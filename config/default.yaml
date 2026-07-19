@@ -1,0 +1,26 @@
+# AI Voice Clone Studio — Default Configuration
+app:
+  name: "AI Voice Clone Studio"
+  version: "0.1.0"
+  debug: true
+
+server:
+  host: "127.0.0.1"
+  port: 8000
+
+audio:
+  default_sample_rate: 44100
+  default_output_format: "wav"
+  max_recording_duration_sec: 300
+  max_upload_size_mb: 50
+
+engine:
+  default: "mock"  # Change to f5_tts, fish_speech, or xtts_v2 on production PC
+  default_language: "en"
+  use_gpu: true
+
+paths:
+  data_dir: "./data"
+  models_dir: "./data/models"
+  voices_dir: "./data/voices"
+  generated_dir: "./data/generated"
