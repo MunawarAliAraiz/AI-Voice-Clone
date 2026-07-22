@@ -51,7 +51,6 @@ class FishSpeechEngine(TTSEngine):
             try:
                 from fish_speech.inference_engine import TTSInferenceEngine
 
-                # Determine checkpoint path — allow override via env or default to HuggingFace cache
                 checkpoint_dir = settings.models_dir / "fish-speech-1.5"
                 if not checkpoint_dir.exists():
                     logger.warning(
@@ -65,24 +64,16 @@ class FishSpeechEngine(TTSEngine):
                 self._model = TTSInferenceEngine(
                     checkpoint=checkpoint_dir_str,
                     device=device,
-                    compile=False,  # Set True for production speed after first run
+                    compile=False,
                 )
                 self._api_version = "v1.5"
 
-            except ImportError:
-                # Fallback: try the older fish-speech API style (pre-1.5)
-                try:
-                    from tools.api import decode_vq_tokens, encode_reference
-                    self._model = {"encode": encode_reference, "decode": decode_vq_tokens}
-                    self._api_version = "legacy"
-                    logger.warning("Loaded Fish Speech with legacy API (pre-1.5)")
-                except ImportError:
-                    raise EngineLoadError(
-                        "fish_speech",
-                        "fish-speech package not installed. "
-                        "Run: pip install fish-speech  "
-                        "GitHub: https://github.com/fishaudio/fish-speech"
-                    )
+            except Exception as err:
+                logger.error(f"Fish Speech error: {err}")
+                raise EngineLoadError(
+                    "fish_speech",
+                    f"Fish Speech engine error: {err}"
+                )
 
             self._loaded = True
             logger.info("✅ Fish Speech S2 model loaded")
