@@ -17,6 +17,45 @@ from ..utils.exceptions import EngineLoadError, GenerationError
 logger = setup_logger("voiceclone.engine.fish_speech")
 
 
+def load_custom_codec_model(codec_checkpoint_path: str, device: str, precision):
+    """Load DAC codec model with dynamic input_dim matching the checkpoint weights."""
+    import fish_speech
+    import torch
+    from pathlib import Path
+    from hydra.utils import instantiate
+    from omegaconf import OmegaConf
+
+    state_dict = torch.load(codec_checkpoint_path, map_location="cpu")
+    if "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+    if any("generator" in k for k in state_dict):
+        state_dict = {
+            k.replace("generator.", ""): v
+            for k, v in state_dict.items()
+            if "generator." in k
+        }
+
+    config_path = Path(fish_speech.__file__).parent / "configs" / "modded_dac_vq.yaml"
+    cfg = OmegaConf.load(str(config_path))
+
+    # Auto-detect input_dim from state_dict weight shape if available
+    downsample_key = "quantizer.downsample.0.0.conv.weight"
+    if downsample_key in state_dict:
+        dim = state_dict[downsample_key].shape[0]
+        logger.info(f"Detected codec input_dim={dim} from checkpoint state_dict")
+        cfg.quantizer.input_dim = dim
+        if hasattr(cfg.quantizer, "post_module"):
+            cfg.quantizer.post_module.input_dim = dim
+        if hasattr(cfg.quantizer, "pre_module"):
+            cfg.quantizer.pre_module.input_dim = dim
+
+    codec = instantiate(cfg)
+    codec.load_state_dict(state_dict, strict=False)
+    codec.eval()
+    codec.to(device=device, dtype=precision)
+    return codec
+
+
 class FishSpeechEngine(TTSEngine):
     """Fish Speech S2 voice cloning engine."""
 
@@ -45,28 +84,95 @@ class FishSpeechEngine(TTSEngine):
         try:
             logger.info(f"Loading Fish Speech S2 on {device}...")
 
-            # fish-speech >= 1.5 exposes a high-level TTS class.
-            # Install with: pip install fish-speech
-            # GitHub: https://github.com/fishaudio/fish-speech
+            # fish-speech exposes high-level inference engines
             try:
+                import inspect
                 from fish_speech.inference_engine import TTSInferenceEngine
 
+                init_params = inspect.signature(TTSInferenceEngine.__init__).parameters
                 checkpoint_dir = settings.models_dir / "fish-speech-1.5"
-                if not checkpoint_dir.exists():
-                    logger.warning(
-                        f"Fish Speech checkpoint not found at {checkpoint_dir}. "
-                        "Attempting to load from HuggingFace (openfishproject/fish-speech-1.5)..."
-                    )
-                    checkpoint_dir_str = "openfishproject/fish-speech-1.5"
-                else:
-                    checkpoint_dir_str = str(checkpoint_dir)
 
-                self._model = TTSInferenceEngine(
-                    checkpoint=checkpoint_dir_str,
-                    device=device,
-                    compile=False,
-                )
-                self._api_version = "v1.5"
+                if "checkpoint" in init_params:
+                    # fish-speech <= 1.5 API: TTSInferenceEngine(checkpoint=..., device=..., compile=...)
+                    if not checkpoint_dir.exists():
+                        logger.warning(
+                            f"Fish Speech checkpoint not found at {checkpoint_dir}. "
+                            "Attempting to load from HuggingFace (openfishproject/fish-speech-1.5)..."
+                        )
+                        checkpoint_dir_str = "openfishproject/fish-speech-1.5"
+                    else:
+                        checkpoint_dir_str = str(checkpoint_dir)
+
+                    self._model = TTSInferenceEngine(
+                        checkpoint=checkpoint_dir_str,
+                        device=device,
+                        compile=False,
+                    )
+                    self._api_version = "v1.5"
+                else:
+                    # fish-speech >= 2.0 API: TTSInferenceEngine(llama_queue=..., decoder_model=..., precision=..., compile=...)
+                    import torch
+                    from huggingface_hub import snapshot_download
+                    from fish_speech.models.text2semantic.inference import (
+                        launch_thread_safe_queue,
+                    )
+
+                    if not checkpoint_dir.exists():
+                        logger.info(f"Downloading Fish Speech 1.5 weights to {checkpoint_dir}...")
+                        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                        snapshot_download(
+                            repo_id="fishaudio/fish-speech-1.5",
+                            local_dir=str(checkpoint_dir),
+                        )
+
+                    # Find codec model checkpoint (.pth)
+                    codec_path = None
+                    for pth in checkpoint_dir.glob("*.pth"):
+                        if any(k in pth.name.lower() for k in ["firefly", "vq", "codec", "generator"]):
+                            codec_path = pth
+                            break
+                    if codec_path is None:
+                        pth_files = [f for f in checkpoint_dir.glob("*.pth") if f.name != "model.pth"]
+                        if pth_files:
+                            codec_path = pth_files[0]
+                        else:
+                            raise EngineLoadError("fish_speech", f"Codec checkpoint not found in {checkpoint_dir}")
+
+                    precision = (
+                        torch.bfloat16
+                        if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+                        else (torch.half if torch.cuda.is_available() else torch.float32)
+                    )
+
+                    decoder_model = load_custom_codec_model(
+                        codec_checkpoint_path=str(codec_path),
+                        device=device,
+                        precision=precision,
+                    )
+
+                    # Ensure tokenizer_config.json exists so AutoTokenizer can load PreTrainedTokenizerFast
+                    tokenizer_config = checkpoint_dir / "tokenizer_config.json"
+                    if not tokenizer_config.exists():
+                        import json
+                        logger.info(f"Creating tokenizer_config.json in {checkpoint_dir}...")
+                        tokenizer_config.write_text(json.dumps({
+                            "tokenizer_class": "PreTrainedTokenizerFast"
+                        }))
+
+                    llama_queue = launch_thread_safe_queue(
+                        checkpoint_path=str(checkpoint_dir),
+                        device=device,
+                        precision=precision,
+                        compile=False,
+                    )
+
+                    self._model = TTSInferenceEngine(
+                        llama_queue=llama_queue,
+                        decoder_model=decoder_model,
+                        precision=precision,
+                        compile=False,
+                    )
+                    self._api_version = "v2.0"
 
             except Exception as err:
                 logger.error(f"Fish Speech error: {err}")
@@ -122,7 +228,46 @@ class FishSpeechEngine(TTSEngine):
         try:
             api_version = getattr(self, "_api_version", "v1.5")
 
-            if api_version == "v1.5" and hasattr(self._model, "tts"):
+            if api_version == "v2.0":
+                from fish_speech.utils.schema import ServeTTSRequest, ServeReferenceAudio
+                import soundfile as sf
+
+                with open(reference_audio, "rb") as f:
+                    ref_audio_bytes = f.read()
+
+                ref_obj = ServeReferenceAudio(
+                    audio=ref_audio_bytes,
+                    text=reference_text or "",
+                )
+
+                req = ServeTTSRequest(
+                    text=text,
+                    references=[ref_obj],
+                    reference_id=None,
+                    max_new_tokens=0,
+                    chunk_length=200,
+                    top_p=0.7,
+                    repetition_penalty=1.5,
+                    temperature=0.7,
+                    streaming=False,
+                )
+
+                results = list(self._model.inference(req))
+                audio_result = None
+                for res in results:
+                    if res.code == "final":
+                        audio_result = res
+                        break
+                    elif res.code == "error":
+                        raise GenerationError(f"Fish Speech inference error: {res.error}")
+
+                if audio_result is None or audio_result.audio is None:
+                    raise GenerationError("Fish Speech generated no audio output.")
+
+                sample_rate, audio_data = audio_result.audio
+                sf.write(str(output_path), audio_data, sample_rate)
+
+            elif api_version == "v1.5" and hasattr(self._model, "tts"):
                 # High-level fish-speech >= 1.5 TTSInferenceEngine API
                 self._model.tts(
                     text=text,

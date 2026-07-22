@@ -21,6 +21,49 @@ export default function RecordPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState('');
 
+  // Mode & File Upload
+  const [activeMode, setActiveMode] = useState<'record' | 'upload'>('record');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = (file: File) => {
+    if (!file.type.startsWith('audio/') && !/\.(wav|mp3|m4a|ogg|webm)$/i.test(file.name)) {
+      setError('Please upload a valid audio file (.wav, .mp3, .m4a, .ogg, .webm).');
+      return;
+    }
+    setError('');
+    setAudioBlob(file);
+    setAudioUrl(URL.createObjectURL(file));
+    if (!profileName) {
+      const defaultName = file.name.replace(/\.[^/.]+$/, '');
+      setProfileName(defaultName);
+    }
+    setSaveSuccess(false);
+
+    const tempAudio = new Audio(URL.createObjectURL(file));
+    tempAudio.onloadedmetadata = () => {
+      if (tempAudio.duration) {
+        setDuration(Math.round(tempAudio.duration));
+      }
+    };
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileUpload(e.target.files[0]);
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
   // Profiles list
   const [profiles, setProfiles] = useState<VoiceProfile[]>([]);
 
@@ -163,37 +206,80 @@ export default function RecordPage() {
 
   return (
     <div className="record-page animate-fade-in">
-      <h1>Record Your Voice</h1>
-      <p className="page-subtitle">Record 15-30 seconds of clean audio to create a voice profile</p>
+      <h1>Record & Upload Voice</h1>
+      <p className="page-subtitle">Record 15-30 seconds of clean audio or upload an existing audio file to create a voice profile</p>
 
-      {/* Waveform */}
-      <div className="card waveform-card">
-        <canvas ref={canvasRef} className="waveform-canvas" width={800} height={120} />
-
-        <div className="record-controls">
-          <span className="record-timer">{formatTime(duration)}</span>
-
-          {!isRecording ? (
-            <button className="btn btn-primary btn-lg record-btn" onClick={startRecording}>
-              ⏺ Start Recording
-            </button>
-          ) : (
-            <button className="btn btn-danger btn-lg record-btn animate-recording" onClick={stopRecording}>
-              ⏹ Stop Recording
-            </button>
-          )}
-
-          <span className="record-hint">
-            {isRecording ? 'Recording...' : duration > 0 ? `${formatTime(duration)} recorded` : 'Click to start'}
-          </span>
-        </div>
-
-        {audioUrl && (
-          <div className="record-preview">
-            <audio controls src={audioUrl} className="record-audio" />
-          </div>
-        )}
+      {/* Mode Selector */}
+      <div className="mode-selector">
+        <button
+          className={`mode-tab ${activeMode === 'record' ? 'active' : ''}`}
+          onClick={() => setActiveMode('record')}
+        >
+          🎙️ Record Audio
+        </button>
+        <button
+          className={`mode-tab ${activeMode === 'upload' ? 'active' : ''}`}
+          onClick={() => setActiveMode('upload')}
+        >
+          📁 Upload Sound File
+        </button>
       </div>
+
+      {activeMode === 'record' ? (
+        /* Waveform & Recorder */
+        <div className="card waveform-card">
+          <canvas ref={canvasRef} className="waveform-canvas" width={800} height={120} />
+
+          <div className="record-controls">
+            <span className="record-timer">{formatTime(duration)}</span>
+
+            {!isRecording ? (
+              <button className="btn btn-primary btn-lg record-btn" onClick={startRecording}>
+                ⏺ Start Recording
+              </button>
+            ) : (
+              <button className="btn btn-danger btn-lg record-btn animate-recording" onClick={stopRecording}>
+                ⏹ Stop Recording
+              </button>
+            )}
+
+            <span className="record-hint">
+              {isRecording ? 'Recording...' : duration > 0 ? `${formatTime(duration)} recorded` : 'Click to start'}
+            </span>
+          </div>
+
+          {audioUrl && (
+            <div className="record-preview">
+              <audio controls src={audioUrl} className="record-audio" />
+            </div>
+          )}
+        </div>
+      ) : (
+        /* File Upload Dropzone */
+        <div
+          className="card upload-dropzone"
+          onDragOver={onDragOver}
+          onDrop={onDrop}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={onFileChange}
+            accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm"
+            style={{ display: 'none' }}
+          />
+          <div className="upload-icon">🎵</div>
+          <div className="upload-title">Drop your audio file here or click to browse</div>
+          <div className="upload-subtitle">Supports WAV, MP3, M4A, OGG, WEBM (15-30 sec recommended)</div>
+
+          {audioUrl && (
+            <div className="record-preview" onClick={e => e.stopPropagation()}>
+              <audio controls src={audioUrl} className="record-audio" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Save Form */}
       {audioBlob && (
