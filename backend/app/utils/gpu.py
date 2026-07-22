@@ -27,7 +27,7 @@ def detect_gpu() -> GPUInfo:
         if torch.cuda.is_available():
             device_idx = 0
             name = torch.cuda.get_device_name(device_idx)
-            vram_total = torch.cuda.get_device_properties(device_idx).total_mem
+            vram_total = getattr(torch.cuda.get_device_properties(device_idx), "total_memory", getattr(torch.cuda.get_device_properties(device_idx), "total_mem", 0))
             vram_free = vram_total - torch.cuda.memory_allocated(device_idx)
             cuda_ver = torch.version.cuda
 

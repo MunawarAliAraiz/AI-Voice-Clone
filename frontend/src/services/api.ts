@@ -12,7 +12,7 @@ import type {
   SystemStatus,
 } from '../types';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = (import.meta as any).env?.VITE_API_BASE || `${window.location.protocol}//${window.location.hostname}:8000`;
 
 // ── Generic fetch wrapper ──
 

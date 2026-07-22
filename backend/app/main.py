@@ -69,19 +69,21 @@ async def lifespan(app: FastAPI):
 # ── Build CORS origins list ──
 
 def _build_cors_origins() -> list[str]:
-    """Combine static localhost origins with any extra origins from VCS_CORS_ORIGINS env var."""
+    """Combine static origins with wildcard for SSH tunneling / remote web access."""
     base_origins = [
-        "http://localhost:1420",   # Tauri dev server
-        "http://localhost:5173",   # Vite dev server
-        "tauri://localhost",       # Tauri production
-        "https://tauri.localhost", # Tauri v2 HTTPS
-        "http://tauri.localhost",  # Tauri v2 HTTP (Windows)
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "tauri://localhost",
+        "https://tauri.localhost",
+        "http://tauri.localhost",
+        "*",
     ]
 
     if settings.cors_origins:
         extra = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
         base_origins.extend(extra)
-        logger.info(f"🌍 Extra CORS origins added: {extra}")
 
     return base_origins
 
