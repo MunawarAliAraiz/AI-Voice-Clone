@@ -5,8 +5,9 @@ Start with: python -m app.main
 """
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .database import init_database
@@ -49,6 +50,12 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.info("💻 Running in CPU mode")
 
+    # Log security status
+    if settings.api_key:
+        logger.info("🔒 API key authentication: ENABLED")
+    else:
+        logger.info("🔓 API key authentication: disabled (set VCS_API_KEY to enable)")
+
     logger.info(f"🌐 Server: http://{settings.host}:{settings.port}")
     logger.info(f"📖 API Docs: http://{settings.host}:{settings.port}/docs")
     logger.info("=" * 60)
@@ -59,7 +66,28 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
 
 
-# Create FastAPI app
+# ── Build CORS origins list ──
+
+def _build_cors_origins() -> list[str]:
+    """Combine static localhost origins with any extra origins from VCS_CORS_ORIGINS env var."""
+    base_origins = [
+        "http://localhost:1420",   # Tauri dev server
+        "http://localhost:5173",   # Vite dev server
+        "tauri://localhost",       # Tauri production
+        "https://tauri.localhost", # Tauri v2 HTTPS
+        "http://tauri.localhost",  # Tauri v2 HTTP (Windows)
+    ]
+
+    if settings.cors_origins:
+        extra = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+        base_origins.extend(extra)
+        logger.info(f"🌍 Extra CORS origins added: {extra}")
+
+    return base_origins
+
+
+# ── Create FastAPI app ──
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
@@ -67,22 +95,47 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow Tauri frontend and dev server
+# CORS middleware — allow Tauri frontend, dev server, and any extra configured origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:1420",   # Tauri dev server
-        "http://localhost:5173",   # Vite dev server
-        "tauri://localhost",       # Tauri production
-        "https://tauri.localhost", # Tauri v2 HTTPS
-        "http://tauri.localhost",  # Tauri v2 HTTP (Windows)
-    ],
+    allow_origins=_build_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routers
+
+# ── Optional API Key Middleware ──
+
+@app.middleware("http")
+async def api_key_middleware(request: Request, call_next):
+    """Enforce API key authentication when VCS_API_KEY is configured.
+
+    Pass the key in the request header:
+        X-API-Key: your_secret_key
+
+    If VCS_API_KEY is empty, this middleware is a no-op (open access).
+    The /docs and /openapi.json endpoints are always accessible.
+    """
+    if settings.api_key:
+        # Always allow docs and health check without auth
+        open_paths = {"/", "/docs", "/openapi.json", "/redoc"}
+        if request.url.path not in open_paths:
+            provided_key = request.headers.get("X-API-Key", "")
+            if provided_key != settings.api_key:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": "Invalid or missing API key. "
+                                  "Pass your key in the X-API-Key request header."
+                    },
+                )
+
+    return await call_next(request)
+
+
+# ── Register routers ──
+
 app.include_router(voice.router)
 app.include_router(tts.router)
 app.include_router(history.router)
@@ -108,3 +161,5 @@ if __name__ == "__main__":
         port=settings.port,
         reload=settings.debug,
     )
+
+

@@ -43,22 +43,52 @@ class FishSpeechEngine(TTSEngine):
     async def load_model(self, device: str = "cpu") -> None:
         self._device = device
         try:
-            # Fish Speech uses its own inference API
-            # This will be implemented when running on the production PC
             logger.info(f"Loading Fish Speech S2 on {device}...")
 
-            # Placeholder — actual import depends on fish-speech package structure
-            # from fish_speech.inference import FishSpeechInference
-            # self._model = FishSpeechInference(device=device)
+            # fish-speech >= 1.5 exposes a high-level TTS class.
+            # Install with: pip install fish-speech
+            # GitHub: https://github.com/fishaudio/fish-speech
+            try:
+                from fish_speech.inference_engine import TTSInferenceEngine
+
+                # Determine checkpoint path — allow override via env or default to HuggingFace cache
+                checkpoint_dir = settings.models_dir / "fish-speech-1.5"
+                if not checkpoint_dir.exists():
+                    logger.warning(
+                        f"Fish Speech checkpoint not found at {checkpoint_dir}. "
+                        "Attempting to load from HuggingFace (openfishproject/fish-speech-1.5)..."
+                    )
+                    checkpoint_dir_str = "openfishproject/fish-speech-1.5"
+                else:
+                    checkpoint_dir_str = str(checkpoint_dir)
+
+                self._model = TTSInferenceEngine(
+                    checkpoint=checkpoint_dir_str,
+                    device=device,
+                    compile=False,  # Set True for production speed after first run
+                )
+                self._api_version = "v1.5"
+
+            except ImportError:
+                # Fallback: try the older fish-speech API style (pre-1.5)
+                try:
+                    from tools.api import decode_vq_tokens, encode_reference
+                    self._model = {"encode": encode_reference, "decode": decode_vq_tokens}
+                    self._api_version = "legacy"
+                    logger.warning("Loaded Fish Speech with legacy API (pre-1.5)")
+                except ImportError:
+                    raise EngineLoadError(
+                        "fish_speech",
+                        "fish-speech package not installed. "
+                        "Run: pip install fish-speech  "
+                        "GitHub: https://github.com/fishaudio/fish-speech"
+                    )
 
             self._loaded = True
             logger.info("✅ Fish Speech S2 model loaded")
 
-        except ImportError:
-            raise EngineLoadError(
-                "fish_speech",
-                "fish-speech package not installed. See: https://github.com/fishaudio/fish-speech"
-            )
+        except EngineLoadError:
+            raise
         except Exception as e:
             raise EngineLoadError("fish_speech", str(e))
 
@@ -83,8 +113,8 @@ class FishSpeechEngine(TTSEngine):
         output_path: Path | None = None,
         reference_text: str | None = None,
     ) -> GenerationResult:
-        if not self._loaded:
-            raise GenerationError("Fish Speech model not loaded.")
+        if not self._loaded or self._model is None:
+            raise GenerationError("Fish Speech model not loaded. Call load_model() first.")
 
         if not reference_audio.exists():
             raise GenerationError(f"Reference audio not found: {reference_audio}")
@@ -99,18 +129,60 @@ class FishSpeechEngine(TTSEngine):
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            # TODO: Implement actual Fish Speech inference on production PC
-            # result = self._model.synthesize(
-            #     text=text,
-            #     reference_audio=str(reference_audio),
-            #     language=language,
-            #     output_path=str(output_path),
-            # )
+            api_version = getattr(self, "_api_version", "v1.5")
+
+            if api_version == "v1.5" and hasattr(self._model, "tts"):
+                # High-level fish-speech >= 1.5 TTSInferenceEngine API
+                self._model.tts(
+                    text=text,
+                    reference_audio=str(reference_audio),
+                    reference_text=reference_text or "",
+                    output=str(output_path),
+                    language=language,
+                )
+            else:
+                # Fallback: fish-speech generate() pipeline (common pattern)
+                import soundfile as sf
+
+                result_audio = self._model.generate(
+                    text=text,
+                    prompt_tokens=str(reference_audio),
+                    prompt_text=reference_text or "",
+                    language=language,
+                    top_p=0.7,
+                    repetition_penalty=1.5,
+                    temperature=0.7,
+                )
+
+                # result_audio may be (samples, sr) tuple or a numpy array
+                if isinstance(result_audio, tuple):
+                    audio_data, sample_rate = result_audio
+                else:
+                    audio_data = result_audio
+                    sample_rate = 44100
+
+                sf.write(str(output_path), audio_data, sample_rate)
 
             gen_time = time.time() - start_time
-            raise GenerationError(
-                "Fish Speech engine is a placeholder — "
-                "will be fully implemented on the production PC with GPU."
+
+            # Measure output duration
+            import wave as wave_module
+            try:
+                with wave_module.open(str(output_path), "r") as wf:
+                    duration_sec = wf.getnframes() / wf.getframerate()
+                    sample_rate_out = wf.getframerate()
+            except Exception:
+                duration_sec = 0.0
+                sample_rate_out = 44100
+
+            logger.info(f"✅ Fish Speech generated: {duration_sec:.1f}s in {gen_time:.2f}s")
+
+            return GenerationResult(
+                output_path=output_path,
+                duration_sec=duration_sec,
+                gen_time_sec=gen_time,
+                sample_rate=sample_rate_out,
+                engine="fish_speech",
             )
 
         except GenerationError:

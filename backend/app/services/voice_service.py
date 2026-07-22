@@ -2,7 +2,7 @@
 AI Voice Clone Studio — Voice Profile Service
 """
 
-import shutil
+import subprocess
 import wave
 from pathlib import Path
 from datetime import datetime
@@ -14,7 +14,7 @@ from ..utils.exceptions import AudioValidationError, ProfileNotFoundError
 
 logger = setup_logger("voiceclone.service.voice")
 
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".webm"}
+ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".webm", ".m4a"}
 MAX_DURATION_SEC = 300  # 5 minutes
 
 
@@ -25,6 +25,77 @@ def _validate_audio_extension(filename: str) -> None:
         raise AudioValidationError(
             f"Unsupported format '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
+
+
+def _convert_to_wav(input_path: Path) -> Path:
+    """Convert any audio format to a clean WAV file for AI model compatibility.
+
+    AI models (F5-TTS, XTTS v2, Fish Speech) require:
+    - Format: PCM WAV
+    - Sample rate: 22050 Hz
+    - Channels: Mono (1)
+    - Bit depth: 16-bit
+
+    Browser recordings arrive as .webm (Opus codec) and must be converted.
+    If input is already a valid WAV, it is re-encoded to ensure correct specs.
+    Requires ffmpeg to be installed on the system.
+    """
+    output_path = input_path.with_suffix(".wav")
+
+    # If input is already a WAV with the right name, still re-encode to
+    # guarantee sample rate / channel / format are correct.
+    if input_path == output_path:
+        # Encode to a temp file first to avoid reading/writing the same file
+        tmp_path = input_path.with_stem(input_path.stem + "_tmp")
+        final_input = input_path
+        final_output = tmp_path
+    else:
+        final_input = input_path
+        final_output = output_path
+
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-y",                    # overwrite without asking
+                "-i", str(final_input),  # input file
+                "-ar", "22050",          # sample rate (22kHz — F5-TTS default)
+                "-ac", "1",              # mono
+                "-sample_fmt", "s16",    # 16-bit PCM
+                "-f", "wav",             # force WAV output
+                str(final_output),
+            ],
+            capture_output=True,
+            timeout=60,
+        )
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode("utf-8", errors="ignore")
+            raise AudioValidationError(
+                f"Audio conversion failed (ffmpeg error): {stderr[-500:]}"
+            )
+
+        # If we wrote to a temp file, replace the original
+        if final_output != output_path:
+            final_output.replace(output_path)
+
+        # Remove the original non-WAV file to save disk space
+        if input_path != output_path and input_path.exists():
+            input_path.unlink()
+
+        logger.info(f"Converted audio to WAV: {output_path}")
+        return output_path
+
+    except FileNotFoundError:
+        # ffmpeg not installed — log a warning and keep original
+        logger.warning(
+            "⚠️  ffmpeg not found — skipping audio conversion. "
+            "Install ffmpeg for browser recording support: "
+            "Ubuntu: apt-get install ffmpeg | Windows: winget install ffmpeg"
+        )
+        return input_path
+    except subprocess.TimeoutExpired:
+        raise AudioValidationError("Audio conversion timed out (file may be too large).")
 
 
 def _get_wav_duration(filepath: Path) -> float | None:
@@ -43,10 +114,14 @@ async def save_voice_recording(
     transcript: str | None,
     language: str,
 ) -> dict:
-    """Save an uploaded voice recording and create a profile."""
+    """Save an uploaded voice recording and create a profile.
+
+    Automatically converts any audio format (webm, mp3, ogg, flac) to
+    a clean 22kHz mono WAV that is compatible with all AI models.
+    """
     _validate_audio_extension(filename)
 
-    # Save file
+    # Save raw uploaded file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
     ext = Path(filename).suffix.lower()
@@ -55,10 +130,13 @@ async def save_voice_recording(
 
     settings.voices_dir.mkdir(parents=True, exist_ok=True)
     audio_path.write_bytes(file_content)
-    logger.info(f"Saved voice recording: {audio_path}")
+    logger.info(f"Saved raw upload: {audio_path}")
 
-    # Get duration (for WAV files)
-    duration = _get_wav_duration(audio_path) if ext == ".wav" else None
+    # Convert to AI-compatible WAV (handles .webm from browser, .mp3, etc.)
+    audio_path = _convert_to_wav(audio_path)
+
+    # Get duration from the final WAV
+    duration = _get_wav_duration(audio_path)
 
     # Save to database
     db = await get_db()
@@ -71,7 +149,7 @@ async def save_voice_recording(
         await db.commit()
         profile_id = cursor.lastrowid
 
-        logger.info(f"Created voice profile #{profile_id}: '{name}'")
+        logger.info(f"✅ Created voice profile #{profile_id}: '{name}' ({duration:.1f}s)" if duration else f"✅ Created voice profile #{profile_id}: '{name}'")
 
         return {
             "id": profile_id,

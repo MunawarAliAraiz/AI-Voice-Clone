@@ -15,8 +15,14 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # Server
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"   # Use 127.0.0.1 for local-only; 0.0.0.0 for server/GPU deployment
     port: int = 8000
+
+    # Security — optional API key (set VCS_API_KEY env var to enable auth)
+    api_key: str = ""  # Empty = no auth required
+
+    # CORS — comma-separated extra origins (e.g. "https://myapp.vercel.app,https://myapp.com")
+    cors_origins: str = ""  # Empty = only localhost origins allowed
 
     # Paths — all relative to project root
     project_root: Path = Path(__file__).resolve().parent.parent.parent
