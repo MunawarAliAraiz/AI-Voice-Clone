@@ -155,6 +155,42 @@ export const systemApi = {
     return data.engines;
   },
 
+  async getModelsCatalog(): Promise<any[]> {
+    const data = await apiFetch<{ models: any[] }>('/api/models');
+    return data.models || [];
+  },
+
+  async downloadModel(modelName: string): Promise<any> {
+    return apiFetch(`/api/models/${modelName}/download`, { method: 'POST' });
+  },
+
+  async getModelProgress(modelName: string): Promise<any> {
+    return apiFetch(`/api/models/${modelName}/progress`);
+  },
+
+  async deleteModel(modelName: string): Promise<any> {
+    return apiFetch(`/api/models/${modelName}`, { method: 'DELETE' });
+  },
+
+  async updateModel(modelName: string): Promise<any> {
+    return apiFetch(`/api/models/${modelName}/update`, { method: 'POST' });
+  },
+
+  async verifyModel(modelName: string): Promise<any> {
+    return apiFetch(`/api/models/${modelName}/verify`, { method: 'POST' });
+  },
+
+  async getEngineHealth(engineName: string): Promise<Record<string, any>> {
+    const data = await apiFetch<{ health: Record<string, any> }>(`/api/models/${engineName}/health`);
+    return data.health;
+  },
+
+  async unloadEngine(engineName: string): Promise<void> {
+    await apiFetch(`/api/models/${engineName}/unload`, { method: 'POST' });
+  },
+
+
+
   async getSettings(): Promise<Record<string, { value: string; category: string }>> {
     const data = await apiFetch<{ settings: Record<string, { value: string; category: string }> }>('/api/settings');
     return data.settings;
@@ -167,3 +203,34 @@ export const systemApi = {
     });
   },
 };
+
+// ── Translation API ──
+
+export const translationApi = {
+  async translate(text: string, targetLang: string, sourceLang?: string): Promise<{
+    status: string;
+    translated_text: string;
+    source_lang: string;
+    target_lang: string;
+    cached: boolean;
+  }> {
+    return apiFetch('/api/translate', {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        target_lang: targetLang,
+        source_lang: sourceLang,
+      }),
+    });
+  },
+
+  async detect(text: string): Promise<string> {
+    const data = await apiFetch<{ detected_language: string }>('/api/translate/detect', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+    return data.detected_language;
+  },
+};
+
+

@@ -59,6 +59,18 @@ CREATE TABLE IF NOT EXISTS model_registry (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Translation cache: Stores cached translations to avoid re-running NLLB-200
+CREATE TABLE IF NOT EXISTS translation_cache (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_text     TEXT NOT NULL,
+    source_lang     TEXT NOT NULL,
+    target_lang     TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_text, source_lang, target_lang)
+);
+
+
 -- Insert default settings
 INSERT OR IGNORE INTO settings (key, value, category) VALUES
     ('default_engine', 'mock', 'engine'),

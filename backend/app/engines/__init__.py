@@ -5,35 +5,32 @@ Central registry for all TTS engines. Handles engine discovery,
 selection, and lifecycle management.
 """
 
-from .base import TTSEngine, EngineInfo
+from .base import TTSEngine, EngineInfo, GenerationResult
 from .mock_engine import MockTTSEngine
 from .f5_tts import F5TTSEngine
 from .fish_speech import FishSpeechEngine
 from .xtts_v2 import XTTSv2Engine
+from .registry import EngineRegistry, register_engine
+
 from ..utils.logger import setup_logger
 from ..utils.exceptions import EngineNotFoundError
 
 logger = setup_logger("voiceclone.engines")
 
-# Engine registry — maps engine name to its class
-_ENGINE_CLASSES: dict[str, type[TTSEngine]] = {
-    "mock": MockTTSEngine,
-    "f5_tts": F5TTSEngine,
-    "fish_speech": FishSpeechEngine,
-    "xtts_v2": XTTSv2Engine,
-}
+# Register core engines into the singleton registry
+EngineRegistry.register("mock", MockTTSEngine)
+EngineRegistry.register("f5_tts", F5TTSEngine)
+EngineRegistry.register("fish_speech", FishSpeechEngine)
+EngineRegistry.register("xtts_v2", XTTSv2Engine)
 
-# Singleton engine instances
-_engine_instances: dict[str, TTSEngine] = {}
+# Maintain backward compatibility aliases
+_ENGINE_CLASSES = EngineRegistry._engine_classes
+_engine_instances = EngineRegistry._engine_instances
 
 
 def get_available_engines() -> list[EngineInfo]:
     """Get info about all registered engines."""
-    result = []
-    for name, cls in _ENGINE_CLASSES.items():
-        engine = cls()
-        result.append(engine.get_info())
-    return result
+    return EngineRegistry.get_available_engines_info()
 
 
 def get_engine(name: str) -> TTSEngine:
@@ -48,14 +45,7 @@ def get_engine(name: str) -> TTSEngine:
     Raises:
         EngineNotFoundError: If engine name is not registered
     """
-    if name not in _ENGINE_CLASSES:
-        raise EngineNotFoundError(name)
-
-    if name not in _engine_instances:
-        _engine_instances[name] = _ENGINE_CLASSES[name]()
-        logger.info(f"Created engine instance: {name}")
-
-    return _engine_instances[name]
+    return EngineRegistry.get_instance(name)
 
 
 def select_engine_for_language(language: str) -> str:
@@ -78,11 +68,14 @@ def select_engine_for_language(language: str) -> str:
     priorities = language_priority.get(language, ["fish_speech", "f5_tts", "mock"])
 
     for engine_name in priorities:
-        engine = get_engine(engine_name)
-        info = engine.get_info()
-        if info.is_loaded and engine.is_language_supported(language):
-            logger.info(f"Auto-selected engine '{engine_name}' for language '{language}'")
-            return engine_name
+        try:
+            engine = get_engine(engine_name)
+            info = engine.get_info()
+            if info.is_loaded and engine.is_language_supported(language):
+                logger.info(f"Auto-selected engine '{engine_name}' for language '{language}'")
+                return engine_name
+        except EngineNotFoundError:
+            continue
 
     # Fallback: return mock if nothing is loaded
     logger.warning(f"No loaded engine supports '{language}', falling back to mock")
@@ -92,11 +85,16 @@ def select_engine_for_language(language: str) -> str:
 __all__ = [
     "TTSEngine",
     "EngineInfo",
+    "GenerationResult",
     "MockTTSEngine",
     "F5TTSEngine",
     "FishSpeechEngine",
     "XTTSv2Engine",
+    "EngineRegistry",
+    "register_engine",
     "get_engine",
     "get_available_engines",
     "select_engine_for_language",
 ]
+
+

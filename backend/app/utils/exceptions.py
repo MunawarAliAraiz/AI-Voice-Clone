@@ -60,3 +60,22 @@ class DiskSpaceError(VoiceCloneError):
             f"Insufficient disk space: {required_mb}MB required, {available_mb}MB available",
             code="DISK_SPACE_ERROR",
         )
+
+
+class VRAMExhaustedError(VoiceCloneError):
+    """Raised when GPU VRAM is insufficient to load a model."""
+    def __init__(self, engine_name: str, required_vram_mb: int):
+        super().__init__(
+            f"Insufficient GPU VRAM to load engine '{engine_name}'. Required ~{required_vram_mb}MB",
+            code="VRAM_EXHAUSTED_ERROR",
+        )
+
+
+class EngineRegistrationError(VoiceCloneError):
+    """Raised when registering an invalid TTS engine."""
+    def __init__(self, engine_name: str, detail: str):
+        super().__init__(
+            f"Failed to register engine '{engine_name}': {detail}",
+            code="ENGINE_REGISTRATION_ERROR",
+        )
+

@@ -4,8 +4,10 @@ AI Voice Clone Studio — Voice Profile Service
 
 import subprocess
 import wave
+from typing import Optional
 from pathlib import Path
 from datetime import datetime
+
 
 from ..database import get_db, close_db
 from ..config import settings
@@ -27,75 +29,28 @@ def _validate_audio_extension(filename: str) -> None:
         )
 
 
-def _convert_to_wav(input_path: Path) -> Path:
+from ..utils.audio_pipeline import AudioPipeline, AudioPipelineConfig
+
+
+def _convert_to_wav(input_path: Path, config: Optional[AudioPipelineConfig] = None) -> Path:
     """Convert any audio format to a clean WAV file for AI model compatibility.
 
-    AI models (F5-TTS, XTTS v2, Fish Speech) require:
-    - Format: PCM WAV
-    - Sample rate: 22050 Hz
-    - Channels: Mono (1)
-    - Bit depth: 16-bit
-
-    Browser recordings arrive as .webm (Opus codec) and must be converted.
-    If input is already a valid WAV, it is re-encoded to ensure correct specs.
-    Requires ffmpeg to be installed on the system.
+    Delegates to modular AudioPipeline for optional format conversion,
+    noise reduction, silence trimming, and EBU R128 loudness normalization.
     """
-    output_path = input_path.with_suffix(".wav")
-
-    # If input is already a WAV with the right name, still re-encode to
-    # guarantee sample rate / channel / format are correct.
-    if input_path == output_path:
-        # Encode to a temp file first to avoid reading/writing the same file
-        tmp_path = input_path.with_stem(input_path.stem + "_tmp")
-        final_input = input_path
-        final_output = tmp_path
-    else:
-        final_input = input_path
-        final_output = output_path
-
-    try:
-        result = subprocess.run(
-            [
-                "ffmpeg",
-                "-y",                    # overwrite without asking
-                "-i", str(final_input),  # input file
-                "-ar", "22050",          # sample rate (22kHz — F5-TTS default)
-                "-ac", "1",              # mono
-                "-sample_fmt", "s16",    # 16-bit PCM
-                "-f", "wav",             # force WAV output
-                str(final_output),
-            ],
-            capture_output=True,
-            timeout=60,
+    if config is None:
+        # Default reference conversion config: 22.05kHz mono PCM WAV, normalized & trimmed
+        config = AudioPipelineConfig(
+            convert_wav=True,
+            sample_rate=22050,
+            channels=1,
+            normalize_loudness=True,
+            trim_silence=True,
+            reduce_noise=False,
         )
 
-        if result.returncode != 0:
-            stderr = result.stderr.decode("utf-8", errors="ignore")
-            raise AudioValidationError(
-                f"Audio conversion failed (ffmpeg error): {stderr[-500:]}"
-            )
+    return AudioPipeline.process_pipeline(input_path=input_path, config=config)
 
-        # If we wrote to a temp file, replace the original
-        if final_output != output_path:
-            final_output.replace(output_path)
-
-        # Remove the original non-WAV file to save disk space
-        if input_path != output_path and input_path.exists():
-            input_path.unlink()
-
-        logger.info(f"Converted audio to WAV: {output_path}")
-        return output_path
-
-    except FileNotFoundError:
-        # ffmpeg not installed — log a warning and keep original
-        logger.warning(
-            "⚠️  ffmpeg not found — skipping audio conversion. "
-            "Install ffmpeg for browser recording support: "
-            "Ubuntu: apt-get install ffmpeg | Windows: winget install ffmpeg"
-        )
-        return input_path
-    except subprocess.TimeoutExpired:
-        raise AudioValidationError("Audio conversion timed out (file may be too large).")
 
 
 def _get_wav_duration(filepath: Path) -> float | None:

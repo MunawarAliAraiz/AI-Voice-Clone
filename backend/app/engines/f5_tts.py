@@ -49,10 +49,10 @@ class F5TTSEngine(TTSEngine):
             self._loaded = True
             logger.info("✅ F5-TTS model loaded successfully")
 
-        except ImportError:
+        except ImportError as e:
             raise EngineLoadError(
                 "f5_tts",
-                "f5-tts package not installed. Run: pip install f5-tts"
+                f"Failed to import f5_tts: {e}. Run: pip install f5-tts"
             )
         except Exception as e:
             raise EngineLoadError("f5_tts", str(e))
@@ -81,7 +81,11 @@ class F5TTSEngine(TTSEngine):
         language: str = "en",
         output_path: Path | None = None,
         reference_text: str | None = None,
+        emotion: str = "neutral",
+        style: str | None = None,
+        **kwargs,
     ) -> GenerationResult:
+
         """Generate speech using F5-TTS."""
         if not self._loaded or self._model is None:
             raise GenerationError("F5-TTS model not loaded. Call load_model() first.")

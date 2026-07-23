@@ -56,9 +56,13 @@ async def update_settings(updates: dict[str, str]):
 
 @router.get("/models")
 async def list_models():
-    """List all available TTS engines and their status."""
+    """List all available AI models and registered TTS engines."""
+    from ..services.model_manager import get_model_manager
+    manager = get_model_manager()
+    models_catalog = await manager.list_models()
     engines = get_available_engines()
     return {
+        "models": models_catalog,
         "engines": [
             {
                 "name": e.name,
@@ -73,6 +77,31 @@ async def list_models():
             for e in engines
         ]
     }
+
+
+
+@router.get("/models/{engine_name}/health")
+async def engine_health(engine_name: str):
+    """Get detailed health check and diagnostic status for a specific engine."""
+    from ..engines import get_engine
+    try:
+        engine = get_engine(engine_name)
+        return {"status": "ok", "health": engine.health_check()}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/models/{engine_name}/unload")
+async def unload_engine_model(engine_name: str):
+    """Manually unload an engine model from memory to free VRAM/RAM."""
+    from ..engines import get_engine
+    try:
+        engine = get_engine(engine_name)
+        await engine.unload_model()
+        return {"status": "ok", "message": f"Engine '{engine_name}' unloaded from memory"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 
 # ── System ──
@@ -107,14 +136,45 @@ async def system_status():
 
 
 @router.get("/system/gpu")
-async def gpu_info():
-    """Get detailed GPU information."""
-    gpu = get_gpu_info()
+async def get_gpu_status():
+    """Get detailed GPU metrics, temperature, and operating mode."""
+    from ..utils.gpu_manager import get_gpu_manager
+    mgr = get_gpu_manager()
+    metrics = mgr.get_vram_metrics()
     return {
-        "available": gpu.available,
-        "name": gpu.name,
-        "vram_total_mb": gpu.vram_total_mb,
-        "vram_free_mb": gpu.vram_free_mb,
-        "cuda_version": gpu.cuda_version,
-        "device": gpu.device,
+        "status": "ok",
+        "available": metrics.available,
+        "name": metrics.gpu_name,
+        "vram_total_mb": metrics.vram_total_mb,
+        "vram_used_mb": metrics.vram_used_mb,
+        "vram_free_mb": metrics.vram_free_mb,
+        "vram_allocated_mb": metrics.vram_allocated_mb,
+        "vram_reserved_mb": metrics.vram_reserved_mb,
+        "usage_pct": metrics.usage_pct,
+        "temperature_celsius": metrics.temperature_celsius,
+        "device": metrics.device,
+        "mode": mgr.mode.value,
     }
+
+
+@router.post("/system/gpu/cleanup")
+async def cleanup_gpu_memory():
+    """Trigger manual VRAM memory cleanup pass."""
+    from ..utils.gpu_manager import get_gpu_manager
+    mgr = get_gpu_manager()
+    res = mgr.cleanup_memory()
+    return res
+
+
+@router.post("/system/gpu/mode")
+async def set_gpu_mode(payload: dict):
+    """Set GPU operating mode ('one_active_model' or 'multi_model')."""
+    from ..utils.gpu_manager import get_gpu_manager
+    mode = payload.get("mode", "one_active_model")
+    mgr = get_gpu_manager()
+    try:
+        mgr.set_mode(mode)
+        return {"status": "ok", "mode": mgr.mode.value}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

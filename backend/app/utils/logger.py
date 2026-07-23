@@ -22,7 +22,7 @@ def setup_logger(name: str = "voiceclone") -> logging.Logger:
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG if settings.debug else logging.INFO)
     console_fmt = logging.Formatter(
-        "%(asctime)s │ %(levelname)-8s │ %(name)-20s │ %(message)s",
+        "%(asctime)s | %(levelname)-8s | %(name)-20s | %(message)s",
         datefmt="%H:%M:%S",
     )
     console.setFormatter(console_fmt)

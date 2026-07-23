@@ -46,6 +46,10 @@ class TTSGenerateRequest(BaseModel):
     language: str = Field("en", examples=["en", "ur", "hi"])
     engine: str = Field("auto", examples=["auto", "f5_tts", "fish_speech", "xtts_v2", "mock"])
     output_format: str = Field("wav", examples=["wav", "mp3"])
+    emotion: str = Field("neutral", examples=["neutral", "happy", "sad", "angry", "calm", "excited", "narration"])
+    style: str = Field("default", examples=["default", "youtube", "podcast", "audiobook", "storytelling", "news", "educational", "gaming", "corporate"])
+
+
 
 
 class TTSGenerateResponse(BaseModel):
@@ -136,3 +140,23 @@ class SystemStatus(BaseModel):
     active_engine: str
     profiles_count: int
     generations_count: int
+
+
+# ── Translation Schemas ──
+
+
+class TranslationRequest(BaseModel):
+    """Request for neural text translation."""
+    text: str = Field(..., min_length=1, max_length=5000, examples=["Hello, how are you?"])
+    target_lang: str = Field(..., examples=["ur", "hi", "en"])
+    source_lang: str | None = Field(None, examples=["en", "ur", "hi", "auto"])
+
+
+class TranslationResponse(BaseModel):
+    """Translation response."""
+    status: str = "ok"
+    translated_text: str
+    source_lang: str
+    target_lang: str
+    cached: bool
+

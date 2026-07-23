@@ -4,11 +4,13 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"cd ../backend && python -m app.main\"",
+    "dev": "vite",
+    "dev:all": "concurrently \"vite\" \"python -m app.main\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },
+
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-shell": "^2.3.5",

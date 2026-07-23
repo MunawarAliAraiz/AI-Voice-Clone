@@ -2,16 +2,18 @@
 AI Voice Clone Studio — TTS Orchestration Service
 """
 
+import asyncio
 import time
 from pathlib import Path
 
-from ..engines import get_engine, select_engine_for_language
+from ..engines import get_engine, select_engine_for_language, EngineRegistry
 from ..database import get_db, close_db
 from ..config import settings
 from ..utils.logger import setup_logger
 from ..utils.exceptions import ProfileNotFoundError, GenerationError
 
 logger = setup_logger("voiceclone.service.tts")
+
 
 
 def _convert_wav_to_mp3(wav_path: Path) -> Path:
@@ -40,12 +42,18 @@ def _convert_wav_to_mp3(wav_path: Path) -> Path:
         return wav_path
 
 
+from ..utils.emotion_engine import EmotionEngine
+from ..utils.style_manager import StyleManager
+
+
 async def generate_speech(
     text: str,
     profile_id: int,
     language: str = "en",
     engine_name: str = "auto",
     output_format: str = "wav",
+    emotion: str = "neutral",
+    style: str = "default",
 ) -> dict:
     """Generate speech from text using a voice profile.
 
@@ -55,10 +63,19 @@ async def generate_speech(
         language: Target language ('en', 'ur', 'hi')
         engine_name: Engine to use ('auto', 'f5_tts', 'fish_speech', 'xtts_v2', 'mock')
         output_format: Output format ('wav', 'mp3')
+        emotion: Target emotion ('neutral', 'happy', 'sad', 'angry', 'calm', 'excited', 'narration')
+        style: Style preset ('default', 'youtube', 'podcast', 'audiobook', 'storytelling', 'news', 'educational', 'gaming', 'corporate')
 
     Returns:
         Dict with generation results
     """
+    # Validate emotion & style
+    norm_emotion = EmotionEngine.validate_emotion(emotion)
+    style_preset = StyleManager.get_style(style)
+
+    # Preprocess text according to style rules (sentence splitting, pause injection, punctuation)
+    processed_text = StyleManager.preprocess_text(text, style_name=style_preset.name)
+
     # Get voice profile
     db = await get_db()
     try:
@@ -84,29 +101,61 @@ async def generate_speech(
     engine = get_engine(engine_name)
     info = engine.get_info()
 
-    # Load engine if not loaded
+    # Load engine if not loaded (with automatic VRAM offloading for GPU safety)
     if not info.is_loaded:
         from ..utils.gpu import get_gpu_info
         gpu = get_gpu_info()
         device = gpu.device if gpu.available else "cpu"
-        await engine.load_model(device=device)
+        engine = await EngineRegistry.manage_vram_and_load(engine_name, device=device)
 
-    # Generate
-    logger.info(f"Generating: engine={engine_name}, lang={language}, profile={profile['name']}")
-    start_time = time.time()
-
-    result = await engine.generate(
-        text=text,
-        reference_audio=reference_audio,
-        language=language,
-        reference_text=profile.get("transcript"),
+    # Check if active engine supports native emotion mode
+    native_emotion_supported = hasattr(engine, "supports_emotion") and engine.supports_emotion(norm_emotion)
+    logger.info(
+        f"Generating: engine={engine_name}, lang={language}, profile={profile['name']}, "
+        f"emotion={norm_emotion} (Native: {native_emotion_supported}), style={style_preset.name}"
     )
 
-    # Convert to MP3 if requested
+    engine_kwargs = {
+        "text": processed_text,
+        "reference_audio": reference_audio,
+        "language": language,
+        "reference_text": profile.get("transcript"),
+    }
+    if native_emotion_supported:
+        engine_kwargs["emotion"] = norm_emotion
+
+    result = await engine.generate(**engine_kwargs)
+
+
     final_path = result.output_path
+    native_applied = native_emotion_supported and norm_emotion != "neutral"
+    degraded = False
+
+    # If engine does not support native emotion, apply graceful acoustic adaptation fallback
+    if not native_emotion_supported and norm_emotion != "neutral":
+        emotion_res = EmotionEngine.apply_acoustic_adaptation(
+            input_audio_path=result.output_path,
+            emotion=norm_emotion,
+            sample_rate=result.sample_rate,
+        )
+        final_path = emotion_res.output_path
+        degraded = emotion_res.degraded
+        native_applied = emotion_res.native_applied
+
+    # Apply Style Audio Adjustments (Speaking rate tempo multiplier & pitch prosody)
+    if style_preset.name != "default":
+        final_path = StyleManager.apply_style_audio(
+            input_audio_path=final_path,
+            style_name=style_preset.name,
+            sample_rate=result.sample_rate,
+        )
+
+    # Convert to MP3 if requested
     if output_format == "mp3":
-        final_path = _convert_wav_to_mp3(result.output_path)
-        output_format = final_path.suffix.lstrip(".")  # update to actual format saved
+        final_path = _convert_wav_to_mp3(final_path)
+        output_format = final_path.suffix.lstrip(".")
+
+
 
     # Save to history
     db = await get_db()
@@ -131,7 +180,8 @@ async def generate_speech(
     finally:
         await close_db(db)
 
-    logger.info(f"✅ Generation #{history_id} complete: {result.duration_sec:.1f}s audio in {result.gen_time_sec:.2f}s")
+    logger.info(f"[OK] Generation #{history_id} complete: {result.duration_sec:.1f}s audio in {result.gen_time_sec:.2f}s")
+
 
     return {
         "id": history_id,

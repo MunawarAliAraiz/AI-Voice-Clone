@@ -39,27 +39,34 @@ def detect_gpu() -> GPUInfo:
                 cuda_version=cuda_ver,
                 device=f"cuda:{device_idx}",
             )
-            logger.info(f"✅ GPU detected: {name} ({info.vram_total_mb} MB VRAM)")
+            logger.info(f"GPU detected: {name} ({info.vram_total_mb} MB VRAM)")
             return info
         else:
-            logger.warning("⚠️ PyTorch found but CUDA not available — using CPU")
+            logger.warning("PyTorch found but CUDA not available -- using CPU")
             return GPUInfo(available=False, device="cpu")
 
     except ImportError:
-        logger.warning("⚠️ PyTorch not installed — GPU detection unavailable")
+        logger.warning("PyTorch not installed -- GPU detection unavailable")
         return GPUInfo(available=False, device="cpu")
     except Exception as e:
-        logger.error(f"❌ GPU detection error: {e}")
+        logger.error(f"GPU detection error: {e}")
         return GPUInfo(available=False, device="cpu")
 
 
-# Cached GPU info
-_gpu_info: GPUInfo | None = None
+
+from .gpu_manager import get_gpu_manager, GPUManager, GPUMode, VRAMMetrics
 
 
 def get_gpu_info() -> GPUInfo:
-    """Get cached GPU info (detect once)."""
-    global _gpu_info
-    if _gpu_info is None:
-        _gpu_info = detect_gpu()
-    return _gpu_info
+    """Get GPU info dynamically from GPUManager."""
+    mgr = get_gpu_manager()
+    m = mgr.get_vram_metrics()
+    return GPUInfo(
+        available=m.available,
+        name=m.gpu_name,
+        vram_total_mb=m.vram_total_mb,
+        vram_free_mb=m.vram_free_mb,
+        cuda_version="CUDA",
+        device=m.device,
+    )
+

@@ -12,7 +12,9 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import init_database
 from .engines import get_engine
-from .routers import voice, tts, history, settings as settings_router
+from .routers import voice, tts, history, settings as settings_router, translation, models
+
+
 from .utils.logger import setup_logger
 
 logger = setup_logger("voiceclone.main")
@@ -37,28 +39,29 @@ async def lifespan(app: FastAPI):
     # Load mock engine (always available for development)
     mock = get_engine("mock")
     await mock.load_model()
-    logger.info("🤖 Mock engine loaded (development mode)")
+    logger.info("[ENGINE] Mock engine loaded (development mode)")
 
     # Try loading real engines (will silently fail if packages aren't installed)
     try:
         from .utils.gpu import get_gpu_info
         gpu = get_gpu_info()
         if gpu.available:
-            logger.info(f"🎮 GPU: {gpu.name} ({gpu.vram_total_mb} MB VRAM)")
+            logger.info(f"[GPU] {gpu.name} ({gpu.vram_total_mb} MB VRAM)")
         else:
-            logger.info("💻 Running in CPU mode (no CUDA GPU detected)")
+            logger.info("[CPU] Running in CPU mode (no CUDA GPU detected)")
     except Exception:
-        logger.info("💻 Running in CPU mode")
+        logger.info("[CPU] Running in CPU mode")
 
     # Log security status
     if settings.api_key:
-        logger.info("🔒 API key authentication: ENABLED")
+        logger.info("[AUTH] API key authentication: ENABLED")
     else:
-        logger.info("🔓 API key authentication: disabled (set VCS_API_KEY to enable)")
+        logger.info("[AUTH] API key authentication: disabled (set VCS_API_KEY to enable)")
 
-    logger.info(f"🌐 Server: http://{settings.host}:{settings.port}")
-    logger.info(f"📖 API Docs: http://{settings.host}:{settings.port}/docs")
+    logger.info(f"[SERVER] Server: http://{settings.host}:{settings.port}")
+    logger.info(f"[DOCS] API Docs: http://{settings.host}:{settings.port}/docs")
     logger.info("=" * 60)
+
 
     yield
 
@@ -142,6 +145,10 @@ app.include_router(voice.router)
 app.include_router(tts.router)
 app.include_router(history.router)
 app.include_router(settings_router.router)
+app.include_router(translation.router)
+app.include_router(models.router)
+
+
 
 
 @app.get("/")

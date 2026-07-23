@@ -25,7 +25,11 @@ export interface TTSGenerateRequest {
   language: string;
   engine: string;
   output_format: string;
+  emotion?: string;
+  style?: string;
 }
+
+
 
 export interface TTSGenerateResult {
   id: number;

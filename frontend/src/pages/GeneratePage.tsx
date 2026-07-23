@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { voiceApi, ttsApi } from '../services/api';
+import { voiceApi, ttsApi, translationApi } from '../services/api';
+
 import type { VoiceProfile, TTSGenerateResult } from '../types';
 import './GeneratePage.css';
 
@@ -10,13 +11,36 @@ export default function GeneratePage() {
   const [language, setLanguage] = useState('en');
   const [engine, setEngine] = useState('auto');
   const [outputFormat, setOutputFormat] = useState('wav');
+  const [emotion, setEmotion] = useState('neutral');
+  const [style, setStyle] = useState('default');
   const [generating, setGenerating] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translationNotice, setTranslationNotice] = useState('');
   const [result, setResult] = useState<TTSGenerateResult | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     voiceApi.listProfiles().then(setProfiles).catch(() => {});
   }, []);
+
+  const handleTranslate = async () => {
+    if (!text.trim()) {
+      setError('Please enter text to translate.');
+      return;
+    }
+    setTranslating(true);
+    setError('');
+    setTranslationNotice('');
+    try {
+      const res = await translationApi.translate(text.trim(), language);
+      setText(res.translated_text);
+      setTranslationNotice(`✅ Translated (${res.source_lang.toUpperCase()} → ${res.target_lang.toUpperCase()})`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Translation failed');
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!selectedProfile || !text.trim()) {
@@ -35,6 +59,8 @@ export default function GeneratePage() {
         language,
         engine,
         output_format: outputFormat,
+        emotion,
+        style,
       });
       setResult(res);
     } catch (err) {
@@ -43,6 +69,9 @@ export default function GeneratePage() {
       setGenerating(false);
     }
   };
+
+
+
 
   const textPlaceholders: Record<string, string> = {
     en: 'Type your text here in English...',
@@ -93,6 +122,34 @@ export default function GeneratePage() {
             </div>
 
             <div className="form-row">
+              <label className="form-label">Emotion</label>
+              <select value={emotion} onChange={e => setEmotion(e.target.value)}>
+                <option value="neutral">Neutral (Default)</option>
+                <option value="happy">Happy (😊)</option>
+                <option value="sad">Sad (😢)</option>
+                <option value="angry">Angry (😡)</option>
+                <option value="calm">Calm (🧘)</option>
+                <option value="excited">Excited (🎉)</option>
+                <option value="narration">Narration (🎙️)</option>
+              </select>
+            </div>
+
+            <div className="form-row">
+              <label className="form-label">Style Preset</label>
+              <select value={style} onChange={e => setStyle(e.target.value)}>
+                <option value="default">Default (Standard)</option>
+                <option value="youtube">YouTube (Fast & Punchy)</option>
+                <option value="podcast">Podcast (Conversational)</option>
+                <option value="audiobook">Audiobook (Expressive)</option>
+                <option value="storytelling">Storytelling (Dramatic)</option>
+                <option value="news">News (Broadcast)</option>
+                <option value="educational">Educational (Clear)</option>
+                <option value="gaming">Gaming (High Energy)</option>
+                <option value="corporate">Corporate (Professional)</option>
+              </select>
+            </div>
+
+            <div className="form-row">
               <label className="form-label">Format</label>
               <select value={outputFormat} onChange={e => setOutputFormat(e.target.value)}>
                 <option value="wav">WAV</option>
@@ -100,6 +157,8 @@ export default function GeneratePage() {
               </select>
             </div>
           </div>
+
+
 
           <div className="form-row">
             <label className="form-label">Text to Speak *</label>
@@ -111,10 +170,22 @@ export default function GeneratePage() {
               dir={language === 'ur' ? 'rtl' : 'ltr'}
               className="text-input"
             />
-            <span className="char-count">{text.length} / 5000 characters</span>
+            <div className="text-actions-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+              <span className="char-count">{text.length} / 5000 characters</span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleTranslate}
+                disabled={translating || !text.trim()}
+              >
+                {translating ? '🌐 Translating...' : `🌐 Translate Text to ${language.toUpperCase()}`}
+              </button>
+            </div>
           </div>
 
+          {translationNotice && <div className="form-success" style={{ marginBottom: '12px' }}>{translationNotice}</div>}
           {error && <div className="form-error">{error}</div>}
+
 
           <button
             className="btn btn-primary btn-lg generate-btn"

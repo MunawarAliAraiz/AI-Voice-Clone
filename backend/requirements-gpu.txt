@@ -11,7 +11,12 @@ f5-tts>=1.0.0
 coqui-tts>=0.25.0
 fish-speech>=1.5.0
 
+# Neural Translation & HF Model Downloads
+transformers>=4.40.0
+huggingface_hub>=0.23.0
+
 # Audio processing
 librosa>=0.10.0
 numpy>=1.26.0
 scipy>=1.12.0
+

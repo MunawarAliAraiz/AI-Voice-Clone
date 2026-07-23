@@ -23,6 +23,8 @@ async def generate(request: TTSGenerateRequest):
             language=request.language,
             engine_name=request.engine,
             output_format=request.output_format,
+            emotion=request.emotion,
+            style=request.style,
         )
         return {"status": "ok", "result": result}
 
@@ -65,3 +67,19 @@ async def languages():
     """List supported languages with their available engines."""
     langs = await get_supported_languages()
     return {"languages": langs}
+
+
+@router.get("/emotions")
+async def get_emotions():
+    """List supported emotion modes."""
+    from ..utils.emotion_engine import EmotionEngine
+    return {"emotions": EmotionEngine.get_supported_emotions()}
+
+
+@router.get("/styles")
+async def get_styles():
+    """List available speech style presets."""
+    from ..utils.style_manager import StyleManager
+    return {"styles": StyleManager.list_styles()}
+
+
