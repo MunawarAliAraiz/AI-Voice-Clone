@@ -13,12 +13,14 @@ from pathlib import Path
 from datetime import datetime
 
 from .base import TTSEngine, EngineInfo, GenerationResult
+from .registry import register_engine
 from ..config import settings
 from ..utils.logger import setup_logger
 
 logger = setup_logger("voiceclone.engine.mock")
 
 
+@register_engine("mock")
 class MockTTSEngine(TTSEngine):
     """Mock TTS engine that generates a sine-wave tone for testing."""
 

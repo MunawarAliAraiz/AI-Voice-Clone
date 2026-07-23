@@ -10,6 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 from .base import TTSEngine, EngineInfo, GenerationResult
+from .registry import register_engine
 from ..config import settings
 from ..utils.logger import setup_logger
 from ..utils.exceptions import EngineLoadError, GenerationError, ModelNotDownloadedError
@@ -17,6 +18,7 @@ from ..utils.exceptions import EngineLoadError, GenerationError, ModelNotDownloa
 logger = setup_logger("voiceclone.engine.f5tts")
 
 
+@register_engine("f5_tts")
 class F5TTSEngine(TTSEngine):
     """F5-TTS voice cloning engine."""
 

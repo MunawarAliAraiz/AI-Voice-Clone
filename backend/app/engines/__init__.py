@@ -17,11 +17,7 @@ from ..utils.exceptions import EngineNotFoundError
 
 logger = setup_logger("voiceclone.engines")
 
-# Register core engines into the singleton registry
-EngineRegistry.register("mock", MockTTSEngine)
-EngineRegistry.register("f5_tts", F5TTSEngine)
-EngineRegistry.register("fish_speech", FishSpeechEngine)
-EngineRegistry.register("xtts_v2", XTTSv2Engine)
+# Core engines automatically register themselves via @register_engine decorator on import
 
 # Maintain backward compatibility aliases
 _ENGINE_CLASSES = EngineRegistry._engine_classes
