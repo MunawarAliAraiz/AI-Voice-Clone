@@ -76,6 +76,46 @@ class F5TTSEngine(TTSEngine):
 
             logger.info("F5-TTS model unloaded")
 
+    def _prepare_reference_audio(self, reference_audio: Path, max_sec: float = 7.0) -> Path:
+        """Trim reference audio to optimal duration (5-7 seconds max) to fit F5-TTS 8192 frame sequence limit."""
+        try:
+            import soundfile as sf
+            data, sr = sf.read(str(reference_audio))
+            max_samples = int(sr * max_sec)
+            if len(data) > max_samples:
+                logger.info(f"Trimming reference audio for F5-TTS from {len(data)/sr:.1f}s to {max_sec}s max to prevent sequence length overflow")
+                trimmed_data = data[:max_samples]
+                temp_path = settings.generated_dir / f"temp_f5_ref_{time.time_ns()}.wav"
+                temp_path.parent.mkdir(parents=True, exist_ok=True)
+                sf.write(str(temp_path), trimmed_data, sr)
+                return temp_path
+        except Exception as err:
+            logger.warning(f"F5-TTS reference trimming skipped ({err})")
+        return reference_audio
+
+    def _split_text_chunks(self, text: str, max_chars: int = 140) -> list[str]:
+        """Split long text into sentence chunks to stay under F5-TTS frame limit."""
+        import re
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?۔;\n])\s+', text) if s.strip()]
+        chunks = []
+        curr = ""
+        for s in sentences:
+            if len(curr) + len(s) + 1 <= max_chars:
+                curr = f"{curr} {s}".strip()
+            else:
+                if curr:
+                    chunks.append(curr)
+                if len(s) > max_chars:
+                    # Hard split very long sentences
+                    sub = [s[i:i+max_chars] for i in range(0, len(s), max_chars)]
+                    chunks.extend(sub[:-1])
+                    curr = sub[-1]
+                else:
+                    curr = s
+        if curr:
+            chunks.append(curr)
+        return chunks if chunks else [text]
+
     async def generate(
         self,
         text: str,
@@ -105,14 +145,42 @@ class F5TTSEngine(TTSEngine):
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        prepared_ref = self._prepare_reference_audio(reference_audio, max_sec=6.0)
+
         try:
-            # F5-TTS inference
-            wav, sr, _ = self._model.infer(
-                ref_file=str(reference_audio),
-                ref_text=reference_text or "",
-                gen_text=text,
-                file_wave=str(output_path),
-            )
+            chunks = self._split_text_chunks(text, max_chars=130)
+            logger.info(f"F5-TTS text chunked into {len(chunks)} batch segment(s)")
+
+            import numpy as np
+            import soundfile as sf
+
+            all_wavs = []
+            sr_out = 24000
+
+            for idx, chunk in enumerate(chunks):
+                chunk_file = output_path.with_stem(f"{output_path.stem}_chk_{idx}")
+                wav_chunk, sr_chunk, _ = self._model.infer(
+                    ref_file=str(prepared_ref),
+                    ref_text=reference_text or "",
+                    gen_text=chunk,
+                    file_wave=str(chunk_file),
+                )
+                if chunk_file.exists():
+                    try:
+                        chunk_file.unlink()
+                    except Exception:
+                        pass
+                if wav_chunk is not None and len(wav_chunk) > 0:
+                    all_wavs.append(wav_chunk)
+                    sr_out = sr_chunk
+
+            if all_wavs:
+                final_wav = np.concatenate(all_wavs)
+                sf.write(str(output_path), final_wav, sr_out)
+                wav = final_wav
+                sr = sr_out
+            else:
+                raise GenerationError("F5-TTS generated no audio output.")
 
             gen_time = time.time() - start_time
             duration_sec = len(wav) / sr if wav is not None else 0
@@ -130,7 +198,16 @@ class F5TTSEngine(TTSEngine):
             )
 
         except Exception as e:
+            logger.error(f"F5-TTS generation error: {e}")
             raise GenerationError(f"F5-TTS generation failed: {e}")
+        finally:
+            if prepared_ref != reference_audio and prepared_ref.exists():
+                try:
+                    prepared_ref.unlink()
+                except Exception:
+                    pass
+
+
 
     def get_supported_languages(self) -> list[str]:
         return ["en", "hi", "zh", "ja", "ko", "fr", "de", "es"]
