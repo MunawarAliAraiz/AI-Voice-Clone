@@ -166,11 +166,18 @@ class FishSpeechEngine(TTSEngine):
         logger.info(f"Loading Fish Speech engine on device '{target_device}'...")
 
         try:
+            try:
+                import audiotools
+                import fish_speech
+                from fish_speech.inference_engine import TTSInferenceEngine
+            except ImportError as imp_err:
+                raise EngineLoadError("fish_speech", f"Failed to import fish_speech / audiotools: {imp_err}. Run: pip install fish-speech descript-audiotools")
+
             import torch
             import inspect
-            from fish_speech.inference_engine import TTSInferenceEngine
 
             init_params = inspect.signature(TTSInferenceEngine.__init__).parameters
+
 
             if "checkpoint" in init_params:
                 # fish-speech <= 1.5 API
