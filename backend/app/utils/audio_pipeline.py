@@ -36,10 +36,10 @@ class AudioPipelineConfig:
     target_loudness_lufs: float = -16.0
     trim_silence: bool = True
     silence_threshold_db: float = -40.0
-    reduce_noise: bool = False
-    noise_reduction_db: float = 12.0
+    reduce_noise: bool = True
+    noise_reduction_db: float = 15.0
+    isolate_vocals: bool = True
     cleanup_input: bool = False
-
 
 
 class FFmpegEngine:
@@ -98,27 +98,35 @@ class AudioPipeline:
         """Construct FFmpeg audio filter list based on active configuration."""
         filters = []
 
-        # 1. Noise Reduction Module (FFmpeg afftdn filter)
-        if config.reduce_noise:
-            # afftdn: adaptive FFT noise reduction filter
-            nr_amount = max(1.0, min(30.0, config.noise_reduction_db))
-            filters.append(f"afftdn=nr={nr_amount}:nf=-50")
+        # 1. Vocal Isolation & Music Removal (Highpass, Lowpass & Speech EQ Boost)
+        if config.isolate_vocals:
+            # Cut sub-bass/basslines < 80Hz and high-frequency cymbals/synths > 7.8kHz
+            filters.append("highpass=f=80")
+            filters.append("lowpass=f=7800")
+            # Equalizer boost core human speech band (1.2kHz)
+            filters.append("equalizer=f=1200:width_type=h:width=1500:g=3")
 
-        # 2. Silence Trimming Module (FFmpeg silenceremove filter)
+        # 2. Adaptive Noise Suppression & Hiss Removal (FFmpeg afftdn + anlmdn filters)
+        if config.reduce_noise:
+            nr_amount = max(1.0, min(30.0, config.noise_reduction_db))
+            filters.append(f"afftdn=nr={nr_amount}:nf=-45")
+            filters.append("anlmdn=s=0.0005")
+
+        # 3. Silence Trimming Module (FFmpeg silenceremove filter)
         if config.trim_silence:
             thresh_db = config.silence_threshold_db
-            # Remove leading silence and trailing silence
             filters.append(
                 f"silenceremove=start_periods=1:start_duration=0.05:start_threshold={thresh_db}dB:"
                 f"stop_periods=-1:stop_duration=0.05:stop_threshold={thresh_db}dB"
             )
 
-        # 3. Loudness Normalization Module (FFmpeg loudnorm EBU R128 filter)
+        # 4. Loudness Normalization Module (FFmpeg loudnorm EBU R128 filter)
         if config.normalize_loudness:
             target = config.target_loudness_lufs
             filters.append(f"loudnorm=I={target}:LRA=11:TP=-1.5")
 
         return filters
+
 
     @classmethod
     def process_pipeline(

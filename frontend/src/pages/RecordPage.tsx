@@ -285,7 +285,8 @@ export default function RecordPage() {
           />
           <div className="upload-icon">🎬</div>
           <div className="upload-title">Drop your Audio or Video file here or click to browse</div>
-          <div className="upload-subtitle">Supports MP4, MOV, AVI, MKV, WAV, MP3, M4A, OGG, WEBM (Audio extracted automatically)</div>
+          <div className="upload-subtitle">Supports MP4, MOV, AVI, MKV, WAV, MP3, M4A, OGG, WEBM (Auto audio extraction, music removal & noise suppression)</div>
+
 
           {audioUrl && (
             <div className="record-preview" onClick={e => e.stopPropagation()}>

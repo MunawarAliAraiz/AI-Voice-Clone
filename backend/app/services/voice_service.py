@@ -43,15 +43,17 @@ def _convert_to_wav(input_path: Path, config: Optional[AudioPipelineConfig] = No
     noise reduction, silence trimming, and EBU R128 loudness normalization.
     """
     if config is None:
-        # Default reference conversion config: 22.05kHz mono PCM WAV, normalized & trimmed
+        # Default reference conversion config: 22.05kHz mono PCM WAV, normalized, vocal isolated & noise-suppressed
         config = AudioPipelineConfig(
             convert_wav=True,
             sample_rate=22050,
             channels=1,
             normalize_loudness=True,
             trim_silence=True,
-            reduce_noise=False,
+            reduce_noise=True,
+            isolate_vocals=True,
         )
+
 
     return AudioPipeline.process_pipeline(input_path=input_path, config=config)
 
