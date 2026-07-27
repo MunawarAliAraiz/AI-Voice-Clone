@@ -146,9 +146,13 @@ class XTTSv2Engine(TTSEngine):
         logger.info(f"Loading XTTS v2 engine on device '{target_device}'...")
 
         try:
-            from TTS.api import TTS
+            try:
+                from TTS.api import TTS
+            except ImportError as imp_err:
+                raise EngineLoadError("xtts_v2", f"Failed to import TTS: {imp_err}. Run: pip install coqui-tts")
 
             # Attempt model load from local checkpoint directory or model name
+
             if self._verify_checkpoint_integrity():
                 try:
                     from TTS.tts.configs.xtts_config import XttsConfig
