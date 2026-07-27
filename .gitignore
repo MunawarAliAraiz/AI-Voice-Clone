@@ -9,6 +9,19 @@ build/
 .env
 *.db
 
+# Python Virtual Environments
+venv/
+.venv/
+env/
+
+# Model Checkpoints & Large Binaries
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+
 # Node
 node_modules/
 frontend/node_modules/
