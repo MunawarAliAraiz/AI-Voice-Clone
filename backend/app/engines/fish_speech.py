@@ -198,9 +198,14 @@ class FishSpeechEngine(TTSEngine):
                     if any(k in pth.name.lower() for k in ["firefly", "vq", "codec", "generator"]):
                         codec_path = pth
                         break
-                if codec_path is None:
+                if codec_path is None or not codec_path.exists():
                     pth_files = [f for f in checkpoint_dir.glob("*.pth") if f.name != "model.pth"]
-                    codec_path = pth_files[0] if pth_files else (checkpoint_dir / "codec.pth")
+                    codec_path = pth_files[0] if (pth_files and pth_files[0].exists()) else None
+
+                if codec_path is None or not codec_path.exists():
+                    raise ModelNotDownloadedError(
+                        "Fish Speech model checkpoint weights (.pth) not downloaded yet. Please download Fish Speech model from /api/models first."
+                    )
 
                 precision = (
                     torch.bfloat16
@@ -213,6 +218,7 @@ class FishSpeechEngine(TTSEngine):
                     device=target_device,
                     precision=precision,
                 )
+
 
                 tokenizer_config = checkpoint_dir / "tokenizer_config.json"
                 if not tokenizer_config.exists():
