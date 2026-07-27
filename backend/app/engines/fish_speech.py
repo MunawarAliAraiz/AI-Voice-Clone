@@ -167,11 +167,13 @@ class FishSpeechEngine(TTSEngine):
 
         try:
             try:
+                import dac
                 import audiotools
                 import fish_speech
                 from fish_speech.inference_engine import TTSInferenceEngine
             except ImportError as imp_err:
-                raise EngineLoadError("fish_speech", f"Failed to import fish_speech / audiotools: {imp_err}. Run: pip install fish-speech descript-audiotools")
+                raise EngineLoadError("fish_speech", f"Failed to import fish_speech / dac: {imp_err}. Run: pip install fish-speech descript-audio-codec descript-audiotools")
+
 
             import torch
             import inspect
