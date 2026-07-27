@@ -84,6 +84,11 @@ class EngineRegistry:
         return loaded
 
     @classmethod
+    def list_engines(cls) -> List[TTSEngine]:
+        """Get instances for all registered engines."""
+        return [cls.get_instance(name) for name in cls._engine_classes]
+
+    @classmethod
     def get_available_engines_info(cls) -> List[EngineInfo]:
         """Get metadata for all registered engines."""
         info_list = []

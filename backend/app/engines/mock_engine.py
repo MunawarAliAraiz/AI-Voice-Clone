@@ -54,6 +54,9 @@ class MockTTSEngine(TTSEngine):
         language: str = "en",
         output_path: Path | None = None,
         reference_text: str | None = None,
+        emotion: str = "neutral",
+        style: str | None = None,
+        **kwargs,
     ) -> GenerationResult:
         start_time = time.time()
         logger.info(f"Mock generating: '{text[:50]}...' [{language}]")

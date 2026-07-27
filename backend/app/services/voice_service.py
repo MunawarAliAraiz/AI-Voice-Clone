@@ -16,17 +16,21 @@ from ..utils.exceptions import AudioValidationError, ProfileNotFoundError
 
 logger = setup_logger("voiceclone.service.voice")
 
-ALLOWED_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".webm", ".m4a"}
+ALLOWED_EXTENSIONS = {
+    ".wav", ".mp3", ".ogg", ".flac", ".webm", ".m4a",
+    ".mp4", ".mov", ".avi", ".mkv", ".flv", ".wmv",
+}
 MAX_DURATION_SEC = 300  # 5 minutes
 
 
 def _validate_audio_extension(filename: str) -> None:
-    """Validate audio file extension."""
+    """Validate audio or video file extension."""
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise AudioValidationError(
-            f"Unsupported format '{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
+            f"Unsupported file format '{ext}'. Allowed audio/video formats: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
         )
+
 
 
 from ..utils.audio_pipeline import AudioPipeline, AudioPipelineConfig

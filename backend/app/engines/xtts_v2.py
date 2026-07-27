@@ -235,6 +235,9 @@ class XTTSv2Engine(TTSEngine):
         language: str = "en",
         output_path: Optional[Path] = None,
         reference_text: Optional[str] = None,
+        emotion: str = "neutral",
+        style: Optional[str] = None,
+        **kwargs,
     ) -> GenerationResult:
         """Generate cloned speech from text using reference audio."""
         if not self._loaded or self._tts is None:

@@ -26,8 +26,11 @@ export default function RecordPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (file: File) => {
-    if (!file.type.startsWith('audio/') && !/\.(wav|mp3|m4a|ogg|webm)$/i.test(file.name)) {
-      setError('Please upload a valid audio file (.wav, .mp3, .m4a, .ogg, .webm).');
+    const isAudio = file.type.startsWith('audio/') || /\.(wav|mp3|m4a|ogg|webm|flac)$/i.test(file.name);
+    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|avi|mkv|flv|wmv)$/i.test(file.name);
+
+    if (!isAudio && !isVideo) {
+      setError('Please upload a valid audio or video file (.mp4, .mov, .avi, .mkv, .wav, .mp3, .m4a, .ogg, .webm).');
       return;
     }
     setError('');
@@ -39,13 +42,24 @@ export default function RecordPage() {
     }
     setSaveSuccess(false);
 
-    const tempAudio = new Audio(URL.createObjectURL(file));
-    tempAudio.onloadedmetadata = () => {
-      if (tempAudio.duration) {
-        setDuration(Math.round(tempAudio.duration));
-      }
-    };
+    if (isAudio) {
+      const tempAudio = new Audio(URL.createObjectURL(file));
+      tempAudio.onloadedmetadata = () => {
+        if (tempAudio.duration) {
+          setDuration(Math.round(tempAudio.duration));
+        }
+      };
+    } else {
+      const tempVideo = document.createElement('video');
+      tempVideo.src = URL.createObjectURL(file);
+      tempVideo.onloadedmetadata = () => {
+        if (tempVideo.duration) {
+          setDuration(Math.round(tempVideo.duration));
+        }
+      };
+    }
   };
+
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -207,7 +221,7 @@ export default function RecordPage() {
   return (
     <div className="record-page animate-fade-in">
       <h1>Record & Upload Voice</h1>
-      <p className="page-subtitle">Record 15-30 seconds of clean audio or upload an existing audio file to create a voice profile</p>
+      <p className="page-subtitle">Record clean audio or upload an existing audio/video clip to extract audio for your voice profile</p>
 
       {/* Mode Selector */}
       <div className="mode-selector">
@@ -221,7 +235,7 @@ export default function RecordPage() {
           className={`mode-tab ${activeMode === 'upload' ? 'active' : ''}`}
           onClick={() => setActiveMode('upload')}
         >
-          📁 Upload Sound File
+          📁 Upload Sound / Video File
         </button>
       </div>
 
@@ -266,20 +280,25 @@ export default function RecordPage() {
             type="file"
             ref={fileInputRef}
             onChange={onFileChange}
-            accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm"
+            accept="audio/*,video/*,.wav,.mp3,.m4a,.ogg,.webm,.mp4,.mov,.avi,.mkv,.flv,.wmv"
             style={{ display: 'none' }}
           />
-          <div className="upload-icon">🎵</div>
-          <div className="upload-title">Drop your audio file here or click to browse</div>
-          <div className="upload-subtitle">Supports WAV, MP3, M4A, OGG, WEBM (15-30 sec recommended)</div>
+          <div className="upload-icon">🎬</div>
+          <div className="upload-title">Drop your Audio or Video file here or click to browse</div>
+          <div className="upload-subtitle">Supports MP4, MOV, AVI, MKV, WAV, MP3, M4A, OGG, WEBM (Audio extracted automatically)</div>
 
           {audioUrl && (
             <div className="record-preview" onClick={e => e.stopPropagation()}>
-              <audio controls src={audioUrl} className="record-audio" />
+              {audioBlob && audioBlob.type.startsWith('video/') ? (
+                <video controls src={audioUrl} className="record-audio" style={{ maxHeight: '180px', borderRadius: '8px' }} />
+              ) : (
+                <audio controls src={audioUrl} className="record-audio" />
+              )}
             </div>
           )}
         </div>
       )}
+
 
       {/* Save Form */}
       {audioBlob && (
@@ -342,6 +361,16 @@ export default function RecordPage() {
                   <span className="profile-duration">{formatTime(Math.round(p.duration_sec))}</span>
                 )}
                 <audio controls src={voiceApi.getAudioUrl(p.id)} className="profile-audio" />
+                
+                <div className="profile-transcript-box">
+                  <span className="profile-transcript-title">💬 Transcript</span>
+                  {p.transcript ? (
+                    <span>"{p.transcript}"</span>
+                  ) : (
+                    <span style={{ opacity: 0.6, fontStyle: 'italic' }}>(No transcript provided)</span>
+                  )}
+                </div>
+
                 <div className="profile-actions">
                   <button className="btn btn-ghost btn-danger" onClick={() => deleteProfile(p.id)}>
                     🗑️ Delete
@@ -352,6 +381,7 @@ export default function RecordPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

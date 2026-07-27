@@ -8,9 +8,7 @@ updates, deletion, and health diagnostic status.
 from fastapi import APIRouter, HTTPException
 from ..services.model_manager import get_model_manager, ModelManagerError
 from ..engines import get_engine, EngineRegistry
-from ..utils.exceptions import EngineRegistrationError
-
-
+from ..utils.exceptions import EngineRegistrationError, EngineNotFoundError
 
 
 router = APIRouter(prefix="/api/models", tags=["Model Manager"])
@@ -120,7 +118,7 @@ async def get_engine_health(engine_name: str):
         engine = get_engine(engine_name)
         health = engine.health_check()
         return {"status": "ok", "health": health}
-    except EngineRegistrationError as e:
+    except (EngineRegistrationError, EngineNotFoundError) as e:
         raise HTTPException(status_code=404, detail=e.message)
 
 
@@ -131,7 +129,8 @@ async def unload_engine(engine_name: str):
         engine = get_engine(engine_name)
         await engine.unload_model()
         return {"status": "ok", "message": f"Engine '{engine_name}' unloaded successfully."}
-    except EngineRegistrationError as e:
+    except (EngineRegistrationError, EngineNotFoundError) as e:
         raise HTTPException(status_code=404, detail=e.message)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

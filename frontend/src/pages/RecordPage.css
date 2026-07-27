@@ -111,4 +111,26 @@
 .profile-name { font-weight: var(--weight-semibold); font-size: var(--text-md); }
 .profile-duration { font-size: var(--text-xs); color: var(--text-tertiary); font-family: var(--font-mono); }
 .profile-audio { width: 100%; height: 32px; }
+.profile-transcript-box {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.profile-transcript-title {
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .profile-actions { display: flex; justify-content: flex-end; }
+
