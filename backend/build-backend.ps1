@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 Write-Host "⚙️ Building Python Backend with PyInstaller..." -ForegroundColor Cyan
 
 # 1. Compile with PyInstaller
-pyinstaller --noconfirm --onefile --windowed --name backend run.py
+pyinstaller --noconfirm --onefile --windowed --name backend main.py
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "❌ PyInstaller failed." -ForegroundColor Red
