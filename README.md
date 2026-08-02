@@ -23,7 +23,7 @@ A premium desktop application for personal voice cloning and multilingual text-t
 cd frontend && npm install && npm run dev
 
 # Backend
-cd backend && pip install -r requirements.txt && python -m app.main
+cd backend && uv sync && uv run python -m app.main
 
 # Full app (after Tauri setup)
 npm run tauri dev

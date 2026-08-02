@@ -52,7 +52,7 @@ class F5TTSEngine(TTSEngine):
         except ImportError:
             raise EngineLoadError(
                 "f5_tts",
-                "f5-tts package not installed. Run: pip install f5-tts"
+                "f5-tts package not installed. Run: uv add f5-tts"
             )
         except Exception as e:
             raise EngineLoadError("f5_tts", str(e))

@@ -53,7 +53,7 @@ class XTTSv2Engine(TTSEngine):
         except ImportError:
             raise EngineLoadError(
                 "xtts_v2",
-                "coqui-tts package not installed. Run: pip install coqui-tts"
+                "coqui-tts package not installed. Run: uv add coqui-tts"
             )
         except Exception as e:
             raise EngineLoadError("xtts_v2", str(e))

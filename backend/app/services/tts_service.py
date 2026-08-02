@@ -32,7 +32,7 @@ def _convert_wav_to_mp3(wav_path: Path) -> Path:
     except ImportError:
         logger.warning(
             "pydub not installed — returning WAV instead of MP3. "
-            "Install with: pip install pydub"
+            "Install with: uv add pydub"
         )
         return wav_path
     except Exception as e:

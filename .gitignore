@@ -1,6 +1,7 @@
 # Dependencies
 data/
 logs/
+.venv/
 *.pyc
 __pycache__/
 *.egg-info/

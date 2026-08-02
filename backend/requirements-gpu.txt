@@ -9,7 +9,8 @@ torchaudio>=2.4.0
 # TTS Engines
 f5-tts>=1.0.0
 coqui-tts>=0.25.0
-fish-speech>=1.5.0
+fish-speech @ git+https://github.com/fishaudio/fish-speech.git
+hf-transfer>=0.1.9
 
 # Audio processing
 librosa>=0.10.0
