@@ -447,3 +447,49 @@ Secondary hypotheses: arch/config mismatch with `F5TTS_v1_Base_Open_Bible_Urdu.y
 checkpoint predating `f5-tts` 1.1.22's expected format.
 
 Artifacts: `out_urdu_nativeref.wav` (EMA), `out_urdu_nativeref_noema.wav` (non-EMA).
+
+---
+
+## Urdu: the full experiment chain (2026-08-04)
+
+Reference throughout: the user's own voice, 6.67 s Urdu (`voice_urdu.wav`). Same target sentence
+throughout. Scored by `eval_harness.py` (Whisper large-v3 CER, ECAPA-TDNN speaker cosine).
+
+| # | Model | Input script | CER | Speaker sim | Human verdict |
+|---|---|---|---|---|---|
+| 1 | F5 OpenBible-Urdu | Perso-Arabic, EMA | 0.9636 | 0.0434 | unintelligible ("aaah aaah") |
+| 2 | F5 OpenBible-Urdu | Perso-Arabic, no EMA | 0.9636 | −0.0145 | identical failure |
+| 3 | F5 OpenBible-Urdu | Devanagari, nuqta folded | 0.4862 | 0.1908 | words audible, unusable |
+| 4 | F5 OpenBible-Urdu | Devanagari, nuqta kept | 0.4737 | 0.1375 | unusable |
+| 5 | **VoxCPM2** | Devanagari | **0.0702** ✅ | **0.6859** | **"sounds Hindi, not like me"** |
+
+### Closed questions — do not re-investigate
+
+- **F5 OpenBible-Urdu's vocab is Devanagari, not Perso-Arabic.** 86 entries: 59 Devanagari, 0 Arabic.
+  Every Urdu character hit `vocab_char_map.get(c, 0)` → index 0 → *space*. The model received 112
+  consecutive spaces. Checkpoint `text_embed` is `(87, 512)`, matching the vocab exactly, so it was
+  trained this way — not a mispackaged file.
+- **EMA is not a factor.** `use_ema=True` and `False` gave byte-identical CER.
+- **Nuqta folding is not a factor.** 0.4862 vs 0.4737 — noise.
+- **F5 OpenBible-Urdu is not viable.** Even with correct Devanagari input it plateaus at CER ~0.48,
+  speaker sim ~0.17.
+
+### The finding that reframes the gate
+
+VoxCPM2 scored **CER 0.0702 (pass)** and **speaker sim 0.6859** — a 0.014 miss — yet the user, a
+native speaker, reports the output **sounds Hindi and does not sound like him**.
+
+**Speaker cosine is a screen, not a verdict.** A near-gate similarity score coexisted with a total
+product failure on the actual requirement. The requirement is not "intelligible speech" but "speech
+that sounds like ME speaking Pakistani Urdu". Human evaluation takes precedence over the harness, and
+Phase A's gate must be read that way for every remaining cell.
+
+This also puts the transliteration route under real doubt: routing Urdu through Devanagari to a Hindi
+model may impose Hindi phonetics regardless of the reference. Chatterbox is the next test — different
+architecture, and its model card documents reference-accent bleed, which is the behaviour we want to
+maximise rather than suppress.
+
+### Operational lesson
+
+`eval_harness.py` was lost in a pod migration because it lived only in `/workspace/engines-lab/`.
+Anything that took effort to build belongs in git. It will be rebuilt to the same spec and committed.
