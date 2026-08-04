@@ -18,9 +18,11 @@ Base branch is **`dev`**, not `main`. `main` and `feature/upgrade-tts-engines` a
    `tests/fakes/FakeRuntime` behind `VCS_ALLOW_FAKE_RUNTIME=1` with an `X-Fake-Audio: true` header — never a
    silent fallback.
 2. **`import torch` must not be reachable from `app.main`.** Engine runtimes live in separate OS processes.
-   This is what keeps the API CPU-only, so tests run locally on a machine with no GPU.
-   Verify: `grep -rn "^import torch\|^from torch" backend/app/` must match only
-   `inference/runtimes/**` and `inference/worker.py`.
+   This is what keeps the API CPU-only, so tests run on a machine with no GPU.
+   Enforced by `tests/test_contracts.py::test_no_torch_outside_runtimes`. By hand, **allow leading
+   whitespace** — the legacy engines import torch *inside functions*, so an anchored `grep "^import torch"`
+   reports them clean while the invariant is broken:
+   `grep -rnE "^[[:space:]]*(import torch|from torch)" backend/app/`
 3. **Eviction only inside `_ensure_ready()`, only while holding the GPU-slot semaphore.** This makes
    unload-during-inference unrepresentable rather than merely guarded. Don't add an eviction path elsewhere.
 4. **Routing (`resolve()`) is pure.** No I/O, no `is_loaded`. Routing that consults load state is what caused

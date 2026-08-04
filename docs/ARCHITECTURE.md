@@ -43,12 +43,23 @@ give:
 IPC is nearly free: audio is already on disk, so messages are a few hundred bytes
 of line-delimited JSON. No waveform is ever serialized.
 
-Verified mechanically in Wave 4:
+Verified mechanically on every commit by
+`tests/test_contracts.py::test_no_torch_outside_runtimes`. If you check by hand,
+**allow leading whitespace**:
 
 ```bash
-grep -rn "^import torch\|^from torch" backend/app/
+grep -rnE "^[[:space:]]*(import torch|from torch)" backend/app/
 # must match ONLY inference/runtimes/** and inference/worker.py
 ```
+
+The anchored form (`"^import torch"`) is a false negative: the legacy engines
+import torch *inside functions*, so it reports them clean while the invariant is
+violated. A function-local import still makes torch reachable and still pays the
+~4 s cost on first call.
+
+Until X1 deletes the old engine layer, those known offenders are listed in
+`LEGACY_TORCH_IMPORTERS`, so the invariant is enforced on all new code
+immediately rather than switched off until the deletions land.
 
 The payoff: the API process needs no CUDA, so CI and the full non-GPU suite run
 on a CPU runner in ~30 s, and startup drops ~4 s of torch import.

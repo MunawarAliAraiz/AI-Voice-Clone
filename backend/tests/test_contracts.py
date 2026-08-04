@@ -33,6 +33,30 @@ APP_ROOT = BACKEND_ROOT / "app"
 #: The ONLY places torch may be imported. See ARCHITECTURE.md, invariant 1.
 TORCH_ALLOWED = ("inference/runtimes/", "inference/worker.py")
 
+#: Pre-rewrite modules that still import torch. X1 deletes every one of these in
+#: Wave 2, at which point this set must be emptied and this comment removed.
+#:
+#: It exists so the invariant is enforced on ALL NEW CODE starting now, during
+#: the parallel build, rather than being switched off until the deletions land.
+#: The test below also fails if an entry is listed but no longer offends, so the
+#: list cannot rot.
+#:
+#: Note these import torch INSIDE functions, not at module top level. A
+#: function-local import still makes torch reachable and still pays the ~4s cost
+#: on first call — which is why the check allows leading whitespace. A plain
+#: `grep "^import torch"` reports these files clean, and that false negative is
+#: exactly why this is a test and not a grep in a doc.
+LEGACY_TORCH_IMPORTERS = frozenset(
+    {
+        "utils/gpu.py",
+        "utils/gpu_manager.py",
+        "services/translation_service.py",
+        "engines/f5_tts.py",
+        "engines/fish_speech.py",
+        "engines/xtts_v2.py",
+    }
+)
+
 
 # ── Invariant 1: no torch in the API process ─────────────────────────────────
 
@@ -47,18 +71,40 @@ def test_no_torch_outside_runtimes() -> None:
     runs it on every commit.
     """
     pattern = re.compile(r"^\s*(?:import torch|from torch)", re.MULTILINE)
-    offenders: list[str] = []
+    offenders: set[str] = set()
 
     for path in APP_ROOT.rglob("*.py"):
         rel = path.relative_to(APP_ROOT).as_posix()
         if any(rel.startswith(allowed) or rel == allowed for allowed in TORCH_ALLOWED):
             continue
         if pattern.search(path.read_text(encoding="utf-8")):
-            offenders.append(rel)
+            offenders.add(rel)
 
-    assert not offenders, (
-        f"torch imported outside the worker: {offenders}. "
-        f"Only {TORCH_ALLOWED} may import torch."
+    new_offenders = offenders - LEGACY_TORCH_IMPORTERS
+    assert not new_offenders, (
+        f"torch imported outside the worker: {sorted(new_offenders)}. "
+        f"Only {TORCH_ALLOWED} may import torch — see ARCHITECTURE.md invariant 1."
+    )
+
+
+def test_legacy_torch_list_does_not_rot() -> None:
+    """
+    Every entry in LEGACY_TORCH_IMPORTERS must still exist and still offend.
+
+    Without this, a deleted file lingers in the allowlist and quietly re-opens a
+    hole for a future module of the same name. When X1 finishes, this test fails
+    until the set is emptied — which is the reminder to empty it.
+    """
+    pattern = re.compile(r"^\s*(?:import torch|from torch)", re.MULTILINE)
+    stale = [
+        rel
+        for rel in LEGACY_TORCH_IMPORTERS
+        if not (APP_ROOT / rel).exists()
+        or not pattern.search((APP_ROOT / rel).read_text(encoding="utf-8"))
+    ]
+    assert not stale, (
+        f"These are in LEGACY_TORCH_IMPORTERS but no longer import torch (or are "
+        f"gone): {sorted(stale)}. Remove them from the set."
     )
 
 
