@@ -31,7 +31,7 @@ from .protocol import (
     WireResponse,
     WorkerHandle,
 )
-from .spec import License, LanguageSupport, ModelSpec, ModelState, RuntimeKind
+from .spec import LanguageSupport, License, ModelSpec, ModelState, RuntimeKind
 
 __all__ = [
     "RuntimeKind",
