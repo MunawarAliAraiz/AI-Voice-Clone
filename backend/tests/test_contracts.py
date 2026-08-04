@@ -287,19 +287,17 @@ def test_gate_thresholds() -> None:
     assert not LanguageSupport("ur", Script.ARABIC).meets_gate()
 
 
-@pytest.mark.xfail(
-    reason="Phase A / Wave 3 resolves PENDING_PIN and PENDING_REPO. "
-           "This flips to a hard failure once research lands — it is the gate "
-           "that stops an unpinned revision reaching production.",
-    strict=False,
-)
 def test_all_revisions_pinned() -> None:
     """
-    Every spec must pin a 40-char commit sha.
+    Every spec must pin a 40-char commit sha. HARD GATE as of Wave 1.
 
-    An unpinned `main` combined with `trust_remote_code=True` (IndicF5 may need
-    it) is a supply-chain hole: the code that executes on this box would be
-    whatever the repo owner pushed last.
+    This was xfail while `f5_openf5_en` still carried PENDING placeholders.
+    That spec was dropped (no permissive English F5 exists), so every remaining
+    spec has a real sha and this now holds strictly.
+
+    It matters most for IndicF5, which is CONFIRMED to require
+    `trust_remote_code=True`: an unpinned `main` would mean the code executing
+    on this machine is whatever the repo owner pushed last.
     """
     sha = re.compile(r"^[0-9a-f]{40}$")
     for spec in CATALOG.specs:
