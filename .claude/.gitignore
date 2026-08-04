@@ -1,0 +1,3 @@
+# Machine-specific files: live server endpoints, local settings. Never commit.
+*.local.md
+settings.local.json

@@ -1,0 +1,362 @@
+"""
+AI Voice Clone Studio — Exception hierarchy and RFC 9457 mapping.
+
+CONTRACT MODULE. Wave 0. Replaces `utils/exceptions.py`, which carried codes but
+no HTTP mapping, so every router invented its own status and shape.
+
+Every error the API can produce is here, and every one knows three things:
+
+    code         a STABLE machine-readable string. Clients branch on this.
+                 Renaming one is a breaking API change.
+    http_status  the status it becomes.
+    to_problem() its RFC 9457 application/problem+json body.
+
+The `{"status": "ok", "result": ...}` envelope is gone. Success bodies are the
+resource; failures are problem+json. A client distinguishes them by status code,
+which is what status codes are for.
+
+Fill in `detail` with something the user can act on. "Generation failed" tells
+nobody anything — it is the message the predecessor produced when ChatTTS raised
+NameError, and it cost an afternoon.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+__all__ = [
+    "PROBLEM_CONTENT_TYPE",
+    "PROBLEM_BASE_URI",
+    "AppError",
+    # 4xx — the caller can fix these
+    "ValidationError",
+    "AudioValidationError",
+    "UploadTooLargeError",
+    "ProfileNotFoundError",
+    "HistoryNotFoundError",
+    "ModelNotFoundError",
+    "NoRouteError",
+    "AmbiguousScriptError",
+    "InvalidParamsError",
+    "AuthenticationError",
+    "MediaTokenError",
+    # 5xx / capacity — the caller can retry
+    "QueueFullError",
+    "VRAMExhaustedError",
+    "ModelLoadError",
+    "ModelNotDownloadedError",
+    "WorkerCrashedError",
+    "GenerationTimeoutError",
+    "GenerationError",
+]
+
+PROBLEM_CONTENT_TYPE = "application/problem+json"
+
+#: `type` URIs are namespaced under this. They need not resolve, but they must be
+#: stable — they are the documentation anchor for each code.
+PROBLEM_BASE_URI = "https://voiceclone.local/problems"
+
+
+class AppError(Exception):
+    """
+    Base for everything this application raises deliberately.
+
+    A single handler registered on the app converts any AppError into
+    problem+json. Anything that is NOT an AppError escaping to that handler is a
+    bug, and is logged with a traceback and returned as a bare 500 with no
+    detail — internal messages must never reach a client.
+    """
+
+    code: str = "INTERNAL_ERROR"
+    http_status: int = 500
+    title: str = "Internal error"
+
+    def __init__(self, detail: str, **extensions: Any) -> None:
+        self.detail = detail
+        #: Extra members merged into the problem document. RFC 9457 allows
+        #: arbitrary extension members, and this is where actionable data goes —
+        #: e.g. NoRouteError's list of pairs that WOULD work.
+        self.extensions = extensions
+        super().__init__(detail)
+
+    def to_problem(self, instance: str | None = None) -> dict[str, Any]:
+        """Serialize to an RFC 9457 problem document."""
+        problem: dict[str, Any] = {
+            "type": f"{PROBLEM_BASE_URI}/{self.code.lower().replace('_', '-')}",
+            "title": self.title,
+            "status": self.http_status,
+            "detail": self.detail,
+            "code": self.code,
+        }
+        if instance:
+            problem["instance"] = instance
+        problem.update(self.extensions)
+        return problem
+
+
+# ── Validation (400 / 413) ───────────────────────────────────────────────────
+
+
+class ValidationError(AppError):
+    code = "VALIDATION_ERROR"
+    http_status = 400
+    title = "Invalid request"
+
+
+class AudioValidationError(ValidationError):
+    code = "AUDIO_VALIDATION_ERROR"
+    title = "Invalid audio file"
+
+    def __init__(self, detail: str, **extensions: Any) -> None:
+        super().__init__(detail, **extensions)
+
+
+class UploadTooLargeError(AppError):
+    code = "UPLOAD_TOO_LARGE"
+    http_status = 413
+    title = "Upload too large"
+
+    def __init__(self, limit_mb: int, actual_mb: float | None = None) -> None:
+        detail = f"Reference audio must be under {limit_mb} MB."
+        if actual_mb is not None:
+            detail = f"Reference audio is {actual_mb:.1f} MB; the limit is {limit_mb} MB."
+        super().__init__(detail, limit_mb=limit_mb, actual_mb=actual_mb)
+
+
+# ── Not found (404) ──────────────────────────────────────────────────────────
+
+
+class ProfileNotFoundError(AppError):
+    code = "PROFILE_NOT_FOUND"
+    http_status = 404
+    title = "Voice profile not found"
+
+    def __init__(self, profile_id: int) -> None:
+        super().__init__(f"Voice profile {profile_id} does not exist.", profile_id=profile_id)
+
+
+class HistoryNotFoundError(AppError):
+    code = "HISTORY_NOT_FOUND"
+    http_status = 404
+    title = "Generation not found"
+
+    def __init__(self, history_id: int) -> None:
+        super().__init__(f"Generation {history_id} does not exist.", history_id=history_id)
+
+
+class ModelNotFoundError(AppError):
+    code = "MODEL_NOT_FOUND"
+    http_status = 404
+    title = "Unknown model"
+
+    def __init__(self, model_id: str, available: tuple[str, ...] = ()) -> None:
+        super().__init__(
+            f"No model with id {model_id!r} is registered.",
+            model_id=model_id,
+            available=list(available),
+        )
+
+
+# ── Routing (422) ────────────────────────────────────────────────────────────
+
+
+class NoRouteError(AppError):
+    """
+    Nothing in the catalog can serve this (language, script).
+
+    THE most important error in the system. The entire point of the rewrite is
+    that this is raised instead of silently substituting whatever happened to be
+    loaded. The body must enumerate what WOULD work — a bare "unsupported" sends
+    the user guessing, which is barely better than the sine wave.
+    """
+
+    code = "NO_ROUTE"
+    http_status = 422
+    title = "No model can render this text"
+
+    def __init__(
+        self,
+        language: str,
+        script: str,
+        supported: tuple[tuple[str, str], ...] = (),
+        suggestion: str | None = None,
+    ) -> None:
+        detail = f"No available model renders {language!r} written in {script} script."
+        if suggestion:
+            detail = f"{detail} {suggestion}"
+        super().__init__(
+            detail,
+            language=language,
+            script=script,
+            supported=[{"language": lang, "script": scr} for lang, scr in supported],
+            suggestion=suggestion,
+        )
+
+
+class AmbiguousScriptError(AppError):
+    """Text mixes scripts substantially. Guessing produces audibly broken output."""
+
+    code = "AMBIGUOUS_SCRIPT"
+    http_status = 422
+    title = "Mixed scripts in input"
+
+    def __init__(self, ratios: dict[str, float]) -> None:
+        mix = ", ".join(f"{s} {r:.0%}" for s, r in sorted(ratios.items(), key=lambda kv: -kv[1]))
+        super().__init__(
+            f"The text mixes scripts ({mix}). Split it into separate requests, "
+            f"one per script.",
+            script_ratios=ratios,
+        )
+
+
+class InvalidParamsError(AppError):
+    """A generation parameter is not declared by the selected model."""
+
+    code = "INVALID_PARAMS"
+    http_status = 422
+    title = "Invalid generation parameters"
+
+    def __init__(self, model_id: str, unknown: tuple[str, ...], accepted: tuple[str, ...]) -> None:
+        super().__init__(
+            f"Model {model_id!r} does not accept {', '.join(sorted(unknown))}.",
+            model_id=model_id,
+            unknown=sorted(unknown),
+            accepted=sorted(accepted),
+        )
+
+
+# ── Auth (401 / 403) ─────────────────────────────────────────────────────────
+
+
+class AuthenticationError(AppError):
+    code = "UNAUTHORIZED"
+    http_status = 401
+    title = "Authentication required"
+
+    def __init__(self, detail: str = "A valid X-API-Key header is required.") -> None:
+        super().__init__(detail)
+
+
+class MediaTokenError(AppError):
+    """
+    A signed media URL is missing, malformed, or expired.
+
+    Media tokens exist because `<audio>` elements cannot send auth headers. The
+    signature is checked with `hmac.compare_digest`, and this error deliberately
+    does not distinguish "bad signature" from "expired" — telling an attacker
+    which half they got right is free information.
+    """
+
+    code = "INVALID_MEDIA_TOKEN"
+    http_status = 403
+    title = "Invalid or expired media link"
+
+    def __init__(self, detail: str = "This media link is invalid or has expired.") -> None:
+        super().__init__(detail)
+
+
+# ── Capacity and runtime (5xx) ───────────────────────────────────────────────
+
+
+class QueueFullError(AppError):
+    """
+    Admission bound reached.
+
+    A bounded queue that rejects with 503 beats an unbounded one that OOMs the
+    box. `retry_after_sec` is advisory and belongs in a Retry-After header too.
+    """
+
+    code = "QUEUE_FULL"
+    http_status = 503
+    title = "Server busy"
+
+    def __init__(self, limit: int, retry_after_sec: int = 10) -> None:
+        super().__init__(
+            f"All {limit} inference slots are in use. Retry in a few seconds.",
+            limit=limit,
+            retry_after_sec=retry_after_sec,
+        )
+
+
+class VRAMExhaustedError(AppError):
+    """The model does not fit even after evicting everything else."""
+
+    code = "VRAM_EXHAUSTED"
+    http_status = 503
+    title = "Insufficient GPU memory"
+
+    def __init__(self, model_id: str, required_mb: int, budget_mb: int) -> None:
+        super().__init__(
+            f"Model {model_id!r} needs ~{required_mb} MB but the budget is {budget_mb} MB.",
+            model_id=model_id,
+            required_mb=required_mb,
+            budget_mb=budget_mb,
+        )
+
+
+class ModelLoadError(AppError):
+    code = "MODEL_LOAD_FAILED"
+    http_status = 500
+    title = "Model failed to load"
+
+    def __init__(self, model_id: str, detail: str) -> None:
+        super().__init__(f"Could not load {model_id!r}: {detail}", model_id=model_id)
+
+
+class ModelNotDownloadedError(AppError):
+    code = "MODEL_NOT_DOWNLOADED"
+    http_status = 409
+    title = "Model weights not downloaded"
+
+    def __init__(self, model_id: str, size_mb: int | None = None) -> None:
+        super().__init__(
+            f"Weights for {model_id!r} are not on disk. Download them first.",
+            model_id=model_id,
+            size_mb=size_mb,
+        )
+
+
+class WorkerCrashedError(AppError):
+    """The worker process died mid-request — usually CUDA OOM or an illegal access."""
+
+    code = "WORKER_CRASHED"
+    http_status = 500
+    title = "Inference worker crashed"
+
+    def __init__(self, model_id: str, exit_code: int | None = None) -> None:
+        super().__init__(
+            f"The worker running {model_id!r} exited unexpectedly.",
+            model_id=model_id,
+            exit_code=exit_code,
+        )
+
+
+class GenerationTimeoutError(AppError):
+    """
+    Exceeded its deadline; the worker was killed.
+
+    SIGKILL rather than cancellation is deliberate: a wedged CUDA kernel cannot
+    be interrupted, so the process is the only unit that can be reclaimed.
+    """
+
+    code = "GENERATION_TIMEOUT"
+    http_status = 504
+    title = "Generation timed out"
+
+    def __init__(self, model_id: str, timeout_sec: float) -> None:
+        super().__init__(
+            f"{model_id!r} exceeded its {timeout_sec:.0f}s budget and was terminated.",
+            model_id=model_id,
+            timeout_sec=timeout_sec,
+        )
+
+
+class GenerationError(AppError):
+    """Synthesis failed for a reason the worker could describe."""
+
+    code = "GENERATION_FAILED"
+    http_status = 500
+    title = "Generation failed"
+
+    def __init__(self, model_id: str, detail: str) -> None:
+        super().__init__(detail, model_id=model_id)

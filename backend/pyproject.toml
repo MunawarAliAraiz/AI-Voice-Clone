@@ -1,0 +1,117 @@
+[project]
+name = "voice-clone-studio-backend"
+version = "0.2.0"
+description = "Self-hosted voice cloning studio — Urdu, Hindi, English"
+requires-python = ">=3.12"
+
+# ── The API process. NO TORCH. ───────────────────────────────────────────────
+#
+# This list is the enforcement of the structural invariant: `import torch` must
+# not be reachable from `app.main`. If torch ever appears here, the invariant is
+# gone and tests/test_contracts.py::test_no_torch_outside_runtimes will say so.
+#
+# Note pynvml rather than torch for VRAM: the scheduler must read FREE VRAM
+# (NVML / mem_get_info), and it must do so without importing torch into the API
+# process. `total_memory - memory_allocated()` is not an option anyway — it sees
+# only the calling process's tensors, and the models live in other processes.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "python-multipart>=0.0.20",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "aiosqlite>=0.20",
+    "aiofiles>=24.1",
+    "httpx>=0.28",
+    "soundfile>=0.13",
+    "nvidia-ml-py>=12.560",
+]
+
+# ── Runtime extras: one per worker process type ──────────────────────────────
+#
+# These are NOT installed into the API environment. Each gets its own venv and
+# its own interpreter, created by scripts/setup-runtimes. That per-runtime
+# interpreter is the reason workers are subprocesses rather than threads — see
+# ARCHITECTURE.md, invariant 1.
+#
+# Versions marked TODO are Wave 1's to resolve. Do not guess them: the
+# predecessor pinned `fish-speech==2.0.0`, which does not exist on PyPI (only
+# 0.1.0 is published), and `pip install -r` died on that line.
+[project.optional-dependencies]
+f5 = [
+    "f5-tts>=1.1.22",           # R1 confirms; pulls torchcodec, vocos, x-transformers
+]
+chatterbox = [
+    # TODO(R2): confirm the distribution name and version on PyPI.
+]
+voxcpm = [
+    # TODO(R3): confirm the distribution name and version on PyPI.
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-timeout>=2.3",
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+# ── uv ───────────────────────────────────────────────────────────────────────
+
+[tool.uv]
+default-groups = ["dev"]
+
+# The three runtimes pin transformers/torchaudio stacks with a real chance of
+# not co-resolving. Declaring them as conflicting extras makes uv lock each
+# independently instead of failing — or, worse, silently resolving to a version
+# that satisfies the solver and breaks at import. The predecessor hit exactly
+# this: pyproject demanded transformers>=4.57.6 while fish-speech demanded
+# <=4.57.3, which no version satisfies.
+conflicts = [
+    [
+        { extra = "f5" },
+        { extra = "chatterbox" },
+        { extra = "voxcpm" },
+    ],
+]
+
+# Keep the resolver off torch's CPU-only default wheels. On the pod, torch
+# 2.8.0+cu128 is preinstalled and working; a naive resolve would downgrade it.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "platform_system == 'Linux'" }]
+torchaudio = [{ index = "pytorch-cu128", marker = "platform_system == 'Linux'" }]
+
+# ── Lint / type ──────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
+ignore = ["S101"]  # assert is how the scheduler enforces its slot precondition
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+strict = false
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
