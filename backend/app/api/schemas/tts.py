@@ -112,7 +112,9 @@ class TTSGenerateResponse(BaseModel):
     audio_url: str = Field(..., examples=["/api/media/history/42?t=abc123.1754300000"])
     duration_sec: float | None
     gen_time_sec: float
-    rtf: float | None = Field(None, description="gen_time / duration. <1.0 is faster than realtime.")
+    rtf: float | None = Field(
+        None, description="gen_time / duration. <1.0 is faster than realtime."
+    )
     language: str
     #: Never optional. Every generation states what produced it.
     route: RouteInfo

@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain.language import LanguageCode, Script
-from .spec import License, LanguageSupport, ModelSpec, RuntimeKind
+from .spec import LanguageSupport, License, ModelSpec, RuntimeKind
 
 __all__ = ["PENDING_PIN", "PENDING_REPO", "ModelCatalog", "CATALOG", "build_catalog"]
 
