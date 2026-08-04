@@ -73,10 +73,35 @@ reference speaker rather than falling back to a generic voice.
 
 ---
 
-## f5_openbible_urdu — runtime verified ✅
+## f5_openbible_urdu — pipeline runs, OUTPUT QUALITY NOT VALIDATED ⚠️
 
-**Urdu audio generated on the A5000.** 13.06 s @ 24 kHz, RMS 0.092/0.083 across two runs —
-non-silent, confirmed. This is the first real Urdu clone the project has produced.
+> **A native Urdu speaker listened to `out_urdu_explicit_reftext.wav` and could not understand it.**
+>
+> The test used an **English reference clip with an English transcript** to generate Urdu:
+>
+> ```
+> REF_AUDIO = f5_tts/infer/examples/basic/basic_ref_en.wav
+> REF_TEXT  = "Some call me nature, others call me mother nature."
+> GEN_TEXT  = <Urdu, Perso-Arabic>
+> ```
+>
+> F5 is in-context: it conditions on `(ref_audio, ref_text)` as a prefix and continues into
+> `gen_text`. Two compounding faults here — the acoustic prior is English, and the English reference
+> text is tokenized through this checkpoint's **Urdu-specific `vocab.txt`**. Unintelligible output is
+> the expected result of that setup, so **this does not yet condemn the checkpoint.**
+>
+> **"Non-silent, RMS 0.092" was never evidence of intelligibility.** It was recorded as if it were.
+> RMS proves a waveform exists; nothing more. The CER gate exists for exactly this and was not run
+> on this file.
+>
+> **Re-test required** with Urdu reference audio + a matching Urdu transcript, then score with
+> `eval_harness.py`. Until that passes, `LanguageSupport.verified` stays `False` and this cell must
+> not be advertised.
+
+Performance numbers below are still valid — they measure load, VRAM, and throughput, none of which
+depend on output being intelligible.
+
+**Generated:** 13.06 s @ 24 kHz, RMS 0.092/0.083 across two runs — non-silent, but see above.
 
 | Metric | Estimate was | **Measured** |
 |---|---|---|
