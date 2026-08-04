@@ -54,7 +54,8 @@ F5_OPENBIBLE_URDU = ModelSpec(
     runtime=RuntimeKind.F5,
     license=License.CC_BY_SA_4_0,
     hf_repo="multilingual-tts/F5-TTS-OpenBible-Urdu",
-    hf_revision=PENDING_PIN,
+    # Verified: this is the snapshot actually downloaded to the pod's HF cache.
+    hf_revision="78b7eca91d22e2e7be7f3ca4778b8eb59dbaf465",
     languages=(
         LanguageSupport(language=LanguageCode.URDU.value, script=Script.ARABIC),
     ),
@@ -76,7 +77,10 @@ F5_INDIC = ModelSpec(
     runtime=RuntimeKind.F5,
     license=License.MIT,
     hf_repo="ai4bharat/IndicF5",
-    hf_revision=PENDING_PIN,
+    # Verified: snapshot actually downloaded. If this model needs
+    # trust_remote_code (R1's open question), this pin is a SECURITY CONTROL,
+    # not hygiene — it fixes which remote code executes.
+    hf_revision="ba85abedf18dc479a447eaa0eccbd76ab78a47d5",
     languages=(
         LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
     ),
@@ -120,8 +124,10 @@ CHATTERBOX_ML_V3 = ModelSpec(
     display_name="Chatterbox Multilingual v3",
     runtime=RuntimeKind.CHATTERBOX,
     license=License.MIT,
-    hf_repo=PENDING_REPO,  # R2: confirm exact repo id.
-    hf_revision=PENDING_PIN,
+    hf_repo="ResembleAI/chatterbox",
+    # Verified via the HF X-Repo-Commit header. License MIT, confirmed
+    # independently on the model card, GitHub, and PyPI (chatterbox-tts 0.1.7).
+    hf_revision="5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
     languages=(
         LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
         LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
@@ -153,8 +159,10 @@ VOXCPM2 = ModelSpec(
     display_name="VoxCPM 2",
     runtime=RuntimeKind.VOXCPM,
     license=License.APACHE_2_0,
-    hf_repo=PENDING_REPO,  # R3: confirm exact repo id.
-    hf_revision=PENDING_PIN,
+    hf_repo="openbmb/VoxCPM2",
+    # Verified: snapshot actually downloaded to the pod's HF cache, which also
+    # resolves the repo id itself.
+    hf_revision="bffb3df5a29440629464e5e839f4d214c8714c3d",
     languages=(
         LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
         LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
