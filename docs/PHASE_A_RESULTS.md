@@ -94,9 +94,24 @@ reference speaker rather than falling back to a generic voice.
 > RMS proves a waveform exists; nothing more. The CER gate exists for exactly this and was not run
 > on this file.
 >
+> **Measured, Whisper large-v3-turbo:**
+>
+> ```
+> TARGET: آج موسم بہت خوشگوار ہے اور سورج آسمان پر چمک رہا ہے، لوگ باہر سیر کر رہے ہیں۔
+> HEARD : اب آآآآآآآآآآآآآآآآآآآآآآآآآآآ…   (one vowel, repeating for 13s)
+> CER   : 0.993   gate 0.25   FAIL
+> ```
+>
+> Not "slightly wrong Urdu" — **degenerate repeat-loop output**, which is what a flow-matching model
+> produces when its conditioning prefix is incoherent. This corroborates the mismatched-reference
+> diagnosis rather than a broken checkpoint.
+>
 > **Re-test required** with Urdu reference audio + a matching Urdu transcript, then score with
 > `eval_harness.py`. Until that passes, `LanguageSupport.verified` stays `False` and this cell must
 > not be advertised.
+>
+> **Blocked on:** a ~10 s Urdu voice clip with its transcript. This is also the real product
+> scenario — a user's own voice — so it is the right test, not a workaround.
 
 Performance numbers below are still valid — they measure load, VRAM, and throughput, none of which
 depend on output being intelligible.
