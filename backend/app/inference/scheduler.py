@@ -26,13 +26,26 @@ gone and so is the guarantee.
 from __future__ import annotations
 
 import asyncio
+import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from ..exceptions import (
+    GenerationTimeoutError,
+    ModelNotFoundError,
+    QueueFullError,
+    VRAMExhaustedError,
+    WorkerCrashedError,
+)
 from .catalog import ModelCatalog
-from .protocol import ModelStatus, SynthRequest, SynthResult, WorkerHandle
-from .spec import ModelSpec, RuntimeKind
+from .protocol import ModelStatus, SynthRequest, SynthResult, WireOp, WorkerHandle
+from .spec import ModelSpec, ModelState, RuntimeKind
 
 __all__ = ["SchedulerConfig", "InferenceScheduler"]
+
+#: Builds a worker for a runtime. Injected so tests can supply FakeWorker and
+#: the whole scheduler suite runs with no GPU and no subprocess.
+WorkerFactory = Callable[[RuntimeKind], Awaitable[WorkerHandle]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,8 +92,14 @@ class InferenceScheduler:
     class, which is what lets the API test suite run with no GPU.
     """
 
-    def __init__(self, catalog: ModelCatalog, config: SchedulerConfig | None = None) -> None:
+    def __init__(
+        self,
+        catalog: ModelCatalog,
+        worker_factory: WorkerFactory,
+        config: SchedulerConfig | None = None,
+    ) -> None:
         self._catalog = catalog
+        self._make_worker = worker_factory
         self._config = config or SchedulerConfig()
 
         #: THE GPU. Exactly one holder at a time. Every inference and every
@@ -91,8 +110,18 @@ class InferenceScheduler:
         #: immediately is a 503, not a wait.
         self._admission = asyncio.Semaphore(self._config.admission_limit)
 
-        #: Live workers by runtime. LRU order for eviction.
+        #: Live workers by runtime.
         self._workers: dict[RuntimeKind, WorkerHandle] = {}
+
+        #: Monotonic use counter for LRU. A counter rather than a clock: it is
+        #: deterministic, so eviction order is testable without freezing time.
+        self._tick = 0
+        self._last_used: dict[RuntimeKind, int] = {}
+
+        #: True only while a task holds `_slot`. Used by the assertion in
+        #: `_ensure_ready` that keeps the eviction invariant honest.
+        self._slot_held = False
+        self._shutting_down = False
 
     # ── SchedulerProtocol ────────────────────────────────────────────────────
 
@@ -121,7 +150,60 @@ class InferenceScheduler:
         Raises: QueueFullError, ModelNotFoundError, VRAMExhaustedError,
             WorkerCrashedError, GenerationTimeoutError, GenerationError.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        spec = self._require(request.model_id)
+
+        # Non-blocking: a full queue rejects immediately rather than piling up
+        # unbounded waiters behind a 60s generation.
+        if self._admission.locked() or not self._try_acquire(self._admission):
+            raise QueueFullError(limit=self._config.admission_limit)
+
+        try:
+            async with self._hold_slot():
+                worker = await self._ensure_ready(spec)
+                payload = {
+                    "model_id": spec.id,
+                    "text": request.text,
+                    "reference_audio": str(request.reference_audio),
+                    "reference_text": request.reference_text,
+                    "output_path": str(request.output_path),
+                    "params": request.params,
+                    "sample_rate": request.sample_rate,
+                }
+                timeout = self._timeout_for(spec, request.text)
+
+                # shield() is NOT optional. If the HTTP client disconnects
+                # mid-generation, an unshielded await would be cancelled, the
+                # `async with` would release the slot, and the next request
+                # would enter while this CUDA kernel is still running. That is
+                # the exact race this class exists to prevent. The only early
+                # exit is the timeout below, which kills the process.
+                try:
+                    response = await asyncio.shield(
+                        worker.call(WireOp.SYNTH, payload, timeout=timeout)
+                    )
+                except TimeoutError as exc:
+                    await self._evict(spec.runtime)
+                    raise GenerationTimeoutError(spec.id, timeout) from exc
+
+                if not response.ok:
+                    if not worker.is_alive:
+                        self._forget(spec.runtime)
+                        raise WorkerCrashedError(spec.id)
+                    raise self._error_from(spec, response)
+
+                self._tick += 1
+                self._last_used[spec.runtime] = self._tick
+                result = response.result
+                return SynthResult(
+                    output_path=request.output_path,
+                    duration_sec=float(result["duration_sec"]),
+                    gen_time_sec=float(result["gen_time_sec"]),
+                    sample_rate=int(result.get("sample_rate", request.sample_rate)),
+                    model_id=spec.id,
+                    load_time_sec=float(result.get("load_time_sec", 0.0)),
+                )
+        finally:
+            self._admission.release()
 
     async def status(self) -> tuple[ModelStatus, ...]:
         """
@@ -131,18 +213,46 @@ class InferenceScheduler:
         and a status call that queues behind a 60s generation makes the UI look
         hung. Report from in-memory bookkeeping only.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        out: list[ModelStatus] = []
+        for spec in self._catalog.specs:
+            worker = self._workers.get(spec.runtime)
+            if worker is not None and worker.loaded_model_id == spec.id:
+                state, wait = ModelState.RESIDENT, 0.0
+            elif worker is not None and worker.is_alive:
+                # Same runtime is live with a different checkpoint: a swap costs
+                # seconds, not a process start. The UI shows that difference.
+                state, wait = ModelState.WARM, min(spec.est_load_sec, 5.0)
+            else:
+                state, wait = ModelState.COLD, spec.est_load_sec
+            out.append(
+                ModelStatus(
+                    spec=spec,
+                    state=state,
+                    est_wait_sec=wait,
+                    vram_mb_in_use=spec.vram_mb if state is ModelState.RESIDENT else None,
+                    last_used_at=self._last_used.get(spec.runtime),
+                )
+            )
+        return tuple(out)
 
     async def warm(self, model_id: str) -> None:
         """
         Pre-load a spec. Takes the slot, so it queues behind in-flight work
         rather than racing it.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        spec = self._require(model_id)
+        async with self._hold_slot():
+            await self._ensure_ready(spec)
 
     async def shutdown(self) -> None:
         """Kill every worker. Idempotent. Called from the app lifespan."""
-        raise NotImplementedError("Wave 2 / B1")
+        self._shutting_down = True
+        workers = list(self._workers.values())
+        self._workers.clear()
+        self._last_used.clear()
+        for worker in workers:
+            with contextlib.suppress(Exception):
+                await worker.kill(grace_sec=self._config.kill_grace_sec)
 
     # ── Internals ────────────────────────────────────────────────────────────
 
@@ -166,7 +276,83 @@ class InferenceScheduler:
         leaves fragmentation and a ~500 MB CUDA context behind, so the VRAM the
         budget thinks it reclaimed does not actually come back.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        # The invariant, asserted rather than trusted. This is the cheapest
+        # possible guard on the one property the whole design rests on.
+        assert self._slot_held, "_ensure_ready called without holding the GPU slot"
+
+        worker = self._workers.get(spec.runtime)
+
+        # RESIDENT — nothing to do.
+        if worker is not None and worker.is_alive and worker.loaded_model_id == spec.id:
+            return worker
+
+        # A dead worker is bookkeeping we must drop before sizing the budget.
+        if worker is not None and not worker.is_alive:
+            self._forget(spec.runtime)
+            worker = None
+
+        # WARM — right runtime, wrong checkpoint. Swap in-process.
+        if worker is not None:
+            await self._load_into(worker, spec)
+            return worker
+
+        # COLD — evict until this spec fits, then spawn.
+        await self._make_room_for(spec)
+        worker = await self._make_worker(spec.runtime)
+        self._workers[spec.runtime] = worker
+        self._tick += 1
+        self._last_used[spec.runtime] = self._tick
+        try:
+            await self._load_into(worker, spec)
+        except Exception:
+            # Never leave a half-loaded worker holding VRAM the budget believes
+            # is in use by a working model.
+            await self._evict(spec.runtime)
+            raise
+        return worker
+
+    async def _load_into(self, worker: WorkerHandle, spec: ModelSpec) -> None:
+        """Load `spec` into an existing worker. Caller holds the slot."""
+        response = await worker.call(
+            WireOp.LOAD,
+            {"model_id": spec.id, "hf_repo": spec.hf_repo, "hf_revision": spec.hf_revision},
+            timeout=self._config.load_timeout_sec,
+        )
+        if not response.ok:
+            raise self._error_from(spec, response)
+
+    async def _make_room_for(self, spec: ModelSpec) -> None:
+        """
+        Evict least-recently-used runtimes until `spec` fits the budget.
+
+        Sizing uses each resident spec's RECORDED `vram_mb`, not a live free-VRAM
+        reading — see `_free_vram_mb` for why a live reading cannot predict peak.
+        """
+        if spec.vram_mb > self._config.budget_mb:
+            raise VRAMExhaustedError(spec.id, spec.vram_mb, self._config.budget_mb)
+
+        while (
+            self._reserved_mb() + spec.vram_mb > self._config.budget_mb
+            or len(self._workers) >= self._config.max_workers
+        ):
+            if not self._workers:
+                raise VRAMExhaustedError(spec.id, spec.vram_mb, self._config.budget_mb)
+            victim = min(self._workers, key=lambda r: self._last_used.get(r, 0))
+            await self._evict(victim)
+
+    def _reserved_mb(self) -> int:
+        """VRAM attributed to live workers, from recorded per-spec figures."""
+        total = 0
+        for runtime, worker in self._workers.items():
+            loaded = worker.loaded_model_id
+            spec = self._catalog.get(loaded) if loaded else None
+            total += spec.vram_mb if spec else self._largest_vram(runtime)
+        return total
+
+    def _largest_vram(self, runtime: RuntimeKind) -> int:
+        """Worst-case VRAM for a runtime whose checkpoint we cannot identify."""
+        specs = self._catalog.by_runtime(runtime)
+        return max((s.vram_mb for s in specs), default=0)
 
     async def _spawn(self, runtime: RuntimeKind) -> WorkerHandle:
         """
@@ -177,16 +363,25 @@ class InferenceScheduler:
         rather than a thread — F5, Chatterbox, and VoxCPM pin transformers and
         torchaudio stacks with a real chance of not co-resolving in one env.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        return await self._make_worker(runtime)
 
     async def _evict(self, runtime: RuntimeKind) -> None:
         """
         Kill a runtime's worker and reclaim its VRAM.
 
         PRECONDITION: the caller holds `self._slot`. Reachable only from
-        `_ensure_ready`.
+        `_make_room_for`, from the failure path of a partially-loaded spawn, and
+        from a generation timeout — all three hold the slot. `shutdown()`
+        bypasses it deliberately: by then nothing may take the slot again.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        assert self._slot_held or self._shutting_down, (
+            "_evict called without holding the GPU slot"
+        )
+        worker = self._workers.pop(runtime, None)
+        self._last_used.pop(runtime, None)
+        if worker is not None:
+            with contextlib.suppress(Exception):
+                await worker.kill(grace_sec=self._config.kill_grace_sec)
 
     def _free_vram_mb(self) -> int:
         """
@@ -213,7 +408,7 @@ class InferenceScheduler:
         taken between requests. A live reading is useful for detecting
         *external* processes, not for predicting peak.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        return max(0, self._config.budget_mb - self._reserved_mb())
 
     def _timeout_for(self, spec: ModelSpec, text: str) -> float:
         """
@@ -222,4 +417,61 @@ class InferenceScheduler:
         A fixed timeout is wrong in both directions: it kills long-but-healthy
         generations and lets a wedged short one hold the slot for minutes.
         """
-        raise NotImplementedError("Wave 2 / B1")
+        chunks = max(1.0, len(text) / 100.0)
+        budget = self._config.base_timeout_sec + chunks * self._config.timeout_per_100_chars_sec
+        # A slow model needs proportionally longer. est_rtf is measured, so this
+        # tracks reality rather than a guess.
+        if spec.est_rtf:
+            budget *= max(1.0, spec.est_rtf / 0.5)
+        return budget
+
+    # ── Slot plumbing ────────────────────────────────────────────────────────
+
+    @contextlib.asynccontextmanager
+    async def _hold_slot(self):
+        """
+        Acquire the GPU slot and record that we hold it.
+
+        The flag exists purely so `_ensure_ready` and `_evict` can ASSERT the
+        invariant rather than trust it. asyncio.Semaphore has no "am I the
+        holder" query, and the whole design rests on this one property.
+        """
+        async with self._slot:
+            self._slot_held = True
+            try:
+                yield
+            finally:
+                self._slot_held = False
+
+    @staticmethod
+    def _try_acquire(sem: asyncio.Semaphore) -> bool:
+        """Acquire without waiting. Returns False if it would have blocked."""
+        if sem.locked():
+            return False
+        # Semaphore.acquire() returns immediately when the counter is positive,
+        # so this cannot block given the check above.
+        sem._value -= 1  # noqa: SLF001 - asyncio exposes no non-blocking acquire
+        return True
+
+    def _require(self, model_id: str) -> ModelSpec:
+        spec = self._catalog.get(model_id)
+        if spec is None:
+            raise ModelNotFoundError(model_id, tuple(s.id for s in self._catalog.specs))
+        return spec
+
+    def _forget(self, runtime: RuntimeKind) -> None:
+        """Drop bookkeeping for a worker that died on its own."""
+        self._workers.pop(runtime, None)
+        self._last_used.pop(runtime, None)
+
+    def _error_from(self, spec: ModelSpec, response) -> Exception:
+        """Map a worker error response onto an app exception."""
+        from ..exceptions import GenerationError, ModelLoadError
+
+        code = response.error_code or ""
+        detail = response.error_message or "worker reported no detail"
+        if code == "WORKER_CRASHED":
+            return WorkerCrashedError(spec.id)
+        if code in {"MODEL_LOAD_FAILED", "LOAD_FAILED"}:
+            return ModelLoadError(spec.id, detail)
+        return GenerationError(spec.id, detail)
