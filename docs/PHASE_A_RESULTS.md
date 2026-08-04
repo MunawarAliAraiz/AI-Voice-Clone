@@ -79,10 +79,75 @@ reference speaker rather than falling back to a generic voice.
 the standard F5 class or requires `AutoModel(trust_remote_code=True)`. If the latter, the pinned
 revision becomes a security control rather than hygiene.
 
-## voxcpm2
+## voxcpm2 — runtime verified ✅
 
-⏳ R3 in flight. Must re-measure VRAM and RTF on **sm_86**; the published ~8 GB / RTF 0.30 figures
-are Ada-generation. At ~8 GB this is the largest spec and constrains what can co-reside.
+Repo **`openbmb/VoxCPM2`** @ `bffb3df5a29440629464e5e839f4d214c8714c3d`.
+Class `voxcpm.core.VoxCPM`; model impl `voxcpm.model.voxcpm2.VoxCPM2Model`.
+
+### Licensing gate: PASSED
+
+Apache-2.0 on **both** weights and code (`VoxCPM/LICENSE`, `pyproject.toml`), and the model card
+explicitly permits commercial use. Verified separately because weights and code are often licensed
+differently.
+
+### Measured on the A5000 (sm_86)
+
+| Metric | Estimate was | **Measured** | Note |
+|---|---|---|---|
+| Peak VRAM | 8000 MB | **7300 MB** | nvidia-smi peak during generation; 6200 MB resident after load. Estimate was conservative. |
+| RTF | 0.30 | **0.58** | English and Hindi alike, 3 samples. 1.9× the published figure — that was Ada; Ampere has no FP8. **Still passes the < 1.0 gate.** |
+| Cold load | 45 s | **123.8 s** | True cold. 65.6 s once torch Inductor's compile cache is warm on disk. |
+
+The load-time miss is the one that matters for UX: the UI would have promised "~45 s" and delivered
+two minutes.
+
+### Real API
+
+```python
+# voxcpm.core.VoxCPM — public generate() is (*args, **kwargs); the real
+# signature lives on _generate:
+_generate(text, prompt_wav_path=None, prompt_text=None, reference_wav_path=None,
+          cfg_value=2.0, inference_timesteps=10, min_len=2, max_len=4096,
+          normalize=False, denoise=False, retry_badcase=True,
+          retry_badcase_max_times=3, retry_badcase_ratio_threshold=6.0,
+          streaming=False, seed=None)
+```
+
+Zero-shot cloning needs `reference_wav_path` alone — **no reference transcript required**.
+UI-worthy params: `cfg_value` (1.0–3.0, default 2.0), `inference_timesteps` (1–50, default 10).
+The `retry_badcase*` and `min_len`/`max_len` knobs are safety internals and must NOT surface in the UI.
+
+### ⚠️ Warm-up trap — must be handled in the runtime
+
+The bundled warm-up (`optimize=True`) never passes a reference clip, so it does **not** compile the
+cloning path. The first real cloning call then pays an extra **40–55 s** of `torch.compile`. A
+runtime that uses the built-in warm-up will make every cold worker's first request look broken.
+
+**The runtime must warm up with a real reference clip.**
+
+### Other measured facts
+
+- Sample rates: **16 kHz encoder input, 48 kHz output** (from `config.json`).
+- Reference duration does not drive output length: 2 s / 10 s / 60 s all succeeded, no truncation,
+  near-constant generation time.
+- sm_86 clean — no flash-attn, no FP8, plain `scaled_dot_product_attention` + bf16.
+- Deps: `torch 2.13.0+cu130`, `torchaudio 2.11.0`, `transformers 5.14.1`, `huggingface-hub 1.26.0`.
+
+**This dependency set validates the architecture.** VoxCPM2 wants torch 2.13.0+cu130 while the pod's
+base is 2.8.0+cu128 — they coexist only because each runtime gets its own venv and its own
+interpreter in a separate process. A thread pool could not have done this, which is the first of the
+three reasons subprocesses were chosen.
+
+### NOT measured — gate still incomplete
+
+- **CER** (needs Whisper-large-v3) and **speaker cosine** (needs a real embedding model). R3b used an
+  MFCC-cosine + F0 proxy and reported English 0.9950 / Hindi 0.9926 similarity to the reference —
+  suggestive that Hindi genuinely clones rather than falling back to a generic voice, but **flagged
+  by R3b itself as a heuristic, not a verified embedding result.** R4b's harness does the real check.
+- Denoiser (ZipEnhancer) VRAM and load time; concurrent-request VRAM; the 20-request soak.
+
+**`LanguageSupport.verified` stays `False` for both cells** until CER and speaker cosine are measured.
+RTF passes; two of three gates are still unrun.
 
 ## Urdu pipeline
 

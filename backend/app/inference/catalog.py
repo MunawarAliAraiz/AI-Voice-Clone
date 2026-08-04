@@ -167,15 +167,37 @@ VOXCPM2 = ModelSpec(
         LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
         LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
     ),
-    vram_mb=8000,
-    est_load_sec=45.0,
-    est_rtf=0.30,
+    # MEASURED on the A5000 (sm_86), R3b. 6.2 GB resident after load, 7.3 GB
+    # peak during generation per nvidia-smi (the real total, including CUDA
+    # context — not torch.cuda.max_memory_allocated).
+    vram_mb=7300,
+    # MEASURED: 123.8s TRUE cold. 65.6s once torch Inductor's compile cache is
+    # warm on disk. The estimate here was 45s — the UI would have promised
+    # "~45s" and delivered two minutes.
+    est_load_sec=124.0,
+    # MEASURED: 0.57-0.58 English and Hindi. 1.9x the published 0.30, which was
+    # an Ada figure; Ampere has no FP8. Still passes the RTF < 1.0 gate.
+    est_rtf=0.58,
     needs_reference_text=False,
+    params={
+        "cfg_value": {
+            "type": "number", "minimum": 1.0, "maximum": 3.0, "default": 2.0,
+            "title": "Guidance",
+        },
+        "inference_timesteps": {
+            "type": "integer", "minimum": 1, "maximum": 50, "default": 10,
+            "title": "Quality steps",
+        },
+    },
     notes=(
-        "R3: the ~8GB / RTF 0.30 figures are published for 4090-class Ada "
-        "hardware. Re-measure on the A5000 (sm_86) before the scheduler trusts "
-        "vram_mb — admission control is built on this number being honest. At "
-        "8GB it is the largest spec and constrains what can co-reside."
+        "Apache-2.0 on BOTH weights and code; model card explicitly permits "
+        "commercial use. Native rates: 16 kHz encoder in, 48 kHz out. "
+        "WARM-UP TRAP: the bundled warm-up (optimize=True) never passes a "
+        "reference, so it does not compile the cloning path — the first real "
+        "clone then pays an extra 40-55s torch.compile. The runtime MUST warm "
+        "up with a real reference clip or every cold worker's first request "
+        "looks broken. Reference duration does not affect output length "
+        "(2s/10s/60s all fine, no truncation)."
     ),
 )
 
