@@ -132,6 +132,63 @@ def test_domain_is_pure() -> None:
 # ── Catalog integrity ────────────────────────────────────────────────────────
 
 
+def test_domain_never_imports_inference() -> None:
+    """
+    The dependency arrow runs `inference -> domain`, one way.
+
+    Domain is the pure layer; it may not know an inference layer exists. The
+    first draft of `routing.py` imported `ModelCatalog` directly, which was a
+    circular import (`inference.spec` already imports `domain.language.Script`)
+    AND a layering inversion. `ports.CatalogView` exists to break it.
+    """
+    pattern = re.compile(r"^\s*(?:import app\.inference|from (?:app\.)?\.*inference)", re.MULTILINE)
+    offenders = [
+        p.relative_to(APP_ROOT).as_posix()
+        for p in (APP_ROOT / "domain").rglob("*.py")
+        if pattern.search(p.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, (
+        f"domain must not import inference: {offenders}. "
+        f"Depend on app.domain.ports.CatalogView instead."
+    )
+
+
+def test_packages_import_in_any_order() -> None:
+    """
+    Importing `app.inference` first must work as well as `app.domain` first.
+
+    A cycle can hide behind import order: the original defect passed the whole
+    suite because every test happened to import `app.domain` first, and only
+    blew up when something reached for `app.inference` first. Run both orders in
+    a clean interpreter so sys.modules cannot mask it.
+    """
+    import subprocess
+    import sys
+
+    for first, second in (("app.inference", "app.domain"), ("app.domain", "app.inference")):
+        proc = subprocess.run(
+            [sys.executable, "-c", f"import {first}; import {second}"],
+            cwd=BACKEND_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (
+            f"importing {first} before {second} failed:\n{proc.stderr}"
+        )
+
+
+def test_model_catalog_satisfies_catalog_view() -> None:
+    """
+    The concrete catalog must structurally satisfy the domain's port.
+
+    If this breaks, `resolve()` type-checks against something no real catalog
+    provides, and the failure surfaces at runtime in Wave 2 instead of here.
+    """
+    from app.domain.ports import CatalogView
+
+    assert isinstance(CATALOG, CatalogView)
+
+
 def test_catalog_ids_unique() -> None:
     ids = [s.id for s in CATALOG.specs]
     assert len(ids) == len(set(ids))

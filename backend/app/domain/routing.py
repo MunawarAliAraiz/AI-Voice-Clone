@@ -25,8 +25,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from ..inference.catalog import ModelCatalog
 from .language import Script, TextProfile
+from .ports import CatalogView
 
 __all__ = [
     "TransformKind",
@@ -123,7 +123,7 @@ class RoutePlan:
 def resolve(
     profile: TextProfile,
     requested: str | None,
-    catalog: ModelCatalog,
+    catalog: CatalogView,
     strategy: UrduStrategy = UrduStrategy.NATIVE,
 ) -> RoutePlan:
     """
@@ -138,7 +138,9 @@ def resolve(
         requested: an explicit model id, or None to let the catalog decide.
             An explicit id is honored if it verifiably supports the pair, and
             raises otherwise. It is NEVER silently swapped for something else.
-        catalog: the model catalog. Carries no residency information.
+        catalog: anything satisfying `CatalogView`. Typed as a protocol rather
+            than `ModelCatalog` so the domain layer never imports the inference
+            layer — the dependency arrow runs inference -> domain only.
         strategy: how to treat Perso-Arabic Urdu.
 
     Returns:
