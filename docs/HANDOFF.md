@@ -14,7 +14,7 @@ Last updated: **2026-08-04**, during Wave 1.
 |---|---|
 | **0 — Contracts** | ✅ Done, pushed. 24 tests pass, ruff clean. |
 | **X1 — Deletions** | ✅ Done, pushed. −5402 lines. |
-| **1 — Research** | 🔄 In flight. See below. |
+| **1 — Research** | ✅ Substantially done. Every question that could change the architecture is answered. Two specs fully measured, one blocked on an HF gate, one installed but unmeasured. |
 | 2 — Build | Not started. Blocked on Wave 1 for the runtimes only; everything else is unblocked. |
 | 3 — Integration | Not started. |
 | 4 — Review | Not started. |
@@ -137,6 +137,40 @@ Wave 1 gates only the runtime implementations. These can start now against the f
 5. Permissive licenses only.
 6. Nothing routes until Phase A verifies it. `LanguageSupport.verified=False` is the default and the
    catalog currently resolves nothing — deliberately.
+
+## Wave 1 outcome
+
+| Spec | State |
+|---|---|
+| `f5_openbible_urdu` | ✅ Verified. Real Urdu audio generated. 6112 MB, 7.0 s load, RTF 0.21 |
+| `voxcpm2` | ✅ Verified. 7300 MB, 124 s load, RTF 0.58. Hindi speaker sim **0.678 — below the 0.70 gate**, needs a re-run |
+| `chatterbox_ml_v3` | ⚠️ MIT confirmed; venv installed (torch + chatterbox import OK); **nothing measured** |
+| `f5_indic` | 🔒 Blocked on the HF gate |
+| ~~`f5_openf5_en`~~ | ❌ Dropped — no permissive English F5 exists |
+
+**Design changes forced by research** (the reason Wave 1 ran before Wave 2):
+
+1. **Two F5 loader paths, not one runtime class.** IndicF5 needs
+   `AutoModel(trust_remote_code=True)`; OpenBible-Urdu is a raw checkpoint through the stock loader.
+2. **English cannot use F5** — routes to Chatterbox.
+3. **Reference limit is ~12 s with silent truncation**, not ~6 s. The "8192" was an unrelated rotary
+   table (~87 s).
+4. **Blank `ref_text` silently loads Whisper** — 39.5 s cold, 5.1 s warm, per request.
+5. **VRAM must be sampled concurrently**, not after the fact — post-hoc readings under-report peak
+   ~5× because allocator caches are released between requests.
+6. **Roman Urdu → Devanagari is one hop and higher quality than Roman → Perso-Arabic** — the
+   transliterated route is the better path, not a licensing compromise.
+
+Ready-to-use on the pod: `/workspace/engines-lab/r4-urdu/eval_harness.py` (Whisper large-v3 +
+ECAPA-TDNN, both permissive) and `corpus/` with documented provenance.
+
+## Next session — start here
+
+Wave 2 backend agents are fully unblocked against the frozen contracts and need no GPU:
+**B1** (scheduler + its five tests, against `FakeWorker`), **B2** (API layer, against
+`FakeScheduler`), **B3** (domain implementations). Use Sonnet — this is implementation against frozen
+contracts, which is what contracts are for. Two or three agents at a time, not eight: a session limit
+kills all in-flight agents at once.
 
 ## Open items
 
