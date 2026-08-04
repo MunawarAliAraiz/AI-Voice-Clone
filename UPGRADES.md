@@ -1,5 +1,17 @@
 # AI Voice Clone Studio — Upgrades & Roadmap
 
+> **⚠️ Partially superseded by [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md).** Kept as a record of
+> intent, but check the plan before acting on anything here — several items were reconsidered:
+>
+> - **Emotion & tone sliders** were *removed*, not added. The nine presets that existed resolved to
+>   an `atempo` multiplier, with text preprocessing that was a no-op on Urdu and Hindi — the target
+>   languages. They are replaced by real per-model parameters (e.g. Chatterbox's `exaggeration`),
+>   with the UI hiding controls the selected model does not declare.
+> - **Studio-grade preprocessing** landed as the audio pipeline, plus a level meter and clipping
+>   indicator at record time — reference quality dominates clone quality more than any model knob.
+> - The **desktop shell was dropped**; this is a web app now.
+> - XTTS v2 is gone (non-commercial license), so items referencing its prompt tokens no longer apply.
+
 While the foundation of the AI Voice Clone Studio is highly robust, transitioning it from a strong prototype into a **world-class, commercial-grade professional application** requires several key feature additions and architectural improvements. 
 
 Here is the detailed roadmap for future development:
