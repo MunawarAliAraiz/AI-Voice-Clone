@@ -365,3 +365,51 @@ The plan says a failing cell is removed from the catalog. Before applying that t
 **Action for Wave 3:** re-run Hindi with 3 sentences and a language-matched reference before deciding.
 If it still misses, Hindi routes to Chatterbox or IndicF5 and this cell is deleted — not shipped with
 a caveat.
+
+---
+
+## 🔴 Urdu re-test with a NATIVE reference — still FAILS
+
+Run with a correct setup: the user's own 6.67 s Urdu recording as reference, the matching Urdu-script
+transcript as `ref_text`, and an everyday-register corpus sentence as `gen_text`. Reference was used
+in full (6.61 s after preprocessing — no truncation).
+
+```
+target      : اگر تمہیں فارغ وقت ملے تو مجھے فون کر لینا، ہم کہیں باہر کھانا کھانے چلتے ہیں...
+whisper hears: 'موسیقی'      ← the word for "music". Whisper does not hear speech at all.
+
+CER         0.9636   (< 0.25)   FAIL
+speaker sim 0.0434   (> 0.70)   FAIL
+RTF         0.3331   (< 1.0)    PASS
+OVERALL     FAIL
+```
+
+**This is the decisive result.** The previous failure was explicable by a mismatched English
+reference. This one is not — the setup was correct. A speaker similarity of **0.043 is
+indistinguishable from zero**: the output has no relationship to the reference voice. Combined with
+Whisper transcribing 8 seconds of audio as the single word "music", the output is very likely not
+intelligible speech at all.
+
+Fast, cheap, and wrong: RTF 0.333 and 5776 MB. Performance was never the problem.
+
+### What this does and does not establish
+
+Established: `f5_openbible_urdu` as currently loaded does not clone Urdu. It cannot ship in this
+state, and `LanguageSupport.verified` stays `False`.
+
+NOT yet established: whether the checkpoint itself is unusable, or whether the loading is wrong. One
+cheap hypothesis remains untested — `load_model(..., use_ema=True)`. `model_last.pt` is a *training*
+checkpoint carrying both `model_state_dict` and `ema_model_state_dict`; if the EMA weights are
+unpopulated or stale, garbage output is exactly what results. Re-running with `use_ema=False` is a
+one-line experiment that would distinguish "bad checkpoint" from "wrong loading".
+
+### Consequence if it does not recover
+
+Native Perso-Arabic Urdu has no other permissively-licensed option — this was the only free native
+Urdu cloning checkpoint in existence. Urdu would then ship exclusively via the transliteration route
+(Perso-Arabic → Devanagari → a Hindi model), which R4b verified works and which the architecture
+already supports as a first-class path with `lossy=True` and a visible route chip.
+
+That is a product decision, not a technical one, and it belongs to the user.
+
+Artifact: `/workspace/engines-lab/r1-f5/out_urdu_nativeref.wav`
