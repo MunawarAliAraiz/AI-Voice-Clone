@@ -149,10 +149,106 @@ three reasons subprocesses were chosen.
 **`LanguageSupport.verified` stays `False` for both cells** until CER and speaker cosine are measured.
 RTF passes; two of three gates are still unrun.
 
-## Urdu pipeline
+## Urdu pipeline — ANSWERED ✅
 
-⏳ R4 in flight. Decisive question: does `ai4bharat-transliteration` support `ur` in the
-**indic → roman** direction? If not, Perso-Arabic → Devanagari collapses to NLLB translation, which
-is a different and worse operation — translation changes words, transliteration only changes script.
+`ai4bharat-transliteration` **1.1.3, MIT**. Import path is `ai4bharat.transliteration` (the dist name
+does not match the package). Both directions support `ur`, confirmed by execution:
 
-R4 also delivers the eval harness that scores every cell in this document.
+| Route | Result |
+|---|---|
+| Roman Urdu → Perso-Arabic | works — `shukriya` → `شکریہ`, `mohabbat` → `محبت` |
+| Perso-Arabic → Roman | works — `آپ کیسے ہیں` → `aap kisay hain` |
+| **Roman Urdu → Devanagari** | **direct one hop.** No Perso-Arabic intermediate. |
+| Perso-Arabic → Devanagari | **no direct hop exists** — only two-hop via Roman |
+
+### The unexpected result: Devanagari output beats Perso-Arabic output
+
+Feeding identical Roman strings to the same engine for `lang_code="hi"` vs `"ur"`, the **Hindi output
+was consistently more accurate**. `"hai"` → `है` correct every time, while the Urdu hop produced `ہی`
+— a different real word — every time.
+
+So routing Roman Urdu through Devanagari is not a compromise forced by licensing. On this evidence
+it is the *better* path, presumably because the multilingual model saw far more Hindi romanization in
+training than Urdu.
+
+### Perso-Arabic → Devanagari compounds errors — keep it opt-in and lossy
+
+Two-hop is the only route, and it degrades measurably:
+
+```
+مجھے آپ سے محبت ہے
+  two-hop:  → "majhay aap say mohabat hay" → मझे आप से मोहबत है
+  one-hop from clean Roman:                → मुझे आप से मोहब्बत है   (correct)
+```
+
+Gemination dropped, vowels wrong. **Never chain Perso-Arabic → Roman → Devanagari as a substitute
+for Roman → Devanagari.** This validates `UrduStrategy.TRANSLITERATE` being explicit opt-in with
+`lossy=True`.
+
+### Vowel loss is genuine information loss, not fuzziness
+
+Undotted Perso-Arabic, top-4 beams:
+
+```
+شکر  → ['shikar', 'shakar', 'shukar', 'shekar']
+```
+
+Both genuine readings — *shukr* (thanks) and *shakar* (sugar) — are valid for that spelling, and the
+model's top-1 `shikar` (hunt) is **neither**. The model resolves purely from corpus frequency, with
+no access to intended meaning. That is the honest basis for the `lossy` flag on this route.
+
+---
+
+## Eval harness ✅
+
+`/workspace/engines-lab/r4-urdu/eval_harness.py` — built, working, and validated.
+
+- **CER**: Whisper large-v3 (MIT), with script-aware normalization — NFC, Arabic-Indic and
+  Devanagari digit folding, `۔ ؟ ، । ॥` punctuation stripping.
+- **Speaker similarity**: SpeechBrain ECAPA-TDNN (`speechbrain/spkrec-ecapa-voxceleb`, Apache-2.0)
+  cosine.
+- **RTF**: caller-supplied timing.
+- Corpus at `corpus/`: 3 everyday-register Urdu Perso-Arabic sentences (deliberately *not*
+  liturgical), hand-written Roman Urdu equivalents, 3 Hindi Devanagari, 3 English, plus
+  `reference_speaker_10s.wav` (12.8 s, from VoxCPM's Apache-2.0 example assets — documented
+  provenance, not a real person's voice without consent).
+
+Sanity check: `cosine(ref, ref) = 1.0000` exactly.
+
+Noted deviation: installing the eval stack bumped `.venv-eval`'s torch from 2.8.0+cu128 to
+2.13.0+cu130. CUDA verified still working. Not the "silent downgrade to broken cu124" trap, but it
+diverges from the documented baseline.
+
+---
+
+## ⚠️ First real gate results — and they contradict the proxy
+
+Scored genuine VoxCPM2 output (cloned from the same reference, known target text):
+
+| | CER (<0.25) | Speaker sim (>0.70) | RTF (<1.0) |
+|---|---|---|---|
+| English | 0.000 ✅ | 0.739 ✅ | 12.68 ❌ *(cold-start artifact; R3b measured 0.58 warm)* |
+| **Hindi** | 0.086 ✅ | **0.678 ❌** | 0.58 ✅ |
+
+**VoxCPM2 Hindi fails speaker similarity at 0.678 against a 0.70 gate.**
+
+R3b's MFCC+F0 proxy had reported 0.9926 for Hindi and concluded cloning worked — and R3b correctly
+labelled that a heuristic rather than a verified result. The real ECAPA embedding says otherwise.
+**This is exactly why the gate requires a speaker-embedding model, and why proxy metrics must never
+be promoted to verified.**
+
+The English RTF failure is a measurement artifact — that run included the 40–55 s warm-up trap. Warm
+RTF is 0.58.
+
+### Not yet a delete decision
+
+The plan says a failing cell is removed from the catalog. Before applying that to VoxCPM2 + Hindi:
+
+- **n = 1.** One sentence, one reference clip.
+- **0.678 vs 0.70 is borderline** — within plausible variance for a single sample.
+- The reference clip is English-language speech; the model card warns that a language-mismatched
+  reference degrades output and suggests `cfg_weight=0.0` to mitigate. That was not applied.
+
+**Action for Wave 3:** re-run Hindi with 3 sentences and a language-matched reference before deciding.
+If it still misses, Hindi routes to Chatterbox or IndicF5 and this cell is deleted — not shipped with
+a caveat.
