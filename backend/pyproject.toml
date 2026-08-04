@@ -95,10 +95,28 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC", "S", "RUF"]
-ignore = ["S101"]  # assert is how the scheduler enforces its slot precondition
+ignore = [
+    # assert is how the scheduler enforces its GPU-slot precondition.
+    "S101",
+    # `__all__` is grouped by concept, not alphabetized. In contract modules the
+    # grouping IS documentation — it shows which types belong together.
+    "RUF022",
+    # Urdu and Devanagari punctuation (۔ ؟ ، ।) is flagged as "ambiguous
+    # unicode". It is the entire point of this codebase.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # `timeout` parameters on async functions. Ruff suggests asyncio.timeout,
+    # which CANCELS the awaited coroutine — precisely wrong here. A wedged CUDA
+    # kernel cannot be cancelled, and cancelling would release the GPU slot
+    # while the kernel still runs, which is the exact race the scheduler exists
+    # to prevent. The implementation kills the process instead.
+    "ASYNC109",
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "B"]
+# Test doubles: blocking path calls are fine when the "I/O" is a 14-byte write.
+"tests/**" = ["S", "B", "ASYNC240"]
 
 [tool.mypy]
 python_version = "3.12"

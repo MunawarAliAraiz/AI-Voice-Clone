@@ -22,7 +22,7 @@ could not speak it.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from ..domain.language import Script
 
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 
-class RuntimeKind(str, Enum):
+class RuntimeKind(StrEnum):
     """A worker process type. Each has its own interpreter and dependency set."""
 
     F5 = "f5"
@@ -47,7 +47,7 @@ class RuntimeKind(str, Enum):
     FAKE = "fake"
 
 
-class License(str, Enum):
+class License(StrEnum):
     """
     Weight licenses.
 
@@ -80,7 +80,7 @@ _PERMISSIVE: frozenset[License] = frozenset(
 )
 
 
-class ModelState(str, Enum):
+class ModelState(StrEnum):
     """
     Residency of a spec, as reported to the UI.
 

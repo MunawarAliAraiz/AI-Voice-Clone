@@ -32,7 +32,7 @@ of JSON over line-delimited stdio. No waveform is ever serialized.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -53,7 +53,7 @@ __all__ = [
 # ── Wire protocol: line-delimited JSON over the worker's stdin/stdout ─────────
 
 
-class WireOp(str, Enum):
+class WireOp(StrEnum):
     """Operations a worker understands. One request, one response, in order."""
 
     #: Load a checkpoint. If another spec of the same runtime is loaded, the

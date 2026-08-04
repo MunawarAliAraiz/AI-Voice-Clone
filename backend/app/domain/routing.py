@@ -23,7 +23,7 @@ never be left wondering why their Urdu came out sounding like Hindi.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from ..inference.catalog import ModelCatalog
 from .language import Script, TextProfile
@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 
-class TransformKind(str, Enum):
+class TransformKind(StrEnum):
     """A text transformation applied before synthesis."""
 
     #: Text reaches the model unchanged. The only lossless option.
@@ -50,7 +50,7 @@ class TransformKind(str, Enum):
     ARAB_TO_DEVA = "arab_to_deva"
 
 
-class UrduStrategy(str, Enum):
+class UrduStrategy(StrEnum):
     """
     How to handle Urdu, when there is a choice.
 

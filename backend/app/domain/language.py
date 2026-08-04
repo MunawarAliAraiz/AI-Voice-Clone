@@ -19,7 +19,7 @@ definition of Roman Urdu, unambiguously, because the user said so.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 __all__ = [
     "Script",
@@ -30,7 +30,7 @@ __all__ = [
 ]
 
 
-class Script(str, Enum):
+class Script(StrEnum):
     """Writing system, detected from the text itself."""
 
     LATIN = "latin"
@@ -44,7 +44,7 @@ class Script(str, Enum):
     MIXED = "mixed"
 
 
-class LanguageCode(str, Enum):
+class LanguageCode(StrEnum):
     """
     Languages the product exposes.
 
