@@ -174,6 +174,12 @@ class ModelSpec:
     #: of showing nine emotion presets that resolve to an atempo multiplier.
     params: dict[str, dict] = field(default_factory=dict)
 
+    #: True if the HF repo is access-gated: downloading needs an accepted
+    #: license and an HF_TOKEN. A gated spec cannot be fetched on a fresh pod
+    #: without human action, so the scheduler must fail with a clear,
+    #: actionable error rather than a bare 401 from deep inside a loader.
+    gated: bool = False
+
     #: True once Phase A has produced audible proof on the target GPU.
     phase_a_verified: bool = False
     notes: str = ""

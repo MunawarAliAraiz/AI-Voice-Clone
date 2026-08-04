@@ -214,15 +214,33 @@ def test_every_shipped_license_is_permissive() -> None:
     )
 
 
-def test_three_runtimes_five_specs() -> None:
-    """The lineup is a decision, not an accident. Changing it is a plan change."""
-    assert len(CATALOG.specs) == 5
+def test_three_runtimes_four_specs() -> None:
+    """
+    The lineup is a decision, not an accident. Changing it is a plan change.
+
+    Was five specs until `f5_openf5_en` was dropped: R1b established that no
+    genuinely permissive English F5 checkpoint exists — every candidate is
+    license-washed on top of SWivid/F5-TTS's CC-BY-NC weights. English routes to
+    Chatterbox (MIT) instead.
+    """
+    assert len(CATALOG.specs) == 4
     assert {s.runtime for s in CATALOG.specs} == {
         RuntimeKind.F5,
         RuntimeKind.CHATTERBOX,
         RuntimeKind.VOXCPM,
     }
-    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 3
+    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
+    assert CATALOG.get("f5_openf5_en") is None
+
+
+def test_gated_specs_are_flagged() -> None:
+    """
+    A gated repo cannot be downloaded without human action (accepting a license
+    and supplying an HF_TOKEN). It must be declared so the scheduler can fail
+    with an actionable message instead of a bare 401 from inside a loader.
+    """
+    indic = CATALOG.require("f5_indic")
+    assert indic.gated, "ai4bharat/IndicF5 is gated ('gated': 'auto' on the HF API)"
 
 
 def test_fake_runtime_is_not_in_the_catalog() -> None:

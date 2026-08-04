@@ -62,12 +62,27 @@ F5_OPENBIBLE_URDU = ModelSpec(
     vram_mb=4000,
     est_load_sec=40.0,
     needs_reference_text=True,
-    reference_max_sec=6.0,
+    # MEASURED by reading f5-tts 1.1.22 source, not the docs. The real limit is
+    # ~12s, not the ~6s previously assumed, and it is SILENT: pydub silence-based
+    # clipping accumulates to a 12000ms target, then hard-truncates aseg[:12000]
+    # with only a print. No exception reaches the caller.
+    #
+    # The "8192 frame limit" in the plan is a DIFFERENT thing — dit.py's
+    # precompute_max_pos, the rotary-position table (~87s of 24kHz audio), which
+    # clamps rather than raising. It is not the reference limit.
+    reference_max_sec=12.0,
     notes=(
         "The only free native-Urdu cloning checkpoint that exists. Trained from "
         "scratch, so it does NOT inherit F5's CC-BY-NC. Bible-domain read "
         "speech: formal register, narrow prosody — expect it to sound liturgical "
-        "on conversational text. CC-BY-SA requires a NOTICE attribution entry."
+        "on conversational text. CC-BY-SA requires a NOTICE attribution entry. "
+        "Raw model_last.pt state dict loaded via f5_tts.infer.utils_infer."
+        "load_model — no custom code, no trust_remote_code. Also needs vocab.txt "
+        "and a Hydra arch YAML. "
+        "HIDDEN WHISPER: if ref_text is blank, preprocess_ref_audio_text() "
+        "silently loads openai/whisper-large-v3-turbo to transcribe the "
+        "reference. ALWAYS pass ref_text or the runtime pays an undeclared "
+        "model load and per-request ASR cost."
     ),
 )
 
@@ -77,44 +92,54 @@ F5_INDIC = ModelSpec(
     runtime=RuntimeKind.F5,
     license=License.MIT,
     hf_repo="ai4bharat/IndicF5",
-    # Verified: snapshot actually downloaded. If this model needs
-    # trust_remote_code (R1's open question), this pin is a SECURITY CONTROL,
-    # not hygiene — it fixes which remote code executes.
+    # ⚠️ This revision is verified for the README ONLY. The repo is GATED
+    # ("gated": "auto") and every other file 401s without an accepted license
+    # and an HF_TOKEN. An earlier commit called this "verified from the
+    # downloaded snapshot" — that was wrong; the snapshot directory existed but
+    # held only the README. The weights have never been fetched.
+    #
+    # It is nonetheless a SECURITY CONTROL, not mere hygiene: R1b confirmed
+    # IndicF5 ships its own model.py and requires
+    # AutoModel.from_pretrained(..., trust_remote_code=True), i.e. arbitrary
+    # code execution from the repo. The pin fixes WHICH code runs.
     hf_revision="ba85abedf18dc479a447eaa0eccbd76ab78a47d5",
+    gated=True,
     languages=(
         LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
     ),
     vram_mb=4000,
     est_load_sec=40.0,
     needs_reference_text=True,
-    reference_max_sec=6.0,
+    reference_max_sec=12.0,
     notes=(
-        "R1 must determine how this actually loads — raw checkpoint into the F5 "
-        "class, or AutoModel(trust_remote_code=True)? That answer decides the "
-        "whole F5 loader strategy. If trust_remote_code is required, the pinned "
-        "revision stops being hygiene and becomes a security control."
+        "GATED — needs an accepted HF license and an HF_TOKEN before it can be "
+        "downloaded at all. Loads via AutoModel(trust_remote_code=True) against "
+        "a bundled model.py (architecture INF5Model, model_type inf5), so it "
+        "needs a SEPARATE loader from the raw-checkpoint F5 path — one runtime "
+        "class does NOT serve both. Nothing here is runtime-verified yet."
     ),
 )
 
-F5_OPENF5_EN = ModelSpec(
-    id="f5_openf5_en",
-    display_name="OpenF5 English",
-    runtime=RuntimeKind.F5,
-    license=License.APACHE_2_0,
-    hf_repo=PENDING_REPO,  # R1: the plan did not name this exactly. Confirm.
-    hf_revision=PENDING_PIN,
-    languages=(
-        LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
-    ),
-    vram_mb=4000,
-    est_load_sec=40.0,
-    needs_reference_text=True,
-    reference_max_sec=6.0,
-    notes=(
-        "Apache-2.0 English checkpoint, chosen because F5's own base weights are "
-        "CC-BY-NC and therefore unshippable here."
-    ),
-)
+# f5_openf5_en — DROPPED (R1b, 2026-08-04).
+#
+# No genuinely permissive English F5 checkpoint exists. R1b searched ~100 HF F5
+# repos; every English-capable one traces back to SWivid/F5-TTS, whose weights
+# are CC-BY-NC-4.0. Several carry a permissive tag that covers only a format
+# conversion, not the weights:
+#
+#   lucasnewman/f5-tts-mlx (mit)     — its own README says the weights are
+#                                      reshaped from SWivid/F5-TTS. MIT covers
+#                                      the conversion code only.
+#   H5N1AIDS/F5-TTS-ONNX (apache-2)  — empty README, no provenance
+#   kevinwang676/F5-TTS (mit)        — empty README, no provenance
+#   zeeshiii05/E2-F5-TTS (apache-2)  — dataset tag is a math-reasoning corpus;
+#                                      not a credible TTS checkpoint
+#
+# This is license-washing, and golden rule #6 exists precisely for it: a
+# permissive tag on top of CC-BY-NC weights does not make them shippable.
+#
+# English therefore routes to chatterbox_ml_v3 (MIT), which the plan already
+# anticipated as the English option.
 
 
 # ── Chatterbox runtime ───────────────────────────────────────────────────────
@@ -202,10 +227,11 @@ VOXCPM2 = ModelSpec(
 )
 
 
+#: 3 runtimes, 4 specs. Was 5 until f5_openf5_en was dropped for licensing —
+#: see the note where it used to be defined.
 ALL_SPECS: tuple[ModelSpec, ...] = (
     F5_OPENBIBLE_URDU,
     F5_INDIC,
-    F5_OPENF5_EN,
     CHATTERBOX_ML_V3,
     VOXCPM2,
 )
