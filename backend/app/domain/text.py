@@ -72,7 +72,27 @@ def normalize_whitespace(text: str) -> str:
     forms the phonemizer depends on. If normalization is ever needed, it belongs
     per-runtime, not here.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    return " ".join(text.split())
+
+
+def _is_false_stop(text: str, i: int) -> bool:
+    """
+    True if the `.` at index `i` does not end a sentence.
+
+    Only applies to Latin's `.`; `۔` and `।` have no such ambiguity, which is
+    part of why the terminator table is per-script.
+
+    Two cases: a decimal point (3.5) and a single-letter initial (J. Smith).
+    Deliberately does not carry an abbreviation list — "Dr." and "etc." will
+    over-split, which produces a slightly short chunk rather than a wrong one.
+    """
+    if text[i] != ".":
+        return False
+    nxt = text[i + 1] if i + 1 < len(text) else ""
+    prv = text[i - 1] if i > 0 else ""
+    if nxt.isdigit() and prv.isdigit():
+        return True
+    return bool(prv.isupper() and (i < 2 or not text[i - 2].isalpha()))
 
 
 def split_sentences(text: str, script: Script) -> list[str]:
@@ -83,7 +103,32 @@ def split_sentences(text: str, script: Script) -> list[str]:
     whitespace-only input rather than `[""]`, which would otherwise become a
     zero-length synthesis request.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    text = normalize_whitespace(text)
+    if not text:
+        return []
+
+    terminators = SENTENCE_TERMINATORS.get(script, SENTENCE_TERMINATORS[Script.LATIN])
+    sentences: list[str] = []
+    start = 0
+    i = 0
+    while i < len(text):
+        if text[i] in terminators and not _is_false_stop(text, i):
+            # Absorb a run of terminators, so "What?!" stays one sentence.
+            end = i + 1
+            while end < len(text) and text[end] in terminators:
+                end += 1
+            chunk = text[start:end].strip()
+            if chunk:
+                sentences.append(chunk)
+            start = end
+            i = end
+            continue
+        i += 1
+
+    tail = text[start:].strip()
+    if tail:
+        sentences.append(tail)
+    return sentences
 
 
 def chunk_for_synthesis(
@@ -110,4 +155,92 @@ def chunk_for_synthesis(
     engine-specific limits leak into shared code and silently truncate the
     others.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
+
+    sentences = split_sentences(text, script)
+    if not sentences:
+        return []
+
+    # 1. Greedily pack whole sentences.
+    packed: list[tuple[str, bool]] = []  # (text, ends_on_sentence)
+    buf = ""
+    for sentence in sentences:
+        if len(sentence) > max_chars:
+            if buf:
+                packed.append((buf, True))
+                buf = ""
+            packed.extend(_split_oversized(sentence, max_chars))
+            continue
+        candidate = f"{buf} {sentence}".strip() if buf else sentence
+        if len(candidate) <= max_chars:
+            buf = candidate
+        else:
+            packed.append((buf, True))
+            buf = sentence
+    if buf:
+        packed.append((buf, True))
+
+    # 2. Merge a runt trailing chunk backwards. These models render a two-word
+    #    final chunk with audibly wrong prosody — it sounds clipped regardless
+    #    of the model — so a slightly long chunk beats a very short one.
+    if min_chars > 0 and len(packed) >= 2 and len(packed[-1][0]) < min_chars:
+        prev_text, _ = packed[-2]
+        last_text, last_ends = packed[-1]
+        merged = f"{prev_text} {last_text}"
+        if len(merged) <= max_chars:
+            packed[-2:] = [(merged, last_ends)]
+
+    return [
+        TextChunk(text=t, index=i, ends_on_sentence=ends)
+        for i, (t, ends) in enumerate(packed)
+    ]
+
+
+def _split_oversized(sentence: str, max_chars: int) -> list[tuple[str, bool]]:
+    """
+    Break one over-long sentence, preferring clause breaks over word breaks.
+
+    Everything produced here has `ends_on_sentence=False` — worth logging,
+    because the joins between these chunks are exactly where prosody artifacts
+    appear.
+    """
+    parts: list[str] = []
+    buf = ""
+    for token in _tokenize_clauses(sentence):
+        candidate = f"{buf}{token}" if buf else token.lstrip()
+        if len(candidate) <= max_chars:
+            buf = candidate
+        else:
+            if buf:
+                parts.append(buf.strip())
+            buf = token.lstrip()
+    if buf.strip():
+        parts.append(buf.strip())
+
+    # A single clause may still exceed the budget; fall back to word boundaries.
+    out: list[str] = []
+    for part in parts:
+        while len(part) > max_chars:
+            cut = part.rfind(" ", 0, max_chars)
+            if cut <= 0:
+                cut = max_chars  # one unbroken token longer than the budget
+            out.append(part[:cut].strip())
+            part = part[cut:].strip()
+        if part:
+            out.append(part)
+    return [(p, False) for p in out]
+
+
+def _tokenize_clauses(sentence: str) -> list[str]:
+    """Split at clause separators, keeping each separator on its left part."""
+    tokens: list[str] = []
+    buf = ""
+    for char in sentence:
+        buf += char
+        if char in CLAUSE_SEPARATORS:
+            tokens.append(buf)
+            buf = ""
+    if buf:
+        tokens.append(buf)
+    return tokens

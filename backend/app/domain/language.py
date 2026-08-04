@@ -116,6 +116,15 @@ class TextProfile:
         return self.script is Script.ARABIC
 
 
+def _script_of(char: str) -> Script | None:
+    """The script a single character belongs to, or None if unscripted."""
+    cp = ord(char)
+    for script, ranges in SCRIPT_RANGES.items():
+        if any(lo <= cp <= hi for lo, hi in ranges):
+            return script
+    return None
+
+
 def detect_script(text: str) -> tuple[Script, dict[Script, float]]:
     """
     Measure the dominant script of `text`.
@@ -128,7 +137,22 @@ def detect_script(text: str) -> tuple[Script, dict[Script, float]]:
         are present, and MIXED when no single script reaches
         SCRIPT_DOMINANCE_THRESHOLD.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    counts: dict[Script, int] = {}
+    total = 0
+    for char in text:
+        script = _script_of(char)
+        if script is not None:
+            counts[script] = counts.get(script, 0) + 1
+            total += 1
+
+    if total == 0:
+        return Script.UNKNOWN, {}
+
+    ratios = {script: n / total for script, n in counts.items()}
+    dominant, share = max(ratios.items(), key=lambda kv: kv[1])
+    if share >= SCRIPT_DOMINANCE_THRESHOLD:
+        return dominant, ratios
+    return Script.MIXED, ratios
 
 
 def profile_text(text: str, language: str) -> TextProfile:
@@ -138,4 +162,11 @@ def profile_text(text: str, language: str) -> TextProfile:
     Does not validate that the pair is routable — that is `routing.resolve`'s
     job, and it needs the profile in order to explain the rejection.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    script, ratios = detect_script(text)
+    return TextProfile(
+        text=text,
+        language=language,
+        script=script,
+        script_ratios=ratios,
+        char_count=len(text),
+    )

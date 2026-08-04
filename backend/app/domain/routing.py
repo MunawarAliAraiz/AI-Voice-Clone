@@ -22,11 +22,12 @@ never be left wondering why their Urdu came out sounding like Hindi.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from .language import Script, TextProfile
-from .ports import CatalogView
+from ..exceptions import AmbiguousScriptError, ModelNotFoundError, NoRouteError
+from .language import LanguageCode, Script, TextProfile
+from .ports import CatalogView, SpecView
 
 __all__ = [
     "TransformKind",
@@ -119,6 +120,24 @@ class RoutePlan:
         """True if the transform may have altered pronunciation."""
         return self.transform.lossy
 
+    @property
+    def needs_transform(self) -> bool:
+        """
+        True if `resolved_text` is still the ORIGINAL text and a transform must
+        be applied before synthesis.
+
+        This is the seam between the pure and impure halves. `resolve()` cannot
+        transliterate — that needs a model, which is I/O — so it returns the
+        plan with `resolved_text` set to the input. The service layer applies
+        the transform and calls `with_resolved_text()`. A worker must never
+        receive a plan where this is still True.
+        """
+        return not self.transform.is_identity
+
+    def with_resolved_text(self, text: str) -> RoutePlan:
+        """Return a copy carrying the post-transform text."""
+        return replace(self, resolved_text=text)
+
 
 def resolve(
     profile: TextProfile,
@@ -173,4 +192,125 @@ def resolve(
     Latin, short inputs are genuinely ambiguous, and a classifier would be
     confidently wrong forever. The user's declared language settles it.
     """
-    raise NotImplementedError("Wave 2 / B3")
+    if profile.script is Script.MIXED:
+        raise AmbiguousScriptError(
+            {s.value: r for s, r in profile.script_ratios.items()}
+        )
+
+    target, transform = _plan_transform(profile, strategy, catalog)
+    candidates = catalog.candidates(target.language, target.script)
+
+    if requested is not None:
+        spec = catalog.get(requested)
+        if spec is None:
+            raise ModelNotFoundError(requested)
+        # An explicit request is honored or refused. It is NEVER silently
+        # swapped — that substitution is the whole defect being designed out.
+        if not spec.supports(target.language, target.script):
+            raise NoRouteError(
+                language=profile.language,
+                script=profile.script.value,
+                supported=_supported(catalog),
+                suggestion=(
+                    f"Model {requested!r} cannot render {profile.language!r} in "
+                    f"{profile.script.value} script."
+                ),
+            )
+        chosen: SpecView = spec
+    else:
+        if not candidates:
+            raise NoRouteError(
+                language=profile.language,
+                script=profile.script.value,
+                supported=_supported(catalog),
+                suggestion=_suggest(profile),
+            )
+        # Catalog order IS preference order, and it consults no load state.
+        chosen = candidates[0]
+
+    return RoutePlan(
+        model_id=chosen.id,
+        transform=transform,
+        # Identity transforms are already resolved. Anything else is filled in
+        # by the service layer via with_resolved_text() — see needs_transform.
+        resolved_text=profile.text,
+        requested_language=profile.language,
+        source_script=profile.script,
+        rationale=_rationale(profile, chosen, transform),
+        alternatives=tuple(c.id for c in candidates if c.id != chosen.id),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _Target:
+    """The (language, script) a model must actually be able to render."""
+
+    language: str
+    script: Script
+
+
+def _plan_transform(
+    profile: TextProfile, strategy: UrduStrategy, catalog: CatalogView
+) -> tuple[_Target, TextTransform]:
+    """Decide the target pair and the transform needed to reach it."""
+    lang, script = profile.language, profile.script
+    hindi = _Target(LanguageCode.HINDI.value, Script.DEVANAGARI)
+
+    if lang == LanguageCode.URDU.value:
+        if script is Script.ARABIC:
+            if strategy is UrduStrategy.TRANSLITERATE:
+                # Two hops, and R4b measured it compounding errors badly:
+                # مجھے -> "majhay" -> मझे rather than मुझे. Opt-in only.
+                return hindi, TextTransform(
+                    TransformKind.ARAB_TO_DEVA, Script.ARABIC, Script.DEVANAGARI,
+                    lossy=True,
+                )
+            return (
+                _Target(lang, Script.ARABIC),
+                TextTransform(TransformKind.NONE, Script.ARABIC, Script.ARABIC),
+            )
+        if script is Script.LATIN:
+            # Roman Urdu. R4b verified this is a DIRECT one hop, and that the
+            # Devanagari output is more accurate than the Perso-Arabic output
+            # from the same Roman input — so this is the better path, not a
+            # licensing compromise.
+            return hindi, TextTransform(
+                TransformKind.ROMAN_TO_DEVA, Script.LATIN, Script.DEVANAGARI
+            )
+        if script is Script.DEVANAGARI:
+            raise NoRouteError(
+                language=lang,
+                script=script.value,
+                supported=_supported(catalog),
+                suggestion="That is Devanagari — did you mean language='hi'?",
+            )
+
+    return (
+        _Target(lang, script),
+        TextTransform(TransformKind.NONE, script, script),
+    )
+
+
+def _supported(catalog: CatalogView) -> tuple[tuple[str, str], ...]:
+    return tuple((lang, script.value) for lang, script in catalog.supported_pairs())
+
+
+def _suggest(profile: TextProfile) -> str | None:
+    if profile.script is Script.UNKNOWN:
+        return "The text contains no letters in a supported script."
+    return None
+
+
+def _rationale(
+    profile: TextProfile, spec: SpecView, transform: TextTransform
+) -> str:
+    """User-facing prose for the route chip. Displayed verbatim."""
+    name = getattr(spec, "display_name", spec.id)
+    if transform.kind is TransformKind.ROMAN_TO_DEVA:
+        return f"Roman Urdu transliterated to Devanagari and rendered by {name}"
+    if transform.kind is TransformKind.ARAB_TO_DEVA:
+        return (
+            f"Urdu transliterated from Perso-Arabic to Devanagari and rendered "
+            f"by {name}. Short vowels are inferred, so pronunciation may differ."
+        )
+    return f"{profile.language} in {profile.script.value} script rendered by {name}"
