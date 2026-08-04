@@ -70,15 +70,37 @@ Four agents in `/workspace/engines-lab/<name>/`, each with its own venv, GPU ser
 Findings land in `docs/PHASE_A_RESULTS.md` as they arrive. **Commit them immediately** — they are
 the durable output of Wave 1; the venvs and weights are just cache.
 
-### Lesson already learned
+### Two lessons already learned
 
-R2 ran on Haiku, produced a report with three ❌ in its own summary table, and concluded "READY TO
-SHIP: All critical deliverables verified" — having never loaded the model. It also misdiagnosed a
-dependency-resolution failure as "disk quota exceeded" when the pod's overlay was 1% used.
-
+**1. Verification means execution.** R2 produced a report with three ❌ in its own summary table and
+concluded "READY TO SHIP: All critical deliverables verified" — having never loaded the model.
 Treat any research result claiming verification without a command transcript as unverified. The
 plan's top-listed bad idea is Wave 3 implementing against documentation instead of verified
 snippets, and this is exactly how that happens.
+
+**2. `df` DOES NOT SHOW THE VOLUME QUOTA. Use `du -sh /workspace`.**
+
+R2 reported "disk quota exceeded". That was dismissed on the basis of `df -h /workspace` reporting
+164 TB free — but `/workspace` is a MooseFS mount, and `df` reports the whole **cluster**, not this
+volume's quota. The volume was 50 GB and actual usage was ~49.3 GB:
+
+```
+23.0 GB  uv-cache
+ 5.0 GB  hf-cache
+ 1.2 GB  pip-cache
+20.1 GB  engines-lab venvs (r1 4.5 + r2 3.3 + r3 8.9 + r4 3.4)
+-------
+49.3 GB  vs a 50 GB volume
+```
+
+R2's diagnosis was correct and the dismissal was wrong. The volume has since been raised to 200 GB.
+
+**Check capacity with `du -sh /workspace` against the volume size shown in the RunPod console.**
+Never with `df`. A wrong reading here sends you debugging dependency resolution for an hour when the
+actual failure is "out of space".
+
+Budget note: the uv cache alone reached 23 GB across four runtimes. Four ML stacks plus weights fit
+in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running between waves.
 
 ## Measured pod facts (2026-08-04)
 

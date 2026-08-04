@@ -157,6 +157,10 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   There's a startup assertion for duplicate `(method, path)` — keep it.
 - **CSS vars.** `--color-primary`, `--border-color`, `--transition-medium` are used but never declared. A CI
   check greps every `var(--x)` against `variables.css`. `styles/variables.css` is otherwise good — keep it.
+- **`df` does not show the `/workspace` quota.** It is a MooseFS mount and `df` reports the whole cluster —
+  it will cheerfully say "164 TB free" while the volume is full. Use `du -sh /workspace` against the volume
+  size in the RunPod console. This already cost an hour: a real "disk quota exceeded" was dismissed as a
+  misdiagnosis because `df` looked fine. Four runtime venvs plus the uv cache reached ~49 GB.
 
 ## Conventions
 
