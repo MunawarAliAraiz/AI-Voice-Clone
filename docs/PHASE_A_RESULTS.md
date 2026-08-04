@@ -73,11 +73,84 @@ reference speaker rather than falling back to a generic voice.
 
 ---
 
-## f5_openbible_urdu / f5_indic / f5_openf5_en
+## f5_openbible_urdu — runtime verified ✅
 
-⏳ R1 in flight. The decisive question: whether `ai4bharat/IndicF5` loads as a raw checkpoint into
-the standard F5 class or requires `AutoModel(trust_remote_code=True)`. If the latter, the pinned
-revision becomes a security control rather than hygiene.
+**Urdu audio generated on the A5000.** 13.06 s @ 24 kHz, RMS 0.092/0.083 across two runs —
+non-silent, confirmed. This is the first real Urdu clone the project has produced.
+
+| Metric | Estimate was | **Measured** |
+|---|---|---|
+| Peak VRAM | 4000 MB | **6112 MB** (`torch.cuda.max_memory_allocated`); 5845 MiB concurrent nvidia-smi |
+| Cold load | 40 s | **7.0 s** — 5× pessimistic; by far the fastest spec |
+| RTF | — | **0.23 cold / 0.20 warm** — comfortably inside the gate |
+
+Loads as a raw `model_last.pt` training checkpoint (`model_state_dict`, `ema_model_state_dict`, …)
+into the stock `f5-tts` `DiT` class. No custom code, no `trust_remote_code`. Also needs `vocab.txt`
+and a Hydra arch YAML; vocoder is `vocos` (`charactr/vocos-mel-24khz`).
+
+```python
+model_cfg = OmegaConf.load(CONFIG_YAML)
+model_cls = get_class(f"f5_tts.model.{model_cfg.model.backbone}")   # f5_tts.model.DiT
+vocoder   = load_vocoder(vocoder_name="vocos", is_local=False, device="cuda")
+model     = load_model(model_cls, model_cfg.model.arch, CKPT_PT,
+                       mel_spec_type="vocos", vocab_file=VOCAB_TXT,
+                       use_ema=True, device="cuda")
+ref_a, ref_t = preprocess_ref_audio_text(ref_audio_path, ref_text)
+wav, sr, _ = infer_process(ref_a, ref_t, gen_text, model, vocoder,
+                           mel_spec_type="vocos", device="cuda")
+```
+
+### Confirmed behaviours
+
+- **Reference limit ~12 s, silent truncation.** Verified with a real 23.8 s clip: log said
+  `"Audio is over 12s, clipping short."`, output stayed valid. No exception reaches the caller.
+- **Hidden Whisper measured.** Blank `ref_text` loads `openai/whisper-large-v3-turbo`: **39.5 s
+  cold** (includes downloading weights), **5.1 s warm**. Always pass `ref_text`.
+- Deps: `f5-tts 1.1.22`, `torch 2.8.0+cu128`, `transformers 5.14.1`, `vocos 0.1.0`, `numpy 2.4.6`.
+  No transitive breakage.
+
+### ⚠️ Trap that changes the scheduler
+
+**Post-hoc VRAM readings under-report the peak by ~5×.** Sampling nvidia-smi 20 s after inference
+showed ~1092 MiB; concurrent sampling at 200 ms during the same run caught **5845 MiB**. Allocator
+caches are released between requests.
+
+So admission control must size from the spec's recorded `vram_mb` (measured under load), **not** from
+a live free-VRAM reading taken between requests. A live reading detects *external* processes; it does
+not predict peak. Recorded in `scheduler.py::_free_vram_mb`.
+
+### Also learned
+
+`curl -C -` resume produced a file matching the target byte count exactly that was still internally
+corrupt (`PytorchStreamReader failed reading file data/277`). Re-downloaded cleanly via
+`huggingface_hub.hf_hub_download`. **Never trust byte count alone after a resumed download.**
+
+---
+
+## f5_indic — BLOCKED 🔒
+
+`ai4bharat/IndicF5` is gated (`"gated": "auto"`). Every file except `README.md` returns
+`GatedRepoError: 401`. Nothing beyond metadata has been verified.
+
+Confirmed from the HF API config and model card: `"architectures": ["INF5Model"]`,
+`"auto_map": {"AutoModel": "model.INF5Model"}`, `"model_type": "inf5"`, tagged `custom_code`, and the
+card's own snippet uses `AutoModel.from_pretrained(..., trust_remote_code=True)`.
+
+**Therefore one F5 runtime class is NOT enough.** Wave 3 needs two loader paths: a generic raw-F5
+checkpoint loader (OpenBible-Urdu shaped) and a dedicated `AutoModel(trust_remote_code=True)` path.
+And because IndicF5 executes repo code, its pinned revision is a genuine security control.
+
+**Unblock:** accept the license at huggingface.co/ai4bharat/IndicF5 and set `HF_TOKEN` on the pod.
+
+## f5_openf5_en — DROPPED ❌
+
+No permissive English F5 checkpoint exists. ~100 HF repos searched; every English-capable one derives
+from `SWivid/F5-TTS` (CC-BY-NC-4.0). The permissive-tagged candidates are license-washing:
+`lucasnewman/f5-tts-mlx` (MIT) says in its own README the weights are reshaped from SWivid;
+`H5N1AIDS/F5-TTS-ONNX`, `kevinwang676/F5-TTS`, `ABUS-AI/F5-TTS-v0.1` have empty READMEs and no
+provenance; `zeeshiii05/E2-F5-TTS` tags a math-reasoning dataset and is not credible.
+
+English routes to `chatterbox_ml_v3` (MIT).
 
 ## voxcpm2 — runtime verified ✅
 

@@ -200,6 +200,18 @@ class InferenceScheduler:
 
         In the API process this reads NVML directly (pynvml, not torch) so the
         no-torch invariant survives.
+
+        MEASURED TRAP (R1b, Wave 1): a post-hoc NVML/nvidia-smi reading badly
+        UNDER-reports the transient peak. Sampling 20s after an F5 inference
+        finished showed ~1092 MiB; concurrent sampling at 200ms during the same
+        run caught 5845 MiB. Allocator caches are released back between
+        requests, so the number you get after the fact is not the number that
+        determines whether the next model fits.
+
+        Consequence for admission control: size decisions must use the spec's
+        recorded `vram_mb` (measured under load), NOT a live free-VRAM reading
+        taken between requests. A live reading is useful for detecting
+        *external* processes, not for predicting peak.
         """
         raise NotImplementedError("Wave 2 / B1")
 

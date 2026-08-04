@@ -59,10 +59,18 @@ F5_OPENBIBLE_URDU = ModelSpec(
     languages=(
         LanguageSupport(language=LanguageCode.URDU.value, script=Script.ARABIC),
     ),
-    vram_mb=4000,
-    est_load_sec=40.0,
+    # MEASURED, R1b. torch.cuda.max_memory_allocated() = 6112 MB; concurrent
+    # nvidia-smi sampling caught a 5845 MiB process peak. Using the torch
+    # figure as the conservative one.
+    vram_mb=6112,
+    # MEASURED: 7.0s cold (model + vocos vocoder). The 40s estimate was 5x
+    # pessimistic — this is by far the fastest spec to load.
+    est_load_sec=7.0,
+    # MEASURED: 0.23 cold / 0.20 warm on a ~15-word Urdu sentence.
+    est_rtf=0.21,
     needs_reference_text=True,
-    # MEASURED by reading f5-tts 1.1.22 source, not the docs. The real limit is
+    # MEASURED by reading f5-tts 1.1.22 source, then CONFIRMED with a real
+    # 23.8s clip (log: "Audio is over 12s, clipping short.", output still valid). The real limit is
     # ~12s, not the ~6s previously assumed, and it is SILENT: pydub silence-based
     # clipping accumulates to a 12000ms target, then hard-truncates aseg[:12000]
     # with only a print. No exception reaches the caller.
