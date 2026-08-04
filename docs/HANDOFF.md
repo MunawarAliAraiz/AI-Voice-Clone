@@ -34,6 +34,27 @@ HuggingFace), not lost work.
 Connection details for the current pod are in `.claude/remote.local.md` (gitignored — endpoints
 change). Note SSH must use Windows `ssh.exe`; Git Bash cannot see the ssh-agent holding the key.
 
+## ⚠️ Wave 1 was INTERRUPTED (2026-08-04)
+
+All four research agents died at the same instant on a **Claude session limit**, not on any pod or
+code failure. Nothing about the pod, the network, or the research approach was at fault.
+
+State at interruption:
+
+| Agent | Reached |
+|---|---|
+| R1 (F5) | Had launched a resumable background download on the pod (`curl -C -`, retrying). May still be running or finished — **check `/workspace/engines-lab/r1-f5/` before re-downloading anything.** |
+| R2b (Chatterbox) | Barely started. |
+| R3 (VoxCPM) | Installed, was introspecting the real `generate()` signature. |
+| R4 (Urdu) | Was about to build the eval harness; transliteration answer NOT yet obtained. |
+
+**Before relaunching any agent, inspect what is already on disk.** Roughly 43 GB was downloaded
+(23 GB uv cache, 5 GB HF cache, ~20 GB of venvs). Re-downloading it costs ~70 minutes at 7 MB/s and
+is pure waste. Check each lab directory and each venv first.
+
+The four agent contexts are resumable within the same Claude session; across sessions, relaunch from
+`docs/PHASE_A_RESULTS.md` plus whatever is on disk.
+
 ## Wave 1 — research in flight
 
 Four agents in `/workspace/engines-lab/<name>/`, each with its own venv, GPU serialized via
