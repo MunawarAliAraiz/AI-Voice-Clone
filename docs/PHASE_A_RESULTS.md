@@ -413,3 +413,37 @@ already supports as a first-class path with `lossy=True` and a visible route chi
 That is a product decision, not a technical one, and it belongs to the user.
 
 Artifact: `/workspace/engines-lab/r1-f5/out_urdu_nativeref.wav`
+
+### use_ema=False — hypothesis REFUTED
+
+Controlled re-run. Diff against the previous script was exactly two lines (`use_ema` and the output
+path); same checkpoint, config, vocab, vocoder, reference, transcript, target text, GPU.
+
+| | use_ema=True | use_ema=False |
+|---|---|---|
+| Whisper transcript | `موسیقی` | `موسیقی` |
+| CER | 0.9636 FAIL | **0.9636 FAIL** |
+| Speaker sim | 0.0434 FAIL | **−0.0145 FAIL** |
+| RTF | 0.3331 PASS | 0.2726 PASS |
+| Duration | 8.11 s | 8.11 s |
+| RMS | 0.0765 | 0.0793 |
+
+**Both weight sets produce the same non-speech output.** CER is identical to four decimals because
+Whisper returned the same single word. The EMA weights are not the problem, so this is not a matter
+of selecting the wrong tensors from the checkpoint.
+
+### What the failure signature now points at
+
+The model emits audio of the **correct predicted duration** (8.11 s for that sentence, both runs)
+with plausible RMS — but no speech. That is the signature of a model receiving meaningless *input
+tokens* while its duration predictor still works on text length.
+
+Leading hypothesis, untested: **`vocab.txt` / tokenizer mismatch.** F5 uses a custom character
+tokenizer; if the Perso-Arabic characters in `gen_text` are absent from this checkpoint's vocab, they
+map to unknown IDs and the model has nothing meaningful to condition on. Cheap to test, no GPU
+required: check membership of the target text's characters against `vocab.txt`.
+
+Secondary hypotheses: arch/config mismatch with `F5TTS_v1_Base_Open_Bible_Urdu.yaml`, or the
+checkpoint predating `f5-tts` 1.1.22's expected format.
+
+Artifacts: `out_urdu_nativeref.wav` (EMA), `out_urdu_nativeref_noema.wav` (non-EMA).
