@@ -4,7 +4,7 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-04**, during Wave 1.
+Last updated: **2026-08-04**, end of the Urdu-cloning investigation.
 
 ---
 
@@ -12,14 +12,16 @@ Last updated: **2026-08-04**, during Wave 1.
 
 | Wave | Status |
 |---|---|
-| **0 — Contracts** | ✅ Done, pushed. 24 tests pass, ruff clean. |
+| **0 — Contracts** | ✅ Done, pushed. |
 | **X1 — Deletions** | ✅ Done, pushed. −5402 lines. |
-| **1 — Research** | ✅ Substantially done. Every question that could change the architecture is answered. Two specs fully measured, one blocked on an HF gate, one installed but unmeasured. |
-| 2 — Build | Not started. Blocked on Wave 1 for the runtimes only; everything else is unblocked. |
-| 3 — Integration | Not started. |
-| 4 — Review | Not started. |
+| **1 — Research** | ✅ Done. All arch-changing questions answered; catalog holds measured numbers. |
+| **B3 — domain layer** | ✅ Done (built inline, not by an agent). `detect_script`, `resolve`, `split_sentences`, `chunk_for_synthesis` all implemented. |
+| **B1 — scheduler** | ✅ Done (built inline). GPU-slot invariant asserted; 20 tests against `FakeWorker`, no GPU. |
+| **Urdu investigation** | ✅ Concluded. See `docs/URDU_CLONING_REPORT.md`. No permissive model zero-shot clones the owner's voice; fix is LoRA fine-tuning, not model choice. |
+| **2 — Build (rest)** | B2 (API layer) is next and fully unblocked. F1–F4 (frontend), D1 (Docker/CI) unblocked. |
+| 3 — Integration / 4 — Review | Not started. |
 
-Branch: **`rewrite/contracts`**, off `dev`.
+**Test count: 75 passing, ruff clean.** Branch: **`rewrite/contracts`**, off `dev`.
 
 ## Resuming on a new pod
 
@@ -34,43 +36,39 @@ HuggingFace), not lost work.
 Connection details for the current pod are in `.claude/remote.local.md` (gitignored — endpoints
 change). Note SSH must use Windows `ssh.exe`; Git Bash cannot see the ssh-agent holding the key.
 
-## ⚠️ Wave 1 was INTERRUPTED (2026-08-04)
+## 🔴 Urdu voice cloning — investigation concluded
 
-All four research agents died at the same instant on a **Claude session limit**, not on any pod or
-code failure. Nothing about the pod, the network, or the research approach was at fault.
+Full report: `docs/URDU_CLONING_REPORT.md`. All runs: `docs/PHASE_A_RESULTS.md`. Verdict from the
+owner (native Urdu speaker) listening to real output:
 
-State at interruption:
+**No permissively-licensed zero-shot model clones the owner's voice.** F5, VoxCPM2, and Chatterbox
+all produce intelligible Urdu in a *generic* voice. The reason is the finding that matters most:
 
-| Agent | Reached |
-|---|---|
-| R1 (F5) | Had launched a resumable background download on the pod (`curl -C -`, retrying). May still be running or finished — **check `/workspace/engines-lab/r1-f5/` before re-downloading anything.** |
-| R2b (Chatterbox) | Barely started. |
-| R3 (VoxCPM) | Installed, was introspecting the real `generate()` signature. |
-| R4 (Urdu) | Was about to build the eval harness; transliteration answer NOT yet obtained. |
+> **Intelligibility and speaker-identity are independent failures.** Intelligibility was solved
+> (Perso-Arabic → Devanagari input fixed CER 0.96 → 0.07). Identity comes from the reference *audio*
+> encoder, **not the text** — so transliteration is NOT the voice bottleneck, and no amount of text
+> or knob tuning fixes it. Root cause: out-of-distribution speaker encoding (encoders are
+> English-trained; a 7 s Pakistani-Urdu voice is off-distribution).
 
-**Before relaunching any agent, inspect what is already on disk.** Roughly 43 GB was downloaded
-(23 GB uv cache, 5 GB HF cache, ~20 GB of venvs). Re-downloading it costs ~70 minutes at 7 MB/s and
-is pure waste. Check each lab directory and each venv first.
+**Path forward:** ship the VoxCPM2 intelligibility pipeline as "a natural Urdu voice" (honest, works,
+Apache-2.0); for real cloning, **LoRA fine-tune VoxCPM2** on 2–10 min of the owner's audio. Do NOT
+try more zero-shot models or samplers — the ceiling is the encoder.
 
-The four agent contexts are resumable within the same Claude session; across sessions, relaunch from
-`docs/PHASE_A_RESULTS.md` plus whatever is on disk.
+**Closed — do not re-investigate:** F5 vocab (Devanagari, 0 Arabic chars), EMA, nuqta-folding,
+zero-shot knobs, transliteration-as-voice-cause. All ruled out with evidence in the report.
 
-## Wave 1 — research in flight
+Ranked best→worst by ear: `out_voxcpm_urdu_deva.wav` > `out_chatterbox_standard.wav` >
+`out_chatterbox_maxref.wav`. All in `C:\Users\abdus\Downloads\Voices\`.
 
-Four agents in `/workspace/engines-lab/<name>/`, each with its own venv, GPU serialized via
-`flock /workspace/engines-lab/.gpu.lock`.
+### Reusable durable assets (now in git, not on a pod)
 
-| Agent | Target | The question that decides something |
-|---|---|---|
-| R1 | F5 + 3 checkpoints | How `ai4bharat/IndicF5` loads — raw checkpoint or `trust_remote_code`? Decides whether one runtime class serves all three F5 specs. |
-| R2b | Chatterbox ML v3 | Runtime verification (R2's first pass was documentation-only — see below). |
-| R3 | VoxCPM 2 | Re-measure ~8 GB / RTF 0.30 on **sm_86**; published figures are Ada. Largest spec, so admission control depends on it. |
-| R4 | Urdu pipeline + eval harness | Does `ai4bharat-transliteration` have `ur` in the indic→roman direction? If not, the Perso-Arabic→Devanagari route collapses. |
+- `eval/eval_harness.py` — Whisper large-v3 CER + ECAPA-TDNN cosine + RTF. **The gate is a SCREEN,
+  not a verdict** (VoxCPM2 passed CER, nearly passed cosine, still sounded like a stranger). Needs a
+  torch venv: `uv pip install torch torchaudio transformers speechbrain jiwer soundfile`.
+- `eval/fixtures/voice_urdu.wav` — the owner's reference (6.67 s), with transcript + Devanagari
+  transliteration + standard target sentence in `eval/fixtures/README.md`.
 
-Findings land in `docs/PHASE_A_RESULTS.md` as they arrive. **Commit them immediately** — they are
-the durable output of Wave 1; the venvs and weights are just cache.
-
-### Two lessons already learned
+### Lessons carried forward
 
 **1. Verification means execution.** R2 produced a report with three ❌ in its own summary table and
 concluded "READY TO SHIP: All critical deliverables verified" — having never loaded the model.
@@ -111,19 +109,15 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 - Present: git, ffmpeg, uv, flock. Missing: **node, npm** (so frontend work happens locally), nvcc,
   espeak-ng (not needed by any chosen runtime).
 
-## What is NOT blocked on Wave 1
+## What's left to build
 
-Wave 1 gates only the runtime implementations. These can start now against the frozen contracts:
-
-- **X1** ✅ done
-- **B2** — `main.py`, `config.py`, `db/**`, `api/**`, media tokens. Depends on `SchedulerProtocol`,
-  not on the scheduler; tests run against `tests/fakes/FakeScheduler`.
-- **B3** — `domain/**`: `detect_script`, `resolve`, `split_sentences` are all `NotImplementedError`
-  stubs with signatures fixed.
-- **B1** — the scheduler itself, plus all five of its tests, which run against `FakeWorker` with no
-  GPU. Only the three real runtime classes wait for Wave 1.
-- **F1–F4** — the whole frontend, against `types/api.ts` and `lib/queryKeys.ts`.
+- **B2** (next) — `main.py`, `config.py`, `db/**`, `api/**` routers, media tokens. Depends on
+  `SchedulerProtocol`, not the scheduler; tests against `tests/fakes/FakeScheduler`. Wire B1 in.
+- **F1–F4** — frontend, against `types/api.ts` and `lib/queryKeys.ts`. Node/npm are local-only.
 - **D1** — Docker, CI.
+- **Real runtimes** (was Wave 3) — implement against the verified snippets in `PHASE_A_RESULTS.md`.
+  Catalog now: `voxcpm2`, `chatterbox_ml_v3` (both permissive, measured), `f5_openbible_urdu`
+  (Devanagari-only, weak clone), `f5_indic` (gated). Given the Urdu report, VoxCPM2 is the priority.
 
 ## Non-negotiables (full detail in CLAUDE.md and docs/ARCHITECTURE.md)
 
@@ -138,43 +132,37 @@ Wave 1 gates only the runtime implementations. These can start now against the f
 6. Nothing routes until Phase A verifies it. `LanguageSupport.verified=False` is the default and the
    catalog currently resolves nothing — deliberately.
 
-## Wave 1 outcome
+## Design facts established by research (in the catalog / code already)
 
-| Spec | State |
-|---|---|
-| `f5_openbible_urdu` | ✅ Verified. Real Urdu audio generated. 6112 MB, 7.0 s load, RTF 0.21 |
-| `voxcpm2` | ✅ Verified. 7300 MB, 124 s load, RTF 0.58. Hindi speaker sim **0.678 — below the 0.70 gate**, needs a re-run |
-| `chatterbox_ml_v3` | ⚠️ MIT confirmed; venv installed (torch + chatterbox import OK); **nothing measured** |
-| `f5_indic` | 🔒 Blocked on the HF gate |
-| ~~`f5_openf5_en`~~ | ❌ Dropped — no permissive English F5 exists |
-
-**Design changes forced by research** (the reason Wave 1 ran before Wave 2):
-
-1. **Two F5 loader paths, not one runtime class.** IndicF5 needs
-   `AutoModel(trust_remote_code=True)`; OpenBible-Urdu is a raw checkpoint through the stock loader.
-2. **English cannot use F5** — routes to Chatterbox.
-3. **Reference limit is ~12 s with silent truncation**, not ~6 s. The "8192" was an unrelated rotary
-   table (~87 s).
-4. **Blank `ref_text` silently loads Whisper** — 39.5 s cold, 5.1 s warm, per request.
-5. **VRAM must be sampled concurrently**, not after the fact — post-hoc readings under-report peak
-   ~5× because allocator caches are released between requests.
-6. **Roman Urdu → Devanagari is one hop and higher quality than Roman → Perso-Arabic** — the
-   transliterated route is the better path, not a licensing compromise.
-
-Ready-to-use on the pod: `/workspace/engines-lab/r4-urdu/eval_harness.py` (Whisper large-v3 +
-ECAPA-TDNN, both permissive) and `corpus/` with documented provenance.
+1. **Two F5 loader paths, not one class.** IndicF5 → `AutoModel(trust_remote_code=True)`;
+   OpenBible-Urdu → raw checkpoint via stock `f5-tts` loader.
+2. **`f5_openf5_en` dropped** — no permissive English F5 exists (all derive from CC-BY-NC SWivid).
+   English routes to Chatterbox.
+3. **F5 reference limit ~12 s, silent truncation** (not ~6 s; "8192" is an unrelated rotary table).
+4. **F5 blank `ref_text` silently loads Whisper** — always pass `ref_text`.
+5. **VRAM must be sampled concurrently** — post-hoc readings under-report peak ~5×. Scheduler sizes
+   from recorded `vram_mb`, not live readings.
+6. **Roman Urdu → Devanagari is one MIT-licensed hop** (`ai4bharat-transliteration`), higher quality
+   than the Perso-Arabic path.
+7. **VoxCPM2 warm-up trap** — built-in warm-up skips the cloning path; first real clone eats +40–55 s
+   unless warmed with a real reference.
 
 ## Next session — start here
 
-Wave 2 backend agents are fully unblocked against the frozen contracts and need no GPU:
-**B1** (scheduler + its five tests, against `FakeWorker`), **B2** (API layer, against
-`FakeScheduler`), **B3** (domain implementations). Use Sonnet — this is implementation against frozen
-contracts, which is what contracts are for. Two or three agents at a time, not eight: a session limit
-kills all in-flight agents at once.
+**B2 (API layer) on Sonnet.** Implementation against frozen contracts is what Sonnet is for. Wire the
+scheduler in behind `SchedulerProtocol`; test against `FakeScheduler`. Then F1–F4 (frontend, local).
+
+**Token discipline (owner priority):** terse replies, no recaps, no exploratory pod runs without
+go-ahead, batch verification. Build inline when holding the contracts (B1/B3 were faster+cheaper that
+way than spawning agents). Only spawn agents for genuinely parallel work.
 
 ## Open items
 
-- [ ] **Rotate the GitHub PAT.** It was pasted into a chat transcript and is permanently logged.
+- [ ] **Rotate the GitHub PAT** (`ghp_...`) — pasted into the transcript, and written to two pods'
+      `/root/.git-credentials`. Permanently logged.
+- [ ] **Urdu product decision (owner):** ship generic-voice MVP, or invest in LoRA fine-tune of
+      VoxCPM2. See `docs/URDU_CLONING_REPORT.md` §4.
+- [ ] Accept the IndicF5 HF license + set `HF_TOKEN` on the pod (unblocks `f5_indic`).
 - [ ] Empty `LEGACY_TORCH_IMPORTERS` once the old engine layer is deleted (blocked on B1/B2/B3
       landing replacements — deleting it now would break the running app).
 - [ ] `NOTICE` file with CC-BY-SA attribution for OpenBible-Urdu.
