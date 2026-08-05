@@ -270,10 +270,16 @@ def _plan_transform(
                 TextTransform(TransformKind.NONE, Script.ARABIC, Script.ARABIC),
             )
         if script is Script.LATIN:
-            # Roman Urdu. R4b verified this is a DIRECT one hop, and that the
-            # Devanagari output is more accurate than the Perso-Arabic output
-            # from the same Roman input — so this is the better path, not a
-            # licensing compromise.
+            # Roman Urdu / Hinglish. A tokenizer-free model (VoxCPM2) renders
+            # romanized Urdu DIRECTLY — verified 2026-08-05 that Roman input
+            # sounds equivalent to Devanagari — so when a model natively serves
+            # (ur, Latin) the text is passed through UNCHANGED. Only a model that
+            # needs Devanagari (F5) falls back to the lossless one-hop below.
+            if catalog.candidates(lang, Script.LATIN):
+                return (
+                    _Target(lang, Script.LATIN),
+                    TextTransform(TransformKind.NONE, Script.LATIN, Script.LATIN),
+                )
             return hindi, TextTransform(
                 TransformKind.ROMAN_TO_DEVA, Script.LATIN, Script.DEVANAGARI
             )

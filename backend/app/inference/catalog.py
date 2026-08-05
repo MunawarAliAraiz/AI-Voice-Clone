@@ -196,9 +196,22 @@ VOXCPM2 = ModelSpec(
     # Verified: snapshot actually downloaded to the pod's HF cache, which also
     # resolves the repo id itself.
     hf_revision="bffb3df5a29440629464e5e839f4d214c8714c3d",
+    # VERIFIED 2026-08-05 by the E1/E2 cross-lingual tests + the owner's ear.
+    # VoxCPM2 is tokenizer-free and renders ROMANIZED Hindi/Urdu directly (owner
+    # confirmed Roman ~= Devanagari by ear), so it serves Latin-script hi/ur with
+    # NO transliteration step — the whole ai4bharat hop was dropped. speaker_cosine
+    # is ECAPA against public-domain references; CER for the Latin cells is not
+    # re-measured (owner listening is authoritative, per the screen-not-verdict
+    # rule), and the Devanagari CER is the Phase-A figure.
     languages=(
-        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
-        LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
+        LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN,
+                        verified=True, speaker_cosine=0.795),
+        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.LATIN,
+                        verified=True, speaker_cosine=0.887),
+        LanguageSupport(language=LanguageCode.URDU.value, script=Script.LATIN,
+                        verified=True, speaker_cosine=0.826),
+        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI,
+                        verified=True, cer=0.086, speaker_cosine=0.887),
     ),
     # MEASURED on the A5000 (sm_86), R3b. 6.2 GB resident after load, 7.3 GB
     # peak during generation per nvidia-smi (the real total, including CUDA

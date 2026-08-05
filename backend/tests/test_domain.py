@@ -60,7 +60,12 @@ URDU_SPEC = StubSpec("f5_openbible_urdu", "OpenBible Urdu", (("ur", Script.ARABI
 HINDI_A = StubSpec("chatterbox_ml_v3", "Chatterbox", (
     ("hi", Script.DEVANAGARI), ("en", Script.LATIN),
 ))
-HINDI_B = StubSpec("voxcpm2", "VoxCPM 2", (("hi", Script.DEVANAGARI),))
+HINDI_B = StubSpec("voxcpm2", "VoxCPM 2", (
+    # VoxCPM2 renders romanized hi/ur directly (tokenizer-free), so it declares
+    # the Latin cells too — no transliteration needed.
+    ("hi", Script.DEVANAGARI), ("hi", Script.LATIN),
+    ("ur", Script.LATIN), ("en", Script.LATIN),
+))
 CATALOG = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B))
 
 
@@ -193,11 +198,22 @@ def test_native_urdu_routes_to_urdu_spec_untransformed() -> None:
     assert not plan.needs_transform
 
 
-def test_roman_urdu_routes_to_hindi_via_one_hop() -> None:
+def test_roman_urdu_routes_directly_when_a_model_renders_it() -> None:
+    # VoxCPM2 declares (ur, Latin), so Roman Urdu goes straight to it, untouched.
     plan = resolve(profile_text(ROMAN_URDU, "ur"), None, CATALOG)
+    assert plan.model_id == "voxcpm2"
+    assert plan.transform.kind is TransformKind.NONE
+    assert not plan.needs_transform  # the worker gets the Roman text as-is
+    assert not plan.lossy
+
+
+def test_roman_urdu_falls_back_to_devanagari_hop_without_a_latin_model() -> None:
+    # Catalog with no (ur, Latin) support: the lossless Roman->Devanagari one-hop
+    # is used so a Devanagari-only model (F5) can still serve it.
+    catalog = StubCatalog((URDU_SPEC, HINDI_A))  # chatterbox has no (ur, Latin)
+    plan = resolve(profile_text(ROMAN_URDU, "ur"), None, catalog)
     assert plan.model_id == "chatterbox_ml_v3"
     assert plan.transform.kind is TransformKind.ROMAN_TO_DEVA
-    assert not plan.lossy          # one hop, script-only
     assert plan.needs_transform    # service layer must fill resolved_text
     assert "Roman Urdu" in plan.rationale
 
@@ -276,7 +292,10 @@ def test_resolve_ignores_load_state_entirely() -> None:
 
 
 def test_with_resolved_text_closes_the_transform_seam() -> None:
-    plan = resolve(profile_text(ROMAN_URDU, "ur"), None, CATALOG)
+    # Use a catalog with no (ur, Latin) model so the transform seam is exercised
+    # (with a direct-Latin model the plan needs no transform at all).
+    catalog = StubCatalog((URDU_SPEC, HINDI_A))
+    plan = resolve(profile_text(ROMAN_URDU, "ur"), None, catalog)
     assert plan.needs_transform
     final = plan.with_resolved_text("आप कैसे हैं")
     assert final.resolved_text == "आप कैसे हैं"
