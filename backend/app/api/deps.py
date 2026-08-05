@@ -14,17 +14,23 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from ..config import Settings
+from ..db import Database
 from ..exceptions import PROBLEM_BASE_URI, PROBLEM_CONTENT_TYPE
 from ..inference.catalog import CATALOG, ModelCatalog
 from ..inference.protocol import SchedulerProtocol
 
-__all__ = ["get_settings", "get_scheduler", "get_catalog", "ApiKeyMiddleware"]
+__all__ = ["get_settings", "get_scheduler", "get_catalog", "get_db", "ApiKeyMiddleware"]
 
 
 def get_settings(request: Request) -> Settings:
     """The settings this app was built with — injected in tests, so a request
     reads the app's settings rather than a process-wide cached singleton."""
     return request.app.state.settings
+
+
+def get_db(request: Request) -> Database:
+    """The live database connection, opened at startup (or injected in tests)."""
+    return request.app.state.db
 
 
 def get_scheduler(request: Request) -> SchedulerProtocol:

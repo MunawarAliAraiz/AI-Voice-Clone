@@ -23,6 +23,7 @@ from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
 from .api.routers import health, models, system
 from .config import Settings, get_settings
+from .db import Database
 from .inference.protocol import SchedulerProtocol
 
 __all__ = ["create_app"]
@@ -31,6 +32,7 @@ __all__ = ["create_app"]
 def create_app(
     *,
     scheduler: SchedulerProtocol | None = None,
+    db: Database | None = None,
     settings: Settings | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
@@ -38,22 +40,31 @@ def create_app(
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.ensure_dirs()
-        # Build the real scheduler only if one was not injected (tests inject a
-        # fake). We shut down only what we own — never a caller's scheduler.
+        # Build the real scheduler/db only if not injected (tests inject fakes /
+        # an in-memory db). We tear down only what we own.
         if getattr(app.state, "scheduler", None) is None:
             app.state.scheduler = _build_scheduler(settings)
             app.state.owns_scheduler = True
+        if getattr(app.state, "db", None) is None:
+            app.state.db = Database(settings.db_path)
+            await app.state.db.connect()
+            app.state.owns_db = True
         try:
             yield
         finally:
             if getattr(app.state, "owns_scheduler", False):
                 await app.state.scheduler.shutdown()
+            if getattr(app.state, "owns_db", False):
+                await app.state.db.close()
 
     app = FastAPI(title="AI Voice Clone Studio", version=settings.version, lifespan=lifespan)
     app.state.settings = settings
     if scheduler is not None:
         app.state.scheduler = scheduler
         app.state.owns_scheduler = False
+    if db is not None:
+        app.state.db = db
+        app.state.owns_db = False
 
     install_exception_handlers(app)
 

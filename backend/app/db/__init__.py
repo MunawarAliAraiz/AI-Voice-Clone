@@ -15,3 +15,7 @@ Policy, decided once so it is not relitigated per-module:
 This replaces a per-call `aiosqlite.connect` that re-ran PRAGMAs every time and
 leaked a connection on every translation (translation_service.py:164-178).
 """
+
+from .database import Database
+
+__all__ = ["Database"]
