@@ -44,4 +44,5 @@ Thumbs.db
 frontend/src-tauri/bin/
 frontend/dist/
 frontend/src-tauri/target/
-frontend/src-tauri/bin/*.exe*.tsbuildinfo
+frontend/src-tauri/bin/*.exe
+*.tsbuildinfo
