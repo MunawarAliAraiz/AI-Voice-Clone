@@ -15,7 +15,6 @@ eviction logic lives in the scheduler, on the far side of the wire protocol.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 __all__ = ["RuntimeBackend", "make_backend"]
@@ -70,4 +69,16 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .voxcpm import VoxCPMBackend
 
         return VoxCPMBackend()
+    if runtime == "fake":
+        import os
+
+        # Silence-only, but still gated: a fake runtime reachable in production
+        # is how a demo mode becomes a shipped lie. It must be opted into.
+        if os.environ.get("VCS_ALLOW_FAKE_RUNTIME") not in {"1", "true", "True"}:
+            raise ValueError(
+                "fake runtime requires VCS_ALLOW_FAKE_RUNTIME=1 in the environment"
+            )
+        from .fake import FakeBackend
+
+        return FakeBackend()
     raise ValueError(f"no runtime backend for {runtime!r}")

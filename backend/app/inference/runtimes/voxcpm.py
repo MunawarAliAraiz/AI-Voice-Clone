@@ -11,12 +11,17 @@ Design facts fixed by Phase-A / E1-E2 validation (2026-08-05, RTX 4000 Ada):
   * Output sample rate is the model's own (`tts_model.sample_rate`, 48000);
     we write at that rate and report it — never silently resample to 44100.
   * `cfg_value` default 2.0 (2.0-2.5 sound natural by ear; 1.5/3.0 drift).
-  * `optimize=True` + first real clone = ~74s torch.compile warm-up trap, so we
-    warm the cloning path at load with a bundled reference.
+  * `optimize` (torch.compile) is OFF by default. With it on, the first-ever
+    cold load compiles for ~383s on a fresh inductor cache — past the
+    scheduler's 300s load_timeout, so it would get the worker killed. Compile
+    buys RTF ~0.83 vs ~1.05, so it is a deliberate opt-in that also needs a
+    raised load timeout and a persistent TORCHINDUCTOR_CACHE_DIR. Off, load is
+    seconds (weights cached) and the first request is normal speed, no trap.
 """
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any
 
@@ -49,13 +54,13 @@ class VoxCPMBackend:
         model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
         try:
             self._model = VoxCPM(
-                voxcpm_model_path=model_path, load_denoiser=False, optimize=True
+                voxcpm_model_path=model_path, load_denoiser=False, optimize=False
             )
         except TypeError:
             # Older/newer signature: fall back to from_pretrained (cache already
             # holds the pinned revision from the snapshot_download above).
             self._model = VoxCPM.from_pretrained(
-                hf_repo, load_denoiser=False, optimize=True
+                hf_repo, load_denoiser=False, optimize=False
             )
         self._sr = int(self._model.tts_model.sample_rate)
         self.loaded_model_id = model_id
@@ -63,19 +68,21 @@ class VoxCPMBackend:
         return time.time() - t0
 
     def _warm(self) -> None:
-        """Compile the cloning path once so the first real clone isn't +74s."""
+        """
+        Prime the cloning path once at load so the first real request doesn't
+        pay CUDA kernel autotune / lazy-init latency. Cheap without compile.
+        """
         import os
 
         ref = next((p for p in _WARMUP_REF_CANDIDATES if os.path.exists(p)), None)
         if ref is None or self._model is None:
             return
-        try:
+        # Best-effort: a warm-up failure must not fail the load.
+        with contextlib.suppress(Exception):
             self._model.generate(
                 text="warm up.", reference_wav_path=ref,
                 cfg_value=2.0, inference_timesteps=10, normalize=False,
             )
-        except Exception:
-            pass  # warm-up is best-effort; a failure here must not fail load
 
     def synth(
         self,
@@ -111,12 +118,10 @@ class VoxCPMBackend:
         self._model = None
         self._sr = None
         self.loaded_model_id = None
-        try:
+        with contextlib.suppress(Exception):
             import gc
 
             import torch
 
             gc.collect()
             torch.cuda.empty_cache()
-        except Exception:
-            pass
