@@ -66,25 +66,59 @@ command -v flock  >/dev/null || { apt-get update -qq && apt-get install -y -qq u
 command -v uv     >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="/root/.local/bin:$PATH"
 
-echo "== 5. backend env (NO torch — that is the structural invariant) =="
+echo "== 5. backend API env (NO torch — that is the structural invariant) =="
 cd "$REPO_DIR/backend" && uv sync --python 3.12
 
-echo "== 6. research lab =="
+echo "== 6. VoxCPM 2 runtime env (the process that ACTUALLY has torch) =="
+# The GPU model runs in a separate interpreter from the API. This is the env the
+# API points VCS_VOXCPM_PYTHON at; without it, every /generate 422s.
+VOX_VENV="$REPO_DIR/backend/.venv-voxcpm"
+if [ ! -x "$VOX_VENV/bin/python" ]; then
+  uv venv "$VOX_VENV" --python 3.12
+fi
+uv pip install --python "$VOX_VENV" voxcpm 2>&1 | tail -2
+# CRITICAL: a plain voxcpm install pulls a torch cu130 wheel whose CUDA runtime
+# is newer than most drivers, so torch.cuda.is_available() is silently False and
+# synthesis runs on CPU and times out. Pin the cu128 build the RunPod drivers
+# support. If your driver is newer, bump the index url to match.
+uv pip install --python "$VOX_VENV" \
+  torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$VOX_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 7. VoxCPM 2 weights (pinned revision, ~7GB, cached on /workspace) =="
+VOX_REV="bffb3df5a29440629464e5e839f4d214c8714c3d"
+"$VOX_VENV/bin/python" - "$VOX_REV" <<'PY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download("openbmb/VoxCPM2", revision=sys.argv[1])
+print("   weights at", p)
+PY
+
+echo "== 8. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 7. verify =="
+echo "== 9. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
-cd "$REPO_DIR/backend" && uv run pytest -q 2>&1 | tail -3
+cd "$REPO_DIR/backend" && uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
 echo
 echo "== READY =="
-echo "  repo:   $REPO_DIR ($BRANCH)"
-echo "  lab:    /workspace/engines-lab/"
-echo "  caches: /workspace/{hf,torch,pip,uv}-cache"
+echo "  repo:    $REPO_DIR ($BRANCH)"
+echo "  runtime: $VOX_VENV  (torch cu128)"
+echo "  lab:     /workspace/engines-lab/"
+echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"
 echo
-echo "If /workspace was NOT carried over, the model weights are gone and must be"
-echo "re-downloaded (~7MB/s from HuggingFace). Everything else above is rebuilt."
+echo "Start serving:"
+echo "  cd $REPO_DIR/backend && \\"
+echo "    HF_HOME=/workspace/hf-cache \\"
+echo "    VCS_VOXCPM_PYTHON=$VOX_VENV/bin/python \\"
+echo "    VCS_WORKER_CWD=$REPO_DIR/backend \\"
+echo "    uv run uvicorn app.main:app --host 127.0.0.1 --port 8000"
+echo
+echo "Reach it from your laptop with a tunnel (do not expose the port directly):"
+echo "  ssh -N -L 8000:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>"

@@ -12,6 +12,7 @@ build/
 # Python Virtual Environments
 venv/
 .venv/
+.venv-*/
 env/
 
 # Model Checkpoints & Large Binaries
