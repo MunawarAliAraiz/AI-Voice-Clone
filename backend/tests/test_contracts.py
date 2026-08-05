@@ -409,6 +409,8 @@ def test_no_stray_modules_in_contract_packages() -> None:
         # Runtime layer (the torch side) — spawned as a subprocess, never imported
         # by the API. Allowlisted for torch in TORCH_ALLOWED; see worker.py.
         "worker", "runtimes",
+        # Production factory that constructs+starts WorkerProcess for the scheduler.
+        "factory",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected
