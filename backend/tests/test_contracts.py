@@ -46,16 +46,10 @@ TORCH_ALLOWED = ("inference/runtimes/", "inference/worker.py")
 #: on first call — which is why the check allows leading whitespace. A plain
 #: `grep "^import torch"` reports these files clean, and that false negative is
 #: exactly why this is a test and not a grep in a doc.
-LEGACY_TORCH_IMPORTERS = frozenset(
-    {
-        "utils/gpu.py",
-        "utils/gpu_manager.py",
-        "services/translation_service.py",
-        "engines/f5_tts.py",
-        "engines/fish_speech.py",
-        "engines/xtts_v2.py",
-    }
-)
+#: Emptied once the predecessor engine/service/util layer was deleted (B2). The
+#: invariant now stands with no grandfathered exceptions: torch is reachable
+#: ONLY from `inference/runtimes/` and `inference/worker.py`.
+LEGACY_TORCH_IMPORTERS: frozenset[str] = frozenset()
 
 
 # ── Invariant 1: no torch in the API process ─────────────────────────────────

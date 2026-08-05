@@ -450,7 +450,7 @@ class InferenceScheduler:
             return False
         # Semaphore.acquire() returns immediately when the counter is positive,
         # so this cannot block given the check above.
-        sem._value -= 1  # noqa: SLF001 - asyncio exposes no non-blocking acquire
+        sem._value -= 1
         return True
 
     def _require(self, model_id: str) -> ModelSpec:
