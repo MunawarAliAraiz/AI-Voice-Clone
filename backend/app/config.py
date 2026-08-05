@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     allow_fake_runtime: bool = False
 
     #: CORS allow-list. Set `VCS_CORS_ORIGINS` to a JSON array to override.
+    #: 1420 is the Vite dev port from vite.config; 5173 is Vite's default.
     cors_origins: list[str] = [
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]

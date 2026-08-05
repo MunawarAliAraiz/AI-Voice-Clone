@@ -125,3 +125,9 @@ def _assert_no_duplicate_routes(app: FastAPI) -> None:
             key = (method, path)
             assert key not in seen, f"duplicate route registered: {key}"
             seen.add(key)
+
+
+#: Module-level ASGI app for `uvicorn app.main:app`. Construction only wires
+#: routes/middleware; the scheduler and db open in the lifespan at startup, so
+#: importing this touches neither the GPU nor the filesystem.
+app = create_app()
