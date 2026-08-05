@@ -3,6 +3,7 @@ import { api, ApiError, mediaUrl } from './services/api';
 import type {
   HistoryItem,
   LanguageInfo,
+  ScriptDetectResponse,
   TTSGenerateResponse,
   VoiceProfile,
 } from './types/api';
@@ -43,8 +44,11 @@ export default function App() {
         <div className="brand">
           <span className="logo">◈</span> Voice Clone Studio
         </div>
-        <div className={`status ${online ? 'ok' : 'down'}`}>
-          {online === null ? 'connecting…' : online ? 'backend online' : 'backend offline'}
+        <div className="topbar-right">
+          <ApiKeyControl onSaved={refresh} />
+          <div className={`status ${online ? 'ok' : 'down'}`}>
+            {online === null ? 'connecting…' : online ? 'backend online' : 'backend offline'}
+          </div>
         </div>
       </header>
 
@@ -65,6 +69,36 @@ export default function App() {
   );
 }
 
+function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState(localStorage.getItem('vcs_api_key') ?? '');
+  function save() {
+    if (key) localStorage.setItem('vcs_api_key', key);
+    else localStorage.removeItem('vcs_api_key');
+    setOpen(false);
+    onSaved();
+  }
+  return (
+    <div className="apikey">
+      <button className="icon-btn" type="button" title="API key" onClick={() => setOpen((o) => !o)}>⚙</button>
+      {open && (
+        <div className="apikey-pop">
+          <label>
+            API key
+            <input
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              type="password"
+              placeholder="X-API-Key (optional)"
+            />
+          </label>
+          <button className="primary" type="button" onClick={save}>Save</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Enrollment ────────────────────────────────────────────────────────────
 
 function EnrollCard({
@@ -74,29 +108,34 @@ function EnrollCard({
   languages: LanguageInfo[];
   onEnrolled: () => void;
 }) {
+  const [mode, setMode] = useState<'upload' | 'record'>('upload');
   const [name, setName] = useState('');
   const [language, setLanguage] = useState('ur');
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const rec = useRecorder();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const file = fileRef.current?.files?.[0];
-    if (!file) return setErr('Choose a reference audio file.');
+    const fromFile = mode === 'upload' ? fileRef.current?.files?.[0] ?? null : null;
+    const source: Blob | null = mode === 'record' ? rec.blob : fromFile;
+    const filename = fromFile?.name ?? 'recording.wav';
+    if (!source) return setErr(mode === 'record' ? 'Record a clip first.' : 'Choose a reference audio file.');
     if (!consent) return setErr('You must confirm you are authorized to clone this voice.');
     setBusy(true);
     setErr(null);
     try {
       const form = new FormData();
-      form.append('file', file);
-      form.append('name', name || file.name);
+      form.append('file', source, filename);
+      form.append('name', name || filename);
       form.append('language', language);
       form.append('consent', 'true');
       await api.createVoice(form);
       setName('');
       setConsent(false);
+      rec.reset();
       if (fileRef.current) fileRef.current.value = '';
       onEnrolled();
     } catch (e) {
@@ -109,7 +148,34 @@ function EnrollCard({
   return (
     <form className="card" onSubmit={submit}>
       <h2>Add a voice</h2>
-      <label>Reference audio<input ref={fileRef} type="file" accept="audio/*" /></label>
+      <div className="tabs">
+        <button type="button" className={mode === 'upload' ? 'on' : ''} onClick={() => setMode('upload')}>Upload</button>
+        <button type="button" className={mode === 'record' ? 'on' : ''} onClick={() => setMode('record')}>Record</button>
+      </div>
+
+      {mode === 'upload' ? (
+        <label>Reference audio<input ref={fileRef} type="file" accept="audio/*" /></label>
+      ) : (
+        <div className="recorder">
+          {!rec.recording ? (
+            <button type="button" className="rec-btn" onClick={() => void rec.start()}>
+              ● Record
+            </button>
+          ) : (
+            <button type="button" className="rec-btn recording" onClick={rec.stop}>
+              ■ Stop ({fmtSeconds(rec.seconds)})
+            </button>
+          )}
+          {rec.error && <div className="inline-error">{rec.error}</div>}
+          {rec.blob && !rec.recording && (
+            <div className="rec-preview">
+              <audio controls src={URL.createObjectURL(rec.blob)} />
+              <button type="button" className="link" onClick={rec.reset}>discard</button>
+            </div>
+          )}
+        </div>
+      )}
+
       <label>Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My voice" /></label>
       <label>
         Language
@@ -127,6 +193,10 @@ function EnrollCard({
       <button disabled={busy} type="submit">{busy ? 'Uploading…' : 'Add voice'}</button>
     </form>
   );
+}
+
+function fmtSeconds(s: number): string {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 function VoiceLibrary({ voices, onDeleted }: { voices: VoiceProfile[]; onDeleted: () => void }) {
@@ -174,11 +244,25 @@ function Composer({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<TTSGenerateResponse | null>(null);
+  const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
 
   useEffect(() => {
     const first = voices[0];
     if (profileId === null && first) setProfileId(first.id);
   }, [voices, profileId]);
+
+  // Debounced live script detection — powers the routability hint and dir.
+  useEffect(() => {
+    const t = text.trim();
+    if (!t) {
+      setDetect(null);
+      return;
+    }
+    const h = window.setTimeout(() => {
+      api.detectScript(t, language).then(setDetect).catch(() => setDetect(null));
+    }, 400);
+    return () => window.clearTimeout(h);
+  }, [text, language]);
 
   async function generate() {
     if (profileId === null) return setErr('Add and select a voice first.');
@@ -223,8 +307,16 @@ function Composer({
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={4}
+        dir={detect?.is_rtl ? 'rtl' : 'ltr'}
         placeholder={PLACEHOLDER[language] ?? 'Type your text…'}
       />
+      {detect && (
+        <div className={`detect ${detect.routable ? '' : 'bad'}`}>
+          {detect.routable
+            ? `${detect.script} · renders with ${detect.would_route_to?.model_display_name ?? '—'}`
+            : detect.hint ?? 'This text cannot be routed.'}
+        </div>
+      )}
       {err && <div className="inline-error">{err}</div>}
       <button className="primary" disabled={busy} onClick={() => void generate()}>
         {busy ? 'Generating…' : 'Generate'}
@@ -273,6 +365,92 @@ function HistoryPanel({ items }: { items: HistoryItem[] }) {
       </ul>
     </div>
   );
+}
+
+// ── Mic recording (decoded to WAV so libsndfile on the backend can read it;
+//    MediaRecorder emits webm/opus, which soundfile cannot) ──────────────────
+
+interface Recorder {
+  recording: boolean;
+  seconds: number;
+  blob: Blob | null;
+  error: string | null;
+  start: () => Promise<void>;
+  stop: () => void;
+  reset: () => void;
+}
+
+function useRecorder(): Recorder {
+  const [recording, setRecording] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [blob, setBlob] = useState<Blob | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const mrRef = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const timer = useRef<number | null>(null);
+
+  const start = useCallback(async () => {
+    setError(null);
+    setBlob(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      chunks.current = [];
+      mr.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const webm = new Blob(chunks.current, { type: mr.mimeType || 'audio/webm' });
+        void webmToWav(webm).then(setBlob).catch((e) => setError(String(e)));
+      };
+      mr.start();
+      mrRef.current = mr;
+      setRecording(true);
+      setSeconds(0);
+      timer.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    } catch {
+      setError('Microphone access was denied.');
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    mrRef.current?.stop();
+    if (timer.current) window.clearInterval(timer.current);
+    setRecording(false);
+  }, []);
+
+  const reset = useCallback(() => setBlob(null), []);
+  return { recording, seconds, blob, error, start, stop, reset };
+}
+
+async function webmToWav(input: Blob): Promise<Blob> {
+  const ctx = new AudioContext();
+  const buf = await ctx.decodeAudioData(await input.arrayBuffer());
+  await ctx.close();
+  return encodeWav(buf);
+}
+
+function encodeWav(buffer: AudioBuffer): Blob {
+  const ch = buffer.numberOfChannels;
+  const len = buffer.length;
+  // down-mix to mono
+  const mono = new Float32Array(len);
+  for (let c = 0; c < ch; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) mono[i] = (mono[i] ?? 0) + (data[i] ?? 0) / ch;
+  }
+  const sr = buffer.sampleRate;
+  const out = new DataView(new ArrayBuffer(44 + len * 2));
+  const wr = (o: number, s: string) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  wr(0, 'RIFF'); out.setUint32(4, 36 + len * 2, true); wr(8, 'WAVE');
+  wr(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true);
+  out.setUint16(22, 1, true); out.setUint32(24, sr, true); out.setUint32(28, sr * 2, true);
+  out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  wr(36, 'data'); out.setUint32(40, len * 2, true);
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i] ?? 0));
+    out.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return new Blob([out], { type: 'audio/wav' });
 }
 
 const FALLBACK_LANGS: LanguageInfo[] = [
