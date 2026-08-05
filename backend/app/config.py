@@ -1,74 +1,113 @@
 """
-AI Voice Clone Studio — Configuration Management
+AI Voice Clone Studio — Configuration.
+
+Replaces the predecessor config, whose `default_engine = "mock"` is the exact
+default this rewrite exists to remove. No engine default, no `use_gpu` (the API
+process has no GPU), and the scheduler budget lives here rather than being
+guessed at call time.
+
+Every setting is overridable by a `VCS_`-prefixed env var (e.g. `VCS_API_KEY`).
 """
 
+from __future__ import annotations
+
+import secrets
+import sys
+from functools import lru_cache
 from pathlib import Path
-from pydantic_settings import BaseSettings
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .inference.spec import RuntimeKind
+
+__all__ = ["Settings", "get_settings"]
 
 
 class Settings(BaseSettings):
-    """Application settings with environment variable support."""
+    model_config = SettingsConfigDict(
+        env_prefix="VCS_", env_file=".env", extra="ignore"
+    )
 
-    # App
-    app_name: str = "AI Voice Clone Studio"
-    app_version: str = "0.1.0"
-    debug: bool = True
+    version: str = "0.1.0"
 
-    # Server
-    host: str = "0.0.0.0"   # Use 127.0.0.1 for local-only; 0.0.0.0 for server/GPU deployment
-    port: int = 8000
+    #: When non-empty, every `/api/*` route except health requires this in the
+    #: `X-API-Key` header. Empty = open (single-user local dev only).
+    api_key: str = ""
 
-    # Security — optional API key (set VCS_API_KEY env var to enable auth)
-    api_key: str = ""  # Empty = no auth required
+    #: Enables the silence-only fake runtime. A response so produced carries
+    #: `X-Fake-Audio: true` and the UI shows a loud banner — never a silent path.
+    allow_fake_runtime: bool = False
 
-    # CORS — comma-separated extra origins (e.g. "https://myapp.vercel.app,https://myapp.com")
-    cors_origins: str = ""  # Empty = only localhost origins allowed
+    #: CORS allow-list. Set `VCS_CORS_ORIGINS` to a JSON array to override.
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
-    # Paths — all relative to project root
-    project_root: Path = Path(__file__).resolve().parent.parent.parent
-    data_dir: Path = project_root / "data"
-    voices_dir: Path = data_dir / "voices"
-    profiles_dir: Path = data_dir / "profiles"
-    generated_dir: Path = data_dir / "generated"
-    models_dir: Path = data_dir / "models"
-    cache_dir: Path = data_dir / "cache"
-    db_dir: Path = data_dir / "db"
-    logs_dir: Path = project_root / "logs"
+    #: Root for all mutable state — reference audio, generated clips, the db.
+    data_dir: Path = Path("data")
 
-    # Database
-    db_path: Path = db_dir / "voiceclone.db"
+    #: HMAC secret for signed media URLs. Auto-generated per process if unset, so
+    #: dev works out of the box; set it in production so tokens survive restarts.
+    media_token_secret: str = ""
+    media_token_ttl_sec: int = 3600
 
-    # Audio defaults
-    default_sample_rate: int = 44100
-    default_output_format: str = "wav"
-    max_recording_duration_sec: int = 300  # 5 minutes
-    max_upload_size_mb: int = 50
+    #: Scheduler capacity. Defaults suit a 24 GB card; re-derive for other GPUs.
+    budget_mb: int = 16_000
+    max_workers: int = 2
 
-    # TTS Engine
-    default_engine: str = "mock"  # mock / f5_tts / fish_speech / xtts_v2
-    default_language: str = "en"
+    #: Absolute path to each runtime's venv python. A runtime with no interpreter
+    #: is simply unrunnable — the factory raises rather than guessing one.
+    voxcpm_python: str = ""
+    chatterbox_python: str = ""
+    f5_python: str = ""
+    fake_python: str = ""
+    #: Directory workers start in (must contain the importable `app` package).
+    worker_cwd: Path | None = None
 
-    # GPU
-    use_gpu: bool = True  # Will auto-fallback to CPU if no CUDA
-    gpu_device: str = "cuda:0"
+    max_upload_mb: int = 50
+    default_sample_rate: int = 44_100
 
-    class Config:
-        env_prefix = "VCS_"  # Voice Clone Studio
-        env_file = ".env"
+    @model_validator(mode="after")
+    def _default_media_secret(self) -> Settings:
+        if not self.media_token_secret:
+            self.media_token_secret = secrets.token_hex(32)
+        return self
 
-    def ensure_directories(self) -> None:
-        """Create all required directories if they don't exist."""
-        for dir_path in [
-            self.voices_dir,
-            self.profiles_dir,
-            self.generated_dir,
-            self.models_dir,
-            self.cache_dir,
-            self.db_dir,
-            self.logs_dir,
-        ]:
-            dir_path.mkdir(parents=True, exist_ok=True)
+    # ── derived paths ────────────────────────────────────────────────────────
+
+    @property
+    def voices_dir(self) -> Path:
+        return self.data_dir / "voices"
+
+    @property
+    def generated_dir(self) -> Path:
+        return self.data_dir / "generated"
+
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / "voiceclone.db"
+
+    def ensure_dirs(self) -> None:
+        for d in (self.data_dir, self.voices_dir, self.generated_dir):
+            d.mkdir(parents=True, exist_ok=True)
+
+    def interpreters(self) -> dict[RuntimeKind, str]:
+        """RuntimeKind -> venv python, for `make_worker_factory`."""
+        m: dict[RuntimeKind, str] = {}
+        if self.voxcpm_python:
+            m[RuntimeKind.VOXCPM] = self.voxcpm_python
+        if self.chatterbox_python:
+            m[RuntimeKind.CHATTERBOX] = self.chatterbox_python
+        if self.f5_python:
+            m[RuntimeKind.F5] = self.f5_python
+        if self.allow_fake_runtime:
+            m[RuntimeKind.FAKE] = self.fake_python or sys.executable
+        return m
 
 
-# Singleton settings instance
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    """Process-wide settings singleton. Cached so the media secret is stable."""
+    return Settings()

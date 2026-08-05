@@ -1,174 +1,112 @@
 """
-AI Voice Clone Studio — FastAPI Backend Entry Point
+AI Voice Clone Studio — API application.
 
-Start with: python -m app.main
+CPU-ONLY. `import torch` must not be reachable from here — this module and
+everything it imports is scanned by `test_no_torch_outside_runtimes`. The GPU
+lives in worker subprocesses the scheduler spawns; this process only talks to
+them over the wire protocol.
+
+`create_app` takes an optional `scheduler` so the whole HTTP surface can be
+tested against `FakeScheduler` with no torch and no subprocess.
 """
 
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from __future__ import annotations
+
+import contextlib
+import os
+from collections.abc import AsyncIterator
+
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
-from .config import settings
-from .database import init_database
-from .engines import get_engine
-from .routers import voice, tts, history, settings as settings_router, translation, models
+from .api.deps import ApiKeyMiddleware
+from .api.errors import install_exception_handlers
+from .api.routers import health, models, system
+from .config import Settings, get_settings
+from .inference.protocol import SchedulerProtocol
 
-
-from .utils.logger import setup_logger
-
-logger = setup_logger("voiceclone.main")
+__all__ = ["create_app"]
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """App startup and shutdown lifecycle."""
-    # ── Startup ──
-    logger.info("=" * 60)
-    logger.info(f"🚀 {settings.app_name} v{settings.app_version}")
-    logger.info("=" * 60)
+def create_app(
+    *,
+    scheduler: SchedulerProtocol | None = None,
+    settings: Settings | None = None,
+) -> FastAPI:
+    settings = settings or get_settings()
 
-    # Create directories
-    settings.ensure_directories()
-    logger.info("📁 Directories ready")
+    @contextlib.asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        settings.ensure_dirs()
+        # Build the real scheduler only if one was not injected (tests inject a
+        # fake). We shut down only what we own — never a caller's scheduler.
+        if getattr(app.state, "scheduler", None) is None:
+            app.state.scheduler = _build_scheduler(settings)
+            app.state.owns_scheduler = True
+        try:
+            yield
+        finally:
+            if getattr(app.state, "owns_scheduler", False):
+                await app.state.scheduler.shutdown()
 
-    # Initialize database
-    await init_database()
-    logger.info("🗄️  Database ready")
+    app = FastAPI(title="AI Voice Clone Studio", version=settings.version, lifespan=lifespan)
+    app.state.settings = settings
+    if scheduler is not None:
+        app.state.scheduler = scheduler
+        app.state.owns_scheduler = False
 
-    # Load mock engine (always available for development)
-    mock = get_engine("mock")
-    await mock.load_model()
-    logger.info("[ENGINE] Mock engine loaded (development mode)")
+    install_exception_handlers(app)
 
-    # Try loading real engines (will silently fail if packages aren't installed)
-    try:
-        from .utils.gpu import get_gpu_info
-        gpu = get_gpu_info()
-        if gpu.available:
-            logger.info(f"[GPU] {gpu.name} ({gpu.vram_total_mb} MB VRAM)")
-        else:
-            logger.info("[CPU] Running in CPU mode (no CUDA GPU detected)")
-    except Exception:
-        logger.info("[CPU] Running in CPU mode")
+    app.include_router(health.router, prefix="/api")
+    app.include_router(models.router, prefix="/api")
+    app.include_router(models.languages_router, prefix="/api")
+    app.include_router(system.router, prefix="/api")
+    _assert_no_duplicate_routes(app)
 
-    # Log security status
-    if settings.api_key:
-        logger.info("[AUTH] API key authentication: ENABLED")
-    else:
-        logger.info("[AUTH] API key authentication: disabled (set VCS_API_KEY to enable)")
-
-    logger.info(f"[SERVER] Server: http://{settings.host}:{settings.port}")
-    logger.info(f"[DOCS] API Docs: http://{settings.host}:{settings.port}/docs")
-    logger.info("=" * 60)
-
-
-    yield
-
-    # ── Shutdown ──
-    logger.info("Shutting down...")
-
-
-# ── Build CORS origins list ──
-
-def _build_cors_origins() -> list[str]:
-    """Combine static origins with wildcard for SSH tunneling / remote web access."""
-    base_origins = [
-        "http://localhost:1420",
-        "http://127.0.0.1:1420",
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "tauri://localhost",
-        "https://tauri.localhost",
-        "http://tauri.localhost",
-        "*",
-    ]
-
-    if settings.cors_origins:
-        extra = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-        base_origins.extend(extra)
-
-    return base_origins
+    # Middleware order is load-bearing. add_middleware makes the LAST-added the
+    # OUTERMOST, so: API-key added FIRST (innermost), CORS added LAST (outermost).
+    # CORS outermost answers preflight OPTIONS before the API-key check can 403 it
+    # — the exact bug that failed every cross-origin preflight once a key was set.
+    app.add_middleware(ApiKeyMiddleware, api_key=settings.api_key)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    return app
 
 
-# ── Create FastAPI app ──
+def _build_scheduler(settings: Settings) -> SchedulerProtocol:
+    """Construct the real InferenceScheduler. Imported lazily so a fake-injected
+    app (and its tests) never even imports the scheduler implementation."""
+    from .inference.catalog import CATALOG
+    from .inference.factory import make_worker_factory
+    from .inference.scheduler import InferenceScheduler, SchedulerConfig
 
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    description="Personal voice cloning and multilingual text-to-speech",
-    lifespan=lifespan,
-)
-
-# CORS middleware — allow Tauri frontend, dev server, and any extra configured origins
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_build_cors_origins(),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ── Optional API Key Middleware ──
-
-@app.middleware("http")
-async def api_key_middleware(request: Request, call_next):
-    """Enforce API key authentication when VCS_API_KEY is configured.
-
-    Pass the key in the request header:
-        X-API-Key: your_secret_key
-
-    If VCS_API_KEY is empty, this middleware is a no-op (open access).
-    The /docs and /openapi.json endpoints are always accessible.
-    """
-    if settings.api_key:
-        # Always allow docs and health check without auth
-        open_paths = {"/", "/docs", "/openapi.json", "/redoc"}
-        if request.url.path not in open_paths:
-            provided_key = request.headers.get("X-API-Key", "")
-            if provided_key != settings.api_key:
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "detail": "Invalid or missing API key. "
-                                  "Pass your key in the X-API-Key request header."
-                    },
-                )
-
-    return await call_next(request)
-
-
-# ── Register routers ──
-
-app.include_router(voice.router)
-app.include_router(tts.router)
-app.include_router(history.router)
-app.include_router(settings_router.router)
-app.include_router(translation.router)
-app.include_router(models.router)
-
-
-
-
-@app.get("/")
-async def root():
-    """Health check endpoint."""
-    return {
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "status": "running",
-    }
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
+    env = dict(os.environ)
+    if settings.allow_fake_runtime:
+        env["VCS_ALLOW_FAKE_RUNTIME"] = "1"
+    factory = make_worker_factory(
+        interpreters=settings.interpreters(), env=env, cwd=settings.worker_cwd
+    )
+    return InferenceScheduler(
+        CATALOG, factory,
+        SchedulerConfig(budget_mb=settings.budget_mb, max_workers=settings.max_workers),
     )
 
 
+def _assert_no_duplicate_routes(app: FastAPI) -> None:
+    """A duplicate (method, path) means one route silently shadows another — the
+    predecessor's models endpoints were unreachable exactly this way."""
+    seen: set[tuple[str, str]] = set()
+    for route in app.routes:
+        methods = getattr(route, "methods", None) or ()
+        path = getattr(route, "path", "")
+        if not methods or not path:
+            continue  # skip Starlette internals (mounts, method-less routes)
+        for method in methods:
+            key = (method, path)
+            assert key not in seen, f"duplicate route registered: {key}"
+            seen.add(key)
