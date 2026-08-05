@@ -1,47 +1,41 @@
-# ---------------------------------------------------------------
-# AI Voice Clone Studio � Backend Dockerfile
-# ---------------------------------------------------------------
-# Build:   docker build -t voice-clone-backend ./backend
-# Run:     docker run -p 8000:8000 --gpus all voice-clone-backend
-# ---------------------------------------------------------------
+# AI Voice Clone Studio — API image.
+#
+# CPU-ONLY, BY DESIGN. `import torch` is not reachable from the API process; the
+# GPU lives in worker subprocesses that run their own CUDA venvs. So this image
+# is a slim python base, not a multi-gigabyte CUDA one. A GPU deployment runs
+# this API container plus the worker venvs (a separate CUDA image) and points
+# VCS_VOXCPM_PYTHON at the worker interpreter.
+#
+# Build: docker build -t voice-clone-api ./backend
+# Run:   docker run -p 8000:8000 -v $PWD/data:/data voice-clone-api
+#
+# NOTE: not build-tested in this environment — verify `docker build` before use.
 
-# Use NVIDIA CUDA base image for GPU support
-# Swap to python:3.12-slim for CPU-only deployments
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM python:3.12-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-    python3.12 \
-    python3.12-dev \
-    python3-pip \
-    ffmpeg \
-    git \
-    curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1 \
-    && update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1
+# uv, copied from its official image.
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 WORKDIR /app
 
-COPY requirements.txt .
-COPY requirements-gpu.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir -r requirements-gpu.txt
+# Install deps first for layer caching. uv.lock is optional (COPY glob).
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --no-dev
 
 COPY . .
 
-RUN mkdir -p data/voices data/generated data/models data/cache data/db logs
-
-ENV VCS_HOST=0.0.0.0
-ENV VCS_PORT=8000
-ENV VCS_DEBUG=false
-ENV VCS_DEFAULT_ENGINE=f5_tts
+ENV VCS_DATA_DIR=/data \
+    PYTHONUNBUFFERED=1
+RUN mkdir -p /data
+VOLUME ["/data"]
 
 EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8000/api/health || exit 1
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
-
-CMD ["python", "run.py"]
+# ONE uvicorn worker: N workers = N schedulers = N × VRAM.
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

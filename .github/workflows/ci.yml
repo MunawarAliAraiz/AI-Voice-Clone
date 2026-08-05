@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [rewrite/contracts, dev, main]
+  pull_request:
+
+# The backend suite is CPU-only BY DESIGN — the GPU lives in worker subprocesses
+# the API never imports — so it runs on a plain ubuntu runner in seconds. That
+# is the payoff of the process-isolation architecture.
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Sync (API env — no torch, by design)
+        run: uv sync
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Tests (not gpu)
+        run: uv run pytest -m "not gpu"
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: npm install --no-audit --no-fund
+      - name: Typecheck + build
+        run: npm run build

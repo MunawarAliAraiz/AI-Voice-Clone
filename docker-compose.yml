@@ -1,37 +1,36 @@
+# AI Voice Clone Studio — local/compose deployment.
+#
+# The API is CPU-only (no torch); the GPU lives in worker subprocesses. For a
+# real GPU deployment, run the worker venvs on the host/a CUDA image and set
+# VCS_VOXCPM_PYTHON + VCS_WORKER_CWD so the API can spawn them. This compose
+# brings up the CPU API + the static frontend.
+#
+# NOTE: not build-tested in this environment — verify before relying on it.
+
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: voice-clone-backend:latest
-    container_name: voice-clone-backend
+    image: voice-clone-api:latest
+    container_name: voice-clone-api
     restart: unless-stopped
     ports:
       - "${VCS_PORT:-8000}:8000"
     environment:
-      - VCS_HOST=0.0.0.0
-      - VCS_PORT=8000
-      - VCS_DEBUG=false
-      - VCS_DEFAULT_ENGINE=${VCS_DEFAULT_ENGINE:-f5_tts}
       - VCS_API_KEY=${VCS_API_KEY:-}
-      - VCS_CORS_ORIGINS=${VCS_CORS_ORIGINS:-}
-      - VCS_USE_GPU=true
+      - VCS_ALLOW_FAKE_RUNTIME=${VCS_ALLOW_FAKE_RUNTIME:-0}
+      # Point these at a worker venv to enable real generation (GPU host).
+      - VCS_VOXCPM_PYTHON=${VCS_VOXCPM_PYTHON:-}
+      - VCS_WORKER_CWD=${VCS_WORKER_CWD:-}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      - ./data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-      start_period: 90s
+      start_period: 20s
 
   frontend:
     build:
