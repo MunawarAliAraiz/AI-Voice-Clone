@@ -114,5 +114,8 @@ audio { width: 100%; height: 34px; margin-top: 6px; }
 .detect.bad { color: var(--warn); }
 
 .h-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.h-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .star { background: none; border: none; font-size: 18px; line-height: 1; color: var(--muted); padding: 0 2px; cursor: pointer; }
 .star.on { color: var(--warn); }
+.star.del { font-size: 15px; opacity: 0.65; }
+.star.del:hover { opacity: 1; }

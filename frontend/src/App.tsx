@@ -357,14 +357,27 @@ function HistoryPanel({ items, onChanged }: { items: HistoryItem[]; onChanged: (
           <li key={h.id}>
             <div className="h-head">
               <div className="h-text">{h.input_text}</div>
-              <button
-                type="button"
-                className={`star ${h.is_favorite ? 'on' : ''}`}
-                title={h.is_favorite ? 'Unfavorite' : 'Favorite'}
-                onClick={() => void api.setFavorite(h.id, !h.is_favorite).then(onChanged)}
-              >
-                {h.is_favorite ? '★' : '☆'}
-              </button>
+              <div className="h-actions">
+                <button
+                  type="button"
+                  className={`star ${h.is_favorite ? 'on' : ''}`}
+                  title={h.is_favorite ? 'Unfavorite' : 'Favorite'}
+                  onClick={() => void api.setFavorite(h.id, !h.is_favorite).then(onChanged)}
+                >
+                  {h.is_favorite ? '★' : '☆'}
+                </button>
+                <button
+                  type="button"
+                  className="star del"
+                  title="Delete"
+                  onClick={() => {
+                    if (window.confirm('Delete this generation?'))
+                      void api.deleteHistory(h.id).then(onChanged);
+                  }}
+                >
+                  🗑
+                </button>
+              </div>
             </div>
             <div className="v-meta">
               {h.profile_name} · {h.language} · {h.route.model_display_name}

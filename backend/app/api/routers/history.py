@@ -8,10 +8,11 @@ removed from the catalog. Audio URLs are freshly signed per response.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import aiosqlite
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 
 from ...config import Settings
 from ...db import Database
@@ -96,3 +97,15 @@ async def update_history(
         assert row is not None
     prof = await db.get_profile(row["profile_id"])
     return _item(row, prof["name"] if prof else None, catalog, settings)
+
+
+@router.delete("/{gen_id}", status_code=204)
+async def delete_history(
+    gen_id: int, db: Annotated[Database, Depends(get_db)]
+) -> Response:
+    row = await db.get_generation(gen_id)
+    if row is None:
+        raise HistoryNotFoundError(gen_id)
+    await db.delete_generation(gen_id)
+    Path(row["output_path"]).unlink(missing_ok=True)  # noqa: ASYNC240 (one-shot unlink)
+    return Response(status_code=204)

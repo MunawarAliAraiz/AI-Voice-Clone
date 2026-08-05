@@ -169,6 +169,14 @@ class Database:
             await self._c.commit()
         return await self.get_generation(gen_id)
 
+    async def delete_generation(self, gen_id: int) -> bool:
+        async with self._write_lock:
+            cur = await self._c.execute(
+                "DELETE FROM generation_history WHERE id = ?", (gen_id,)
+            )
+            await self._c.commit()
+            return cur.rowcount > 0
+
     async def count_generations(self) -> int:
         cur = await self._c.execute("SELECT COUNT(*) AS n FROM generation_history")
         row = await cur.fetchone()

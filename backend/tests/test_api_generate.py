@@ -114,6 +114,12 @@ def test_history_records_the_generation(tmp_path: Path) -> None:
         assert fav.status_code == 200 and fav.json()["is_favorite"] is True
         assert c.get(f"/api/history/{gen['id']}").json()["is_favorite"] is True
 
+        # delete: 204, gone from list, 404 thereafter
+        assert c.delete(f"/api/history/{gen['id']}").status_code == 204
+        assert c.get("/api/history").json()["total"] == 0
+        assert c.get(f"/api/history/{gen['id']}").status_code == 404
+        assert c.delete("/api/history/9999").status_code == 404
+
 
 def test_detect_script(tmp_path: Path) -> None:
     client, _ = _client(tmp_path)

@@ -93,4 +93,6 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_favorite: isFavorite }),
     }),
+  deleteHistory: (id: number) =>
+    request<void>(`/api/history/${id}`, { method: 'DELETE' }),
 };
