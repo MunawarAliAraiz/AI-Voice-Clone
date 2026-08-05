@@ -1,236 +1,89 @@
-/* ═══════════════════════════════════════════════════════════
-   AI Voice Clone Studio — API Client
-   ═══════════════════════════════════════════════════════════ */
+// API client for the voice-clone backend. Plain fetch, problem+json aware.
 
 import type {
-  VoiceProfile,
-  TTSGenerateRequest,
-  TTSGenerateResult,
-  HistoryItem,
-  LanguageInfo,
-  EngineInfo,
+  HistoryList,
+  LanguageListResponse,
+  ModelListResponse,
+  ProblemJson,
+  ScriptDetectResponse,
   SystemStatus,
-} from '../types';
+  TTSGenerateRequest,
+  TTSGenerateResponse,
+  VoiceProfile,
+  VoiceProfileList,
+} from '../types/api';
 
-const API_BASE = (import.meta as any).env?.VITE_API_BASE || `${window.location.protocol}//${window.location.hostname}:8000`;
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000';
 
-// ── Generic fetch wrapper ──
+/** Media/audio URLs from the API are root-relative and already signed. */
+export function mediaUrl(path: string): string {
+  return path.startsWith('http') ? path : `${API_BASE}${path}`;
+}
 
-async function apiFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
-  const url = `${API_BASE}${path}`;
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw new Error(error.detail?.message || error.detail || `API error: ${response.status}`);
-    }
-
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Cannot connect to backend. Is the Python server running?');
-    }
-    throw error;
+export class ApiError extends Error {
+  constructor(public status: number, public code: string, message: string) {
+    super(message);
   }
 }
 
-// ── Voice Profile API ──
+function apiKey(): string {
+  return localStorage.getItem('vcs_api_key') ?? '';
+}
 
-export const voiceApi = {
-  async uploadVoice(file: Blob, name: string, transcript?: string, language = 'en'): Promise<VoiceProfile> {
-    const formData = new FormData();
-    formData.append('file', file, 'recording.wav');
-    formData.append('name', name);
-    if (transcript) formData.append('transcript', transcript);
-    formData.append('language', language);
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  const key = apiKey();
+  if (key) headers.set('X-API-Key', key);
 
-    const res = await fetch(`${API_BASE}/api/voice/upload`, {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(0, 'NETWORK', 'Cannot reach the backend. Is it running?');
+  }
+
+  if (!res.ok) {
+    let problem: Partial<ProblemJson> = {};
+    try {
+      problem = (await res.json()) as ProblemJson;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(res.status, problem.code ?? 'ERROR', problem.detail ?? res.statusText);
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
+export const api = {
+  // system
+  health: () => request<{ status: string; version: string }>('/api/health'),
+  system: () => request<SystemStatus>('/api/system'),
+  models: () => request<ModelListResponse>('/api/models'),
+  languages: () => request<LanguageListResponse>('/api/languages'),
+
+  // voices
+  listVoices: () => request<VoiceProfileList>('/api/voices'),
+  getVoice: (id: number) => request<VoiceProfile>(`/api/voices/${id}`),
+  deleteVoice: (id: number) => request<void>(`/api/voices/${id}`, { method: 'DELETE' }),
+  createVoice: (form: FormData) =>
+    request<VoiceProfile>('/api/voices', { method: 'POST', body: form }),
+
+  // synthesis
+  generate: (body: TTSGenerateRequest) =>
+    request<TTSGenerateResponse>('/api/generate', {
       method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    return data.profile;
-  },
-
-  async saveRecording(blob: Blob, name: string, transcript?: string, language = 'en'): Promise<VoiceProfile> {
-    const formData = new FormData();
-    formData.append('file', blob, 'recording.webm');
-    formData.append('name', name);
-    if (transcript) formData.append('transcript', transcript);
-    formData.append('language', language);
-
-    const res = await fetch(`${API_BASE}/api/voice/record`, {
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  detectScript: (text: string, language: string) =>
+    request<ScriptDetectResponse>('/api/detect-script', {
       method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    return data.profile;
-  },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    }),
 
-  async listProfiles(): Promise<VoiceProfile[]> {
-    const data = await apiFetch<{ profiles: VoiceProfile[] }>('/api/voice/profiles');
-    return data.profiles;
-  },
-
-  async getProfile(id: number): Promise<VoiceProfile> {
-    const data = await apiFetch<{ profile: VoiceProfile }>(`/api/voice/profiles/${id}`);
-    return data.profile;
-  },
-
-  async deleteProfile(id: number): Promise<void> {
-    await apiFetch(`/api/voice/profiles/${id}`, { method: 'DELETE' });
-  },
-
-  getAudioUrl(profileId: number): string {
-    return `${API_BASE}/api/voice/profiles/${profileId}/audio`;
-  },
+  // history
+  history: (page = 1, pageSize = 50) =>
+    request<HistoryList>(`/api/history?page=${page}&page_size=${pageSize}`),
 };
-
-// ── TTS API ──
-
-export const ttsApi = {
-  async generate(request: TTSGenerateRequest): Promise<TTSGenerateResult> {
-    const data = await apiFetch<{ result: TTSGenerateResult }>('/api/tts/generate', {
-      method: 'POST',
-      body: JSON.stringify(request),
-    });
-    return data.result;
-  },
-
-  async getLanguages(): Promise<LanguageInfo[]> {
-    const data = await apiFetch<{ languages: LanguageInfo[] }>('/api/tts/languages');
-    return data.languages;
-  },
-
-  getGeneratedAudioUrl(historyId: number): string {
-    return `${API_BASE}/api/tts/generate/${historyId}/audio`;
-  },
-};
-
-// ── History API ──
-
-export const historyApi = {
-  async list(page = 1, pageSize = 20): Promise<{ items: HistoryItem[]; total: number }> {
-    return apiFetch(`/api/history?page=${page}&page_size=${pageSize}`);
-  },
-
-  async delete(id: number): Promise<void> {
-    await apiFetch(`/api/history/${id}`, { method: 'DELETE' });
-  },
-
-  async toggleFavorite(id: number): Promise<boolean> {
-    const data = await apiFetch<{ is_favorite: boolean }>(`/api/history/${id}/favorite`, {
-      method: 'PATCH',
-    });
-    return data.is_favorite;
-  },
-
-  getAudioUrl(historyId: number): string {
-    return `${API_BASE}/api/history/${historyId}/audio`;
-  },
-};
-
-// ── Settings & System API ──
-
-export const systemApi = {
-  async getStatus(): Promise<SystemStatus> {
-    return apiFetch('/api/system/status');
-  },
-
-  async getModels(): Promise<EngineInfo[]> {
-    const data = await apiFetch<{ engines: EngineInfo[] }>('/api/models');
-    return data.engines;
-  },
-
-  async getModelsCatalog(): Promise<any[]> {
-    const data = await apiFetch<{ models: any[] }>('/api/models');
-    return data.models || [];
-  },
-
-  async downloadModel(modelName: string): Promise<any> {
-    return apiFetch(`/api/models/${modelName}/download`, { method: 'POST' });
-  },
-
-  async getModelProgress(modelName: string): Promise<any> {
-    return apiFetch(`/api/models/${modelName}/progress`);
-  },
-
-  async deleteModel(modelName: string): Promise<any> {
-    return apiFetch(`/api/models/${modelName}`, { method: 'DELETE' });
-  },
-
-  async updateModel(modelName: string): Promise<any> {
-    return apiFetch(`/api/models/${modelName}/update`, { method: 'POST' });
-  },
-
-  async verifyModel(modelName: string): Promise<any> {
-    return apiFetch(`/api/models/${modelName}/verify`, { method: 'POST' });
-  },
-
-  async getEngineHealth(engineName: string): Promise<Record<string, any>> {
-    const data = await apiFetch<{ health: Record<string, any> }>(`/api/models/${engineName}/health`);
-    return data.health;
-  },
-
-  async unloadEngine(engineName: string): Promise<void> {
-    await apiFetch(`/api/models/${engineName}/unload`, { method: 'POST' });
-  },
-
-
-
-  async getSettings(): Promise<Record<string, { value: string; category: string }>> {
-    const data = await apiFetch<{ settings: Record<string, { value: string; category: string }> }>('/api/settings');
-    return data.settings;
-  },
-
-  async updateSettings(updates: Record<string, string>): Promise<void> {
-    await apiFetch('/api/settings', {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-  },
-};
-
-// ── Translation API ──
-
-export const translationApi = {
-  async translate(text: string, targetLang: string, sourceLang?: string): Promise<{
-    status: string;
-    translated_text: string;
-    source_lang: string;
-    target_lang: string;
-    cached: boolean;
-  }> {
-    return apiFetch('/api/translate', {
-      method: 'POST',
-      body: JSON.stringify({
-        text,
-        target_lang: targetLang,
-        source_lang: sourceLang,
-      }),
-    });
-  },
-
-  async detect(text: string): Promise<string> {
-    const data = await apiFetch<{ detected_language: string }>('/api/translate/detect', {
-      method: 'POST',
-      body: JSON.stringify({ text }),
-    });
-    return data.detected_language;
-  },
-};
-
-
