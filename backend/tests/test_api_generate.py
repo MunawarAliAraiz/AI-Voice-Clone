@@ -88,6 +88,28 @@ def test_generate_unknown_profile_and_bad_params(tmp_path: Path) -> None:
         assert r.json()["code"] == "INVALID_PARAMS"
 
 
+def test_history_records_the_generation(tmp_path: Path) -> None:
+    client, _ = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "ur")
+        gen = c.post("/api/generate", json={
+            "profile_id": pid, "text": "aap kaise hain", "language": "ur",
+        }).json()
+
+        lst = c.get("/api/history").json()
+        assert lst["total"] == 1 and len(lst["items"]) == 1
+        item = lst["items"][0]
+        assert item["id"] == gen["id"]
+        assert item["input_text"] == "aap kaise hain"
+        assert item["profile_name"] == "v"
+        assert item["route"]["model_id"] == "voxcpm2"  # route survives on the row
+        assert item["audio_url"].startswith("/api/media/history/")
+
+        one = c.get(f"/api/history/{gen['id']}")
+        assert one.status_code == 200 and one.json()["id"] == gen["id"]
+        assert c.get("/api/history/9999").status_code == 404
+
+
 def test_detect_script(tmp_path: Path) -> None:
     client, _ = _client(tmp_path)
     with client as c:
