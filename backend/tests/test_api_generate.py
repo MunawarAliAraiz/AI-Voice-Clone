@@ -109,6 +109,11 @@ def test_history_records_the_generation(tmp_path: Path) -> None:
         assert one.status_code == 200 and one.json()["id"] == gen["id"]
         assert c.get("/api/history/9999").status_code == 404
 
+        # favorite toggle
+        fav = c.patch(f"/api/history/{gen['id']}", json={"is_favorite": True})
+        assert fav.status_code == 200 and fav.json()["is_favorite"] is True
+        assert c.get(f"/api/history/{gen['id']}").json()["is_favorite"] is True
+
 
 def test_detect_script(tmp_path: Path) -> None:
     client, _ = _client(tmp_path)

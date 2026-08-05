@@ -160,6 +160,15 @@ class Database:
         cur = await self._c.execute(q, params)
         return list(await cur.fetchall())
 
+    async def set_favorite(self, gen_id: int, is_favorite: bool) -> aiosqlite.Row | None:
+        async with self._write_lock:
+            await self._c.execute(
+                "UPDATE generation_history SET is_favorite = ? WHERE id = ?",
+                (int(is_favorite), gen_id),
+            )
+            await self._c.commit()
+        return await self.get_generation(gen_id)
+
     async def count_generations(self) -> int:
         cur = await self._c.execute("SELECT COUNT(*) AS n FROM generation_history")
         row = await cur.fetchone()

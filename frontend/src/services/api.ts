@@ -1,6 +1,7 @@
 // API client for the voice-clone backend. Plain fetch, problem+json aware.
 
 import type {
+  HistoryItem,
   HistoryList,
   LanguageListResponse,
   ModelListResponse,
@@ -86,4 +87,10 @@ export const api = {
   // history
   history: (page = 1, pageSize = 50) =>
     request<HistoryList>(`/api/history?page=${page}&page_size=${pageSize}`),
+  setFavorite: (id: number, isFavorite: boolean) =>
+    request<HistoryItem>(`/api/history/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_favorite: isFavorite }),
+    }),
 };

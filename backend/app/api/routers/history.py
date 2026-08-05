@@ -19,7 +19,7 @@ from ...exceptions import HistoryNotFoundError
 from ...inference.catalog import ModelCatalog
 from ..deps import get_catalog, get_db, get_settings
 from ..media_tokens import make_media_url
-from ..schemas.history import HistoryItem, HistoryList
+from ..schemas.history import HistoryItem, HistoryList, HistoryUpdate
 from ..schemas.tts import RouteInfo
 
 router = APIRouter(prefix="/history", tags=["history"])
@@ -76,5 +76,23 @@ async def get_history(
     row = await db.get_generation(gen_id)
     if row is None:
         raise HistoryNotFoundError(gen_id)
+    prof = await db.get_profile(row["profile_id"])
+    return _item(row, prof["name"] if prof else None, catalog, settings)
+
+
+@router.patch("/{gen_id}", response_model=HistoryItem)
+async def update_history(
+    gen_id: int,
+    body: HistoryUpdate,
+    db: Annotated[Database, Depends(get_db)],
+    catalog: Annotated[ModelCatalog, Depends(get_catalog)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> HistoryItem:
+    row = await db.get_generation(gen_id)
+    if row is None:
+        raise HistoryNotFoundError(gen_id)
+    if body.is_favorite is not None:
+        row = await db.set_favorite(gen_id, body.is_favorite)
+        assert row is not None
     prof = await db.get_profile(row["profile_id"])
     return _item(row, prof["name"] if prof else None, catalog, settings)

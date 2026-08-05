@@ -62,7 +62,7 @@ export default function App() {
 
         <section className="col wide">
           <Composer voices={voices} languages={languages} onGenerated={refresh} />
-          <HistoryPanel items={history} />
+          <HistoryPanel items={history} onChanged={refresh} />
         </section>
       </main>
     </div>
@@ -347,7 +347,7 @@ function ResultCard({ result }: { result: TTSGenerateResponse }) {
   );
 }
 
-function HistoryPanel({ items }: { items: HistoryItem[] }) {
+function HistoryPanel({ items, onChanged }: { items: HistoryItem[]; onChanged: () => void }) {
   if (!items.length) return null;
   return (
     <div className="card">
@@ -355,7 +355,17 @@ function HistoryPanel({ items }: { items: HistoryItem[] }) {
       <ul className="hist">
         {items.map((h) => (
           <li key={h.id}>
-            <div className="h-text">{h.input_text}</div>
+            <div className="h-head">
+              <div className="h-text">{h.input_text}</div>
+              <button
+                type="button"
+                className={`star ${h.is_favorite ? 'on' : ''}`}
+                title={h.is_favorite ? 'Unfavorite' : 'Favorite'}
+                onClick={() => void api.setFavorite(h.id, !h.is_favorite).then(onChanged)}
+              >
+                {h.is_favorite ? '★' : '☆'}
+              </button>
+            </div>
             <div className="v-meta">
               {h.profile_name} · {h.language} · {h.route.model_display_name}
             </div>
