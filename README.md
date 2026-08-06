@@ -11,7 +11,8 @@ external services, no per-character billing.
 > Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 > Working agreements for contributors and agents: [CLAUDE.md](CLAUDE.md).
 >
-> Active branch is `rewrite/contracts`. `main` and `feature/upgrade-tts-engines` are superseded.
+> Base branch is `main`, which the rewrite was merged into on 2026-08-06. `dev` and
+> `feature/upgrade-tts-engines` are superseded.
 
 ## Languages
 

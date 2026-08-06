@@ -20,7 +20,9 @@ set -euo pipefail
 
 REPO_URL="https://github.com/IftikharAhmedDev/AI-Voice-Clone.git"
 REPO_DIR="/workspace/AI-Voice-Clone"
-BRANCH="${BRANCH:-rewrite/contracts}"
+# main now carries the rewrite (merged 2026-08-06). Override with BRANCH=… if
+# you need to bootstrap a pod against a feature branch.
+BRANCH="${BRANCH:-main}"
 
 echo "== 1. caches off the ephemeral overlay =="
 # The 30GB overlay fills and kills the pod if HF/uv/pip write to ~/.cache.

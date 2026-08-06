@@ -4,34 +4,49 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-04**, end of the Urdu-cloning investigation.
+Last updated: **2026-08-06**, after the frontend revamp and the merge to `main`.
 
 ---
 
 ## Where things stand
 
+**The product is complete and validated end-to-end on GPU with real cloned audio.**
+
 | Wave | Status |
 |---|---|
-| **0 — Contracts** | ✅ Done, pushed. |
-| **X1 — Deletions** | ✅ Done, pushed. −5402 lines. |
-| **1 — Research** | ✅ Done. All arch-changing questions answered; catalog holds measured numbers. |
-| **B3 — domain layer** | ✅ Done (built inline, not by an agent). `detect_script`, `resolve`, `split_sentences`, `chunk_for_synthesis` all implemented. |
-| **B1 — scheduler** | ✅ Done (built inline). GPU-slot invariant asserted; 20 tests against `FakeWorker`, no GPU. |
-| **Urdu investigation** | ✅ Concluded. See `docs/URDU_CLONING_REPORT.md`. No permissive model zero-shot clones the owner's voice; fix is LoRA fine-tuning, not model choice. |
-| **2 — Build (rest)** | B2 (API layer) is next and fully unblocked. F1–F4 (frontend), D1 (Docker/CI) unblocked. |
-| 3 — Integration / 4 — Review | Not started. |
+| **0 — Contracts** | ✅ Done. |
+| **X1 — Deletions** | ✅ Done. −5402 lines, then a further −4628 removing the legacy engines. |
+| **1 — Research** | ✅ Done. Catalog holds measured numbers. |
+| **B3 — domain layer** | ✅ Done. `detect_script`, `resolve`, `split_sentences`, `chunk_for_synthesis`. |
+| **B1 — scheduler** | ✅ Done. GPU-slot invariant asserted; tested against `FakeWorker`, no GPU. |
+| **Urdu** | ✅ Concluded — and then superseded: VoxCPM 2 renders **romanized** Hindi/Urdu directly, so the whole transliteration subsystem was deleted. Native Perso-Arabic is still unrouted (422, never mis-rendered). |
+| **B2 — API layer** | ✅ Done. Enrollment + consent, generate, media tokens, history (list/get/favorite/delete). |
+| **P6 — frontend** | ✅ Done, then revamped 2026-08-06: amber-on-navy tokens, lucide icons, rebuilt history (search / filter / day-grouping / pagination), accessibility pass. |
+| **P7 — CI/Docker** | ✅ CI green. Dockerfile rewritten CPU-slim but **not build-tested**. |
+| **Real-audio E2E** | ✅ Passed on an RTX A4500: enroll → route `voxcpm2`/`none` → real worker → RTF 1.10, valid WAV. |
 
-**Test count: 75 passing, ruff clean.** Branch: **`rewrite/contracts`**, off `dev`.
+**99 tests passing, ruff clean.** Branch: **`main`** (the rewrite was merged in on 2026-08-06;
+`rewrite/contracts` points at the same commit).
 
 ## Resuming on a new pod
 
+The repo is **private**, so the pod cannot fetch it. Ship the tree, then run the bootstrap — both
+from the repo root on your machine:
+
 ```bash
-GH_USER=<user> GH_TOKEN=<token> bash scripts/pod-bootstrap.sh
+git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p <PORT> root@<HOST> "tar -x -C /workspace"
 ```
 
-Rebuilds caches, credentials, repo, backend env, and the research lab. If `/workspace` did NOT
-carry over, model weights are gone and must be re-downloaded — that is bandwidth (~7 MB/s from
-HuggingFace), not lost work.
+```bash
+ssh -p <PORT> root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
+```
+
+Rebuilds caches, both venvs (API without torch, runtime **with torch pinned to cu128** — the default
+cu130 wheel silently reports `cuda.is_available() == False`), and re-downloads the ~7 GB of weights if
+`/workspace` did not carry over. Full runbook: **[POD_SETUP.md](POD_SETUP.md)**.
+
+Note your enrolled voices and history live in `VCS_DATA_DIR` on the pod — they are lost with the
+volume, not with the pod.
 
 Connection details for the current pod are in `.claude/remote.local.md` (gitignored — endpoints
 change). Note SSH must use Windows `ssh.exe`; Git Bash cannot see the ssh-agent holding the key.

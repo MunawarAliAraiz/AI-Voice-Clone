@@ -2,12 +2,15 @@
 
 FastAPI + React voice-cloning studio. Target languages: **Urdu (Perso-Arabic + Roman), Hindi, English**.
 
-Currently mid-rewrite. The authoritative design is **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before
-changing anything in `backend/app/inference/`, `backend/app/domain/`, or the engine layer. This file is the
-operational summary; the plan is the source of truth.
+The rewrite is complete and validated end-to-end on GPU with real cloned audio. The design rationale is
+**[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before changing anything in
+`backend/app/inference/`, `backend/app/domain/`, or the engine layer. This file is the operational summary.
 
-Base branch is **`dev`**, not `main`. `main` and `feature/upgrade-tts-engines` are superseded.
-(`dev` does *not* contain `main`'s last 2 commits — that's known and intentional.)
+**Base branch is `main`.** The rewrite was merged into it on 2026-08-06 (`rewrite/contracts` points at the
+same commit and is kept in step). The merge was an *ours* merge: `main`'s two pre-rewrite commits are
+preserved as ancestors, but none of their content was reinstated — they only touched deleted predecessor
+code, including the CPML-licensed `xtts_v2.py`, which rule 6 forbids reintroducing.
+`dev` and `feature/upgrade-tts-engines` are superseded; do not branch from them.
 
 ---
 
