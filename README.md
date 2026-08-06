@@ -156,7 +156,9 @@ serving. To reach the API from your laptop, forward the port over SSH rather tha
 `ssh -N -L 8000:127.0.0.1:8000 -p PORT root@HOST`.
 
 For the same steps done by hand — clone, both venvs, the torch pin, starting the server, and the
-tunnel — see **[docs/POD_SETUP.md](docs/POD_SETUP.md)**.
+tunnel — see **[docs/POD_SETUP.md](docs/POD_SETUP.md)**. That doc also covers the public-deployment
+path (frontend on Cloudflare, backend behind a static ngrok domain, `VCS_API_KEY`-gated) for sharing a
+working link with other people, rather than reaching it only through your own SSH tunnel.
 
 ## Configuration
 

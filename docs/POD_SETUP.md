@@ -172,6 +172,104 @@ Open http://localhost:1420 — the status chip should read **backend online**. (
 
 ---
 
+## Public deployment (ngrok + Cloudflare)
+
+Everything above assumes you are the only user, reaching the backend through an SSH tunnel that only
+your machine can open. To share a working link with other people, two more pieces are needed: a
+public, **stable** URL for the backend (SSH tunnels aren't shareable, and RunPod's own proxy URL
+changes every pod restart), and a public frontend that points at it.
+
+This deployment is: **frontend on Cloudflare Workers, backend on the pod behind an ngrok static
+domain, protected by `VCS_API_KEY`.**
+
+### One-time setup
+
+**Backend — claim a static ngrok domain** (free tier gives one permanent domain per account, so this
+survives every pod restart):
+
+1. https://dashboard.ngrok.com/get-started/your-authtoken — copy the authtoken.
+2. https://dashboard.ngrok.com/cloud-edge/domains — claim a free domain, e.g.
+   `your-name.ngrok-free.dev`.
+
+**Frontend — deploy `frontend/` to Cloudflare.** The dashboard offers two different products under
+similar names — check which fields you're shown:
+
+- **Classic Pages** (Build command / Output directory / Root directory): output directory
+  `frontend/dist`, root directory `frontend`, build command `npm install && npm run build`.
+- **Workers Builds** (Build command / Deploy command / Path) — what this project is actually set up
+  for, via `frontend/wrangler.toml`:
+  - Path: `frontend`
+  - Build command: `npm install && npm run build`
+  - Deploy command: `npx wrangler deploy`
+
+Either way, set a **build-time** environment variable `VITE_API_BASE` to the ngrok domain from step
+above (e.g. `https://your-name.ngrok-free.dev`) — Vite inlines it into the JS bundle at build time, so
+it must be present *before* `npm run build` runs, not just at deploy.
+
+Do **not** add `frontend/public/_redirects` back if you're on Workers Builds — `wrangler.toml`'s
+`not_found_handling = "single-page-application"` already does the SPA fallback, and having both
+triggers Cloudflare's "infinite redirect loop" validator (error code 100324).
+
+### Every time you (re)start the backend
+
+On the pod:
+
+```bash
+# Re-attach ngrok's authtoken — its config lives on the ephemeral `/` overlay, wiped every pod restart
+ngrok config add-authtoken <TOKEN>
+tmux new-session -d -s ngrok "ngrok http --domain=<your-name>.ngrok-free.dev 8000"
+
+# First time ever: generate secrets and save them off the ephemeral overlay
+python3 -c "
+import secrets
+print('VCS_API_KEY=' + secrets.token_hex(32))
+print('VCS_MEDIA_TOKEN_SECRET=' + secrets.token_hex(32))
+" > /workspace/vcs-secrets.env
+
+# Every restart: reuse the SAME secrets — regenerating invalidates the key
+# every frontend user already has saved
+set -a; source /workspace/vcs-secrets.env; set +a
+
+cd /workspace/AI-Voice-Clone/backend
+tmux new-session -d -s backend "
+HF_HOME=/workspace/hf-cache \
+VCS_API_KEY=\$VCS_API_KEY \
+VCS_MEDIA_TOKEN_SECRET=\$VCS_MEDIA_TOKEN_SECRET \
+VCS_CORS_ORIGINS='[\"https://your-frontend-url\"]' \
+VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
+VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1 | tee /workspace/backend.log
+"
+```
+
+`/workspace/vcs-secrets.env` survives a pod stop/start (same volume-persistence rule as the venvs
+below), so a routine restart is just: re-add the ngrok authtoken, re-source the secrets file, restart
+both `tmux` sessions. A **new** pod (fresh `/workspace`, not just a restarted one) has no secrets
+file — generate one, and treat the resulting API key as new; anyone with the old one needs to be told.
+
+### Verifying it
+
+```bash
+# Backend reachable and healthy (the ngrok header bypasses the free-tier interstitial —
+# without it you'll see an HTML warning page instead of JSON)
+curl -H "ngrok-skip-browser-warning: true" https://your-name.ngrok-free.dev/api/health
+
+# CORS preflight succeeds for the deployed frontend's exact origin
+curl -X OPTIONS -H "Origin: https://your-frontend-url" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "ngrok-skip-browser-warning: true" \
+  https://your-name.ngrok-free.dev/api/models
+```
+
+Then open the frontend URL, click the settings gear, paste the ngrok domain (only needed if you
+didn't bake `VITE_API_BASE` in) and the `VCS_API_KEY`, and save.
+
+**Visiting the ngrok URL itself in a browser is not the product** — it's a JSON API with no page at
+`/` (that path 404s by design; `/docs` has the interactive Swagger UI if you want to poke at it
+directly). The UI lives at the frontend URL, which calls the ngrok URL under the hood.
+
+---
+
 ## Notes
 
 - **Persistence.** Everything under `/workspace` (both venvs, the weights cache, and `backend/data/`
