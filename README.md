@@ -147,6 +147,9 @@ It prints the exact `uvicorn` command (with `VCS_VOXCPM_PYTHON` / `VCS_WORKER_CW
 serving. To reach the API from your laptop, forward the port over SSH rather than exposing it:
 `ssh -N -L 8000:127.0.0.1:8000 -p PORT root@HOST`.
 
+For the same steps done by hand — clone, both venvs, the torch pin, starting the server, and the
+tunnel — see **[docs/POD_SETUP.md](docs/POD_SETUP.md)**.
+
 ## Configuration
 
 Environment variables, prefix `VCS_`, from `backend/.env` (host/port are `uvicorn` CLI flags, not
