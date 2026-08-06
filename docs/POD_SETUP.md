@@ -47,12 +47,30 @@ command -v uv || curl -LsSf https://astral.sh/uv/install.sh | sh; export PATH="/
 command -v ffmpeg || (apt-get update -qq && apt-get install -y -qq ffmpeg)
 ```
 
-## 2. Clone the repo onto the persistent volume
+## 2. Get the code onto the persistent volume
+
+**The repo is private**, so a plain `git clone` on the pod fails without credentials.
+Two routes:
+
+**A — ship it from your machine (preferred; no token ever reaches the pod).** Run this on
+your laptop, from the repo root:
 
 ```bash
-git clone https://github.com/IftikharAhmedDev/AI-Voice-Clone.git /workspace/AI-Voice-Clone
-cd /workspace/AI-Voice-Clone && git checkout rewrite/contracts
+git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p <PORT> root@<HOST> "tar -x -C /workspace"
 ```
+
+This copies the committed tree to `/workspace/AI-Voice-Clone`. There is no `.git` afterwards —
+that is fine, the bootstrap script detects a pre-staged tree and skips cloning. Nothing on the pod
+can push, which is the correct blast radius for a machine that gets destroyed daily.
+
+**B — clone on the pod.** Needs a GitHub token, which then lives in `/root/.git-credentials`
+(ephemeral, `chmod 600`, dies with the pod — never write it to `/workspace`):
+
+```bash
+GH_USER=<you> GH_TOKEN=<token> git clone https://github.com/IftikharAhmedDev/AI-Voice-Clone.git /workspace/AI-Voice-Clone
+```
+
+Use B only when you actually need to commit from the pod.
 
 ## 3. Backend API environment (no torch, by design)
 
