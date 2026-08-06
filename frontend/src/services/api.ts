@@ -54,11 +54,9 @@ function normalizeUrl(url: string): string | null {
   return trimmed;
 }
 
-const API_BASE = getApiBase();
-
 /** Media/audio URLs from the API are root-relative and already signed. */
 export function mediaUrl(path: string): string {
-  return path.startsWith('http') ? path : `${API_BASE}${path}`;
+  return path.startsWith('http') ? path : `${getApiBase()}${path}`;
 }
 
 export class ApiError extends Error {
@@ -72,20 +70,21 @@ function apiKey(): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const apiBase = getApiBase();
   const headers = new Headers(init.headers);
   const key = apiKey();
   if (key) headers.set('X-API-Key', key);
 
   // ngrok free tier bypass (custom header triggers CORS preflight)
-  if (API_BASE.includes('ngrok')) {
+  if (apiBase.includes('ngrok')) {
     headers.set('ngrok-skip-browser-warning', 'true');
   }
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    res = await fetch(`${apiBase}${path}`, { ...init, headers });
   } catch {
-    const msg = API_BASE.startsWith('https://')
+    const msg = apiBase.startsWith('https://')
       ? 'Cannot reach the backend. Check the URL in settings and verify CORS is configured.'
       : 'Cannot reach the backend. Is it running?';
     throw new ApiError(0, 'NETWORK', msg);
