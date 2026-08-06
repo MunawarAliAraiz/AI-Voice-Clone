@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/IftikharAhmedDev/AI-Voice-Clone.git"
+REPO_URL="https://github.com/MunawarAliAraiz/AI-Voice-Clone.git"
 REPO_DIR="/workspace/AI-Voice-Clone"
 # main now carries the rewrite (merged 2026-08-06). Override with BRANCH=… if
 # you need to bootstrap a pod against a feature branch.

@@ -76,7 +76,7 @@ requires both — starting only the API gives you a server whose every `/generat
 interpreter for runtime voxcpm".
 
 ```bash
-git clone https://github.com/IftikharAhmedDev/AI-Voice-Clone.git
+git clone https://github.com/MunawarAliAraiz/AI-Voice-Clone.git
 cd AI-Voice-Clone
 ```
 

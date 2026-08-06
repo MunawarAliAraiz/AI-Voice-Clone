@@ -82,7 +82,7 @@ can push, which is the correct blast radius for a machine that gets destroyed da
 (ephemeral, `chmod 600`, dies with the pod — never write it to `/workspace`):
 
 ```bash
-GH_USER=<you> GH_TOKEN=<token> git clone https://github.com/IftikharAhmedDev/AI-Voice-Clone.git /workspace/AI-Voice-Clone
+GH_USER=<you> GH_TOKEN=<token> git clone https://github.com/MunawarAliAraiz/AI-Voice-Clone.git /workspace/AI-Voice-Clone
 ```
 
 Use B only when you actually need to commit from the pod.
