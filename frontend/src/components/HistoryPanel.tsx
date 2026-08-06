@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { HistoryItem } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
-import { IconAlert, IconSearch, IconSpinner, IconStar, IconTrash, IconX } from './icons';
+import { IconAlert, IconCheckSquare, IconSearch, IconSpinner, IconStar, IconTrash, IconX } from './icons';
 import { dayBucket, fmtDuration, relativeTime, type DayBucket } from '../lib/format';
 
 interface Props {
@@ -33,6 +33,11 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
   const [confirming, setConfirming] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [confirmingBulk, setConfirmingBulk] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const isFav = (h: HistoryItem) => pendingFav[h.id] ?? h.is_favorite;
 
@@ -91,6 +96,48 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
     }
   }
 
+  function toggleSelectMode() {
+    setSelectMode((on) => !on);
+    setSelected(new Set());
+    setConfirmingBulk(false);
+  }
+
+  function toggleSelected(id: number) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllShown() {
+    setSelected(new Set(filtered.map((h) => h.id)));
+  }
+
+  async function removeSelected() {
+    setBulkDeleting(true);
+    setError(null);
+    const ids = [...selected];
+    // No bulk-delete endpoint on the backend — fire them individually, same
+    // as single delete. Failures are collected rather than aborting the rest,
+    // so one bad id doesn't strand every other selected item undeleted.
+    const results = await Promise.allSettled(ids.map((id) => api.deleteHistory(id)));
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBulkDeleting(false);
+    setConfirmingBulk(false);
+    setSelected(new Set());
+    setSelectMode(false);
+    onChanged();
+    if (failed > 0) {
+      setError(
+        failed === ids.length
+          ? 'Could not delete the selected generations.'
+          : `Deleted ${ids.length - failed} of ${ids.length} — ${failed} failed.`
+      );
+    }
+  }
+
   const showing = filtered.length;
 
   return (
@@ -142,9 +189,66 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
                 <IconStar size={13} /> Favorites
               </button>
             </div>
+
+            <button
+              type="button"
+              className={`btn-sm ${selectMode ? 'on' : ''}`}
+              aria-pressed={selectMode}
+              onClick={toggleSelectMode}
+            >
+              <IconCheckSquare size={13} /> {selectMode ? 'Done' : 'Select'}
+            </button>
           </div>
         )}
       </header>
+
+      {selectMode && (
+        <div className="bulkbar" role="toolbar" aria-label="Bulk actions">
+          <label className="bulkbar-all">
+            <input
+              type="checkbox"
+              checked={selected.size > 0 && selected.size === filtered.length}
+              ref={(el) => {
+                if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length;
+              }}
+              onChange={() => (selected.size === filtered.length ? setSelected(new Set()) : selectAllShown())}
+              aria-label="Select all shown"
+            />
+            {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+          </label>
+
+          {selected.size > 0 && !confirmingBulk && (
+            <button type="button" className="btn-sm danger" onClick={() => setConfirmingBulk(true)}>
+              <IconTrash size={13} /> Delete {selected.size}
+            </button>
+          )}
+
+          {confirmingBulk && (
+            <div className="confirm bulk" role="alert">
+              <span>Delete {selected.size} generation{selected.size === 1 ? '' : 's'}?</span>
+              <div className="confirm-actions">
+                <button
+                  type="button"
+                  className="btn-sm danger"
+                  disabled={bulkDeleting}
+                  onClick={() => void removeSelected()}
+                >
+                  {bulkDeleting ? <IconSpinner size={13} /> : null}
+                  {bulkDeleting ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-sm"
+                  onClick={() => setConfirmingBulk(false)}
+                  disabled={bulkDeleting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="inline-error" role="alert">
@@ -194,32 +298,43 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
                   {rows.map((h, i) => (
                     <li
                       key={h.id}
-                      className={`hist-row ${deleting === h.id ? 'removing' : ''}`}
+                      className={`hist-row ${deleting === h.id ? 'removing' : ''} ${selected.has(h.id) ? 'picked' : ''}`}
                       style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
                     >
                       <div className="h-head">
+                        {selectMode && (
+                          <input
+                            type="checkbox"
+                            className="h-check"
+                            checked={selected.has(h.id)}
+                            onChange={() => toggleSelected(h.id)}
+                            aria-label={`Select "${h.input_text.slice(0, 40)}"`}
+                          />
+                        )}
                         <p className="h-text" dir={isRtl(h.route.source_script) ? 'rtl' : 'ltr'}>
                           {h.input_text}
                         </p>
-                        <div className="h-actions">
-                          <button
-                            type="button"
-                            className={`icon-btn star ${isFav(h) ? 'on' : ''}`}
-                            aria-label={isFav(h) ? 'Remove from favorites' : 'Add to favorites'}
-                            aria-pressed={isFav(h)}
-                            onClick={() => void toggleFav(h)}
-                          >
-                            <IconStar size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn danger"
-                            aria-label="Delete generation"
-                            onClick={() => setConfirming(h.id)}
-                          >
-                            <IconTrash size={15} />
-                          </button>
-                        </div>
+                        {!selectMode && (
+                          <div className="h-actions">
+                            <button
+                              type="button"
+                              className={`icon-btn star ${isFav(h) ? 'on' : ''}`}
+                              aria-label={isFav(h) ? 'Remove from favorites' : 'Add to favorites'}
+                              aria-pressed={isFav(h)}
+                              onClick={() => void toggleFav(h)}
+                            >
+                              <IconStar size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn danger"
+                              aria-label="Delete generation"
+                              onClick={() => setConfirming(h.id)}
+                            >
+                              <IconTrash size={15} />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="h-meta">

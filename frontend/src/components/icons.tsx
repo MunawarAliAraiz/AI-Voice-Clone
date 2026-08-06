@@ -8,6 +8,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   Check,
+  CheckSquare,
   ChevronDown,
   Download,
   FileAudio,
@@ -58,6 +59,7 @@ export const IconSettings = make(Settings2);
 export const IconSearch = make(Search);
 export const IconPlus = make(Plus);
 export const IconCheck = make(Check);
+export const IconCheckSquare = make(CheckSquare);
 export const IconX = make(X);
 export const IconAlert = make(AlertCircle);
 export const IconChevronDown = make(ChevronDown);
