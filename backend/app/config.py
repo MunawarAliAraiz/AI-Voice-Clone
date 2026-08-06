@@ -69,6 +69,12 @@ class Settings(BaseSettings):
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 
+    #: Model id to start loading as soon as the app boots, so the first real
+    #: /generate doesn't pay the ~20-60s cold-load cost. Fired in the background
+    #: from the lifespan — startup and /api/health return immediately either way,
+    #: this only changes how soon a worker happens to already be resident.
+    warm_on_startup: str | None = None
+
     max_upload_mb: int = 50
     default_sample_rate: int = 44_100
 

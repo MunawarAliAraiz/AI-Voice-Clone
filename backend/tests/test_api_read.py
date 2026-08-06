@@ -5,6 +5,7 @@ API-key middleware — all against FakeScheduler, no GPU, no torch.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,30 @@ def test_warm_known_and_unknown_model(tmp_path: Path) -> None:
         assert r.status_code == 404
         assert r.headers["content-type"].startswith("application/problem+json")
         assert r.json()["code"] == "MODEL_NOT_FOUND"
+
+
+async def test_warm_on_startup_loads_before_first_request(tmp_path: Path) -> None:
+    """The point of warm_on_startup: the lifespan kicks off the load rather than
+    leaving the first real /generate to pay the cold-load cost.
+
+    TestClient runs the lifespan on a separate anyio portal thread with its own
+    event loop, so `app.state.warm_task` can't be awaited directly from here —
+    that's a cross-loop await. Poll the fake's shared state instead.
+    """
+    scheduler = FakeScheduler()
+    settings = Settings(data_dir=tmp_path, allow_fake_runtime=True, warm_on_startup="voxcpm2")
+    with TestClient(create_app(scheduler=scheduler, settings=settings)):
+        for _ in range(100):
+            if "voxcpm2" in scheduler.warmed:
+                break
+            await asyncio.sleep(0.01)
+        assert "voxcpm2" in scheduler.warmed
+
+
+def test_no_warm_on_startup_by_default(tmp_path: Path) -> None:
+    scheduler = FakeScheduler()
+    with TestClient(create_app(scheduler=scheduler, settings=Settings(data_dir=tmp_path))):
+        assert scheduler.warmed == []
 
 
 def test_api_key_is_enforced_but_health_is_exempt(tmp_path: Path) -> None:

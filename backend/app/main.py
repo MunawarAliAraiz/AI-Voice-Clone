@@ -12,7 +12,9 @@ tested against `FakeScheduler` with no torch and no subprocess.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import logging
 import os
 from collections.abc import AsyncIterator
 
@@ -27,6 +29,8 @@ from .db import Database
 from .inference.protocol import SchedulerProtocol
 
 __all__ = ["create_app"]
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -49,9 +53,33 @@ def create_app(
             app.state.db = Database(settings.db_path)
             await app.state.db.connect()
             app.state.owns_db = True
+
+        # Fire-and-forget: kicks off the ~20-60s cold load immediately instead of
+        # waiting for the first /generate to pay it. Backgrounded rather than
+        # awaited so /api/health answers right away — a slow load is not "the
+        # app is broken", the UI's model-status chip already reports COLD/WARM.
+        # Stashed on app.state (not just a local) so tests can await it directly
+        # instead of racing the event loop to observe it having run.
+        warm_task: asyncio.Task[None] | None = None
+        if settings.warm_on_startup:
+            model_id = settings.warm_on_startup
+
+            async def _warm() -> None:
+                try:
+                    await app.state.scheduler.warm(model_id)
+                except Exception:
+                    logger.exception("startup warm of %r failed; will retry on first request", model_id)
+
+            warm_task = asyncio.create_task(_warm())
+            app.state.warm_task = warm_task
+
         try:
             yield
         finally:
+            if warm_task is not None and not warm_task.done():
+                warm_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await warm_task
             if getattr(app.state, "owns_scheduler", False):
                 await app.state.scheduler.shutdown()
             if getattr(app.state, "owns_db", False):
