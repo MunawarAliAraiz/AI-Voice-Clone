@@ -168,7 +168,7 @@ settings):
 | `VCS_VOXCPM_PYTHON` | *(empty)* | **Required to generate.** Absolute path to the runtime venv's python. Empty = VoxCPM is unrunnable and `/generate` 422s. |
 | `VCS_WORKER_CWD` | *(process cwd)* | Directory workers start in; must contain the importable `app` package (i.e. `backend/`). |
 | `VCS_API_KEY` | *(empty)* | **Empty means no authentication.** Set it before exposing the port. |
-| `VCS_CORS_ORIGINS` | Vite dev ports | JSON array of allowed origins. |
+| `VCS_CORS_ORIGINS` | Vite dev ports | JSON array of allowed origins. `["*"]` together with `VCS_API_KEY` is **refused at boot** — name the origins. |
 | `VCS_ALLOW_FAKE_RUNTIME` | `false` | Enables the silence runtime for GPU-less testing. |
 | `VCS_DATA_DIR` | `./data` | Voices, generations, database. |
 | `VCS_MEDIA_TOKEN_SECRET` | *(random per boot)* | Set in production so signed media URLs survive restarts. |

@@ -86,7 +86,12 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
+        # No cookies or HTTP auth are used — the client authenticates with an
+        # X-API-Key header, which needs no credentials mode. Leaving this on
+        # bought nothing and changed how a wildcard behaves: Starlette answers
+        # wildcard+credentials by echoing the requesting Origin, which allows
+        # every site individually. Off is both accurate and safer.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

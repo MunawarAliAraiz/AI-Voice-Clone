@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.main import create_app
@@ -72,3 +74,22 @@ def test_api_key_is_enforced_but_health_is_exempt(tmp_path: Path) -> None:
         assert unauth.json()["code"] == "AUTHENTICATION_ERROR"
         assert c.get("/api/models", headers={"X-API-Key": "secret"}).status_code == 200
         assert c.get("/api/health").status_code == 200  # exempt
+
+
+def test_wildcard_cors_is_refused_when_an_api_key_is_set(tmp_path: Path) -> None:
+    """
+    A wildcard origin behind an API key means any site can drive this API from a
+    victim's browser. The README promised this guard long before it existed.
+    """
+    with pytest.raises(ValidationError):
+        Settings(data_dir=tmp_path, api_key="secret", cors_origins=["*"])
+
+    # Without a key the deployment is already open by choice — allowed.
+    s = Settings(data_dir=tmp_path, api_key="", cors_origins=["*"])
+    assert s.cors_origins == ["*"]
+
+    # A named origin behind a key is the supported production shape.
+    s2 = Settings(
+        data_dir=tmp_path, api_key="secret", cors_origins=["https://studio.example.com"]
+    )
+    assert s2.cors_origins == ["https://studio.example.com"]

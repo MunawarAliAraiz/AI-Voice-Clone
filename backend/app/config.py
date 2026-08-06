@@ -78,6 +78,29 @@ class Settings(BaseSettings):
             self.media_token_secret = secrets.token_hex(32)
         return self
 
+    @model_validator(mode="after")
+    def _refuse_wildcard_cors_behind_a_key(self) -> Settings:
+        """
+        `VCS_CORS_ORIGINS=["*"]` together with an API key is refused at boot.
+
+        Setting a key means the deployment is reachable by someone other than
+        you, and a wildcard then lets any site on the internet drive it from a
+        victim's browser. It is also worse than it looks: the CORS middleware
+        runs with `allow_credentials`, and Starlette answers a wildcard+
+        credentials config by echoing back whatever Origin asked — so every
+        origin is allowed, individually.
+
+        This check was documented in the README long before it existed. Name the
+        origins instead.
+        """
+        if self.api_key and "*" in self.cors_origins:
+            raise ValueError(
+                "VCS_CORS_ORIGINS='*' is not allowed together with VCS_API_KEY. "
+                "List the exact origins that may call this API, e.g. "
+                '\'["https://studio.example.com"]\'.'
+            )
+        return self
+
     # ── derived paths ────────────────────────────────────────────────────────
 
     @property
