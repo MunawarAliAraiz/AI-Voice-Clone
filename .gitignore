@@ -48,3 +48,6 @@ frontend/dist/
 frontend/src-tauri/target/
 frontend/src-tauri/bin/*.exe
 *.tsbuildinfo
+
+# Stray audio at the repo root (test output, never source)
+/*.wav
