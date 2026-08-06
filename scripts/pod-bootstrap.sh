@@ -5,16 +5,16 @@
 # wiped every time. This script rebuilds everything that is not in git, so a new
 # pod is productive in one command instead of an hour of rediscovery.
 #
-# USAGE (from your laptop, piping over ssh):
+# The repo is PUBLIC for read (clone/fetch need no credentials). Just run:
 #
-#   GH_USER=<user> GH_TOKEN=<token> bash scripts/pod-bootstrap.sh    # on the pod
+#   ssh root@HOST -p PORT "bash -s" < scripts/pod-bootstrap.sh
 #
-# or remotely:
+# GH_USER / GH_TOKEN are only needed if you plan to `git push` FROM the pod —
+# without them, `git pull` still works, only pushing prompts and fails
+# non-interactively. If you do set them, the token is written only to /root
+# (ephemeral, chmod 600) — NEVER to /workspace, which persists and is snapshotted:
 #
 #   ssh root@HOST -p PORT "GH_USER=u GH_TOKEN=t bash -s" < scripts/pod-bootstrap.sh
-#
-# The token is read from the environment and written only to /root (ephemeral,
-# chmod 600). It is NEVER written to /workspace, which persists and is snapshotted.
 
 set -euo pipefail
 
@@ -52,31 +52,25 @@ else
 fi
 
 echo "== 3. repo =="
-# Three cases, because the repo is PRIVATE and cloning it needs a token:
+# The repo is public for read, so a plain clone needs no credentials. Three
+# cases:
 #   a) a real checkout is here      -> fetch + checkout as usual
-#   b) files are here but no .git   -> shipped from the laptop with `git archive`
-#                                      (the token-free route). Use them as-is;
-#                                      cloning over them would fail and, under
-#                                      `set -e`, abort the whole bootstrap.
-#   c) nothing is here              -> clone, which requires GH_USER/GH_TOKEN
+#   b) files are here but no .git   -> a tree was staged some other way (e.g.
+#                                      `git archive` from an uncommitted local
+#                                      branch you want to test). Use it as-is.
+#   c) nothing is here              -> clone (no token required)
 if [ -d "$REPO_DIR/.git" ]; then
-  git -C "$REPO_DIR" remote set-url origin "$REPO_URL"   # keep the remote token-free
+  git -C "$REPO_DIR" remote set-url origin "$REPO_URL"
   git -C "$REPO_DIR" fetch origin --prune
   git -C "$REPO_DIR" checkout "$BRANCH" 2>/dev/null \
     || git -C "$REPO_DIR" checkout -b "$BRANCH" --track "origin/$BRANCH"
   git -C "$REPO_DIR" pull --ff-only origin "$BRANCH" || true
 elif [ -f "$REPO_DIR/backend/pyproject.toml" ]; then
-  echo "   using the pre-staged tree at $REPO_DIR (no .git — shipped via git archive)"
-elif [ -n "${GH_TOKEN:-}" ] && [ -n "${GH_USER:-}" ]; then
+  echo "   using the pre-staged tree at $REPO_DIR (no .git)"
+else
   git clone "$REPO_URL" "$REPO_DIR"
   git -C "$REPO_DIR" checkout "$BRANCH" 2>/dev/null \
     || git -C "$REPO_DIR" checkout -b "$BRANCH" --track "origin/$BRANCH"
-else
-  echo "   ERROR: no code at $REPO_DIR and no GH_USER/GH_TOKEN to clone a PRIVATE repo."
-  echo "   Ship it from your machine instead (no token ever touches the pod):"
-  echo "     git archive --prefix=AI-Voice-Clone/ HEAD | \\"
-  echo "       ssh -p <PORT> root@<HOST> 'tar -x -C /workspace'"
-  exit 1
 fi
 
 echo "== 4. system deps =="
@@ -158,6 +152,7 @@ echo "    HF_HOME=/workspace/hf-cache \\"
 echo "    VCS_API_KEY=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
 echo "    VCS_MEDIA_TOKEN_SECRET=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
 echo "    VCS_CORS_ORIGINS='[\"https://YOUR-PAGES-URL.pages.dev\"]' \\"
+echo "    VCS_WARM_ON_STARTUP=voxcpm2 \\"
 echo "    VCS_VOXCPM_PYTHON=$VOX_VENV/bin/python \\"
 echo "    VCS_WORKER_CWD=$REPO_DIR/backend \\"
 echo "    uv run uvicorn app.main:app --host 127.0.0.1 --port 8000"

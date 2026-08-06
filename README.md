@@ -136,29 +136,24 @@ cd backend && VCS_ALLOW_FAKE_RUNTIME=1 uv run uvicorn app.main:app --port 8000
 
 ## Cloud / RunPod
 
-`scripts/pod-bootstrap.sh` rebuilds a fresh GPU pod from zero — caches redirected off the ephemeral
-overlay, API venv, **and the VoxCPM 2 runtime venv with the cu128 torch pin and weights**.
-
-Two commands, in this order, both run from the repo root on your machine. The first puts the code on
-the pod (the repo is private, so the pod cannot fetch it itself); the second pipes the script over
-the wire and runs it:
-
-```bash
-git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p PORT root@HOST "tar -x -C /workspace"
-```
+`scripts/pod-bootstrap.sh` rebuilds a fresh GPU pod from zero — clones the repo, redirects caches off
+the ephemeral overlay, builds the API venv **and the VoxCPM 2 runtime venv with the cu128 torch pin and
+weights**. The repo is public for read, so no token is needed. One command, from your laptop:
 
 ```bash
 ssh -p PORT root@HOST "bash -s" < scripts/pod-bootstrap.sh
 ```
 
-It prints the exact `uvicorn` command (with `VCS_VOXCPM_PYTHON` / `VCS_WORKER_CWD` set) to start
-serving. To reach the API from your laptop, forward the port over SSH rather than exposing it:
+It prints the exact `uvicorn` command (with a freshly generated `VCS_API_KEY`, `VCS_VOXCPM_PYTHON`,
+`VCS_WORKER_CWD`, and `VCS_WARM_ON_STARTUP` set — the last one starts loading the model in the
+background at boot instead of making the first `/generate` pay the cold-load cost) to start serving.
+To reach the API from your laptop, forward the port over SSH rather than exposing it:
 `ssh -N -L 8000:127.0.0.1:8000 -p PORT root@HOST`.
 
-For the same steps done by hand — clone, both venvs, the torch pin, starting the server, and the
-tunnel — see **[docs/POD_SETUP.md](docs/POD_SETUP.md)**. That doc also covers the public-deployment
-path (frontend on Cloudflare, backend behind a static ngrok domain, `VCS_API_KEY`-gated) for sharing a
-working link with other people, rather than reaching it only through your own SSH tunnel.
+**[docs/POD_SETUP.md](docs/POD_SETUP.md)** has the rest: resuming after a pod restart, connecting a
+local frontend, the manual steps for when something needs debugging, and the public-deployment path
+(frontend on Cloudflare, backend behind a static ngrok domain, `VCS_API_KEY`-gated) for sharing a
+working link with other people rather than reaching it only through your own SSH tunnel.
 
 ## Configuration
 
@@ -176,6 +171,7 @@ settings):
 | `VCS_MEDIA_TOKEN_SECRET` | *(random per boot)* | Set in production so signed media URLs survive restarts. |
 | `VCS_BUDGET_MB` / `VCS_MAX_WORKERS` | `16000` / `2` | Scheduler capacity; defaults suit a 24 GB card. |
 | `VCS_CHATTERBOX_PYTHON` / `VCS_F5_PYTHON` | *(empty)* | Runtime venvs for the other engines, when wired up. |
+| `VCS_WARM_ON_STARTUP` | *(empty)* | Model id (e.g. `voxcpm2`) to start loading as soon as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
 
 There is no `default_engine` setting. Routing decides per request from the declared language and the
 detected script.
