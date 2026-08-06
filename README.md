@@ -135,12 +135,19 @@ cd backend && VCS_ALLOW_FAKE_RUNTIME=1 uv run uvicorn app.main:app --port 8000
 
 ## Cloud / RunPod
 
-`scripts/pod-bootstrap.sh` rebuilds a fresh GPU pod from zero in one command — caches redirected off
-the ephemeral overlay, repo, API venv, **and the VoxCPM 2 runtime venv with the cu128 torch pin and
-weights**. Pipe it in over SSH:
+`scripts/pod-bootstrap.sh` rebuilds a fresh GPU pod from zero — caches redirected off the ephemeral
+overlay, API venv, **and the VoxCPM 2 runtime venv with the cu128 torch pin and weights**.
+
+Two commands, in this order, both run from the repo root on your machine. The first puts the code on
+the pod (the repo is private, so the pod cannot fetch it itself); the second pipes the script over
+the wire and runs it:
 
 ```bash
-ssh root@HOST -p PORT "GH_USER=you GH_TOKEN=ghp_… bash -s" < scripts/pod-bootstrap.sh
+git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p PORT root@HOST "tar -x -C /workspace"
+```
+
+```bash
+ssh -p PORT root@HOST "bash -s" < scripts/pod-bootstrap.sh
 ```
 
 It prints the exact `uvicorn` command (with `VCS_VOXCPM_PYTHON` / `VCS_WORKER_CWD` set) to start

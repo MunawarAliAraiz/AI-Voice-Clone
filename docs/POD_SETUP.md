@@ -1,15 +1,30 @@
 # Pod setup — running the backend on a RunPod GPU
 
 A manual runbook for standing up the backend on a fresh GPU pod, then connecting a local frontend to
-it over an SSH tunnel. This is the same sequence `scripts/pod-bootstrap.sh` automates — run that if
-you want it in one command:
+it over an SSH tunnel. Assumes a fresh RunPod pod with an NVIDIA GPU (developed on an RTX A5000 /
+A4500, 20–24 GB), Ubuntu, and Python 3.12.
+
+`scripts/pod-bootstrap.sh` automates steps 0–7. **Two commands, in this order** — run both from your
+laptop, in the repo root:
 
 ```bash
-ssh root@<HOST> -p <PORT> "GH_USER=you GH_TOKEN=ghp_… bash -s" < scripts/pod-bootstrap.sh
+git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p <PORT> root@<HOST> "tar -x -C /workspace"
 ```
 
-Otherwise, the steps below do it by hand. They assume a fresh RunPod pod with an NVIDIA GPU (developed
-on an RTX A5000 / A4500, 20–24 GB), Ubuntu, and Python 3.12.
+```bash
+ssh -p <PORT> root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
+```
+
+**Why that order?** The `< scripts/pod-bootstrap.sh` redirect feeds the *script itself* over the wire
+(`bash -s` reads its program from stdin), so the script never has to exist on the pod. But the work
+the script does — `uv sync`, building the runtime venv — operates on the *repo*, which does have to
+be there. The repo is private, so the pod cannot fetch it on its own; the archive command above puts
+it in place first.
+
+The one exception: if you supply `GH_USER` / `GH_TOKEN`, the script clones the repo itself and the
+archive step is unnecessary. Prefer the archive route anyway — see step 2 for why.
+
+Steps 0–11 below are the same sequence done by hand.
 
 ---
 
