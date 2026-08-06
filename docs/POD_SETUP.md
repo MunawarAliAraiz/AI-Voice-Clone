@@ -8,12 +8,19 @@ and Python 3.12.
 The repo is public for read — cloning needs no token. From your laptop:
 
 ```bash
-ssh root@<HOST> -p <PORT> "bash -s" < scripts/pod-bootstrap.sh
+ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
 ```
 
-That's it for a fresh pod. It takes a few minutes (mostly downloading the VoxCPM 2 weights, ~7 GB) and
-ends by printing the exact command to start serving, including a freshly generated `VCS_API_KEY` and
-`VCS_MEDIA_TOKEN_SECRET`. Copy that command, run it, and the backend is up.
+That's it for a fresh pod. Piping the script in over `"bash -s" <` isn't backgrounded, so every line
+it prints streams to your terminal live as it runs — `uv sync`, the torch install, the weight
+download, the test run — nothing extra needed to watch it. It takes a few minutes (mostly downloading
+the VoxCPM 2 weights, ~7 GB) and ends by printing the exact command to start serving, including a
+freshly generated `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET`. Copy that command, run it, and the
+backend is up.
+
+`-i ~/.ssh/id_ed25519` is only needed if you're not relying on an ssh-agent to offer the key
+automatically. On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` instead of Git Bash's `ssh` if
+the key is passphrase-protected and loaded in the Windows ssh-agent — Git Bash can't see that agent.
 
 You do **not** need `GH_USER` / `GH_TOKEN` for this — those are only for pushing commits *from* the
 pod, which most sessions never do. If you do need to push from the pod, add them:

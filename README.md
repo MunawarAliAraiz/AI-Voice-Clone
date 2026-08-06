@@ -141,8 +141,15 @@ the ephemeral overlay, builds the API venv **and the VoxCPM 2 runtime venv with 
 weights**. The repo is public for read, so no token is needed. One command, from your laptop:
 
 ```bash
-ssh -p PORT root@HOST "bash -s" < scripts/pod-bootstrap.sh
+ssh -p PORT -i ~/.ssh/id_ed25519 root@HOST "bash -s" < scripts/pod-bootstrap.sh
 ```
+
+`-i ~/.ssh/id_ed25519` points at your private key explicitly — use it if you're not relying on an
+ssh-agent to offer the key automatically. Piping the script in over `"bash -s" < scripts/...` isn't
+backgrounded, so every line the script prints (`uv sync`, the torch install, the weight download, the
+test run) streams to your terminal live as it happens — there's nothing extra to do to see the logs.
+On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` if your key is passphrase-protected and loaded in
+the Windows ssh-agent; Git Bash's `ssh` can't see that agent.
 
 It prints the exact `uvicorn` command (with a freshly generated `VCS_API_KEY`, `VCS_VOXCPM_PYTHON`,
 `VCS_WORKER_CWD`, and `VCS_WARM_ON_STARTUP` set — the last one starts loading the model in the
