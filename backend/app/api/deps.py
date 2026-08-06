@@ -7,6 +7,7 @@ so the whole HTTP surface is tested against `FakeScheduler` with no GPU.
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request
@@ -67,7 +68,8 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         if not self._api_key or request.method == "OPTIONS" or self._exempt(request.url.path):
             return await call_next(request)
-        if request.headers.get("X-API-Key") != self._api_key:
+        provided = request.headers.get("X-API-Key", "")
+        if not hmac.compare_digest(self._api_key, provided):
             return JSONResponse(
                 status_code=401,
                 media_type=PROBLEM_CONTENT_TYPE,

@@ -125,6 +125,26 @@ python3 --version
 cd "$REPO_DIR/backend" && uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
+echo "== 10. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
+  if ! command -v ngrok >/dev/null; then
+    echo "   installing ngrok..."
+    curl -sSL https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz | tar -xz -C /usr/local/bin
+  fi
+
+  ngrok config add-authtoken "$NGROK_AUTHTOKEN"
+  if [ -n "${NGROK_DOMAIN:-}" ]; then
+    echo "   ngrok will use static domain: $NGROK_DOMAIN"
+  else
+    echo "   WARNING: NGROK_DOMAIN not set — ngrok will use random URL"
+  fi
+
+  echo "   ngrok configured. Start it with:"
+  echo "     nohup ngrok http --domain=${NGROK_DOMAIN} 8000 > /workspace/ngrok.log 2>&1 &"
+else
+  echo "   skipped (NGROK_AUTHTOKEN not set)"
+fi
+
 echo
 echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
@@ -135,9 +155,17 @@ echo
 echo "Start serving:"
 echo "  cd $REPO_DIR/backend && \\"
 echo "    HF_HOME=/workspace/hf-cache \\"
+echo "    VCS_API_KEY=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
+echo "    VCS_MEDIA_TOKEN_SECRET=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
+echo "    VCS_CORS_ORIGINS='[\"https://YOUR-PAGES-URL.pages.dev\"]' \\"
 echo "    VCS_VOXCPM_PYTHON=$VOX_VENV/bin/python \\"
 echo "    VCS_WORKER_CWD=$REPO_DIR/backend \\"
 echo "    uv run uvicorn app.main:app --host 127.0.0.1 --port 8000"
 echo
-echo "Reach it from your laptop with a tunnel (do not expose the port directly):"
+if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
+  echo "Then start ngrok in another session:"
+  echo "  ngrok http --domain=${NGROK_DOMAIN} 8000"
+  echo
+fi
+echo "Reach it from your laptop with SSH tunnel (alternative to ngrok):"
 echo "  ssh -N -L 8000:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>"

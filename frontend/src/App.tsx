@@ -111,6 +111,7 @@ export default function App() {
 function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(() => localStorage.getItem('vcs_api_key') ?? '');
+  const [backendUrl, setBackendUrl] = useState(() => localStorage.getItem('vcs_api_base') ?? '');
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -135,8 +136,14 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
   }, [open]);
 
   function save() {
+    // API Key
     if (key) localStorage.setItem('vcs_api_key', key);
     else localStorage.removeItem('vcs_api_key');
+
+    // Backend URL
+    if (backendUrl) localStorage.setItem('vcs_api_base', backendUrl);
+    else localStorage.removeItem('vcs_api_base');
+
     setOpen(false);
     triggerRef.current?.focus();
     onSaved();
@@ -148,7 +155,7 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
         ref={triggerRef}
         className="icon-btn"
         type="button"
-        aria-label="API key settings"
+        aria-label="Settings"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
@@ -156,9 +163,9 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
       </button>
 
       {open && (
-        <div className="apikey-pop" role="dialog" aria-label="API key">
+        <div className="apikey-pop" role="dialog" aria-label="Settings">
           <div className="pop-head">
-            <strong>API key</strong>
+            <strong>Settings</strong>
             <button
               type="button"
               className="icon-btn tiny"
@@ -168,18 +175,32 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
               <IconX size={13} />
             </button>
           </div>
+
           <label className="field">
+            <span className="field-label">Backend URL</span>
+            <input
+              value={backendUrl}
+              onChange={(e) => setBackendUrl(e.target.value)}
+              type="url"
+              placeholder="https://your-backend.ngrok-free.app"
+              autoFocus
+            />
+          </label>
+          <p className="hint">Leave empty to use the build default. Must be https:// for production.</p>
+
+          <label className="field">
+            <span className="field-label">API Key</span>
             <input
               value={key}
               onChange={(e) => setKey(e.target.value)}
               type="password"
               placeholder="X-API-Key"
-              autoFocus
             />
           </label>
-          <p className="hint">Leave empty unless the backend sets one.</p>
+          <p className="hint">Required if the backend sets VCS_API_KEY.</p>
+
           <button className="btn primary sm" type="button" onClick={save}>
-            Save
+            Save & Reload
           </button>
         </div>
       )}

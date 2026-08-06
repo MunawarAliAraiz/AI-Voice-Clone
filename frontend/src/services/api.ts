@@ -14,7 +14,47 @@ import type {
   VoiceProfileList,
 } from '../types/api';
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? 'http://localhost:8000';
+/**
+ * Backend URL precedence:
+ * 1. localStorage('vcs_api_base') — user override
+ * 2. import.meta.env.VITE_API_BASE — build-time baked
+ * 3. '' (same-origin) for prod, localhost for dev
+ */
+function getApiBase(): string {
+  // 1. Runtime override from localStorage
+  const stored = localStorage.getItem('vcs_api_base');
+  if (stored) {
+    const normalized = normalizeUrl(stored);
+    if (normalized !== null) return normalized;
+    console.warn('[api] Invalid vcs_api_base in localStorage, ignoring:', stored);
+  }
+
+  // 2. Build-time env var
+  const envBase = import.meta.env.VITE_API_BASE;
+  if (envBase) {
+    const normalized = normalizeUrl(envBase);
+    if (normalized !== null) return normalized;
+  }
+
+  // 3. Fallback: same-origin for prod, localhost for dev
+  return import.meta.env.DEV ? 'http://localhost:8000' : '';
+}
+
+function normalizeUrl(url: string): string | null {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  if (!/^https?:\/\//i.test(trimmed)) {
+    console.error('[api] Backend URL must start with http:// or https://');
+    return null;
+  }
+  // Warn on mixed content (HTTPS frontend calling HTTP backend)
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && trimmed.startsWith('http://')) {
+    console.warn('[api] Mixed content: HTTPS page cannot call HTTP backend. Browser will block it.');
+  }
+  return trimmed;
+}
+
+const API_BASE = getApiBase();
 
 /** Media/audio URLs from the API are root-relative and already signed. */
 export function mediaUrl(path: string): string {
@@ -36,11 +76,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const key = apiKey();
   if (key) headers.set('X-API-Key', key);
 
+  // ngrok free tier bypass (custom header triggers CORS preflight)
+  if (API_BASE.includes('ngrok')) {
+    headers.set('ngrok-skip-browser-warning', 'true');
+  }
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch {
-    throw new ApiError(0, 'NETWORK', 'Cannot reach the backend. Is it running?');
+    const msg = API_BASE.startsWith('https://')
+      ? 'Cannot reach the backend. Check the URL in settings and verify CORS is configured.'
+      : 'Cannot reach the backend. Is it running?';
+    throw new ApiError(0, 'NETWORK', msg);
   }
 
   if (!res.ok) {

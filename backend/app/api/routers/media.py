@@ -50,4 +50,7 @@ async def get_media(
 
     if not Path(path).exists():  # noqa: ASYNC240 (one-shot stat)
         raise (HistoryNotFoundError if kind == "history" else ProfileNotFoundError)(item_id)
-    return FileResponse(path)
+    return FileResponse(
+        path,
+        headers={"Content-Disposition": f'attachment; filename="{Path(path).name}"'},
+    )
