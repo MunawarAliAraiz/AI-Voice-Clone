@@ -14,7 +14,10 @@ export function fmtDuration(sec: number | null | undefined): string {
 
 export function parseUtcIso(iso: string): number {
   if (!iso) return NaN;
-  const normalized = iso.endsWith('Z') || iso.includes('+') ? iso : `${iso.replace(' ', 'T')}Z`;
+  const s = iso.trim();
+  // Check if explicit timezone indicator (Z, +, or time-part -) is present
+  const hasTz = s.endsWith('Z') || s.includes('+') || (s.includes('T') && s.slice(10).includes('-'));
+  const normalized = hasTz ? s : `${s.replace(' ', 'T')}Z`;
   return Date.parse(normalized);
 }
 
