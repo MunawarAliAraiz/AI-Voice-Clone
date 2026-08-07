@@ -1,0 +1,5 @@
+# Shell scripts run on the pod (Linux) via `ssh ... "bash -s" < script`. A
+# CRLF checkout on Windows (common with core.autocrlf=true) sends literal \r
+# bytes into the remote bash, which breaks `set -euo pipefail` on line 1 and
+# fails cryptically. Force LF regardless of the checkout platform's autocrlf.
+*.sh text eol=lf
