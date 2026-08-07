@@ -5,18 +5,44 @@ and Python 3.12.
 
 ## The one command
 
-The repo is public for read — cloning needs no token. From your laptop:
+**On your own laptop, `cd` into this repo first** — the command ends with
+`< scripts/pod-bootstrap.sh`, a path relative to the repo root, and it pipes your *local* copy of the
+script into the pod's shell. Running it from anywhere else fails with `No such file or directory`.
 
 ```bash
-ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
+cd /path/to/AI-Voice-Clone
 ```
 
-If you already have an ngrok token and a claimed domain, pass them in the same run and it installs and
-configures ngrok too — this is the form worth memorising, run from the repo root:
+Then, from that directory — this is the whole deployment, provisioning through running server:
 
 ```bash
-ssh root@<HOST> -p <PORT> "NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.pages.dev bash -s" < scripts/pod-bootstrap.sh
+ssh root@<HOST> -p <PORT> "START=1 NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.workers.dev bash -s" < scripts/pod-bootstrap.sh
 ```
+
+It provisions everything, then starts the backend and ngrok and polls until `/api/health` answers, so
+there is no second step. It ends by printing your API key and a status block:
+
+```
+== 13. current status ==
+   backend:  UP   (127.0.0.1:8000)
+   ngrok:    UP   https://<your-name>.ngrok-free.dev
+   public:   OK   https://<your-name>.ngrok-free.dev/api/health -> 200
+```
+
+Three `UP`/`OK` lines mean it is fully live. Anything else tells you which half is broken:
+`backend: DOWN` is the server, `public: FAIL ... 404` is the tunnel not connected, `502` is the tunnel
+up but the backend refusing.
+
+**After the first run it gets shorter.** `NGROK_DOMAIN` and `FRONTEND_URL` are remembered on
+`/workspace`, so a later restart on the same volume only needs:
+
+```bash
+ssh root@<HOST> -p <PORT> "START=1 NGROK_AUTHTOKEN=<token> bash -s" < scripts/pod-bootstrap.sh
+```
+
+You do **not** need `GH_USER` / `GH_TOKEN` in any of these. The repo is public for read, so the pod
+clones anonymously; those two are only for pushing commits *from* the pod, which a deploy never does.
+Passing them writes your token to `/root/.git-credentials` on the pod for no benefit.
 
 `FRONTEND_URL` is your deployed frontend's origin, and it is what makes CORS work. **Pass it once** —
 the script saves it to `/workspace/vcs-frontend-url` and reuses it on every later run, so you cannot
