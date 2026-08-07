@@ -14,15 +14,26 @@ import type {
   VoiceProfileList,
 } from '../types/api';
 
+// In production the Worker serving this page also proxies `/api/*` to the
+// backend, so same-origin is the only correct base. A `vcs_api_base` left in
+// localStorage from before the proxy existed sends requests cross-origin again
+// and reinstates the ngrok interstitial that breaks `<audio>` — a per-device
+// failure with no server-side symptom. Drop it once, on load, rather than
+// leaving one phone broken while every other device works.
+if (!import.meta.env.DEV && localStorage.getItem('vcs_api_base')) {
+  console.warn('[api] Ignoring stale vcs_api_base — this deployment proxies /api same-origin.');
+  localStorage.removeItem('vcs_api_base');
+}
+
 /**
  * Backend URL precedence:
- * 1. localStorage('vcs_api_base') — user override
+ * 1. localStorage('vcs_api_base') — dev-only override (see above)
  * 2. import.meta.env.VITE_API_BASE — build-time baked
  * 3. '' (same-origin) for prod, localhost for dev
  */
 function getApiBase(): string {
-  // 1. Runtime override from localStorage
-  const stored = localStorage.getItem('vcs_api_base');
+  // 1. Runtime override from localStorage — development only.
+  const stored = import.meta.env.DEV ? localStorage.getItem('vcs_api_base') : null;
   if (stored) {
     const normalized = normalizeUrl(stored);
     if (normalized !== null) return normalized;

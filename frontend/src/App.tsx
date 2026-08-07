@@ -176,17 +176,25 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
             </button>
           </div>
 
-          <label className="field">
-            <span className="field-label">Backend URL</span>
-            <input
-              value={backendUrl}
-              onChange={(e) => setBackendUrl(e.target.value)}
-              type="url"
-              placeholder="https://your-backend.ngrok-free.app"
-              autoFocus
-            />
-          </label>
-          <p className="hint">Leave empty to use the build default. Must be https:// for production.</p>
+          {/* Dev only. In production the Worker proxies /api/* to the backend,
+              so same-origin is the only correct base and this field can only be
+              wrong — setting it puts requests back cross-origin and breaks
+              audio playback behind ngrok's interstitial. */}
+          {import.meta.env.DEV && (
+            <>
+              <label className="field">
+                <span className="field-label">Backend URL</span>
+                <input
+                  value={backendUrl}
+                  onChange={(e) => setBackendUrl(e.target.value)}
+                  type="url"
+                  placeholder="http://localhost:8000"
+                  autoFocus
+                />
+              </label>
+              <p className="hint">Dev only. Leave empty to use localhost:8000.</p>
+            </>
+          )}
 
           <label className="field">
             <span className="field-label">API Key</span>
@@ -195,6 +203,7 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
               onChange={(e) => setKey(e.target.value)}
               type="password"
               placeholder="X-API-Key"
+              autoFocus={!import.meta.env.DEV}
             />
           </label>
           <p className="hint">Required if the backend sets VCS_API_KEY.</p>
