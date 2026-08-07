@@ -151,6 +151,20 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
 df -h / /workspace | tail -2
 
 echo "== 11. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+# Remember the domain the same way FRONTEND_URL is remembered. A restart that
+# forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
+# the deployed frontend has no way to reach, so the app looks broken for a
+# reason nothing in its logs mentions.
+NGROK_FILE="/workspace/vcs-ngrok-domain"
+if [ -n "${NGROK_DOMAIN:-}" ]; then
+  printf '%s\n' "$NGROK_DOMAIN" > "$NGROK_FILE"
+elif [ -f "$NGROK_FILE" ]; then
+  NGROK_DOMAIN="$(cat "$NGROK_FILE")"
+fi
+# Define unconditionally: every later reference runs under `set -u`, and an
+# unset NGROK_DOMAIN aborted the whole script with "unbound variable".
+NGROK_DOMAIN="${NGROK_DOMAIN:-}"
+
 if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
   if ! command -v ngrok >/dev/null; then
     echo "   installing ngrok..."
@@ -158,14 +172,14 @@ if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
   fi
 
   ngrok config add-authtoken "$NGROK_AUTHTOKEN"
-  if [ -n "${NGROK_DOMAIN:-}" ]; then
-    echo "   ngrok will use static domain: $NGROK_DOMAIN"
+  if [ -n "$NGROK_DOMAIN" ]; then
+    echo "   ngrok domain: $NGROK_DOMAIN"
+    echo "   start it with:"
+    echo "     nohup ngrok http --domain=$NGROK_DOMAIN 8000 > /workspace/ngrok.log 2>&1 &"
   else
-    echo "   WARNING: NGROK_DOMAIN not set — ngrok will use random URL"
+    echo "   WARNING: no NGROK_DOMAIN given and none remembered — ngrok would get a"
+    echo "            random URL your frontend cannot reach. Pass NGROK_DOMAIN once."
   fi
-
-  echo "   ngrok configured. Start it with:"
-  echo "     nohup ngrok http --domain=${NGROK_DOMAIN} 8000 > /workspace/ngrok.log 2>&1 &"
 else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
