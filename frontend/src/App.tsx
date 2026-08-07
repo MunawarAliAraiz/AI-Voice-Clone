@@ -6,7 +6,7 @@ import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
 import { VoiceLibrary } from './components/VoiceLibrary';
-import { IconAlert, IconMusic, IconSettings, IconX } from './components/icons';
+import { IconAlert, IconFileAudio, IconSettings, IconX } from './components/icons';
 import './App.css';
 
 const PAGE_SIZE = 20;
@@ -83,7 +83,7 @@ export default function App() {
             className={activeTab === 'editor' ? 'on' : ''}
             onClick={() => setActiveTab('editor')}
           >
-            <IconMusic size={14} /> Audio Editor
+            <IconFileAudio size={14} /> Audio Editor
           </button>
         </div>
 

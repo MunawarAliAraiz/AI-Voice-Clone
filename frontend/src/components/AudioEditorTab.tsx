@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../services/api';
 import { AudioPlayer } from './AudioPlayer';
-import { IconAlert, IconCheck, IconFile, IconMusic, IconRefresh, IconSpark, IconSpinner, IconUpload } from './icons';
+import { IconAlert, IconCheck, IconFileAudio, IconSpark, IconSpinner, IconUpload } from './icons';
 
 interface Props {
   onEnrolled?: () => void;
@@ -149,7 +149,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
       <div className="card">
         <div className="card-head">
           <h2>
-            <IconMusic size={20} />
+            <IconFileAudio size={20} />
             Audio Editor Studio
           </h2>
           <span className="count">Non-Destructive Processing</span>
@@ -190,7 +190,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', overflow: 'hidden' }}>
-                <IconFile size={20} />
+                <IconFileAudio size={20} />
                 <div style={{ overflow: 'hidden' }}>
                   <strong style={{ display: 'block', fontSize: 'var(--text-md)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {file.name}
@@ -203,7 +203,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
 
               <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
                 <button type="button" className="btn-sm" onClick={handleReset} title="Reset sliders">
-                  <IconRefresh size={14} /> Reset
+                  <IconSpark size={14} /> Reset
                 </button>
                 <button type="button" className="btn-sm danger" onClick={() => setFile(null)}>
                   Change File
