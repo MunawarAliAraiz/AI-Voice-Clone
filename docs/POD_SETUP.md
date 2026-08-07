@@ -22,12 +22,20 @@ backend is up.
 automatically. On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` instead of Git Bash's `ssh` if
 the key is passphrase-protected and loaded in the Windows ssh-agent — Git Bash can't see that agent.
 
-You do **not** need `GH_USER` / `GH_TOKEN` for this — those are only for pushing commits *from* the
-pod, which most sessions never do. If you do need to push from the pod, add them:
+You do **not** need `GH_USER` / `GH_TOKEN` to clone — the repo is public for read. Their main purpose
+is pushing commits *from* the pod, which most sessions never do:
 
 ```bash
 ssh root@<HOST> -p <PORT> "GH_USER=<you> GH_TOKEN=<token> bash -s" < scripts/pod-bootstrap.sh
 ```
+
+**If step 3 fails with `fatal: could not read Username for 'https://github.com'`,** the anonymous
+clone was rejected — observed once, from a RunPod IP, with a plain `401` and `Repository not found`
+on GitHub's git-upload-pack endpoint despite the repo being genuinely public. Not confirmed whether
+this is RunPod-specific, IP-reputation-based, or a one-off; treat "no token needed" as the common case,
+not a guarantee. The same `GH_USER=<you> GH_TOKEN=<token>` command above fixes it — a token
+authenticates past whatever anonymous git-over-HTTPS was hitting, even though the repo needs no
+special access. A classic PAT with just the `repo` scope is enough.
 
 **What that command actually does**, so you know what to expect and where to look if something fails:
 
@@ -47,8 +55,51 @@ ssh root@<HOST> -p <PORT> "GH_USER=<you> GH_TOKEN=<token> bash -s" < scripts/pod
 - Runs the CPU test suite as a sanity check.
 - If `NGROK_AUTHTOKEN` is set, installs and configures ngrok too (see [Public deployment](#public-deployment-ngrok--cloudflare) below).
 
-Re-running the same command on the same pod is safe — every step checks whether its work already
-exists before doing it again.
+**Re-running the same command on the same pod is safe.** Every step checks whether its work already
+exists before doing it again: cache dirs use `mkdir -p`, the repo step detects an existing checkout and
+`pull`s instead of cloning, `uv sync` and `uv venv` are idempotent by design, the weights step relies on
+HuggingFace Hub's own cache to skip a re-download of the same pinned revision, and `ngrok config
+add-authtoken` just overwrites the same token. Nothing gets duplicated or corrupted by running it twice
+— including immediately after a run that failed partway through.
+
+**Windows: if the script fails instantly with `set -euo pipefail` or `invalid option name`,** it's not
+the script — it's CRLF line endings. Git on Windows commonly checks files out with `core.autocrlf=true`,
+which silently turns the script's LF line endings into CRLF on disk; piping that copy into
+`"bash -s" < script` then sends literal `\r` bytes into the remote bash, which chokes on line 1. This
+repo's `.gitattributes` pins `*.sh` to LF on checkout, so a fresh `git clone` after that file exists
+won't hit it — but if your working copy predates it, force a re-checkout:
+
+```powershell
+Remove-Item scripts\pod-bootstrap.sh
+git checkout scripts\pod-bootstrap.sh
+```
+
+Verify it worked — this should **not** mention CRLF:
+
+```powershell
+Get-Content scripts\pod-bootstrap.sh -Raw | Select-String "`r`n" | Measure-Object
+```
+
+(A `Count` of `0` means no CRLF; `file scripts/pod-bootstrap.sh` from Git Bash works too and says
+"with CRLF line terminators" only when the problem is present.)
+
+**Running the one-command bootstrap from PowerShell, not Git Bash:** the `< scripts/pod-bootstrap.sh`
+redirect in the command at the top of this doc is bash syntax — PowerShell rejects it outright with
+`The '<' operator is reserved for future use`. The obvious fix, `Get-Content ... -Raw | ssh ...`, has
+its own trap: PowerShell's pipeline re-encodes text through an external command as UTF-8 **with a BOM**,
+even when the source file has none, and that BOM lands before `#!/usr/bin/env bash` on the far end —
+`bash: line 1: <BOM>#!/usr/bin/env: No such file or directory`. `cmd /c type file | ssh ...` has the
+same problem. The reliable way from PowerShell is `scp` the file over as raw bytes, then run it
+remotely — no text pipeline involved:
+
+```powershell
+scp -P <PORT> -i ~/.ssh/id_ed25519 scripts\pod-bootstrap.sh root@<HOST>:/tmp/pod-bootstrap.sh
+ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> "bash /tmp/pod-bootstrap.sh"
+```
+
+(Prefer Git Bash for the plain `< scripts/pod-bootstrap.sh` form when you have it — it avoids this
+entirely. This `scp` two-step is for when you're in PowerShell specifically, e.g. because the SSH key
+is passphrase-protected and only the Windows ssh-agent — which Git Bash can't see — has it unlocked.)
 
 ---
 
