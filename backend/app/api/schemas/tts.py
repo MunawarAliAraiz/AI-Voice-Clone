@@ -97,6 +97,17 @@ class TTSGenerateRequest(BaseModel):
         ),
     )
     output_format: str = Field("wav", examples=["wav", "mp3"])
+    speed: float = Field(
+        1.0,
+        ge=0.5,
+        le=2.0,
+        description="Speed multiplier for synthesized audio. 1.0 is original, <1.0 is slower, >1.0 is faster.",
+    )
+    emotion: str = Field(
+        "neutral",
+        examples=["neutral", "happy", "sad", "angry", "excited", "calm", "whisper", "narration"],
+        description="Emotional expression style for speech synthesis.",
+    )
     params: dict[str, float | int | str | bool] = Field(
         default_factory=dict,
         description="Model-specific knobs. Validated against the spec; unknown keys are a 422.",

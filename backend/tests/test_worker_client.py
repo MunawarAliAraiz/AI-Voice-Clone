@@ -25,7 +25,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # create_subprocess_exec needs the Proactor loop on Windows; the Selector loop
 # raises NotImplementedError. Harmless on POSIX. Production is Linux either way.
-if sys.platform == "win32":
+if sys.platform == "win32" and sys.version_info < (3, 14):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 

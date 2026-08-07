@@ -26,7 +26,7 @@ from app.inference.spec import License, ModelSpec, ModelState, RuntimeKind
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
-if sys.platform == "win32":  # create_subprocess_exec needs the Proactor loop
+if sys.platform == "win32" and sys.version_info < (3, 14):  # create_subprocess_exec needs the Proactor loop
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 FAKE_SPEC = ModelSpec(

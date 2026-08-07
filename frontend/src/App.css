@@ -120,6 +120,40 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent-line); ou
 input::placeholder, textarea::placeholder { color: var(--tertiary); }
 textarea { resize: vertical; min-height: 108px; line-height: 1.6; }
 
+.textarea-wrapper {
+  position: relative;
+  width: 100%;
+}
+.textarea-wrapper textarea {
+  width: 100%;
+  transition: height 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  padding-bottom: 28px;
+}
+.expand-toggle-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--panel-raised);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+.expand-toggle-btn:hover {
+  color: var(--text);
+  background: rgba(30, 41, 59, 0.95);
+  border-color: var(--line-strong);
+}
+
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 @media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
 

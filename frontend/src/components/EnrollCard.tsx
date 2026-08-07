@@ -120,16 +120,16 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
       {mode === 'upload' ? (
         <div role="tabpanel" id="panel-upload" aria-labelledby="tab-upload">
           <label className="field">
-            <span className="field-label">Reference audio</span>
+            <span className="field-label">Reference audio or video</span>
             <div className="file-drop">
               <input
                 ref={fileRef}
                 type="file"
-                accept="audio/*"
+                accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mkv,.mov,.avi,.webm,.flv,.wmv,.wma,.3gp"
                 onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
               />
               <IconUpload size={15} />
-              <span>{fileName ?? 'Choose a WAV or MP3 — 6 to 15 seconds works best'}</span>
+              <span>{fileName ?? 'Choose an audio or video file (WAV, MP3, MP4, MKV, etc.) — 6 to 15 seconds works best'}</span>
             </div>
           </label>
         </div>

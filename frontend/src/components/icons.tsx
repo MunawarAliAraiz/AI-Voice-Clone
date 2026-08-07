@@ -10,6 +10,7 @@ import {
   Check,
   CheckSquare,
   ChevronDown,
+  ChevronUp,
   Download,
   FileAudio,
   Loader2,
@@ -63,6 +64,7 @@ export const IconCheckSquare = make(CheckSquare);
 export const IconX = make(X);
 export const IconAlert = make(AlertCircle);
 export const IconChevronDown = make(ChevronDown);
+export const IconChevronUp = make(ChevronUp);
 export const IconFileAudio = make(FileAudio);
 export const IconVolume = make(Volume2);
 export const IconOffline = make(WifiOff);

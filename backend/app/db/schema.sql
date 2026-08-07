@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
     trim_end_sec    REAL,
 
     is_active       INTEGER NOT NULL DEFAULT 1,
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 -- The profile list filters on is_active on every page load.
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS generation_history (
     resolved_text   TEXT,
 
     is_favorite     INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
 -- History is always read newest-first, paginated.

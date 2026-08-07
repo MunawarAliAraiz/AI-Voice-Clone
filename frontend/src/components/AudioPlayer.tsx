@@ -26,6 +26,7 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [downloadFmt, setDownloadFmt] = useState<string>('wav');
 
   // Reset when the source changes (e.g. a new generation lands).
   useEffect(() => {
@@ -67,7 +68,7 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
   // The signed URL already carries `?t=`, so the download opt-in is always `&`.
   // Needed because the `download` attribute is ignored cross-origin — the
   // deployed frontend and backend are on different hosts.
-  const downloadHref = `${src}${src.includes('?') ? '&' : '?'}download=1`;
+  const downloadHref = `${src}${src.includes('?') ? '&' : '?'}download=1&format=${downloadFmt}`;
 
   return (
     <div className={`player ${compact ? 'compact' : ''}`}>
@@ -125,15 +126,39 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
         )}
       </span>
 
-      <a
-        className="icon-btn"
-        href={downloadHref}
-        download={downloadName ?? true}
-        aria-label="Download audio"
-        title="Download"
-      >
-        <IconDownload size={compact ? 14 : 16} />
-      </a>
+      <div className="download-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <select
+          value={downloadFmt}
+          onChange={(e) => setDownloadFmt(e.target.value)}
+          aria-label="Download audio format"
+          title="Choose audio format to download"
+          style={{
+            background: 'rgba(255, 255, 255, 0.07)',
+            color: 'var(--fg-muted, #94a3b8)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '4px',
+            fontSize: compact ? '10px' : '11px',
+            padding: '2px 4px',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="wav">WAV</option>
+          <option value="mp3">MP3</option>
+          <option value="flac">FLAC</option>
+          <option value="ogg">OGG</option>
+          <option value="m4a">M4A</option>
+        </select>
+        <a
+          className="icon-btn"
+          href={downloadHref}
+          download={downloadName ? downloadName.replace(/\.[^/.]+$/, `.${downloadFmt}`) : true}
+          aria-label={`Download audio as ${downloadFmt.toUpperCase()}`}
+          title={`Download as ${downloadFmt.toUpperCase()}`}
+        >
+          <IconDownload size={compact ? 14 : 16} />
+        </a>
+      </div>
     </div>
   );
 }
+

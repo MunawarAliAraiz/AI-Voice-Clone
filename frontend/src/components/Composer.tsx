@@ -5,11 +5,11 @@
  * does not guess Roman Urdu from English — both are Latin — so `dir` keys off
  * the DETECTED script, never `language === 'ur'`.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { LanguageInfo, ScriptDetectResponse, TTSGenerateResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
-import { IconAlert, IconCheck, IconSpark, IconSpinner } from './icons';
+import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner } from './icons';
 
 interface Props {
   voices: VoiceProfile[];
@@ -20,6 +20,22 @@ interface Props {
 export function Composer({ voices, languages, onGenerated }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
+  const [speed, setSpeed] = useState<number>(1.0);
+  const [emotion, setEmotion] = useState<string>(() => {
+    try {
+      return localStorage.getItem('vcs_emotion') || 'neutral';
+    } catch {
+      return 'neutral';
+    }
+  });
+  const [expanded, setExpanded] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('vcs_textarea_expanded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -30,6 +46,54 @@ export function Composer({ voices, languages, onGenerated }: Props) {
     const first = voices[0];
     if (profileId === null && first) setProfileId(first.id);
   }, [voices, profileId]);
+
+  // Adjust default speed when language changes (English speech defaults to 0.9x for natural pace)
+  function handleLanguageChange(newLang: string) {
+    setLanguage(newLang);
+    if (newLang === 'en') {
+      setSpeed(0.9);
+    } else if (speed === 0.9) {
+      setSpeed(1.0);
+    }
+  }
+
+  function handleEmotionChange(val: string) {
+    setEmotion(val);
+    try {
+      localStorage.setItem('vcs_emotion', val);
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  function toggleExpanded() {
+    const textarea = textareaRef.current;
+    const selStart = textarea?.selectionStart;
+    const selEnd = textarea?.selectionEnd;
+    const scrollTop = textarea?.scrollTop;
+
+    setExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('vcs_textarea_expanded', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      if (textarea) {
+        if (selStart != null && selEnd != null) {
+          textarea.setSelectionRange(selStart, selEnd);
+        }
+        if (scrollTop != null && !expanded) {
+          textarea.scrollTop = scrollTop;
+        }
+        textarea.focus();
+      }
+    });
+  }
 
   // Debounced live script detection — powers the routability hint and dir.
   useEffect(() => {
@@ -54,7 +118,7 @@ export function Composer({ voices, languages, onGenerated }: Props) {
     setErr(null);
     setResult(null);
     try {
-      const res = await api.generate({ profile_id: profileId, language, text: text.trim() });
+      const res = await api.generate({ profile_id: profileId, language, text: text.trim(), speed, emotion });
       setResult(res);
       onGenerated();
     } catch (e) {
@@ -105,7 +169,7 @@ export function Composer({ voices, languages, onGenerated }: Props) {
         <label className="field">
           <span className="field-label">Language</span>
           <div className="select-wrap">
-            <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+            <select value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
               {langs.map((l) => (
                 <option key={l.code} value={l.code}>
                   {l.display_name}
@@ -114,18 +178,62 @@ export function Composer({ voices, languages, onGenerated }: Props) {
             </select>
           </div>
         </label>
+
+        <label className="field">
+          <span className="field-label">Speed</span>
+          <div className="select-wrap">
+            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+              <option value={0.75}>0.75x (Slower)</option>
+              <option value={0.85}>0.85x (Relaxed)</option>
+              <option value={0.9}>0.90x (Recommended EN)</option>
+              <option value={1.0}>1.00x (Normal)</option>
+              <option value={1.1}>1.10x (Fast)</option>
+              <option value={1.25}>1.25x (Faster)</option>
+            </select>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Emotion</span>
+          <div className="select-wrap">
+            <select value={emotion} onChange={(e) => handleEmotionChange(e.target.value)}>
+              <option value="neutral">Neutral (Default)</option>
+              <option value="happy">Happy 😊</option>
+              <option value="sad">Sad 😢</option>
+              <option value="angry">Angry 😠</option>
+              <option value="excited">Excited 🎉</option>
+              <option value="calm">Calm 🌿</option>
+              <option value="whisper">Whisper 🤫</option>
+              <option value="narration">Narration 📖</option>
+            </select>
+          </div>
+        </label>
       </div>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
-        rows={5}
-        maxLength={5000}
-        dir={rtl ? 'rtl' : 'ltr'}
-        placeholder={PLACEHOLDER[language] ?? 'Type your text…'}
-        aria-label="Text to speak"
-      />
+      <div className="textarea-wrapper">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={onKeyDown}
+          rows={expanded ? 16 : 5}
+          style={{ height: expanded ? '360px' : '130px' }}
+          maxLength={50000}
+          dir={rtl ? 'rtl' : 'ltr'}
+          placeholder={PLACEHOLDER[language] ?? 'Type your text…'}
+          aria-label="Text to speak"
+        />
+        <button
+          type="button"
+          className="expand-toggle-btn"
+          onClick={toggleExpanded}
+          title={expanded ? 'Collapse text area' : 'Expand text area'}
+          aria-label={expanded ? 'Show Less' : 'Show More'}
+        >
+          {expanded ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+          <span>{expanded ? 'Show Less' : 'Show More'}</span>
+        </button>
+      </div>
 
       <div className="composer-foot">
         <div className="detect-slot" aria-live="polite">

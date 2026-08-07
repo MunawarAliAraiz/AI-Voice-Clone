@@ -12,9 +12,15 @@ export function fmtDuration(sec: number | null | undefined): string {
   return sec >= 60 ? fmtSeconds(sec) : `${sec.toFixed(1)}s`;
 }
 
+export function parseUtcIso(iso: string): number {
+  if (!iso) return NaN;
+  const normalized = iso.endsWith('Z') || iso.includes('+') ? iso : `${iso.replace(' ', 'T')}Z`;
+  return Date.parse(normalized);
+}
+
 /** ISO timestamp → `just now` / `4m ago` / `3h ago` / `12 Aug`. */
 export function relativeTime(iso: string): string {
-  const then = Date.parse(iso);
+  const then = parseUtcIso(iso);
   if (Number.isNaN(then)) return '';
   const diff = Math.floor((Date.now() - then) / 1000);
   if (diff < 45) return 'just now';
@@ -28,7 +34,7 @@ export type DayBucket = 'Today' | 'Yesterday' | 'Earlier';
 
 /** Which group heading a generation belongs under. */
 export function dayBucket(iso: string): DayBucket {
-  const then = Date.parse(iso);
+  const then = parseUtcIso(iso);
   if (Number.isNaN(then)) return 'Earlier';
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -37,6 +43,7 @@ export function dayBucket(iso: string): DayBucket {
   if (then >= t - 86_400_000) return 'Yesterday';
   return 'Earlier';
 }
+
 
 /** Hz → `48 kHz`. */
 export function fmtSampleRate(hz: number | null | undefined): string {

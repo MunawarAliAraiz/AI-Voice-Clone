@@ -21,6 +21,7 @@ server-side attachment path there is no way to force a save.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Annotated
 
@@ -57,6 +58,7 @@ async def get_media(
     db: Annotated[Database, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
     download: bool = False,
+    format: str | None = None,
 ) -> FileResponse:
     # Verify BEFORE any lookup, so a bad token reveals nothing about existence.
     verify_token(f"{kind}/{item_id}", t, settings.media_token_secret)
@@ -74,12 +76,29 @@ async def get_media(
     else:
         raise MediaTokenError(f"Unknown media kind {kind!r}.")
 
-    if not Path(path).exists():  # noqa: ASYNC240 (one-shot stat)
+    src_path = Path(path)
+    if not src_path.exists():  # noqa: ASYNC240 (one-shot stat)
         raise (HistoryNotFoundError if kind == "history" else ProfileNotFoundError)(item_id)
-    name = Path(path).name
+
+    serve_path = src_path
+    if format:
+        target_ext = f".{format.lower().lstrip('.')}"
+        if target_ext in _MEDIA_TYPES and src_path.suffix.lower() != target_ext:
+            converted_path = src_path.with_suffix(f".fmt_{format.lower().lstrip('.')}{target_ext}")
+            if not converted_path.exists():
+                cmd = ["ffmpeg", "-y", "-i", str(src_path), str(converted_path)]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if res.returncode == 0 and converted_path.exists():
+                    serve_path = converted_path
+            else:
+                serve_path = converted_path
+
+    stem = src_path.stem
+    name = f"{stem}{serve_path.suffix}"
     disposition = "attachment" if download else "inline"
     return FileResponse(
-        path,
-        media_type=_MEDIA_TYPES.get(Path(path).suffix.lower()),
+        serve_path,
+        media_type=_MEDIA_TYPES.get(serve_path.suffix.lower()),
         headers={"Content-Disposition": f'{disposition}; filename="{name}"'},
     )
+

@@ -81,6 +81,8 @@ export interface TTSGenerateRequest {
   model_id?: string | null;
   urdu_strategy?: string;
   output_format?: string;
+  speed?: number;
+  emotion?: string;
   params?: Record<string, number | string | boolean>;
 }
 

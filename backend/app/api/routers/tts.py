@@ -20,6 +20,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
+from ...audio import apply_audio_effects
 from ...config import Settings
 from ...db import Database
 from ...domain.language import profile_text
@@ -104,6 +105,8 @@ async def generate(
         )
     )
 
+    apply_audio_effects(result.output_path, speed=body.speed, emotion=body.emotion)
+
     row = await db.create_generation(
         profile_id=body.profile_id, input_text=body.text, language=body.language,
         output_path=str(result.output_path), output_format=body.output_format,
@@ -112,6 +115,7 @@ async def generate(
         source_script=plan.source_script.value, route_rationale=plan.rationale,
         resolved_text=plan.resolved_text,
     )
+
 
     if spec.runtime is RuntimeKind.FAKE:
         # Golden rule: fake audio is never silent about being fake.
