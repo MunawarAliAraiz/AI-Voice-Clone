@@ -123,7 +123,9 @@ believing it owns all your VRAM.
 cd frontend && npm install && npm run dev      # http://localhost:1420
 ```
 
-Set `VITE_API_BASE` if the API is not at `http://localhost:8000`.
+Dev talks to `http://localhost:8000` by default. To point it elsewhere, set `VITE_API_BASE` in
+`frontend/.env.local`. There is no in-app setting for the backend address — see
+[Deploying](#deploying-frontend-on-cloudflare-backend-on-a-gpu-pod) for why.
 
 ### No-GPU smoke test
 
@@ -151,16 +153,50 @@ test run) streams to your terminal live as it happens — there's nothing extra 
 On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` if your key is passphrase-protected and loaded in
 the Windows ssh-agent; Git Bash's `ssh` can't see that agent.
 
-It prints the exact `uvicorn` command (with a freshly generated `VCS_API_KEY`, `VCS_VOXCPM_PYTHON`,
-`VCS_WORKER_CWD`, and `VCS_WARM_ON_STARTUP` set — the last one starts loading the model in the
-background at boot instead of making the first `/generate` pay the cold-load cost) to start serving.
-To reach the API from your laptop, forward the port over SSH rather than exposing it:
-`ssh -N -L 8000:127.0.0.1:8000 -p PORT root@HOST`.
+Add `START=1` and it also starts the backend and ngrok and polls until `/api/health` answers, so the
+one command is the whole deployment. It ends by printing your `VCS_API_KEY` in full and a status block
+showing backend / ngrok / public-URL health.
+
+`FRONTEND_URL` and `NGROK_DOMAIN` are saved to `/workspace` on first use and reused afterwards, so a
+restart on the same volume only needs `START=1 NGROK_AUTHTOKEN=…`. To reach the API from your laptop
+without a public URL, forward the port over SSH instead: `ssh -N -L 8000:127.0.0.1:8000 -p PORT root@HOST`.
+
+### Moving to a brand-new pod
+
+A pod restart keeps `/workspace`; a genuinely new volume does not. Pass your existing secrets so the
+new pod adopts them and no browser has to be re-paired:
+
+```bash
+ssh root@NEW_HOST -p NEW_PORT "START=1 NGROK_AUTHTOKEN=<token> \
+  NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.workers.dev \
+  VCS_API_KEY=<existing> VCS_MEDIA_TOKEN_SECRET=<existing> bash -s" < scripts/pod-bootstrap.sh
+```
+
+Both secrets or neither — the script refuses a half pair. Supplying only the API key would silently
+regenerate the media secret and 403 every audio URL already handed out. Omit both and it generates a
+new pair and tells you to re-paste the key.
+
+## Deploying (frontend on Cloudflare, backend on a GPU pod)
+
+The frontend deploys to Cloudflare Workers, and `frontend/worker.js` serves the static assets **and
+proxies `/api/*`** to the pod's ngrok tunnel. The proxy is not incidental: an `<audio>` element cannot
+send a custom header, so it could not carry the `ngrok-skip-browser-warning` that `fetch` uses to get
+past ngrok's free-tier interstitial, and every clip came back as an HTML warning page that the browser
+failed to decode. Proxying makes the API same-origin, so the header is injected server-side — and CORS
+drops out of the picture entirely.
+
+Consequences worth knowing:
+
+- **Do not set `VITE_API_BASE` in the Cloudflare build.** Same-origin is already the production
+  default; setting it sends requests cross-origin again and reinstates the bug.
+- **There is no backend-address setting in the app.** Only an API key field. A saved override outlives
+  a deploy and breaks exactly one device while every other one works.
+- **`BACKEND_ORIGIN` in `frontend/wrangler.toml`** is the one place the tunnel URL lives. Update it
+  there if the ngrok domain changes.
 
 **[docs/POD_SETUP.md](docs/POD_SETUP.md)** has the rest: resuming after a pod restart, connecting a
-local frontend, the manual steps for when something needs debugging, and the public-deployment path
-(frontend on Cloudflare, backend behind a static ngrok domain, `VCS_API_KEY`-gated) for sharing a
-working link with other people rather than reaching it only through your own SSH tunnel.
+local frontend, the manual steps for when something needs debugging, and how to diagnose audio that
+plays on a laptop but not a phone.
 
 ## Configuration
 
@@ -176,7 +212,7 @@ settings):
 | `VCS_ALLOW_FAKE_RUNTIME` | `false` | Enables the silence runtime for GPU-less testing. |
 | `VCS_DATA_DIR` | `./data` | Voices, generations, database. |
 | `VCS_MEDIA_TOKEN_SECRET` | *(random per boot)* | Set in production so signed media URLs survive restarts. |
-| `VCS_BUDGET_MB` / `VCS_MAX_WORKERS` | `16000` / `2` | Scheduler capacity; defaults suit a 24 GB card. |
+| `VCS_BUDGET_MB` / `VCS_MAX_WORKERS` | `16000` / `2` | Scheduler capacity. The defaults were sized for a 24 GB card — lower `VCS_BUDGET_MB` on a smaller one (a 20 GB RTX 4000 Ada runs VoxCPM 2 alone fine, but has far less slack for a second model). |
 | `VCS_CHATTERBOX_PYTHON` / `VCS_F5_PYTHON` | *(empty)* | Runtime venvs for the other engines, when wired up. |
 | `VCS_WARM_ON_STARTUP` | *(empty)* | Model id (e.g. `voxcpm2`) to start loading as soon as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
 
@@ -188,7 +224,7 @@ detected script.
 ```bash
 cd backend && uv run pytest              # CPU-only, no torch, ~30s
 cd backend && uv run pytest -m gpu       # real weights, real GPU
-cd frontend && npm run test && npm run build
+cd frontend && npm run build      # tsc -b + vite build (no test script yet)
 ```
 
 The scheduler tests — including the ones covering concurrent load and eviction — need no GPU.

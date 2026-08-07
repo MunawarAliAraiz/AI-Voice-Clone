@@ -103,7 +103,7 @@ sed '1s/^\xEF\xBB\xBF//' script.sh | tr -d '\r' | /c/Windows/System32/OpenSSH/ss
 |---|---|---|
 | OS | Windows 11 | Ubuntu 24.04.3 |
 | Python | 3.12.13 via `uv` (system python is 3.10.9) | 3.12.3 ✅ |
-| GPU | none | RTX A5000, 24 GB, sm_86 |
+| GPU | none | varies per pod — RTX A5000 24 GB sm_86 originally, an RTX 4000 Ada 20 GB sm_89 since |
 | torch | — | 2.8.0+cu128, CUDA available ✅ |
 | Present | git, node, npm, uv | git, ffmpeg, uv, flock |
 | Missing | GPU | `node`, `npm`, `nvcc`, `espeak-ng` |
@@ -114,8 +114,10 @@ A local `uv sync` was killed for memory (exit 137) — another reason the pod is
 `espeak-ng` is **not** needed by F5 / Chatterbox / VoxCPM — don't install it on a hunch.
 Keep the pod's preinstalled **torch 2.8.0+cu128**; do not let a requirements file downgrade it to the old cu124 pins.
 
-**VRAM budget (24 GB):** `budget_mb = 16000`, `max_workers = 2`. Read free VRAM via NVML / `mem_get_info()` —
-never `total - memory_allocated()`, which sees only the current process and reports 24 GB free while another
+**VRAM budget:** `budget_mb = 16000`, `max_workers = 2` — sized for 24 GB. **Check the card before trusting
+it**: pods are recreated on whatever is available, and a 20 GB RTX 4000 Ada runs VoxCPM 2 alone fine but
+has far less slack for a second resident model. Read free VRAM via NVML / `mem_get_info()` — never
+`total - memory_allocated()`, which sees only the current process and reports 24 GB free while another
 process holds 20 GB.
 
 ---
@@ -133,7 +135,7 @@ per-runtime-interpreter design practical.
 cd backend && uv sync                     # API env — NO torch, by design
 cd backend && uv run pytest -m "not gpu"  # CPU-only, ~30s — the default loop
 cd backend && uv run pytest -m gpu        # pod only: real subprocess, real weights
-cd frontend && npm run test && npm run build
+cd frontend && npm run build      # tsc -b + vite build (no test script yet)
 ```
 
 Runtime environments are separate and are NOT part of `uv sync` — one venv per worker type:

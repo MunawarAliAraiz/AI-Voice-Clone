@@ -180,13 +180,7 @@ To keep it running after you close the SSH session, launch it detached — eithe
 used for ngrok) or `setsid`:
 
 ```bash
-tmux new-session -d -s backend "cd /workspace/AI-Voice-Clone/backend && \
-  set -a && source /workspace/vcs-secrets.env && set +a && \
-  HF_HOME=/workspace/hf-cache \
-  VCS_CORS_ORIGINS='[\"https://your-frontend-url\"]' VCS_WARM_ON_STARTUP=voxcpm2 \
-  VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
-  VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
-  uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1 | tee /workspace/backend.log"
+tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
 ```
 
 Confirm it's up, on the pod:
@@ -239,6 +233,24 @@ is in.
 
 A **new** pod (fresh `/workspace`, not just a restart) has none of this — that's when you run the full
 bootstrap command from the top of this doc again.
+
+### Onto a brand-new volume without re-pairing every browser
+
+A fresh `/workspace` has no secrets file, so bootstrap would generate a new `VCS_API_KEY` and everyone
+would have to paste it again. Carry the existing pair across instead:
+
+```bash
+ssh root@<NEW_HOST> -p <NEW_PORT> "START=1 NGROK_AUTHTOKEN=<token> \
+  NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.workers.dev \
+  VCS_API_KEY=<existing> VCS_MEDIA_TOKEN_SECRET=<existing> bash -s" < scripts/pod-bootstrap.sh
+```
+
+Pass **both or neither** — the script exits rather than accept half a pair. Supplying only the API key
+would leave the media secret to be regenerated, which invalidates every signed `?t=` audio URL already
+handed out: audio that worked a moment ago starts 403ing, with the API key looking innocent.
+
+Because the ngrok domain is static and carried over too, nothing on the Cloudflare side changes — no
+rebuild, no `BACKEND_ORIGIN` edit. Only your `ssh` host and port differ.
 
 ---
 

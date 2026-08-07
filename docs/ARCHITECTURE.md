@@ -175,7 +175,9 @@ a supply-chain hole.
 
 ## VRAM accounting
 
-Budget for the 24 GB A5000:
+The defaults were derived for a 24 GB A5000. Pods get whatever card is available, so re-check this
+against `nvidia-smi` rather than assuming — a 20 GB RTX 4000 Ada, for instance, leaves far less
+headroom for a second resident model and wants a lower `VCS_BUDGET_MB`.
 
 ```
 24564 MB total
@@ -214,6 +216,17 @@ admission decision downstream inherits the wrong number.
   works, so seeking works). The signed URL is embedded in every response; the
   frontend never builds one. Blob-fetching was rejected: it forces a full
   download, breaks seeking, and pins the file in memory.
+- **Media is served `inline`,** with `?download=1` opting into `attachment`.
+  Mobile Safari and Android Chrome honour `attachment` on a media element and
+  refuse to play; desktop browsers ignore it, so an `attachment`-always server
+  looks fine locally and has a dead play button on every phone. The download
+  button needs the query param because the HTML `download` attribute is ignored
+  cross-origin.
+- **The same "no custom headers" limit constrains deployment.** Behind ngrok's
+  free tier, media requests cannot carry `ngrok-skip-browser-warning` the way
+  `fetch` does, so they receive an HTML interstitial instead of audio. The
+  Cloudflare Worker (`frontend/worker.js`) proxies `/api/*` same-origin and
+  injects the header server-side, which also removes CORS from that deployment.
 - **No duplicate routes.** `routers/models.py`'s endpoints were unreachable
   because `settings.py` registered the same paths first. Startup asserts on
   duplicate `(method, path)` and refuses to boot.
@@ -243,7 +256,7 @@ residency and `est_wait_sec` ("OpenBible Urdu · CC-BY-SA · cold, ~40 s"), show
 ```bash
 cd backend && pytest -m "not gpu" -q     # CPU-only, no torch, ~30s
 cd backend && pytest -m gpu -q           # pod only: real subprocess, real weights
-cd frontend && npm run test && npm run build
+cd frontend && npm run build      # tsc -b + vite build (no test script yet)
 ```
 
 The scheduler tests carry the value and **none needs a GPU**, because

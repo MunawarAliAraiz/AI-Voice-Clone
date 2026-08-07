@@ -239,7 +239,7 @@ Only sequential edge in Wave 2: **F2 → F4**. B2 depends on B1's *protocol*, no
 ```bash
 cd backend && pytest -m "not gpu" -q        # CPU-only, no torch, ~30s
 cd backend && pytest -m gpu -q              # real subprocess + real weights on the A5000
-cd frontend && npm run test && npm run build
+cd frontend && npm run build      # tsc -b + vite build (no test script yet)
 ```
 
 End-to-end on the pod: start the API, `POST /api/voice/upload` a 10 s reference, then generate in all four language/script combinations and confirm each response's `route` chip matches the audio produced. Soak: 20 concurrent requests → no VRAM growth, no worker restarts, no request served by a model that wasn't loaded.

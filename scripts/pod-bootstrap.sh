@@ -117,8 +117,24 @@ echo "== 8. secrets (generated once, reused on every restart) =="
 # They are also printed below in full — an $(...) inside the serve command would
 # mint a fresh key on every launch and never show it to you, which is precisely
 # the bug this replaces.
+#
+# A FRESH /workspace has no secrets file, so a brand-new pod would otherwise
+# mint a new key and force every browser to be re-paired. Pass VCS_API_KEY and
+# VCS_MEDIA_TOKEN_SECRET explicitly to carry your existing pair onto the new
+# pod and skip that entirely — the frontend never notices the move.
 SECRETS_FILE="/workspace/vcs-secrets.env"
-if [ ! -f "$SECRETS_FILE" ]; then
+if [ -n "${VCS_API_KEY:-}" ] && [ -n "${VCS_MEDIA_TOKEN_SECRET:-}" ]; then
+  umask 077
+  printf 'VCS_API_KEY=%s\nVCS_MEDIA_TOKEN_SECRET=%s\n' \
+    "$VCS_API_KEY" "$VCS_MEDIA_TOKEN_SECRET" > "$SECRETS_FILE"
+  chmod 600 "$SECRETS_FILE"
+  echo "   using the secrets you passed in (saved to $SECRETS_FILE)"
+elif [ -n "${VCS_API_KEY:-}" ] || [ -n "${VCS_MEDIA_TOKEN_SECRET:-}" ]; then
+  # Half a pair is always a mistake: supplying only the API key would silently
+  # regenerate the media secret and 403 every audio URL already handed out.
+  echo "   ERROR: pass BOTH VCS_API_KEY and VCS_MEDIA_TOKEN_SECRET, or neither." >&2
+  exit 1
+elif [ ! -f "$SECRETS_FILE" ]; then
   umask 077
   python3 - <<'PY' > "$SECRETS_FILE"
 import secrets
@@ -127,6 +143,7 @@ print("VCS_MEDIA_TOKEN_SECRET=" + secrets.token_hex(32))
 PY
   chmod 600 "$SECRETS_FILE"
   echo "   generated $SECRETS_FILE (first run on this volume)"
+  echo "   NOTE: this is a NEW key — paste it into the frontend's settings gear."
 else
   echo "   reusing existing $SECRETS_FILE — NOT regenerating"
 fi
