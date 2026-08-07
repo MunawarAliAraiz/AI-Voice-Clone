@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './services/api';
 import type { HistoryItem, LanguageInfo, VoiceProfile } from './types/api';
+import { AudioEditorTab } from './components/AudioEditorTab';
 import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
 import { VoiceLibrary } from './components/VoiceLibrary';
-import { IconAlert, IconSettings, IconX } from './components/icons';
+import { IconAlert, IconMusic, IconSettings, IconX } from './components/icons';
 import './App.css';
 
 const PAGE_SIZE = 20;
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<'studio' | 'editor'>('studio');
   const [online, setOnline] = useState<boolean | null>(null);
   const [languages, setLanguages] = useState<LanguageInfo[]>([]);
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -67,6 +69,24 @@ export default function App() {
           </span>
         </div>
 
+        {/* Main Application Tabs */}
+        <div className="segmented" style={{ flex: '0 0 auto' }}>
+          <button
+            type="button"
+            className={activeTab === 'studio' ? 'on' : ''}
+            onClick={() => setActiveTab('studio')}
+          >
+            🎙️ Voice Studio
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'editor' ? 'on' : ''}
+            onClick={() => setActiveTab('editor')}
+          >
+            <IconMusic size={14} /> Audio Editor
+          </button>
+        </div>
+
         <div className="topbar-right">
           <ApiKeyControl onSaved={reload} />
           <div className={`status ${online === null ? '' : online ? 'ok' : 'down'}`}>
@@ -86,24 +106,30 @@ export default function App() {
         </div>
       )}
 
-      <main className="grid">
-        <div className="col">
-          <EnrollCard languages={languages} onEnrolled={reload} />
-          <VoiceLibrary voices={voices} onDeleted={reload} />
-        </div>
+      {activeTab === 'studio' ? (
+        <main className="grid">
+          <div className="col">
+            <EnrollCard languages={languages} onEnrolled={reload} />
+            <VoiceLibrary voices={voices} onDeleted={reload} />
+          </div>
 
-        <div className="col">
-          <Composer voices={voices} languages={languages} onGenerated={reload} />
-          <HistoryPanel
-            items={history}
-            total={total}
-            loading={loadingMore}
-            hasMore={history.length < total}
-            onLoadMore={() => void loadMore()}
-            onChanged={reload}
-          />
-        </div>
-      </main>
+          <div className="col">
+            <Composer voices={voices} languages={languages} onGenerated={reload} />
+            <HistoryPanel
+              items={history}
+              total={total}
+              loading={loadingMore}
+              hasMore={history.length < total}
+              onLoadMore={() => void loadMore()}
+              onChanged={reload}
+            />
+          </div>
+        </main>
+      ) : (
+        <main>
+          <AudioEditorTab onEnrolled={reload} />
+        </main>
+      )}
     </div>
   );
 }
