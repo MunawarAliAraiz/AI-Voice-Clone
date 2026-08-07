@@ -11,12 +11,22 @@ The repo is public for read — cloning needs no token. From your laptop:
 ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
 ```
 
+If you already have an ngrok token and a claimed domain, pass them in the same run and it installs and
+configures ngrok too — this is the form worth memorising, run from the repo root:
+
+```bash
+ssh root@<HOST> -p <PORT> "NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.pages.dev bash -s" < scripts/pod-bootstrap.sh
+```
+
+`FRONTEND_URL` is optional and only affects the `VCS_CORS_ORIGINS` value printed in the serve command
+at the end — pass it and you can paste that command unedited.
+
 That's it for a fresh pod. Piping the script in over `"bash -s" <` isn't backgrounded, so every line
 it prints streams to your terminal live as it runs — `uv sync`, the torch install, the weight
 download, the test run — nothing extra needed to watch it. It takes a few minutes (mostly downloading
-the VoxCPM 2 weights, ~7 GB) and ends by printing the exact command to start serving, including a
-freshly generated `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET`. Copy that command, run it, and the
-backend is up.
+the VoxCPM 2 weights, ~7 GB) and ends by printing **your `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` in
+full**, plus the exact command to start serving. Copy the key into the frontend's settings gear, run
+the command, and the backend is up.
 
 `-i ~/.ssh/id_ed25519` is only needed if you're not relying on an ssh-agent to offer the key
 automatically. On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` instead of Git Bash's `ssh` if
@@ -52,6 +62,9 @@ special access. A classic PAT with just the `repo` scope is enough.
   which makes `torch.cuda.is_available()` silently `False` and every generation quietly falls back to
   CPU and times out.
 - Downloads the VoxCPM 2 weights (~7 GB, pinned revision) into the HF cache on `/workspace`.
+- Generates `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` **once** into `/workspace/vcs-secrets.env`
+  (mode `600`) and reuses that file on every later run, so the values are stable across pod restarts.
+  See [Generating and reusing secrets](#generating-and-reusing-secrets) for why stability matters.
 - Runs the CPU test suite as a sanity check.
 - If `NGROK_AUTHTOKEN` is set, installs and configures ngrok too (see [Public deployment](#public-deployment-ngrok--cloudflare) below).
 
@@ -109,15 +122,18 @@ The bootstrap script prints this at the end, with real values filled in:
 
 ```bash
 cd /workspace/AI-Voice-Clone/backend
+set -a; source /workspace/vcs-secrets.env; set +a
 HF_HOME=/workspace/hf-cache \
-VCS_API_KEY=<generated> \
-VCS_MEDIA_TOKEN_SECRET=<generated> \
 VCS_CORS_ORIGINS='["https://your-frontend-url"]' \
 VCS_WARM_ON_STARTUP=voxcpm2 \
 VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
 VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+Sourcing the secrets file rather than inlining `VCS_API_KEY=$(python -c 'secrets...')` is the whole
+point: the inline form mints a brand-new key on every launch, never shows it to you, and silently 401s
+every frontend that had the previous one saved.
 
 `VCS_WARM_ON_STARTUP=voxcpm2` starts loading the model in the background the moment the process boots,
 instead of leaving the first real `/generate` to pay the ~20–60 s cold-load cost. `/api/health`
@@ -131,7 +147,8 @@ used for ngrok) or `setsid`:
 
 ```bash
 tmux new-session -d -s backend "cd /workspace/AI-Voice-Clone/backend && \
-  HF_HOME=/workspace/hf-cache VCS_API_KEY=<...> VCS_MEDIA_TOKEN_SECRET=<...> \
+  set -a && source /workspace/vcs-secrets.env && set +a && \
+  HF_HOME=/workspace/hf-cache \
   VCS_CORS_ORIGINS='[\"https://your-frontend-url\"]' VCS_WARM_ON_STARTUP=voxcpm2 \
   VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
   VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
@@ -176,11 +193,10 @@ there — you just need to restart the backend (and ngrok, if you're using it):
 
 ```bash
 cd /workspace/AI-Voice-Clone/backend
-# reuse the SAME VCS_API_KEY / VCS_MEDIA_TOKEN_SECRET you generated the first time —
-# see "Public deployment" below for why regenerating them breaks things
+# /workspace survived, so the secrets file did too — sourcing it reuses the SAME
+# key rather than minting a new one. See "Public deployment" for why that matters.
+set -a; source /workspace/vcs-secrets.env; set +a
 HF_HOME=/workspace/hf-cache \
-VCS_API_KEY=<same as before> \
-VCS_MEDIA_TOKEN_SECRET=<same as before> \
 VCS_CORS_ORIGINS='["https://your-frontend-url"]' \
 VCS_WARM_ON_STARTUP=voxcpm2 \
 VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
@@ -282,24 +298,22 @@ tmux new-session -d -s ngrok "ngrok http --domain=<your-name>.ngrok-free.dev 800
 
 ### Generating and reusing secrets
 
-The bootstrap script's printed serve command already includes freshly generated `VCS_API_KEY` and
-`VCS_MEDIA_TOKEN_SECRET` values the **first** time you run it. Save them somewhere durable (password
-manager, not just the terminal scrollback) — then reuse the *same* values on every subsequent restart:
+The bootstrap script handles this: on its **first** run against a given `/workspace` it writes
+`/workspace/vcs-secrets.env` (mode `600`) with a generated `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET`,
+and every later run detects the file and reuses it rather than regenerating. It prints both values in
+full at the end — save them somewhere durable (password manager, not just the terminal scrollback).
+
+Load them on every restart with:
 
 ```bash
-python3 -c "
-import secrets
-print('VCS_API_KEY=' + secrets.token_hex(32))
-print('VCS_MEDIA_TOKEN_SECRET=' + secrets.token_hex(32))
-" > /workspace/vcs-secrets.env   # do this ONCE; /workspace survives restarts
-
-set -a; source /workspace/vcs-secrets.env; set +a   # do this on every restart
+set -a; source /workspace/vcs-secrets.env; set +a
 ```
 
-Regenerating instead of reusing invalidates the API key every frontend user already has saved in their
-browser — they'll all start getting 401s with no visible cause. A **new** pod (fresh `/workspace`) has
-no secrets file and needs a fresh one; treat the resulting key as new and tell anyone who had the old
-one.
+Regenerating instead of reusing has two separate consequences: a new `VCS_API_KEY` invalidates the key
+every frontend user has saved in their browser, so they all start getting 401s with no visible cause;
+a new `VCS_MEDIA_TOKEN_SECRET` invalidates every signed `?t=` audio URL already handed out, so audio
+that was playing a moment ago starts 403ing. A **new** pod (fresh `/workspace`) has no secrets file and
+gets a fresh one; treat the resulting key as new and tell anyone who had the old one.
 
 ### Verifying it
 
@@ -317,6 +331,29 @@ curl -X OPTIONS -H "Origin: https://your-frontend-url" \
 
 Then open the frontend URL, click the settings gear, paste the ngrok domain (only needed if you didn't
 bake `VITE_API_BASE` in) and the `VCS_API_KEY`, and save.
+
+### If audio won't play on a phone
+
+Two separate causes, and they look identical from the outside — the play button does nothing while the
+download button works.
+
+1. **`Content-Disposition: attachment`.** Fixed: `/api/media/...` now serves `inline`, and the download
+   button opts back in with `&download=1`. Mobile Safari and Android Chrome honour `attachment` on a
+   media element and refuse to play; desktop Chrome and Firefox ignore it, which is why this survived
+   until someone opened the app on a phone.
+
+2. **The ngrok free-tier interstitial.** `api.ts` sets `ngrok-skip-browser-warning` on every `fetch`,
+   but an `<audio>` element cannot send custom headers — the same reason media URLs are signed instead
+   of key-authenticated. So the audio request can get ngrok's HTML warning page where the JSON API
+   calls sail through, and the app looks online while every clip fails to load. It hides on any device
+   that has already clicked through the interstitial once, because ngrok then sets a cookie for the
+   domain — typically the machine you set the pod up from, and not your phone.
+
+   To check: open `https://<your-name>.ngrok-free.dev/api/health` directly **on the phone**. An ngrok
+   warning page instead of JSON confirms it; clicking *Visit Site* sets the cookie and fixes that
+   browser. For a permanent fix, serve the API from the frontend's own origin (a Cloudflare Worker
+   route proxying `/api/*` to the tunnel) so no cross-origin interstitial is involved at all. Do not
+   "fix" it by blob-fetching the audio — that forces a full download and breaks seeking.
 
 **Visiting the ngrok URL itself in a browser is not the product** — it's a JSON API with no page at
 `/` (that path 404s by design; `/docs` has the interactive Swagger UI if you want to poke at it

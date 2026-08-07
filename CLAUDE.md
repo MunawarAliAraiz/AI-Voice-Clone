@@ -152,7 +152,13 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   last-added outermost, so the original order made every cross-origin preflight 403 the moment `VCS_API_KEY`
   was set.
 - **`<audio>` cannot send auth headers.** Use signed media tokens (`?t=<hmac>.<exp>` → `FileResponse`, Range
-  works). Don't blob-fetch: it forces a full download and breaks seeking.
+  works). Don't blob-fetch: it forces a full download and breaks seeking. Same limitation bites ngrok's
+  free-tier interstitial: `api.ts` adds `ngrok-skip-browser-warning` to every `fetch`, but media requests
+  can't carry it, so clips can 404-to-HTML on a device that never clicked through the warning.
+- **`Content-Disposition` must be `inline` for media.** `attachment` makes mobile Safari and Android Chrome
+  refuse to play and offer a download instead — the play button looks dead while the download button works,
+  and desktop browsers ignore the header entirely so it never shows up in local testing. The download button
+  needs the server-side `&download=1` opt-in because the HTML `download` attribute is ignored cross-origin.
 - **Script detection cannot tell Roman Urdu from English.** "Aap kaise hain" and "How are you" are both Latin.
   The user declares the language; the code detects the script. `(ur, LATIN)` *is* Roman Urdu.
   `dir="rtl"` keys off detected script, never `language === 'ur'`.

@@ -66,6 +66,18 @@ def test_generate_and_media(tmp_path: Path) -> None:
         assert media.status_code == 200
         assert media.content == b"FAKE-NOT-AUDIO"
 
+        # Playback must be `inline`. Mobile browsers honour `attachment` on a
+        # media element and refuse to play — the phone symptom was a dead play
+        # button next to a working download button.
+        assert media.headers["content-disposition"].startswith("inline;")
+        assert media.headers["content-type"] == "audio/wav"
+
+        # `?download=1` is the explicit opt-in the download button uses, because
+        # the HTML `download` attribute is ignored cross-origin.
+        dl = c.get(body["audio_url"] + "&download=1")
+        assert dl.status_code == 200
+        assert dl.headers["content-disposition"].startswith("attachment;")
+
         # A tampered token is refused.
         bad = c.get(body["audio_url"].split("?t=")[0] + "?t=deadbeef.9999999999")
         assert bad.status_code == 403

@@ -25,19 +25,30 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset when the source changes (e.g. a new generation lands).
   useEffect(() => {
     setPlaying(false);
     setCurrent(0);
     setDuration(0);
+    setError(null);
   }, [src]);
 
   const toggle = useCallback(() => {
     const el = ref.current;
     if (!el) return;
     if (el.paused) {
-      void el.play().catch(() => setPlaying(false));
+      // A rejected play() is the only signal for a codec/disposition failure on
+      // mobile, where the element silently refuses to start. Swallowing it is
+      // what made the dead play button impossible to diagnose from the UI.
+      void el.play().then(
+        () => setError(null),
+        (err: unknown) => {
+          setPlaying(false);
+          setError(err instanceof Error ? err.message : 'Playback failed');
+        },
+      );
     } else {
       el.pause();
     }
@@ -53,6 +64,11 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
 
   const pct = duration > 0 ? (current / duration) * 100 : 0;
 
+  // The signed URL already carries `?t=`, so the download opt-in is always `&`.
+  // Needed because the `download` attribute is ignored cross-origin — the
+  // deployed frontend and backend are on different hosts.
+  const downloadHref = `${src}${src.includes('?') ? '&' : '?'}download=1`;
+
   return (
     <div className={`player ${compact ? 'compact' : ''}`}>
       <audio
@@ -67,6 +83,10 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
           setDuration(Number.isFinite(d) ? d : 0);
+        }}
+        onError={() => {
+          setPlaying(false);
+          setError('Could not load audio');
         }}
       />
 
@@ -94,12 +114,20 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
       </div>
 
       <span className="player-time">
-        {fmtSeconds(current)} / {duration ? fmtSeconds(duration) : '--:--'}
+        {error ? (
+          <span className="player-error" role="alert" title={error}>
+            {error}
+          </span>
+        ) : (
+          <>
+            {fmtSeconds(current)} / {duration ? fmtSeconds(duration) : '--:--'}
+          </>
+        )}
       </span>
 
       <a
         className="icon-btn"
-        href={src}
+        href={downloadHref}
         download={downloadName ?? true}
         aria-label="Download audio"
         title="Download"

@@ -108,18 +108,48 @@ p = snapshot_download("openbmb/VoxCPM2", revision=sys.argv[1])
 print("   weights at", p)
 PY
 
-echo "== 8. research lab =="
+echo "== 8. secrets (generated once, reused on every restart) =="
+# These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
+# frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
+# invalidates every signed audio URL already handed out. So they are generated
+# exactly once and persisted to /workspace, which survives a pod stop/start.
+# They are also printed below in full — an $(...) inside the serve command would
+# mint a fresh key on every launch and never show it to you, which is precisely
+# the bug this replaces.
+SECRETS_FILE="/workspace/vcs-secrets.env"
+if [ ! -f "$SECRETS_FILE" ]; then
+  umask 077
+  python3 - <<'PY' > "$SECRETS_FILE"
+import secrets
+print("VCS_API_KEY=" + secrets.token_hex(32))
+print("VCS_MEDIA_TOKEN_SECRET=" + secrets.token_hex(32))
+PY
+  chmod 600 "$SECRETS_FILE"
+  echo "   generated $SECRETS_FILE (first run on this volume)"
+else
+  echo "   reusing existing $SECRETS_FILE — NOT regenerating"
+fi
+# shellcheck disable=SC1090
+set -a; source "$SECRETS_FILE"; set +a
+
+echo "== 9. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 9. verify =="
+echo "== 10. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
-cd "$REPO_DIR/backend" && uv run pytest -q -m "not gpu" 2>&1 | tail -3
+# VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
+# middleware reads it from the environment — leaving it set makes every test
+# request 401 and the suite fails with a misleading `assert 401 == 400`. The
+# unset is explicit rather than relying on step order, since a stale value in
+# /root/.bashrc would do the same thing.
+cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
+  uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 10. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 11. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
   if ! command -v ngrok >/dev/null; then
     echo "   installing ngrok..."
@@ -139,23 +169,76 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
+echo "== 12. current status =="
+# Bootstrap provisions; it does not start anything. On a FIRST run both of these
+# are expected to be down. The value is on a RE-RUN against a live pod, where it
+# answers "is the thing I already started still up?" without a second SSH trip.
+BACKEND_UP=0
+if curl -sf -m 3 http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+  BACKEND_UP=1
+  echo "   backend:  UP   (127.0.0.1:8000)"
+else
+  echo "   backend:  DOWN — start it with the command below"
+fi
+
+NGROK_UP=0
+if pgrep -x ngrok >/dev/null 2>&1; then
+  NGROK_UP=1
+  # The agent's local API knows the real public URL, which is the only way to
+  # catch "ngrok is running, but on a different domain than you think".
+  PUBLIC_URL="$(curl -sf -m 3 http://127.0.0.1:4040/api/tunnels 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["tunnels"][0]["public_url"])' 2>/dev/null || true)"
+  echo "   ngrok:    UP   ${PUBLIC_URL:-(agent API unreachable)}"
+else
+  echo "   ngrok:    DOWN — start it with the command below"
+fi
+
+# Only meaningful when both halves are up: proves the tunnel actually reaches
+# this backend, which neither check above can tell you on its own.
+if [ "$BACKEND_UP" = 1 ] && [ "$NGROK_UP" = 1 ] && [ -n "${NGROK_DOMAIN:-}" ]; then
+  CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 10 \
+    -H 'ngrok-skip-browser-warning: true' \
+    "https://${NGROK_DOMAIN}/api/health" 2>/dev/null || echo 000)"
+  if [ "$CODE" = "200" ]; then
+    echo "   public:   OK   https://${NGROK_DOMAIN}/api/health -> 200"
+  else
+    echo "   public:   FAIL https://${NGROK_DOMAIN}/api/health -> HTTP ${CODE}"
+    echo "             (404 = tunnel not connected; 502 = tunnel up but backend refused)"
+  fi
+fi
+
+CORS_ORIGIN="${FRONTEND_URL:-https://YOUR-PAGES-URL.pages.dev}"
+
 echo
 echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
 echo "  runtime: $VOX_VENV  (torch cu128)"
 echo "  lab:     /workspace/engines-lab/"
 echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"
+echo "  secrets: $SECRETS_FILE"
 echo
-echo "Start serving:"
-echo "  cd $REPO_DIR/backend && \\"
+echo "== YOUR SECRETS (save these — same values on every restart) =="
+echo "  VCS_API_KEY=$VCS_API_KEY"
+echo "  VCS_MEDIA_TOKEN_SECRET=$VCS_MEDIA_TOKEN_SECRET"
+echo "  Paste VCS_API_KEY into the frontend's settings gear."
+echo
+if [ "$CORS_ORIGIN" = "https://YOUR-PAGES-URL.pages.dev" ]; then
+  echo "  NOTE: pass FRONTEND_URL=https://... to bake your real origin into the"
+  echo "        command below; otherwise edit VCS_CORS_ORIGINS before running it."
+  echo
+fi
+echo "Start serving (detached, survives your SSH session closing):"
+echo "  tmux new-session -d -s backend \"cd $REPO_DIR/backend && \\"
+echo "    set -a && source $SECRETS_FILE && set +a && \\"
 echo "    HF_HOME=/workspace/hf-cache \\"
-echo "    VCS_API_KEY=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
-echo "    VCS_MEDIA_TOKEN_SECRET=\$(python -c 'import secrets; print(secrets.token_hex(32))') \\"
-echo "    VCS_CORS_ORIGINS='[\"https://YOUR-PAGES-URL.pages.dev\"]' \\"
+echo "    VCS_CORS_ORIGINS='[\\\"$CORS_ORIGIN\\\"]' \\"
 echo "    VCS_WARM_ON_STARTUP=voxcpm2 \\"
 echo "    VCS_VOXCPM_PYTHON=$VOX_VENV/bin/python \\"
 echo "    VCS_WORKER_CWD=$REPO_DIR/backend \\"
-echo "    uv run uvicorn app.main:app --host 127.0.0.1 --port 8000"
+echo "    uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 2>&1 | tee /workspace/backend.log\""
+echo
+echo "  (sourcing $SECRETS_FILE is what keeps the key stable — do not inline a"
+echo "   freshly generated one, or every saved frontend key starts 401ing.)"
 echo
 if [ -n "${NGROK_AUTHTOKEN:-}" ]; then
   echo "Then start ngrok in another session:"
