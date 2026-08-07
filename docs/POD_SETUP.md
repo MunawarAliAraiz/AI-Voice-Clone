@@ -18,8 +18,17 @@ configures ngrok too — this is the form worth memorising, run from the repo ro
 ssh root@<HOST> -p <PORT> "NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.pages.dev bash -s" < scripts/pod-bootstrap.sh
 ```
 
-`FRONTEND_URL` is optional and only affects the `VCS_CORS_ORIGINS` value printed in the serve command
-at the end — pass it and you can paste that command unedited.
+`FRONTEND_URL` is your deployed frontend's origin, and it is what makes CORS work. **Pass it once** —
+the script saves it to `/workspace/vcs-frontend-url` and reuses it on every later run, so you cannot
+accidentally restart the backend with a placeholder origin. Add `START=1` and it also starts the
+backend and ngrok for you, so the whole deployment is genuinely one command.
+
+Getting this wrong fails in a misleading way: the browser reports `No 'Access-Control-Allow-Origin'
+header is present` and the UI's status chip reads **offline**, which looks like the backend is down
+when it is actually up and rejecting the origin. The value must match the deployed frontend exactly —
+scheme included, no trailing slash. `https://your-app.workers.dev` and `https://your-app.pages.dev` are
+different origins, and Cloudflare gives you one or the other depending on which product you deployed
+under.
 
 That's it for a fresh pod. Piping the script in over `"bash -s" <` isn't backgrounded, so every line
 it prints streams to your terminal live as it runs — `uv sync`, the torch install, the weight
@@ -118,22 +127,21 @@ is passphrase-protected and only the Windows ssh-agent — which Git Bash can't 
 
 ## Start serving
 
-The bootstrap script prints this at the end, with real values filled in:
+Bootstrap writes `/workspace/serve.sh` with the secrets and CORS origin already baked in, so starting
+the backend is one command:
 
 ```bash
-cd /workspace/AI-Voice-Clone/backend
-set -a; source /workspace/vcs-secrets.env; set +a
-HF_HOME=/workspace/hf-cache \
-VCS_CORS_ORIGINS='["https://your-frontend-url"]' \
-VCS_WARM_ON_STARTUP=voxcpm2 \
-VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
-VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
 ```
 
-Sourcing the secrets file rather than inlining `VCS_API_KEY=$(python -c 'secrets...')` is the whole
-point: the inline form mints a brand-new key on every launch, never shows it to you, and silently 401s
-every frontend that had the previous one saved.
+Or skip this entirely by passing `START=1` to the bootstrap, which starts backend and ngrok itself.
+
+`serve.sh` sources `/workspace/vcs-secrets.env` rather than inlining
+`VCS_API_KEY=$(python -c 'secrets...')`, and that is the whole point: the inline form mints a brand-new
+key on every launch, never shows it to you, and silently 401s every frontend that had the previous one
+saved. Baking the CORS origin in the same file prevents the matching failure on the other side — a
+restart that quietly reverts to a placeholder origin, leaving the backend up but rejecting its own
+frontend.
 
 `VCS_WARM_ON_STARTUP=voxcpm2` starts loading the model in the background the moment the process boots,
 instead of leaving the first real `/generate` to pay the ~20–60 s cold-load cost. `/api/health`
@@ -191,17 +199,12 @@ A pod **stop/start** keeps `/workspace` (both venvs, the weights cache, `backend
 voices + history) but wipes `/`, and kills every running process. So the code and weights are still
 there — you just need to restart the backend (and ngrok, if you're using it):
 
+`/workspace` survived, so `serve.sh`, the secrets file and the saved frontend origin all did too —
+which means the restart reuses the same API key and the same CORS origin rather than drifting:
+
 ```bash
-cd /workspace/AI-Voice-Clone/backend
-# /workspace survived, so the secrets file did too — sourcing it reuses the SAME
-# key rather than minting a new one. See "Public deployment" for why that matters.
-set -a; source /workspace/vcs-secrets.env; set +a
-HF_HOME=/workspace/hf-cache \
-VCS_CORS_ORIGINS='["https://your-frontend-url"]' \
-VCS_WARM_ON_STARTUP=voxcpm2 \
-VCS_VOXCPM_PYTHON=/workspace/AI-Voice-Clone/backend/.venv-voxcpm/bin/python \
-VCS_WORKER_CWD=/workspace/AI-Voice-Clone/backend \
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
+tmux new-session -d -s ngrok   'ngrok http --domain=<your-name>.ngrok-free.dev 8000'
 ```
 
 You do not need to re-run the full bootstrap script — nothing it built was lost. Re-running it anyway
