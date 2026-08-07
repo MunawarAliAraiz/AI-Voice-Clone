@@ -15,12 +15,14 @@ from typing import Annotated
 import aiosqlite
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
 
+import uuid
 from ...audio import store_upload, validate_audio
+from ...audio_editor import EditOptions, process_audio_edits
 from ...config import Settings
 from ...db import Database
 from ...exceptions import AudioValidationError, ProfileNotFoundError, ValidationError
 from ..deps import get_db, get_settings
-from ..media_tokens import make_media_url
+from ..media_tokens import make_media_url, verify_token
 from ..schemas.voice import VoiceProfileList, VoiceProfileResponse, VoiceProfileUpdate
 
 router = APIRouter(prefix="/voices", tags=["voices"])
@@ -39,6 +41,59 @@ def _to_response(row: aiosqlite.Row, settings: Settings) -> VoiceProfileResponse
     )
 
 
+@router.post("/preview-edit")
+async def preview_edit(
+    settings: Annotated[Settings, Depends(get_settings)],
+    file: Annotated[UploadFile, File(description="Reference audio.")],
+    trim_start: Annotated[float, Form()] = 0.0,
+    trim_end: Annotated[float | None, Form()] = None,
+    speed: Annotated[float, Form()] = 1.0,
+    pitch_semitones: Annotated[float, Form()] = 0.0,
+    gain_db: Annotated[float, Form()] = 0.0,
+    fade_in_sec: Annotated[float, Form()] = 0.0,
+    fade_out_sec: Annotated[float, Form()] = 0.0,
+    normalize_lufs: Annotated[bool, Form()] = False,
+    remove_silence: Annotated[bool, Form()] = False,
+) -> dict:
+    # Stream input upload to temporary file
+    orig_path = await store_upload(
+        file, settings.voices_dir, max_bytes=settings.max_upload_mb * 1024 * 1024
+    )
+    edited_path = orig_path.with_suffix(".preview.wav")
+    options = EditOptions(
+        trim_start=trim_start,
+        trim_end=trim_end,
+        speed=speed,
+        pitch_semitones=pitch_semitones,
+        gain_db=gain_db,
+        fade_in_sec=fade_in_sec,
+        fade_out_sec=fade_out_sec,
+        normalize_lufs=normalize_lufs,
+        remove_silence=remove_silence,
+    )
+    try:
+        meta = process_audio_edits(orig_path, edited_path, options)
+    except Exception:
+        orig_path.unlink(missing_ok=True)
+        edited_path.unlink(missing_ok=True)
+        raise
+
+    # Store temp edited preview path under temp voice entry id or returning relative token
+    preview_id = edited_path.stem
+    token = make_media_url(
+        f"voice_edit/{preview_id}", settings.media_token_secret, settings.media_token_ttl_sec
+    )
+    return {
+        "preview_url": token,
+        "edited_path": str(edited_path),
+        "orig_path": str(orig_path),
+        "duration_sec": meta.duration_sec,
+        "sample_rate": meta.sample_rate,
+        "peak_dbfs": meta.peak_dbfs,
+        "is_clipped": meta.is_clipped,
+    }
+
+
 @router.post("", response_model=VoiceProfileResponse, status_code=201)
 async def create_voice(
     db: Annotated[Database, Depends(get_db)],
@@ -48,21 +103,59 @@ async def create_voice(
     language: Annotated[str, Form()],
     consent: Annotated[bool, Form(description="Authorized-to-clone confirmation.")],
     transcript: Annotated[str | None, Form()] = None,
+    trim_start: Annotated[float, Form()] = 0.0,
+    trim_end: Annotated[float | None, Form()] = None,
+    speed: Annotated[float, Form()] = 1.0,
+    pitch_semitones: Annotated[float, Form()] = 0.0,
+    gain_db: Annotated[float, Form()] = 0.0,
+    fade_in_sec: Annotated[float, Form()] = 0.0,
+    fade_out_sec: Annotated[float, Form()] = 0.0,
+    normalize_lufs: Annotated[bool, Form()] = False,
+    remove_silence: Annotated[bool, Form()] = False,
 ) -> VoiceProfileResponse:
     if not consent:
         raise ValidationError(
             "You must confirm you are authorized to clone this voice before uploading it."
         )
-    path = await store_upload(
+    orig_path = await store_upload(
         file, settings.voices_dir, max_bytes=settings.max_upload_mb * 1024 * 1024
     )
-    try:
-        meta = validate_audio(path)
-    except AudioValidationError:
-        path.unlink(missing_ok=True)  # don't keep an unusable file around
-        raise
+    
+    # Check if any edits are specified
+    has_edits = (
+        trim_start > 0 or trim_end is not None or speed != 1.0 or pitch_semitones != 0 or
+        gain_db != 0 or fade_in_sec > 0 or fade_out_sec > 0 or normalize_lufs or remove_silence
+    )
+    
+    if has_edits:
+        final_path = orig_path.with_suffix(".profile.wav")
+        options = EditOptions(
+            trim_start=trim_start,
+            trim_end=trim_end,
+            speed=speed,
+            pitch_semitones=pitch_semitones,
+            gain_db=gain_db,
+            fade_in_sec=fade_in_sec,
+            fade_out_sec=fade_out_sec,
+            normalize_lufs=normalize_lufs,
+            remove_silence=remove_silence,
+        )
+        try:
+            meta = process_audio_edits(orig_path, final_path, options)
+        except AudioValidationError:
+            orig_path.unlink(missing_ok=True)
+            final_path.unlink(missing_ok=True)
+            raise
+    else:
+        try:
+            meta = validate_audio(orig_path)
+            final_path = meta.path
+        except AudioValidationError:
+            orig_path.unlink(missing_ok=True)
+            raise
+
     row = await db.create_profile(
-        name=name, audio_path=str(meta.path), language=language, transcript=transcript,
+        name=name, audio_path=str(final_path), language=language, transcript=transcript,
         duration_sec=meta.duration_sec, sample_rate=meta.sample_rate,
         peak_dbfs=meta.peak_dbfs, is_clipped=meta.is_clipped,
     )

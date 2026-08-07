@@ -47,25 +47,61 @@ EMOTION_FILTERS: dict[str, list[str]] = {
 }
 
 
-def apply_audio_effects(path: Path, speed: float = 1.0, emotion: str = "neutral") -> None:
+def apply_audio_effects(
+    path: Path, speed: float = 1.0, emotion: str = "neutral", style_exaggeration: int = 0
+) -> None:
     """
-    Apply speed and emotion DSP adjustments via ffmpeg.
-    If emotion is 'neutral' (or unsupported) and speed == 1.0, returns immediately
-    without modifying the file (guaranteeing exact regression behavior).
+    Apply speed, emotion, and style exaggeration DSP adjustments via ffmpeg.
+    If emotion is 'neutral' (or unsupported), style_exaggeration == 0, and speed == 1.0,
+    returns immediately without modifying the file (guaranteeing exact regression behavior).
     """
     if not path.exists():
         return
     clean_emotion = emotion.lower().strip() if emotion else "neutral"
-    filters = list(EMOTION_FILTERS.get(clean_emotion, []))
+    exag = max(0, min(100, style_exaggeration))
+
+    filters: list[str] = []
 
     if speed != 1.0 and 0.5 <= speed <= 2.0:
-        filters.insert(0, f"atempo={speed}")
+        filters.append(f"atempo={speed}")
+
+    if clean_emotion != "neutral" or exag > 0:
+        exag_mult = 1.0 + (exag / 100.0) * 0.8
+        if clean_emotion == "happy":
+            rate = int(24000 * (1.0 + 0.04 * exag_mult))
+            vol = round(1.0 + 0.10 * exag_mult, 2)
+            filters.extend([f"asetrate={rate}", "aresample=24000", f"volume={vol}"])
+        elif clean_emotion == "sad":
+            rate = int(24000 * max(0.85, 1.0 - 0.05 * exag_mult))
+            vol = round(max(0.7, 1.0 - 0.10 * exag_mult), 2)
+            filters.extend([f"asetrate={rate}", "aresample=24000", f"volume={vol}"])
+        elif clean_emotion == "angry":
+            tempo = round(min(2.0, 1.0 + 0.10 * exag_mult), 2)
+            vol = round(min(1.5, 1.0 + 0.25 * exag_mult), 2)
+            filters.extend([f"atempo={tempo}", f"volume={vol}"])
+        elif clean_emotion == "excited":
+            rate = int(24000 * (1.0 + 0.07 * exag_mult))
+            vol = round(min(1.4, 1.0 + 0.20 * exag_mult), 2)
+            filters.extend([f"asetrate={rate}", "aresample=24000", f"volume={vol}"])
+        elif clean_emotion == "calm":
+            rate = int(24000 * max(0.9, 1.0 - 0.03 * exag_mult))
+            vol = round(max(0.8, 1.0 - 0.08 * exag_mult), 2)
+            filters.extend([f"asetrate={rate}", "aresample=24000", f"volume={vol}"])
+        elif clean_emotion == "whisper":
+            vol = round(max(0.5, 0.75 - 0.10 * (exag / 100.0)), 2)
+            filters.extend(["highpass=f=250", "lowpass=f=3800", f"volume={vol}"])
+        elif clean_emotion == "narration":
+            vol = round(1.0 + 0.05 * exag_mult, 2)
+            filters.extend(["equalizer=f=120:width_type=h:width=200:g=2", f"volume={vol}"])
+        elif exag > 0:
+            vol = round(1.0 + 0.15 * (exag / 100.0), 2)
+            filters.append(f"volume={vol}")
 
     if not filters:
         return
 
     filter_str = ",".join(filters)
-    tmp_path = path.with_suffix(f".fx_{clean_emotion}_{speed}.wav")
+    tmp_path = path.with_suffix(f".fx_{clean_emotion}_{speed}_{exag}.wav")
     cmd = [
         "ffmpeg", "-y", "-i", str(path),
         "-filter:a", filter_str, str(tmp_path)

@@ -53,7 +53,7 @@ _MEDIA_TYPES = {
 @router.get("/{kind}/{item_id}")
 async def get_media(
     kind: str,
-    item_id: int,
+    item_id: str,
     t: str,
     db: Annotated[Database, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -64,15 +64,17 @@ async def get_media(
     verify_token(f"{kind}/{item_id}", t, settings.media_token_secret)
 
     if kind == "voice":
-        row = await db.get_profile(item_id)
+        row = await db.get_profile(int(item_id))
         if row is None:
-            raise ProfileNotFoundError(item_id)
+            raise ProfileNotFoundError(int(item_id))
         path = row["audio_path"]
     elif kind == "history":
-        row = await db.get_generation(item_id)
+        row = await db.get_generation(int(item_id))
         if row is None:
-            raise HistoryNotFoundError(item_id)
+            raise HistoryNotFoundError(int(item_id))
         path = row["output_path"]
+    elif kind == "voice_edit":
+        path = str(settings.voices_dir / f"{item_id}.wav")
     else:
         raise MediaTokenError(f"Unknown media kind {kind!r}.")
 

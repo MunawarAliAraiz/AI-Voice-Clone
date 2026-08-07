@@ -92,6 +92,16 @@ async def generate(
 
     _validate_params(body.params, spec.params, plan.model_id)
 
+    synth_params = dict(body.params)
+    synth_params["stability"] = body.stability
+    synth_params["style_exaggeration"] = body.style_exaggeration
+    if "cfg_value" in spec.params and "cfg_value" not in body.params:
+        # Map stability 0-100 to cfg_value 1.5-2.5 (where 70 maps exactly to default 2.0)
+        if body.stability <= 70:
+            synth_params["cfg_value"] = round(1.5 + (body.stability / 70.0) * 0.5, 2)
+        else:
+            synth_params["cfg_value"] = round(2.0 + ((body.stability - 70.0) / 30.0) * 0.5, 2)
+
     out_path = settings.generated_dir / f"{uuid.uuid4().hex}.{body.output_format}"
     result = await scheduler.synthesize(
         SynthRequest(
@@ -100,12 +110,17 @@ async def generate(
             reference_audio=Path(profile["audio_path"]),
             output_path=out_path,
             reference_text=profile["transcript"] if spec.needs_reference_text else None,
-            params=body.params,
+            params=synth_params,
             sample_rate=settings.default_sample_rate,
         )
     )
 
-    apply_audio_effects(result.output_path, speed=body.speed, emotion=body.emotion)
+    apply_audio_effects(
+        result.output_path,
+        speed=body.speed,
+        emotion=body.emotion,
+        style_exaggeration=body.style_exaggeration,
+    )
 
     row = await db.create_generation(
         profile_id=body.profile_id, input_text=body.text, language=body.language,

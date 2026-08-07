@@ -113,6 +113,8 @@ export const api = {
   deleteVoice: (id: number) => request<void>(`/api/voices/${id}`, { method: 'DELETE' }),
   createVoice: (form: FormData) =>
     request<VoiceProfile>('/api/voices', { method: 'POST', body: form }),
+  previewEditVoice: (form: FormData) =>
+    request<{ preview_url: string }>('/api/voices/preview-edit', { method: 'POST', body: form }),
 
   // synthesis
   generate: (body: TTSGenerateRequest) =>

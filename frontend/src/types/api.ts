@@ -83,6 +83,8 @@ export interface TTSGenerateRequest {
   output_format?: string;
   speed?: number;
   emotion?: string;
+  stability?: number;
+  style_exaggeration?: number;
   params?: Record<string, number | string | boolean>;
 }
 

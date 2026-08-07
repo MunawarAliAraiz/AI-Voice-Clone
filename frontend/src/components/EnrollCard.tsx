@@ -9,6 +9,7 @@ import { api, ApiError } from '../services/api';
 import type { LanguageInfo } from '../types/api';
 import { useRecorder } from '../hooks/useRecorder';
 import { IconAlert, IconMic, IconSpinner, IconStop, IconUpload } from './icons';
+import { AudioEditor, type AudioEditState } from './AudioEditor';
 import { fmtSeconds } from '../lib/format';
 
 interface Props {
@@ -28,6 +29,8 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
   const [language, setLanguage] = useState('ur');
   const [consent, setConsent] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [editOptions, setEditOptions] = useState<AudioEditState | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -46,17 +49,31 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
     e.preventDefault();
     setErr(null);
 
-    const picked = fileRef.current?.files?.[0] ?? null;
-    const blob = mode === 'record' ? rec.blob : picked;
-    if (!blob) return setErr(mode === 'record' ? 'Record a clip first.' : 'Choose an audio file.');
+    const picked = fileRef.current?.files?.[0] ?? selectedFile;
+    const recordedFile = rec.blob ? new File([rec.blob], 'recording.wav', { type: 'audio/wav' }) : null;
+    const activeFile = mode === 'record' ? recordedFile : picked;
+
+    if (!activeFile) return setErr(mode === 'record' ? 'Record a clip first.' : 'Choose an audio file.');
     if (!name.trim()) return setErr('Give this voice a name.');
     if (!consent) return setErr('Please confirm you are authorized to clone this voice.');
 
     const fd = new FormData();
-    fd.append('file', blob, mode === 'record' ? 'recording.wav' : (picked?.name ?? 'audio.wav'));
+    fd.append('file', activeFile, mode === 'record' ? 'recording.wav' : (activeFile.name ?? 'audio.wav'));
     fd.append('name', name.trim());
     fd.append('language', language);
     fd.append('consent', 'true');
+
+    if (editOptions) {
+      fd.append('trim_start', String(editOptions.trimStart));
+      if (editOptions.trimEnd !== null) fd.append('trim_end', String(editOptions.trimEnd));
+      fd.append('speed', String(editOptions.speed));
+      fd.append('pitch_semitones', String(editOptions.pitchSemitones));
+      fd.append('gain_db', String(editOptions.gainDb));
+      fd.append('fade_in_sec', String(editOptions.fadeInSec));
+      fd.append('fade_out_sec', String(editOptions.fadeOutSec));
+      fd.append('normalize_lufs', String(editOptions.normalizeLufs));
+      fd.append('remove_silence', String(editOptions.removeSilence));
+    }
 
     setBusy(true);
     try {
@@ -64,6 +81,8 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
       setName('');
       setConsent(false);
       setFileName(null);
+      setSelectedFile(null);
+      setEditOptions(null);
       if (fileRef.current) fileRef.current.value = '';
       rec.reset();
       onEnrolled();
@@ -126,7 +145,11 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
                 ref={fileRef}
                 type="file"
                 accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mkv,.mov,.avi,.webm,.flv,.wmv,.wma,.3gp"
-                onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setFileName(f?.name ?? null);
+                  setSelectedFile(f);
+                }}
               />
               <IconUpload size={15} />
               <span>{fileName ?? 'Choose an audio or video file (WAV, MP3, MP4, MKV, etc.) — 6 to 15 seconds works best'}</span>
@@ -161,7 +184,23 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
               </div>
             )}
           </div>
+        </div>
+      )}
 
+      {/* Render Built-in Audio Editor when a reference file is selected or recorded */}
+      {((mode === 'upload' && selectedFile) || (mode === 'record' && rec.blob)) && (
+        <AudioEditor
+          file={
+            mode === 'record'
+              ? new File([rec.blob!], 'recording.wav', { type: 'audio/wav' })
+              : selectedFile!
+          }
+          onApplyEdits={setEditOptions}
+        />
+      )}
+
+      {mode === 'record' && (
+        <>
           <p className="hint" aria-live="polite">
             {rec.recording
               ? 'Speak naturally in a quiet room.'
@@ -182,7 +221,7 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
               </button>
             </div>
           )}
-        </div>
+        </>
       )}
 
       <label className="field">

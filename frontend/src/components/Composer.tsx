@@ -28,6 +28,22 @@ export function Composer({ voices, languages, onGenerated }: Props) {
       return 'neutral';
     }
   });
+  const [stability, setStability] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('vcs_stability');
+      return saved !== null ? Number(saved) : 70;
+    } catch {
+      return 70;
+    }
+  });
+  const [styleExaggeration, setStyleExaggeration] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('vcs_style_exaggeration');
+      return saved !== null ? Number(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [expanded, setExpanded] = useState<boolean>(() => {
     try {
       return localStorage.getItem('vcs_textarea_expanded') === 'true';
@@ -61,6 +77,24 @@ export function Composer({ voices, languages, onGenerated }: Props) {
     setEmotion(val);
     try {
       localStorage.setItem('vcs_emotion', val);
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  function handleStabilityChange(val: number) {
+    setStability(val);
+    try {
+      localStorage.setItem('vcs_stability', String(val));
+    } catch {
+      // storage unavailable
+    }
+  }
+
+  function handleStyleExaggerationChange(val: number) {
+    setStyleExaggeration(val);
+    try {
+      localStorage.setItem('vcs_style_exaggeration', String(val));
     } catch {
       // storage unavailable
     }
@@ -118,7 +152,15 @@ export function Composer({ voices, languages, onGenerated }: Props) {
     setErr(null);
     setResult(null);
     try {
-      const res = await api.generate({ profile_id: profileId, language, text: text.trim(), speed, emotion });
+      const res = await api.generate({
+        profile_id: profileId,
+        language,
+        text: text.trim(),
+        speed,
+        emotion,
+        stability,
+        style_exaggeration: styleExaggeration,
+      });
       setResult(res);
       onGenerated();
     } catch (e) {
@@ -207,6 +249,44 @@ export function Composer({ voices, languages, onGenerated }: Props) {
               <option value="narration">Narration 📖</option>
             </select>
           </div>
+        </label>
+
+        <label className="field" style={{ gridColumn: '1 / -1' }}>
+          <span className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Stability</span>
+            <span style={{ color: 'var(--muted)', fontSize: '11px', fontWeight: 400 }}>
+              {stability}% — {stability > 70 ? 'More Stable' : stability < 50 ? 'More Expressive' : 'Balanced'}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={stability}
+            onChange={(e) => handleStabilityChange(Number(e.target.value))}
+            aria-label="Stability"
+            style={{ accentColor: 'var(--accent, #6366f1)', cursor: 'pointer', width: '100%', marginTop: '6px' }}
+          />
+        </label>
+
+        <label className="field" style={{ gridColumn: '1 / -1' }}>
+          <span className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Style Exaggeration</span>
+            <span style={{ color: 'var(--muted)', fontSize: '11px', fontWeight: 400 }}>
+              {styleExaggeration}% — {styleExaggeration === 0 ? 'Natural (Default)' : styleExaggeration > 75 ? 'Highly Exaggerated' : styleExaggeration > 45 ? 'Dramatic' : 'Subtle Expressive'}
+            </span>
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={styleExaggeration}
+            onChange={(e) => handleStyleExaggerationChange(Number(e.target.value))}
+            aria-label="Style Exaggeration"
+            style={{ accentColor: 'var(--accent, #6366f1)', cursor: 'pointer', width: '100%', marginTop: '6px' }}
+          />
         </label>
       </div>
 
