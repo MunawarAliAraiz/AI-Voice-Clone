@@ -1,6 +1,14 @@
 name = "ai-voice-clone"
 compatibility_date = "2026-08-01"
+main = "worker.js"
+
+# The pod's public tunnel. The Worker proxies /api/* here and injects
+# `ngrok-skip-browser-warning`, which an <audio> element cannot send itself.
+# Change this when the ngrok domain changes.
+[vars]
+BACKEND_ORIGIN = "https://moneywise-omega-gratify.ngrok-free.dev"
 
 [assets]
 directory = "dist"
+binding = "ASSETS"
 not_found_handling = "single-page-application"

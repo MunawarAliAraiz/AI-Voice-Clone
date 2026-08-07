@@ -306,9 +306,18 @@ similar names — check which fields you're shown:
   - Build command: `npm install && npm run build`
   - Deploy command: `npx wrangler deploy`
 
-Either way, set a **build-time** environment variable `VITE_API_BASE` to the ngrok domain from step
-above (e.g. `https://your-name.ngrok-free.dev`) — Vite inlines it into the JS bundle at build time, so
-it must be present *before* `npm run build` runs, not just at deploy.
+**Do not set `VITE_API_BASE`.** It used to be required, pointing the bundle straight at the ngrok
+domain. It must now be **removed** from the Cloudflare build settings: `frontend/worker.js` proxies
+`/api/*` to the pod, so the frontend calls its own origin, which is already the production default in
+`getApiBase()`. Setting `VITE_API_BASE` overrides that and sends requests cross-origin again,
+reinstating both the interstitial and the CORS requirement.
+
+The backend origin lives in `wrangler.toml` under `[vars] BACKEND_ORIGIN` — update it there when the
+ngrok domain changes.
+
+Same applies to the **Backend URL box in the app's settings gear**: it writes `vcs_api_base` to
+localStorage and takes precedence over everything. Leave it empty. A value left over from before the
+proxy existed will keep one browser broken while every other device works.
 
 Do **not** add `frontend/public/_redirects` back if you're on Workers Builds — `wrangler.toml`'s
 `not_found_handling = "single-page-application"` already does the SPA fallback, and having both
@@ -371,18 +380,30 @@ download button works.
    media element and refuse to play; desktop Chrome and Firefox ignore it, which is why this survived
    until someone opened the app on a phone.
 
-2. **The ngrok free-tier interstitial.** `api.ts` sets `ngrok-skip-browser-warning` on every `fetch`,
-   but an `<audio>` element cannot send custom headers — the same reason media URLs are signed instead
-   of key-authenticated. So the audio request can get ngrok's HTML warning page where the JSON API
-   calls sail through, and the app looks online while every clip fails to load. It hides on any device
-   that has already clicked through the interstitial once, because ngrok then sets a cookie for the
-   domain — typically the machine you set the pod up from, and not your phone.
+2. **The ngrok free-tier interstitial.** Fixed by the Worker proxy in `frontend/worker.js`; this is
+   what it exists for. `api.ts` sets `ngrok-skip-browser-warning` on every `fetch`, but an `<audio>`
+   element cannot send custom headers — the same reason media URLs are signed instead of
+   key-authenticated. So the audio request came back as a 2.8 KB HTML warning page with
+   `content-type: text/html` while the JSON API sailed through, and Safari reported
+   `NotSupportedError` because the element never received audio at all.
 
-   To check: open `https://<your-name>.ngrok-free.dev/api/health` directly **on the phone**. An ngrok
-   warning page instead of JSON confirms it; clicking *Visit Site* sets the cookie and fixes that
-   browser. For a permanent fix, serve the API from the frontend's own origin (a Cloudflare Worker
-   route proxying `/api/*` to the tunnel) so no cross-origin interstitial is involved at all. Do not
-   "fix" it by blob-fetching the audio — that forces a full download and breaks seeking.
+   **Do not diagnose this by opening the API in the phone's browser** — that is a *first-party*
+   navigation, so ngrok's cookie is sent and you get clean JSON, which looks like proof the
+   interstitial is not your problem. It is not the same request. The `<audio>` element makes a
+   *cross-site* request, and Safari's Intelligent Tracking Prevention blocks third-party cookies by
+   default, so the cookie is never attached. That asymmetry is also the whole reason it presented as
+   phone-only: desktop Chrome still sends the cookie cross-site, so the laptop worked throughout.
+
+   Reproduce it correctly with curl instead — no skip header, browser UA:
+
+   ```bash
+   curl -sD - -o /dev/null -A "Mozilla/5.0 (iPhone...) Safari/604.1" \
+     "https://<your-name>.ngrok-free.dev/api/media/voice/1?t=<token>"
+   ```
+
+   `content-type: text/html` means the interstitial; `audio/wav` means it is genuinely reaching the
+   backend. Do not "fix" this by blob-fetching the audio — that forces a full download and breaks
+   seeking.
 
 **Visiting the ngrok URL itself in a browser is not the product** — it's a JSON API with no page at
 `/` (that path 404s by design; `/docs` has the interactive Swagger UI if you want to poke at it
