@@ -1,81 +1,81 @@
 /* ═══════════════════════════════════════════════════════════
-   AI Voice Clone Studio — Modern Premium Design System
-   Rich dark mode with glassmorphism, vibrant warm amber/gold,
-   refined typography, and spacious layouts.
+   AI Voice Clone Studio — Design Tokens
+   Warm amber on deep navy studio theme. Compact, crisp,
+   and high contrast.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Surfaces & Glass ── */
-  --bg: #070a12;
-  --panel: rgba(18, 24, 43, 0.75);
-  --panel-2: rgba(24, 34, 61, 0.65);
-  --panel-solid: #11172a;
-  --panel-inset: rgba(11, 16, 31, 0.85);
-  --panel-raised: rgba(255, 255, 255, 0.05);
+  /* ── Surfaces ── */
+  --bg: #0a0e1a;
+  --panel: #13192b;
+  --panel-2: #1a223a;
+  --panel-solid: #111728;
+  --panel-inset: #0c1120;
+  --panel-raised: rgba(255, 255, 255, 0.04);
 
-  /* ── Accent — Warm Amber Gold ── */
-  --accent: #f59e0b;
-  --accent-hover: #fbbf24;
-  --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  --accent-soft: rgba(245, 158, 11, 0.15);
-  --accent-line: rgba(245, 158, 11, 0.38);
-  --accent-ring: rgba(245, 158, 11, 0.5);
-  --accent-glow: rgba(245, 158, 11, 0.25);
-  --on-accent: #0f0b04;
+  /* ── Accent — Warm Amber Copper ── */
+  --accent: #e5a055;
+  --accent-hover: #f2b978;
+  --accent-gradient: #e5a055;
+  --accent-soft: rgba(229, 160, 85, 0.12);
+  --accent-line: rgba(229, 160, 85, 0.34);
+  --accent-ring: rgba(229, 160, 85, 0.45);
+  --accent-glow: rgba(229, 160, 85, 0.2);
+  --on-accent: #1a1206;
 
-  /* ── Text Colors ── */
-  --text: #f3f4f6;
-  --muted: #a1a9c3;
-  --tertiary: #6b7594;
+  /* ── Text ── */
+  --text: #edf0f7;
+  --muted: #9aa3c0;
+  --tertiary: #5c6685;
 
-  /* ── Hairlines & Borders ── */
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.18);
+  /* ── Hairlines ── */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
   /* ── Semantics ── */
-  --success: #34d399;
-  --success-glow: rgba(52, 211, 153, 0.3);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.15);
-  --warn: #fbbf24;
+  --success: #59d3a9;
+  --success-glow: rgba(89, 211, 169, 0.25);
+  --danger: #ff6b7a;
+  --danger-soft: rgba(255, 107, 122, 0.12);
+  --warn: #ffcc66;
 
-  /* ── Typography Scale ── */
+  /* ── Compact Typography Scale ── */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --text-xs: 12.5px;
-  --text-sm: 14px;
-  --text-base: 15px;
-  --text-md: 16.5px;
-  --text-lg: 19px;
-  --text-xl: 24px;
-  --text-2xl: 30px;
-  --text-3xl: 36px;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+  --text-md: 14.5px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
 
-  /* ── Spacing Scale ── */
+  /* ── Compact Spacing Scale ── */
   --space-1: 4px;
-  --space-2: 10px;
-  --space-3: 14px;
-  --space-4: 18px;
-  --space-5: 24px;
-  --space-6: 28px;
-  --space-8: 36px;
-  --space-12: 52px;
-  --space-16: 72px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
 
   /* ── Radii ── */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 22px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
   /* ── Motion ── */
-  --dur-fast: 140ms;
-  --dur-base: 220ms;
-  --dur-slow: 360ms;
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ── Elevation & Shadows ── */
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.25);
-  --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.35);
-  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55);
+  /* ── Elevation ── */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
 }

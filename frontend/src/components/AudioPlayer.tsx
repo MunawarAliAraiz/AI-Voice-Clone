@@ -7,7 +7,7 @@
  * this is presentation only.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { IconDownload, IconPause, IconPlay } from './icons';
+import { IconDownload, IconPause, IconPlay, IconSpinner } from './icons';
 import { fmtSeconds } from '../lib/format';
 
 interface Props {
@@ -27,6 +27,7 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [downloadFmt, setDownloadFmt] = useState<string>('wav');
+  const [downloading, setDownloading] = useState(false);
 
   // Reset when the source changes (e.g. a new generation lands).
   useEffect(() => {
@@ -40,9 +41,6 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
     const el = ref.current;
     if (!el) return;
     if (el.paused) {
-      // A rejected play() is the only signal for a codec/disposition failure on
-      // mobile, where the element silently refuses to start. Swallowing it is
-      // what made the dead play button impossible to diagnose from the UI.
       void el.play().then(
         () => setError(null),
         (err: unknown) => {
@@ -63,11 +61,44 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
     setCurrent(t);
   }, []);
 
-  const pct = duration > 0 ? (current / duration) * 100 : 0;
+  const handleDownload = useCallback(
+    async (e: React.MouseEvent<HTMLAnchorElement>) => {
+      e.preventDefault();
+      if (downloading) return;
+      setDownloading(true);
 
-  // The signed URL already carries `?t=`, so the download opt-in is always `&`.
-  // Needed because the `download` attribute is ignored cross-origin — the
-  // deployed frontend and backend are on different hosts.
+      const downloadUrl = `${src}${src.includes('?') ? '&' : '?'}download=1&format=${downloadFmt}`;
+      const headers = new Headers();
+      const key = localStorage.getItem('vcs_api_key') ?? '';
+      if (key) headers.set('X-API-Key', key);
+      headers.set('ngrok-skip-browser-warning', 'true');
+
+      try {
+        const res = await fetch(downloadUrl, { headers });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        const targetName = downloadName
+          ? downloadName.replace(/\.[^/.]+$/, `.${downloadFmt}`)
+          : `audio.${downloadFmt}`;
+        a.download = targetName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      } catch (err) {
+        console.error('Download error:', err);
+        window.location.href = downloadUrl;
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [src, downloadFmt, downloadName, downloading],
+  );
+
+  const pct = duration > 0 ? (current / duration) * 100 : 0;
   const downloadHref = `${src}${src.includes('?') ? '&' : '?'}download=1&format=${downloadFmt}`;
 
   return (
@@ -134,8 +165,8 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
           title="Choose audio format to download"
           style={{
             background: 'rgba(255, 255, 255, 0.07)',
-            color: 'var(--fg-muted, #94a3b8)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            color: 'var(--muted)',
+            border: '1px solid var(--line)',
             borderRadius: '4px',
             fontSize: compact ? '10px' : '11px',
             padding: '2px 4px',
@@ -151,14 +182,14 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
         <a
           className="icon-btn"
           href={downloadHref}
+          onClick={handleDownload}
           download={downloadName ? downloadName.replace(/\.[^/.]+$/, `.${downloadFmt}`) : true}
           aria-label={`Download audio as ${downloadFmt.toUpperCase()}`}
-          title={`Download as ${downloadFmt.toUpperCase()}`}
+          title={downloading ? 'Downloading...' : `Download as ${downloadFmt.toUpperCase()}`}
         >
-          <IconDownload size={compact ? 14 : 16} />
+          {downloading ? <IconSpinner size={compact ? 14 : 16} /> : <IconDownload size={compact ? 14 : 16} />}
         </a>
       </div>
     </div>
   );
 }
-
