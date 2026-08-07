@@ -144,6 +144,28 @@ Confirm it's up, on the pod:
 curl -s http://127.0.0.1:8000/api/health
 ```
 
+### Watching logs from your own machine
+
+The `tee /workspace/backend.log` in the detached command above means every request and error is
+written to that file, live, independent of the `tmux` session or your SSH connection. From your own
+laptop, in your own terminal:
+
+```bash
+ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> "tail -f /workspace/backend.log"
+```
+
+`Ctrl+C` stops watching — it does not touch the backend, since `tail -f` is a separate process from
+the one actually running the server.
+
+To attach to the running session itself, rather than just its log output:
+
+```bash
+ssh -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST> -t "tmux attach -t backend"
+```
+
+`Ctrl+B` then `D` detaches without killing it. Detaching this way is not optional if you attach — a
+plain `Ctrl+C` from inside the attached session kills the backend, not just your view of it.
+
 ---
 
 ## Resuming after a pod restart
