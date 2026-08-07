@@ -114,7 +114,7 @@ export const api = {
   createVoice: (form: FormData) =>
     request<VoiceProfile>('/api/voices', { method: 'POST', body: form }),
   previewEditVoice: (form: FormData) =>
-    request<{ preview_url: string }>('/api/voices/preview-edit', { method: 'POST', body: form }),
+    request<{ preview_url: string; duration_sec?: number; peak_dbfs?: number; is_clipped?: boolean }>('/api/voices/preview-edit', { method: 'POST', body: form }),
 
   // synthesis
   generate: (body: TTSGenerateRequest) =>
