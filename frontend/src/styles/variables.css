@@ -1,79 +1,81 @@
 /* ═══════════════════════════════════════════════════════════
-   AI Voice Clone Studio — Design Tokens
-   Warm amber on deep navy. ONE accent, hairline borders,
-   flat fills. No gradient buttons, no glow, no glassmorphism.
+   AI Voice Clone Studio — Modern Premium Design System
+   Rich dark mode with glassmorphism, vibrant warm amber/gold,
+   refined typography, and spacious layouts.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Surfaces ──
-     --bg and the body radial gradient are the product's identity.
-     Do not change them. */
-  --bg: #0a0e1a;
-  --panel: #141a2e;
-  --panel-2: #1b2340;
-  --panel-inset: #0e1428;
-  --panel-raised: rgba(255, 255, 255, 0.028);
+  /* ── Surfaces & Glass ── */
+  --bg: #070a12;
+  --panel: rgba(18, 24, 43, 0.75);
+  --panel-2: rgba(24, 34, 61, 0.65);
+  --panel-solid: #11172a;
+  --panel-inset: rgba(11, 16, 31, 0.85);
+  --panel-raised: rgba(255, 255, 255, 0.05);
 
-  /* ── Accent — warm amber, the only accent in the system ──
-     Carries primary action, focus, active state and the brand mark.
-     Warm-on-cool is the audio-studio pairing; it is deliberately not
-     the violet→cyan "AI app" gradient. */
-  --accent: #e5a055;
-  --accent-hover: #f2b978;
-  --accent-soft: rgba(229, 160, 85, 0.12);
-  --accent-line: rgba(229, 160, 85, 0.34);
-  --accent-ring: rgba(229, 160, 85, 0.45);
-  --on-accent: #1a1206;
+  /* ── Accent — Warm Amber Gold ── */
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --accent-soft: rgba(245, 158, 11, 0.15);
+  --accent-line: rgba(245, 158, 11, 0.38);
+  --accent-ring: rgba(245, 158, 11, 0.5);
+  --accent-glow: rgba(245, 158, 11, 0.25);
+  --on-accent: #0f0b04;
 
-  /* ── Text ── */
-  --text: #edf0f7;
-  --muted: #9aa3c0;      /* raised from #8b94b3 — now AA on --bg */
-  --tertiary: #5c6685;
+  /* ── Text Colors ── */
+  --text: #f3f4f6;
+  --muted: #a1a9c3;
+  --tertiary: #6b7594;
 
-  /* ── Hairlines ── */
-  --line: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  /* ── Hairlines & Borders ── */
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
 
-  /* ── Semantic only. Never decorative. ── */
-  --success: #59d3a9;
-  --danger: #ff6b7a;
-  --warn: #ffcc66;
-  --danger-soft: rgba(255, 107, 122, 0.12);
+  /* ── Semantics ── */
+  --success: #34d399;
+  --success-glow: rgba(52, 211, 153, 0.3);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.15);
+  --warn: #fbbf24;
 
-  /* ── Typography — Inter is preloaded in index.html ── */
+  /* ── Typography Scale ── */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
+  --text-xs: 12.5px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-md: 16.5px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --text-3xl: 36px;
 
-  /* ── Spacing ── */
+  /* ── Spacing Scale ── */
   --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-12: 48px;
-  --space-16: 64px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --space-5: 24px;
+  --space-6: 28px;
+  --space-8: 36px;
+  --space-12: 52px;
+  --space-16: 72px;
 
   /* ── Radii ── */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
   --radius-full: 9999px;
 
   /* ── Motion ── */
-  --dur-fast: 120ms;
-  --dur-base: 200ms;
-  --dur-slow: 320ms;
+  --dur-fast: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ── Elevation — restrained; depth comes from hairlines, not shadow ── */
-  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
+  /* ── Elevation & Shadows ── */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55);
 }

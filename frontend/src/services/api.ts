@@ -34,7 +34,7 @@ function getApiBase(): string {
     if (normalized !== null) return normalized;
   }
 
-  return import.meta.env.DEV ? 'http://localhost:8000' : '';
+  return '';
 }
 
 function normalizeUrl(url: string): string | null {
