@@ -14,40 +14,26 @@ import type {
   VoiceProfileList,
 } from '../types/api';
 
-// In production the Worker serving this page also proxies `/api/*` to the
-// backend, so same-origin is the only correct base. A `vcs_api_base` left in
-// localStorage from before the proxy existed sends requests cross-origin again
-// and reinstates the ngrok interstitial that breaks `<audio>` — a per-device
-// failure with no server-side symptom. Drop it once, on load, rather than
-// leaving one phone broken while every other device works.
-if (!import.meta.env.DEV && localStorage.getItem('vcs_api_base')) {
-  console.warn('[api] Ignoring stale vcs_api_base — this deployment proxies /api same-origin.');
-  localStorage.removeItem('vcs_api_base');
-}
-
 /**
  * Backend URL precedence:
- * 1. localStorage('vcs_api_base') — dev-only override (see above)
- * 2. import.meta.env.VITE_API_BASE — build-time baked
- * 3. '' (same-origin) for prod, localhost for dev
+ * 1. import.meta.env.VITE_API_BASE — build-time, for dev against a non-default
+ *    address (put it in frontend/.env.local)
+ * 2. '' (same-origin) for prod, localhost:8000 for dev
+ *
+ * There is deliberately no runtime override. In production the Worker serving
+ * this page also proxies `/api/*` to the backend, so same-origin is the only
+ * base that can be correct — pointing the app anywhere else puts requests
+ * cross-origin and reinstates the ngrok interstitial that breaks `<audio>`.
+ * A settings box for it could only ever be set wrong, and because localStorage
+ * outlives a deploy it broke exactly one device while every other one worked.
  */
 function getApiBase(): string {
-  // 1. Runtime override from localStorage — development only.
-  const stored = import.meta.env.DEV ? localStorage.getItem('vcs_api_base') : null;
-  if (stored) {
-    const normalized = normalizeUrl(stored);
-    if (normalized !== null) return normalized;
-    console.warn('[api] Invalid vcs_api_base in localStorage, ignoring:', stored);
-  }
-
-  // 2. Build-time env var
   const envBase = import.meta.env.VITE_API_BASE;
   if (envBase) {
     const normalized = normalizeUrl(envBase);
     if (normalized !== null) return normalized;
   }
 
-  // 3. Fallback: same-origin for prod, localhost for dev
   return import.meta.env.DEV ? 'http://localhost:8000' : '';
 }
 

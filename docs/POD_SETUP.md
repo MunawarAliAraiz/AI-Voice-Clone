@@ -315,9 +315,10 @@ reinstating both the interstitial and the CORS requirement.
 The backend origin lives in `wrangler.toml` under `[vars] BACKEND_ORIGIN` — update it there when the
 ngrok domain changes.
 
-Same applies to the **Backend URL box in the app's settings gear**: it writes `vcs_api_base` to
-localStorage and takes precedence over everything. Leave it empty. A value left over from before the
-proxy existed will keep one browser broken while every other device works.
+The app's settings gear has **no Backend URL box** — it was removed for the same reason. Same-origin is
+the only base that can be correct once the Worker proxies, and because localStorage outlives a deploy,
+a value saved there broke exactly one device while every other one worked. To point a *development*
+build somewhere other than `localhost:8000`, set `VITE_API_BASE` in `frontend/.env.local`.
 
 Do **not** add `frontend/public/_redirects` back if you're on Workers Builds — `wrangler.toml`'s
 `not_found_handling = "single-page-application"` already does the SPA fallback, and having both
@@ -367,8 +368,8 @@ curl -X OPTIONS -H "Origin: https://your-frontend-url" \
   https://your-name.ngrok-free.dev/api/models
 ```
 
-Then open the frontend URL, click the settings gear, paste the ngrok domain (only needed if you didn't
-bake `VITE_API_BASE` in) and the `VCS_API_KEY`, and save.
+Then open the frontend URL, click the settings gear, paste the `VCS_API_KEY`, and save. That is the
+only thing the gear asks for — the backend address is not configured in the browser at all.
 
 ### If audio won't play on a phone
 

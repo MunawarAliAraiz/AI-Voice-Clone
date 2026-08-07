@@ -111,7 +111,6 @@ export default function App() {
 function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(() => localStorage.getItem('vcs_api_key') ?? '');
-  const [backendUrl, setBackendUrl] = useState(() => localStorage.getItem('vcs_api_base') ?? '');
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -136,13 +135,8 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
   }, [open]);
 
   function save() {
-    // API Key
     if (key) localStorage.setItem('vcs_api_key', key);
     else localStorage.removeItem('vcs_api_key');
-
-    // Backend URL
-    if (backendUrl) localStorage.setItem('vcs_api_base', backendUrl);
-    else localStorage.removeItem('vcs_api_base');
 
     setOpen(false);
     triggerRef.current?.focus();
@@ -176,26 +170,6 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
             </button>
           </div>
 
-          {/* Dev only. In production the Worker proxies /api/* to the backend,
-              so same-origin is the only correct base and this field can only be
-              wrong — setting it puts requests back cross-origin and breaks
-              audio playback behind ngrok's interstitial. */}
-          {import.meta.env.DEV && (
-            <>
-              <label className="field">
-                <span className="field-label">Backend URL</span>
-                <input
-                  value={backendUrl}
-                  onChange={(e) => setBackendUrl(e.target.value)}
-                  type="url"
-                  placeholder="http://localhost:8000"
-                  autoFocus
-                />
-              </label>
-              <p className="hint">Dev only. Leave empty to use localhost:8000.</p>
-            </>
-          )}
-
           <label className="field">
             <span className="field-label">API Key</span>
             <input
@@ -203,7 +177,7 @@ function ApiKeyControl({ onSaved }: { onSaved: () => void }) {
               onChange={(e) => setKey(e.target.value)}
               type="password"
               placeholder="X-API-Key"
-              autoFocus={!import.meta.env.DEV}
+              autoFocus
             />
           </label>
           <p className="hint">Required if the backend sets VCS_API_KEY.</p>
