@@ -14,12 +14,12 @@ must never break while you do it."
 ## Where things stand
 
 **Branch:** `feature/jobs-mobile-perf`, pushed to `fork` (`https://github.com/MunawarAliAraiz/AI-Voice-Clone`).
-Not yet merged to `main`, no PR opened yet as of 2026-08-09.
+Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 
 | Phase | Status | Summary |
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
-| **2 — Speech Direction layer** | 🚧 Preview landed | IR + heuristic analyzer + per-model capability report + read-only `POST /api/direction/analyze` + UI chip are in. Multi-segment *generation*, the LLM analyzer, and Advanced editing still pending — see below. |
+| **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | 📋 Designed, not started | Move video→audio extraction into the browser; server-side ffmpeg becomes the fallback, not the only path. |
 | **4 — Chatterbox runtime + beyond** | 💭 Not designed | Real `exaggeration` knob, multi-speaker, dubbing, post-processing presets. |
 
@@ -175,19 +175,40 @@ The **read-only preview** is built, tested, and wired end-to-end:
 - **UI** — `frontend/src/components/DirectionPanel.tsx`: the capability chip (honored→approximated→
   ignored, rationale tooltips) + summary line + expandable per-segment detail, debounced into the
   Composer behind a "Direction (preview)" disclosure. RTL keys off `source_script`, never `language`.
+- **Multi-segment generation (2026-08-10)** — direction now audibly affects output, not just the
+  preview. `POST /generate` gained `apply_direction: bool` (default false, unchanged behavior). When
+  true, the router calls `analyze()` + `render()` at enqueue (same pure-at-enqueue discipline as
+  routing — rule 4) and stores per-segment `{text, params, speed, pause_after_ms}` on the job.
+  `jobs/handlers/synthesize.py` branches on whether `segments` is present: directed jobs call
+  `scheduler.synthesize()` once **per segment** (own text/cfg_value/tempo), then
+  `audio.concat_wavs_with_pauses()` joins the real per-segment WAVs with real inter-segment silence —
+  every sample is either real model output or explicit silence, nothing fabricated (rule 1). Temp
+  segment files are always cleaned up (`finally`); the final path is recorded on the job row before
+  synthesis starts, same orphan rule as single-shot. `TTSGenerateResponse.segment_count` (1 for
+  normal, >1 when directed) surfaces in the Composer's result chip and the Recent tab, so a directed
+  clip visibly says so. The Composer only shows the "Apply this direction" checkbox *inside* the
+  capability-chip disclosure — the user must see what will/won't take effect before opting in.
+  33 new backend tests (concat primitive, the ffmpeg-missing-on-PATH graceful-degrade this surfaced as
+  a pre-existing gap and fixed the same way `routers/media.py`'s conversion path already was, the
+  directed job handler via a WAV-writing scheduler double, and the HTTP surface). 245 backend tests
+  total, ruff-clean, frontend build green. **Not yet validated with real audio — needs the pod** (this
+  box has no GPU/VoxCPM worker configured; local runs correctly reach the real scheduler and fail only
+  on `no interpreter configured for runtime 'voxcpm'`, the same failure single-shot generation already
+  hits here).
 
 ### Remaining
 
-1. **Multi-segment generation** — the renderer produces per-segment knobs, but the synth path still
-   generates one clip from the whole text. Wiring per-segment params + inter-segment pauses into actual
-   audio (a new job step) is the next build. It must not weaken golden rule 1, which is why it was held
-   out of the preview.
+1. **Real-audio pod validation** — confirm actual VoxCPM2 output through the directed path: segment
+   boundaries land where expected, joined audio has no clicks/discontinuities at the splice points,
+   and per-segment `cfg_value` audibly changes delivery. Nothing here should differ from single-shot
+   VoxCPM2 behavior (same worker, same wire protocol, called N times instead of once), but it is
+   unverified until heard.
 2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0)** — the flagged second implementation behind the frozen
    `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
    API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
    job `kind`. This is the "analyzer" half of the owner's "both, analyzer first" decision.
 3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
-   tab for pros") is not built. Simple mode (summary + chip) is what shipped.
+   tab for pros") is not built. Simple mode (summary + chip + apply checkbox) is what shipped.
 
 **Original design notes (unchanged):**
 

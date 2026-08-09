@@ -26,7 +26,13 @@ from fastapi import UploadFile
 
 from .exceptions import AudioValidationError, UploadTooLargeError
 
-__all__ = ["AudioMeta", "apply_audio_effects", "store_upload", "validate_audio"]
+__all__ = [
+    "AudioMeta",
+    "apply_audio_effects",
+    "concat_wavs_with_pauses",
+    "store_upload",
+    "validate_audio",
+]
 
 _CHUNK = 1 << 20  # 1 MiB
 _MIN_DURATION_SEC = 0.5
@@ -57,12 +63,62 @@ def apply_audio_effects(path: Path, speed: float = 1.0) -> None:
 
     tmp_path = path.with_suffix(f".fx_speed{speed}.wav")
     cmd = ["ffmpeg", "-y", "-i", str(path), "-filter:a", f"atempo={speed}", str(tmp_path)]
-    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except FileNotFoundError:
+        # ffmpeg missing from PATH: leave the file at its original tempo rather
+        # than fail the whole job — real model audio, just not re-timed. Same
+        # choice as the format-conversion path in routers/media.py.
+        tmp_path.unlink(missing_ok=True)
+        return
     if res.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 0:
         tmp_path.replace(path)
     else:
         tmp_path.unlink(missing_ok=True)
 
+
+
+def concat_wavs_with_pauses(parts: list[Path], pauses_ms: list[int], out_path: Path) -> float:
+    """
+    Join WAV `parts` in order into `out_path`, inserting `pauses_ms[i]` of
+    silence AFTER part i (the pause after the LAST part is dropped — no trailing
+    silence). Returns the final duration in seconds.
+
+    This is how Speech Direction becomes audible: each part is a separately
+    synthesized segment carrying its own per-segment prosody, and the gaps are
+    real inter-segment pauses. Every written sample is either a real segment or
+    explicit silence between segments — nothing is fabricated (golden rule 1).
+
+    All parts must share a sample rate and channel count; since they come from
+    one model in one job that holds, and a mismatch raises rather than being
+    papered over. Output is 16-bit PCM WAV (the pipeline's mono reference form).
+    """
+    if not parts:
+        raise AudioValidationError("No audio segments to join.")
+
+    blocks: list[np.ndarray] = []
+    sr0: int | None = None
+    last = len(parts) - 1
+    for i, part in enumerate(parts):
+        try:
+            data, sr = sf.read(str(part), dtype="float32", always_2d=True)
+        except Exception as exc:
+            raise AudioValidationError(f"Segment {i} is not readable audio.") from exc
+        if sr0 is None:
+            sr0 = int(sr)
+        elif int(sr) != sr0:
+            raise AudioValidationError(f"Segment {i} sample rate {sr} != {sr0}; cannot join.")
+        blocks.append(data)
+
+        pause_ms = pauses_ms[i] if i < len(pauses_ms) else 0
+        if pause_ms > 0 and i != last:
+            frames = int(sr0 * pause_ms / 1000)
+            if frames > 0:
+                blocks.append(np.zeros((frames, data.shape[1]), dtype=np.float32))
+
+    joined = np.concatenate(blocks, axis=0)
+    sf.write(str(out_path), joined, sr0, subtype="PCM_16")
+    return round(joined.shape[0] / sr0, 3)
 
 
 @dataclass(frozen=True)

@@ -54,6 +54,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const [direction, setDirection] = useState<DirectionAnalyzeResponse | null>(null);
   const [directionLoading, setDirectionLoading] = useState(false);
   const [directionErr, setDirectionErr] = useState<string | null>(null);
+  // Gated behind the disclosure being opened at least once — the user must
+  // have seen the honesty chip (what this model honors/ignores) before they
+  // can opt into applying it. Not reset on collapse: an already-informed
+  // choice stays in effect while the composer stays open.
+  const [applyDirection, setApplyDirection] = useState(false);
 
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
@@ -181,6 +186,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         text: text.trim(),
         speed,
         stability,
+        apply_direction: applyDirection,
       });
       settledJobId.current = null;
       setJobId(newJob.id);
@@ -325,7 +331,13 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
       </button>
 
       {showDirection && (
-        <DirectionPanel data={direction} loading={directionLoading} error={directionErr} />
+        <DirectionPanel
+          data={direction}
+          loading={directionLoading}
+          error={directionErr}
+          applyDirection={applyDirection}
+          onApplyDirectionChange={setApplyDirection}
+        />
       )}
 
       {err && (
@@ -417,6 +429,11 @@ function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: ()
           {r.transform === 'none' ? 'direct' : r.transform}
         </span>
         {r.lossy && <span className="tag warn">lossy</span>}
+        {job.result.segment_count > 1 && (
+          <span className="tag" title="Rendered as separately-synthesized, pause-joined segments">
+            directed · {job.result.segment_count} segments
+          </span>
+        )}
         <span className="grow" />
         <span className="v-meta">
           {job.result.duration_sec != null && <span>{job.result.duration_sec.toFixed(1)}s</span>}

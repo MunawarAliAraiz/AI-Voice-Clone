@@ -84,6 +84,11 @@ export interface TTSGenerateRequest {
   speed?: number;
   stability?: number;
   params?: Record<string, number | string | boolean>;
+  /** Apply Speech Direction: analyze into per-segment prosody and render each
+   *  segment separately, joined with real inter-segment pauses. Only fields
+   *  the routed model HONORS/APPROXIMATES take effect (see DirectionPanel's
+   *  capability chip) — never a silent no-op. Defaults false. */
+  apply_direction?: boolean;
 }
 
 export interface TTSGenerateResponse {
@@ -95,6 +100,9 @@ export interface TTSGenerateResponse {
   language: string;
   route: RouteInfo;
   created_at: string;
+  /** 1 for a normal generation; >1 when Speech Direction rendered this clip
+   *  from several separately-synthesized, pause-joined segments. */
+  segment_count: number;
 }
 
 export interface ScriptDetectResponse {

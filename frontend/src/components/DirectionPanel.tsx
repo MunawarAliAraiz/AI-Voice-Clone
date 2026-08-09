@@ -17,13 +17,23 @@ interface Props {
   data: DirectionAnalyzeResponse | null;
   loading: boolean;
   error: string | null;
+  /** Optional apply toggle. Omit both to keep this panel purely read-only
+   *  (e.g. a future standalone preview with no generate action attached). */
+  applyDirection?: boolean;
+  onApplyDirectionChange?: (value: boolean) => void;
 }
 
 // Honored first, ignored last — the ordering that makes "this model honors
 // rate, ignores emotion" readable at a glance.
 const SUPPORT_ORDER: Record<string, number> = { honored: 0, approximated: 1, ignored: 2 };
 
-export function DirectionPanel({ data, loading, error }: Props) {
+export function DirectionPanel({
+  data,
+  loading,
+  error,
+  applyDirection,
+  onApplyDirectionChange,
+}: Props) {
   const [showSegments, setShowSegments] = useState(false);
 
   if (loading) return <p className="hint">Analyzing direction…</p>;
@@ -53,6 +63,21 @@ export function DirectionPanel({ data, loading, error }: Props) {
           </span>
         ))}
       </div>
+
+      {onApplyDirectionChange && plan.segments.length > 0 && (
+        <label className="consent" style={{ marginTop: 'var(--space-2)' }}>
+          <input
+            type="checkbox"
+            checked={applyDirection ?? false}
+            onChange={(e) => onApplyDirectionChange(e.target.checked)}
+          />
+          <span>
+            Apply this direction — render {plan.segments.length} segment
+            {plan.segments.length === 1 ? '' : 's'} separately with the pacing above, joined with
+            real pauses. Fields marked "ignored" above still won't take effect.
+          </span>
+        </label>
+      )}
 
       {plan.segments.length > 0 && (
         <>
