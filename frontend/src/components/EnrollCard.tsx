@@ -8,7 +8,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../services/api';
 import type { LanguageInfo } from '../types/api';
 import { useRecorder } from '../hooks/useRecorder';
-import { IconAlert, IconMic, IconSpinner, IconStop, IconUpload } from './icons';
+import {
+  IconAlert,
+  IconChevronDown,
+  IconChevronUp,
+  IconMic,
+  IconSpinner,
+  IconStop,
+  IconUpload,
+} from './icons';
 import { AudioEditor, type AudioEditState } from './AudioEditor';
 import { fmtSeconds } from '../lib/format';
 
@@ -31,6 +39,7 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [editOptions, setEditOptions] = useState<AudioEditState | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -97,6 +106,7 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
       setFileName(null);
       setSelectedFile(null);
       setEditOptions(null);
+      setShowAdvanced(false);
       if (fileRef.current) fileRef.current.value = '';
       rec.reset();
       onEnrolled();
@@ -202,12 +212,28 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
         </div>
       )}
 
-      {/* Render Built-in Audio Editor when a reference file is selected or recorded */}
+      {/* Trim/speed/pitch/gain/fades — real controls, but noise for the common
+          case of "upload a clean clip and go". Collapsed by default; the
+          general-audience flow never needs to see them. */}
       {((mode === 'upload' && selectedFile) || (mode === 'record' && recFile)) && (
-        <AudioEditor
-          file={mode === 'record' ? recFile! : selectedFile!}
-          onApplyEdits={setEditOptions}
-        />
+        <>
+          <button
+            type="button"
+            className="disclosure-btn"
+            onClick={() => setShowAdvanced((s) => !s)}
+            aria-expanded={showAdvanced}
+          >
+            {showAdvanced ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+            <span>Advanced editing (trim, speed, pitch, gain, fades)</span>
+          </button>
+
+          {showAdvanced && (
+            <AudioEditor
+              file={mode === 'record' ? recFile! : selectedFile!}
+              onApplyEdits={setEditOptions}
+            />
+          )}
+        </>
       )}
 
       {mode === 'record' && (

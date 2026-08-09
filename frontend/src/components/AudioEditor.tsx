@@ -26,6 +26,24 @@ interface Props {
   onApplyEdits: (edits: AudioEditState) => void;
 }
 
+// Plain-language buckets over the raw semitone/dB dials — nobody outside audio
+// engineering knows what "+3 semitones" means, but "Higher" is unambiguous.
+const PITCH_OPTIONS = [
+  { value: -6, label: '🔉 Much Lower' },
+  { value: -3, label: '🔉 Lower' },
+  { value: 0, label: '🎤 Normal' },
+  { value: 3, label: '🔊 Higher' },
+  { value: 6, label: '🔊 Much Higher' },
+];
+
+const VOLUME_OPTIONS = [
+  { value: -12, label: '🔈 Much Quieter' },
+  { value: -6, label: '🔈 Quieter' },
+  { value: 0, label: '🔉 Normal' },
+  { value: 6, label: '🔊 Louder' },
+  { value: 12, label: '📢 Much Louder' },
+];
+
 export function AudioEditor({ file, onApplyEdits }: Props) {
   const [duration, setDuration] = useState<number>(30);
   const [trimStart, setTrimStart] = useState<number>(0);
@@ -181,36 +199,40 @@ export function AudioEditor({ file, onApplyEdits }: Props) {
           </select>
         </div>
 
-        {/* Pitch Shift Slider */}
+        {/* Pitch Selector */}
         <div>
           <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>
-            Pitch: {pitch > 0 ? `+${pitch}` : pitch} semitones
+            Pitch
           </label>
-          <input
-            type="range"
-            min={-12}
-            max={12}
-            step={1}
+          <select
             value={pitch}
             onChange={(e) => setPitch(Number(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--accent, #6366f1)' }}
-          />
+            style={{ width: '100%', fontSize: '11px', padding: '4px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'inherit', border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            {PITCH_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Volume/Gain Slider */}
+        {/* Volume Selector */}
         <div>
           <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>
-            Gain: {gain > 0 ? `+${gain}` : gain} dB
+            Volume
           </label>
-          <input
-            type="range"
-            min={-12}
-            max={12}
-            step={1}
+          <select
             value={gain}
             onChange={(e) => setGain(Number(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--accent, #6366f1)' }}
-          />
+            style={{ width: '100%', fontSize: '11px', padding: '4px 6px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'inherit', border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            {VOLUME_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -256,7 +278,7 @@ export function AudioEditor({ file, onApplyEdits }: Props) {
             onChange={(e) => setNormalize(e.target.checked)}
             style={{ accentColor: 'var(--accent, #6366f1)' }}
           />
-          Normalize LUFS (-16 LUFS)
+          Even Out Loudness (broadcast standard)
         </label>
 
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>

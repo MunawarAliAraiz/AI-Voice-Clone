@@ -33,7 +33,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const [stability, setStability] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('vcs_stability');
-      return saved !== null ? Number(saved) : 70;
+      return saved !== null ? nearestStabilityOption(Number(saved)) : 70;
     } catch {
       return 70;
     }
@@ -262,22 +262,20 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         </label>
 
         <label className="field" style={{ gridColumn: '1 / -1' }}>
-          <span className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Stability</span>
-            <span style={{ color: 'var(--muted)', fontSize: '11px', fontWeight: 400 }}>
-              {stability}% — {stability > 70 ? 'More Stable' : stability < 50 ? 'More Expressive' : 'Balanced'}
-            </span>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={stability}
-            onChange={(e) => handleStabilityChange(Number(e.target.value))}
-            aria-label="Stability"
-            style={{ accentColor: 'var(--accent, #6366f1)', cursor: 'pointer', width: '100%', marginTop: '6px' }}
-          />
+          <span className="field-label">Delivery style</span>
+          <div className="select-wrap">
+            <select
+              value={stability}
+              onChange={(e) => handleStabilityChange(Number(e.target.value))}
+              aria-label="Delivery style"
+            >
+              {STABILITY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </label>
       </div>
 
@@ -447,6 +445,24 @@ function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: ()
       </div>
       <AudioPlayer autoPlay src={mediaUrl(job.result.audio_url)} label="generated audio" />
     </div>
+  );
+}
+
+// "Stability" is how closely each generation sticks to the reference voice's
+// exact vocal texture vs. varying naturally from run to run — not emotional
+// tone (that's the separate Direction feature below). Plain-language
+// buckets over a 0-100 raw dial so nobody has to guess what a percentage means.
+const STABILITY_OPTIONS = [
+  { value: 30, label: '🎭 More Expressive' },
+  { value: 50, label: '🎨 Balanced' },
+  { value: 70, label: '🎯 Consistent (Recommended)' },
+  { value: 90, label: '🪨 Very Stable' },
+];
+
+function nearestStabilityOption(v: number): number {
+  return STABILITY_OPTIONS.reduce(
+    (best, o) => (Math.abs(o.value - v) < Math.abs(best - v) ? o.value : best),
+    STABILITY_OPTIONS[0]!.value
   );
 }
 
