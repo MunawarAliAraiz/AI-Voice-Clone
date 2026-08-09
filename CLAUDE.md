@@ -6,6 +6,14 @@ The rewrite is complete and validated end-to-end on GPU with real cloned audio. 
 **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before changing anything in
 `backend/app/inference/`, `backend/app/domain/`, or the engine layer. This file is the operational summary.
 
+**What's currently in flight, and what's next:** **[docs/ROADMAP.md](docs/ROADMAP.md)** —
+phase-by-phase status (done / in progress / designed-not-built), including the async job queue,
+the Recent tab, mobile/perf fixes, and the deferred Speech Direction / client-side-extraction /
+Chatterbox designs. **[docs/HANDOFF.md](docs/HANDOFF.md)** is the lower-level "resume without
+reconstructing anything" state dump (pod facts, open items, what a fresh session should do first).
+Update both at every checkpoint — a previous pod termination lost a day of planning because state
+lived only in a chat transcript, not in git.
+
 **Base branch is `main`.** The rewrite was merged into it on 2026-08-06 (`rewrite/contracts` points at the
 same commit and is kept in step). The merge was an *ours* merge: `main`'s two pre-rewrite commits are
 preserved as ancestors, but none of their content was reinstated — they only touched deleted predecessor
@@ -36,6 +44,14 @@ code, including the CPML-licensed `xtts_v2.py`, which rule 6 forbids reintroduci
    HF card. This is why XTTS v2 and Fish Speech were removed — don't reintroduce them.
 7. **Pin every HuggingFace `revision`.** `trust_remote_code=True` on an unpinned `main` is a supply-chain hole
    (IndicF5 needs it).
+8. **The `jobs` table is the queue.** `POST /api/generate` enqueues a row and returns 202;
+   `backend/app/inference/scheduler.py` is **never modified** for job-queue work — no FIFO object
+   goes into it, ever. A `JobRunner` (`app/jobs/runner.py`) claims rows from the `jobs` table with an
+   atomic `UPDATE ... RETURNING`. Route is resolved once, at enqueue, and stored on the row
+   (`route_json`) — a handler calling `resolve()` again at claim time is rule 4's bug wearing a queue.
+   A fake-runtime job's completed response must carry both the `X-Fake-Audio: true` header **and**
+   `is_fake: true` in the body (rule 1) — the header alone doesn't survive a proxy that strips it.
+   Full design: [docs/ROADMAP.md](docs/ROADMAP.md#part-a--async-job-queue).
 
 ---
 
@@ -166,8 +182,13 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   `dir="rtl"` keys off detected script, never `language === 'ur'`.
 - **Route shadowing.** `routers/models.py` endpoints were unreachable because `settings.py` registered first.
   There's a startup assertion for duplicate `(method, path)` — keep it.
-- **CSS vars.** `--color-primary`, `--border-color`, `--transition-medium` are used but never declared. A CI
-  check greps every `var(--x)` against `variables.css`. `styles/variables.css` is otherwise good — keep it.
+- **CSS vars.** `--fg` was used with a hardcoded fallback (`var(--fg, #f8fafc)`) and never declared in
+  `variables.css` — the fallback hid the bug instead of surfacing it. `frontend/scripts/check-css-vars.mjs`
+  (run via `npm run check:css-vars`, wired into `npm run build`) greps every `var(--x)` against
+  `variables.css` and fails the build on a miss, with a small allowlist for genuinely dynamic
+  runtime-computed properties (e.g. `--level`/`--phase` on the recording meter, written straight to
+  the DOM by JS, never meant to be declared statically). `styles/variables.css` is otherwise good —
+  keep it, and don't add a token there that isn't a real design token.
 - **`df` does not show the `/workspace` quota.** It is a MooseFS mount and `df` reports the whole cluster —
   it will cheerfully say "164 TB free" while the volume is full. Use `du -sh /workspace` against the volume
   size in the RunPod console. This already cost an hour: a real "disk quota exceeded" was dismissed as a
@@ -175,7 +196,16 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
 
 ## Conventions
 
-- Errors are RFC 9457 `problem+json` with a stable `code`. No `{"status":"ok","result":…}` envelope.
-- Every route needs `response_model=`. `frontend/src/types/api.ts` is **generated** from OpenAPI — don't hand-edit.
-- Frontend server state is TanStack Query v5; Zustand holds only API key, toasts, and record device preference.
+- Errors are RFC 9457 `problem+json` with a stable `code`. No `{"status":"ok","result":…}` envelope. A job's
+  `status` field (queued/running/succeeded/failed/cancelled) is domain state, not a transport envelope —
+  don't confuse the two when reviewing `JobStatusResponse`.
+- Every route needs `response_model=`. `frontend/src/types/api.ts` is **hand-written**, mirroring
+  `backend/app/api/schemas/**` — update it by hand when a schema changes. (Generating it from OpenAPI was
+  the plan at one point; it was never built. Don't assume a generator exists or refuse to hand-edit this
+  file — hand-editing it is correct.)
+- Frontend server state is TanStack Query v5 (`frontend/src/hooks/queries.ts`), adopted 2026-08.
+  **There is no Zustand** — it was never added, despite an earlier version of this file claiming
+  otherwise. The API key lives in `localStorage`, read/written directly in `App.tsx`'s `ApiKeyControl`.
+  Toasts and other UI-only state are plain `useState`. Don't add Zustand on the assumption it's already
+  a project dependency — check `package.json` first.
 - No `.catch(() => {})`. Ever.
