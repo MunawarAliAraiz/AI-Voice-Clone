@@ -12,6 +12,7 @@ Two rules that keep the wire honest:
 """
 
 from .history import HistoryItem, HistoryList, HistoryUpdate
+from .jobs import JobList, JobStatusResponse
 from .models import (
     LanguageInfo,
     LanguageListResponse,
@@ -54,6 +55,8 @@ __all__ = [
     "HistoryItem",
     "HistoryList",
     "HistoryUpdate",
+    "JobStatusResponse",
+    "JobList",
     "GPUInfo",
     "SystemStatus",
     "HealthResponse",

@@ -115,7 +115,7 @@ export function AudioEditor({ file, onApplyEdits }: Props) {
   return (
     <div className="audio-editor card-inset" style={{ padding: '14px', borderRadius: '8px', background: 'var(--panel-inset, rgba(15,23,42,0.6))', border: '1px solid var(--line, rgba(255,255,255,0.1))', marginTop: '12px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--fg, #f8fafc)' }}>
+        <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
           🛠️ Audio Editor Controls
         </h4>
         <button
@@ -134,7 +134,7 @@ export function AudioEditor({ file, onApplyEdits }: Props) {
           <span>Trim Start: {trimStart.toFixed(1)}s</span>
           <span>Trim End: {trimEnd?.toFixed(1) ?? duration.toFixed(1)}s</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+        <div className="trim-grid">
           <input
             type="range"
             min={0}

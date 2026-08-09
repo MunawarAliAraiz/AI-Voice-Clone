@@ -89,8 +89,13 @@ async def get_media(
             converted_path = src_path.with_suffix(f".fmt_{format.lower().lstrip('.')}{target_ext}")
             if not converted_path.exists():
                 cmd = ["ffmpeg", "-y", "-i", str(src_path), str(converted_path)]
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                if res.returncode == 0 and converted_path.exists():
+                try:
+                    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                except FileNotFoundError:
+                    # ffmpeg missing from PATH: serve the original format rather
+                    # than 500 — a wrong-but-playable file beats a hard failure.
+                    res = None
+                if res is not None and res.returncode == 0 and converted_path.exists():
                     serve_path = converted_path
             else:
                 serve_path = converted_path

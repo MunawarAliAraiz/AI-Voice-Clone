@@ -13,6 +13,8 @@ stored denormalized so history stays auditable after the catalog changes.
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,14 @@ class Database:
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
         await self._conn.commit()
+        # The job queue's atomic claim (UPDATE ... RETURNING) needs SQLite 3.35+
+        # (2021). Assert it here rather than discovering it at the first claim,
+        # deep inside a request.
+        if sqlite3.sqlite_version_info < (3, 35, 0):
+            raise RuntimeError(
+                f"SQLite {sqlite3.sqlite_version} is too old for the job queue's "
+                f"atomic claim (UPDATE ... RETURNING needs 3.35+)."
+            )
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -78,6 +88,24 @@ class Database:
             "SELECT * FROM voice_profiles WHERE id = ?", (profile_id,)
         )
         return await cur.fetchone()
+
+    async def get_profiles_by_ids(self, profile_ids: Sequence[int]) -> dict[int, aiosqlite.Row]:
+        """
+        Batched `get_profile`, keyed by id. Exists so a list endpoint (history,
+        jobs) can resolve N rows' `profile_name` in one query instead of N —
+        `routers/history.py` used to call `get_profile` once per row on every
+        page load.
+        """
+        unique = sorted(set(profile_ids))
+        if not unique:
+            return {}
+        placeholders = ",".join("?" for _ in unique)
+        cur = await self._c.execute(
+            f"SELECT * FROM voice_profiles WHERE id IN ({placeholders})",  # noqa: S608
+            unique,
+        )
+        rows = await cur.fetchall()
+        return {row["id"]: row for row in rows}
 
     async def list_profiles(self, *, active_only: bool = True) -> list[aiosqlite.Row]:
         q = "SELECT * FROM voice_profiles"
@@ -147,6 +175,21 @@ class Database:
         )
         return await cur.fetchone()
 
+    async def find_generation_by_output_path(self, output_path: str) -> aiosqlite.Row | None:
+        """
+        Used only by the job-queue startup reaper's orphan check. Deliberately
+        queries the source of truth (does ANY history row reference this exact
+        file) rather than trusting a job row's own `history_id` link — a job
+        can finish its work (audio written, history row created) and still be
+        cancelled at shutdown in the narrow window before its own row is
+        updated to 'succeeded'. Trusting `job.history_id is None` there would
+        delete a file a real history row still points at.
+        """
+        cur = await self._c.execute(
+            "SELECT * FROM generation_history WHERE output_path = ? LIMIT 1", (output_path,)
+        )
+        return await cur.fetchone()
+
     async def list_generations(
         self, *, limit: int = 50, offset: int = 0, profile_id: int | None = None
     ) -> list[aiosqlite.Row]:
@@ -181,3 +224,240 @@ class Database:
         cur = await self._c.execute("SELECT COUNT(*) AS n FROM generation_history")
         row = await cur.fetchone()
         return int(row["n"]) if row else 0
+
+    # ── jobs (async queue) ───────────────────────────────────────────────────
+    #
+    # Rows come back raw, same as everywhere else in this file — decoding
+    # params_json/route_json/result_json into a JobRecord is the jobs
+    # package's job (see app/jobs/runner.py), not this layer's.
+
+    async def create_job(
+        self, *, kind: str, params_json: str, route_json: str | None,
+        profile_id: int | None, priority: int = 0,
+    ) -> aiosqlite.Row:
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """INSERT INTO jobs (kind, params_json, route_json, profile_id, priority)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (kind, params_json, route_json, profile_id, priority),
+            )
+            await self._c.commit()
+            new_id = cur.lastrowid
+        row = await self.get_job(int(new_id))
+        assert row is not None
+        return row
+
+    async def get_job(self, job_id: int) -> aiosqlite.Row | None:
+        cur = await self._c.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
+        return await cur.fetchone()
+
+    async def list_jobs(
+        self, *, limit: int = 50, offset: int = 0, kind: str | None = None,
+        profile_id: int | None = None,
+    ) -> list[aiosqlite.Row]:
+        q = "SELECT * FROM jobs"
+        where: list[str] = []
+        params: list[Any] = []
+        if kind is not None:
+            where.append("kind = ?")
+            params.append(kind)
+        if profile_id is not None:
+            where.append("profile_id = ?")
+            params.append(profile_id)
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY queued_at DESC, id DESC LIMIT ? OFFSET ?"
+        params += [limit, offset]
+        cur = await self._c.execute(q, params)
+        return list(await cur.fetchall())
+
+    async def count_jobs(self, *, kind: str | None = None) -> int:
+        q = "SELECT COUNT(*) AS n FROM jobs"
+        params: list[Any] = []
+        if kind is not None:
+            q += " WHERE kind = ?"
+            params.append(kind)
+        cur = await self._c.execute(q, params)
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def claim_next_job(self, kind: str) -> aiosqlite.Row | None:
+        """
+        Atomically move the oldest eligible 'queued' job of `kind` to
+        'running' and return it — one statement, one write-lock acquisition,
+        no window in which two pool tasks could observe the same job as
+        claimable.
+        """
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """UPDATE jobs
+                      SET status = 'running',
+                          started_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          attempt = attempt + 1
+                    WHERE id = (
+                        SELECT id FROM jobs
+                         WHERE status = 'queued' AND kind = ? AND cancel_requested = 0
+                         ORDER BY priority DESC, id
+                         LIMIT 1
+                    )
+                    RETURNING *""",
+                (kind,),
+            )
+            row = await cur.fetchone()
+            await self._c.commit()
+            return row
+
+    async def finish_job(
+        self, job_id: int, *, history_id: int | None, result_json: str | None,
+    ) -> aiosqlite.Row | None:
+        async with self._write_lock:
+            await self._c.execute(
+                """UPDATE jobs
+                      SET status = 'succeeded',
+                          history_id = ?,
+                          result_json = ?,
+                          finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    WHERE id = ?""",
+                (history_id, result_json, job_id),
+            )
+            await self._c.commit()
+        return await self.get_job(job_id)
+
+    async def fail_job(
+        self, job_id: int, *, error_code: str, error_title: str, error_status: int,
+        error_detail: str, error_extensions_json: str,
+    ) -> aiosqlite.Row | None:
+        async with self._write_lock:
+            await self._c.execute(
+                """UPDATE jobs
+                      SET status = 'failed',
+                          error_code = ?, error_title = ?, error_status = ?,
+                          error_detail = ?, error_extensions_json = ?,
+                          finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    WHERE id = ?""",
+                (error_code, error_title, error_status, error_detail,
+                 error_extensions_json, job_id),
+            )
+            await self._c.commit()
+        return await self.get_job(job_id)
+
+    async def cancel_queued_job(self, job_id: int) -> aiosqlite.Row | None:
+        """
+        Cancel only if still 'queued'. Atomic: if the pool claimed it between
+        the caller's status check and this call, zero rows match and None
+        comes back — the caller re-reads the job to build the right error
+        (already terminal vs. now running, i.e. `JobNotCancellableError`).
+        """
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """UPDATE jobs
+                      SET status = 'cancelled', cancel_requested = 1,
+                          finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    WHERE id = ? AND status = 'queued'
+                    RETURNING *""",
+                (job_id,),
+            )
+            row = await cur.fetchone()
+            await self._c.commit()
+            return row
+
+    async def count_pending(self, kind: str) -> int:
+        """Jobs of `kind` not yet terminal — the enqueue-time backpressure bound."""
+        cur = await self._c.execute(
+            "SELECT COUNT(*) AS n FROM jobs WHERE kind = ? AND status IN ('queued','running')",
+            (kind,),
+        )
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def count_ahead(self, job_id: int, kind: str) -> int:
+        """How many still-queued jobs of `kind` were enqueued before this one."""
+        cur = await self._c.execute(
+            "SELECT COUNT(*) AS n FROM jobs WHERE kind = ? AND status = 'queued' AND id < ?",
+            (kind, job_id),
+        )
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def list_active_jobs(self, kind: str) -> list[aiosqlite.Row]:
+        """
+        Every not-yet-terminal job of `kind`, in enqueue order. Feeds
+        `app/jobs/estimate.py`'s ETA math: at most one row is 'running' (it
+        can appear anywhere in this id-ordered list — claim order isn't
+        enqueue order — the caller splits by status, not position).
+        """
+        cur = await self._c.execute(
+            "SELECT * FROM jobs WHERE kind = ? AND status IN ('queued','running') ORDER BY id",
+            (kind,),
+        )
+        return list(await cur.fetchall())
+
+    async def has_running(self, kind: str) -> bool:
+        cur = await self._c.execute(
+            "SELECT 1 FROM jobs WHERE kind = ? AND status = 'running' LIMIT 1", (kind,)
+        )
+        return await cur.fetchone() is not None
+
+    async def reap_running(
+        self, *, error_code: str, error_title: str, error_status: int, error_detail: str,
+    ) -> list[aiosqlite.Row]:
+        """
+        Fail every 'running' row and return the PRE-update rows (so the caller
+        can read `params_json` for the output path and decide whether to
+        unlink an orphaned file). Dead by definition: this app runs one
+        uvicorn worker, so a 'running' row at startup can only be from the
+        process that just died.
+        """
+        async with self._write_lock:
+            cur = await self._c.execute("SELECT * FROM jobs WHERE status = 'running'")
+            rows = list(await cur.fetchall())
+            if rows:
+                await self._c.execute(
+                    """UPDATE jobs
+                          SET status = 'failed',
+                              error_code = ?, error_title = ?, error_status = ?,
+                              error_detail = ?, error_extensions_json = '{}',
+                              finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                        WHERE status = 'running'""",
+                    (error_code, error_title, error_status, error_detail),
+                )
+                await self._c.commit()
+            return rows
+
+    async def expire_queued(
+        self, *, max_age_sec: int, error_code: str, error_title: str,
+        error_status: int, error_detail: str,
+    ) -> int:
+        """Fail 'queued' rows older than `max_age_sec`. Returns count expired."""
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """UPDATE jobs
+                      SET status = 'failed',
+                          error_code = ?, error_title = ?, error_status = ?,
+                          error_detail = ?, error_extensions_json = '{}',
+                          finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                          updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    WHERE status = 'queued'
+                      AND queued_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ? || ' seconds')""",
+                (error_code, error_title, error_status, error_detail, f"-{max_age_sec}"),
+            )
+            await self._c.commit()
+            return cur.rowcount
+
+    async def delete_jobs_older_than(self, *, retention_hours: int) -> int:
+        """Delete terminal jobs whose `finished_at` is older than the retention window."""
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """DELETE FROM jobs
+                    WHERE status IN ('succeeded','failed','cancelled')
+                      AND finished_at IS NOT NULL
+                      AND finished_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ? || ' hours')""",
+                (f"-{retention_hours}",),
+            )
+            await self._c.commit()
+            return cur.rowcount

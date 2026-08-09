@@ -28,8 +28,11 @@ env/
 node_modules/
 frontend/node_modules/
 
-# Tauri
+# Tauri — the project has no Cargo.toml, tauri.conf.json, or @tauri-apps
+# dependency; frontend/src-tauri/gen/schemas/ is stray generated output from
+# a fork branch merge (~5,260 of that branch's 7,326 added frontend lines).
 src-tauri/target/
+frontend/src-tauri/
 
 # Models (large files)
 data/models/

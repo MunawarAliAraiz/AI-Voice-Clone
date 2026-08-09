@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Download,
   FileAudio,
+  History,
   Loader2,
   Mic,
   MicOff,
@@ -70,6 +71,7 @@ export const IconVolume = make(Volume2);
 export const IconOffline = make(WifiOff);
 export const IconRoute = make(ArrowUpRight);
 export const IconSpark = make(Sparkle);
+export const IconHistory = make(History);
 
 /** Spinner — the one icon that animates. */
 export function IconSpinner({ size = SIZE, className }: IconProps) {

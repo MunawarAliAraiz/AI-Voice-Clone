@@ -23,10 +23,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
-from .api.routers import health, history, media, models, system, tts, voice
+from .api.routers import health, history, jobs, media, models, system, tts, voice
 from .config import Settings, get_settings
 from .db import Database
+from .inference.catalog import CATALOG
 from .inference.protocol import SchedulerProtocol
+from .jobs import JobRunner
 
 __all__ = ["create_app"]
 
@@ -38,6 +40,7 @@ def create_app(
     scheduler: SchedulerProtocol | None = None,
     db: Database | None = None,
     settings: Settings | None = None,
+    job_runner: JobRunner | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
 
@@ -53,6 +56,20 @@ def create_app(
             app.state.db = Database(settings.db_path)
             await app.state.db.connect()
             app.state.owns_db = True
+        # The job queue always wraps whichever db/scheduler ended up above —
+        # real or fake, injected or built — so the API test suite gets a real
+        # JobRunner driving a real Database against FakeScheduler, same as
+        # every other dependency here. See app/jobs/__init__.py.
+        if getattr(app.state, "jobs", None) is None:
+            app.state.jobs = JobRunner(app.state.db, app.state.scheduler, CATALOG, settings)
+            app.state.owns_jobs = True
+        if getattr(app.state, "owns_jobs", False):
+            # A 'running' row found now is dead by definition — see
+            # JobRunner.reap_stale. Only for a runner built HERE: an injected
+            # one (owns_jobs=False) is the caller's to start/stop, same as an
+            # injected scheduler or db.
+            await app.state.jobs.reap_stale()
+            await app.state.jobs.start()
 
         # Fire-and-forget: kicks off the ~20-60s cold load immediately instead of
         # waiting for the first /generate to pay it. Backgrounded rather than
@@ -80,6 +97,11 @@ def create_app(
                 warm_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await warm_task
+            if getattr(app.state, "owns_jobs", False):
+                # Never mark in-flight rows failed here — the disk isn't
+                # trustworthy mid-shutdown. The next boot's reap_stale
+                # decides, with the file (or its absence) in front of it.
+                await app.state.jobs.stop(drain_timeout_sec=settings.job_drain_timeout_sec)
             if getattr(app.state, "owns_scheduler", False):
                 await app.state.scheduler.shutdown()
             if getattr(app.state, "owns_db", False):
@@ -93,6 +115,9 @@ def create_app(
     if db is not None:
         app.state.db = db
         app.state.owns_db = False
+    if job_runner is not None:
+        app.state.jobs = job_runner
+        app.state.owns_jobs = False
 
     install_exception_handlers(app)
 
@@ -102,6 +127,7 @@ def create_app(
     app.include_router(system.router, prefix="/api")
     app.include_router(voice.router, prefix="/api")
     app.include_router(tts.router, prefix="/api")
+    app.include_router(jobs.router, prefix="/api")
     app.include_router(media.router, prefix="/api")
     app.include_router(history.router, prefix="/api")
     _assert_no_duplicate_routes(app)

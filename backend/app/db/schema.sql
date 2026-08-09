@@ -163,3 +163,77 @@ CREATE TABLE IF NOT EXISTS transliteration_cache (
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE (source_text, transform)
 );
+
+
+-- ── Jobs: the async queue ────────────────────────────────────────────────────
+--
+-- This table IS the queue. `app/inference/scheduler.py` is never given a FIFO
+-- object of its own — position is a COUNT(*) over this table, computed in
+-- `app/jobs/estimate.py`, which keeps the scheduler's eviction-under-slot
+-- invariant untouched. See `app/jobs/__init__.py` for the full design.
+--
+-- There is no migration mechanism (see the note at the top of this file's
+-- history for voice_profiles/generation_history — the same applies here):
+-- CREATE TABLE IF NOT EXISTS means an existing table keeps its old shape
+-- forever. Every column any foreseeable job kind will need must exist NOW,
+-- including result_json for kinds that never produce a generation_history row.
+
+CREATE TABLE IF NOT EXISTS jobs (
+    -- AUTOINCREMENT doubles as the FIFO sequence: monotonic, so "how many jobs
+    -- are ahead of me" is one COUNT with no extra column and no clock.
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    kind                   TEXT    NOT NULL,
+    status                 TEXT    NOT NULL DEFAULT 'queued'
+                           CHECK (status IN ('queued','running','succeeded','failed','cancelled')),
+
+    -- Opaque outside the kind's own handler. For 'synthesize' this carries the
+    -- resolved SynthRequest fields, INCLUDING output_path — see the orphan
+    -- rule in app/jobs/runner.py: no file is ever written whose path is not
+    -- already recorded in a job row.
+    params_json            TEXT    NOT NULL,
+    -- The RoutePlan, decided once by the pure resolve() at enqueue time and
+    -- never recomputed at claim time. Re-routing toward whatever model happens
+    -- to be resident when a job is claimed would be routing-by-residency —
+    -- bit-for-bit the defect this codebase's rewrite exists to prevent.
+    route_json             TEXT,
+
+    -- Result refs. history_id is the typed ref for 'synthesize'. result_json
+    -- exists for kinds that produce no history row (it cannot be added later).
+    history_id             INTEGER REFERENCES generation_history(id) ON DELETE SET NULL,
+    result_json            TEXT,
+
+    -- RFC 9457, decomposed. Reassembled on read into exactly the document
+    -- AppError.to_problem() produces, so the frontend's existing problem+json
+    -- handling works on a job's error field unchanged. Raw exception text is
+    -- NEVER stored here — a torch stack trace or filesystem path must not
+    -- reach a client; unexpected exceptions log server-side and store
+    -- error_code='INTERNAL_ERROR' with a generic detail.
+    error_code             TEXT,
+    error_title            TEXT,
+    error_status           INTEGER,
+    error_detail           TEXT,
+    error_extensions_json  TEXT,
+
+    profile_id             INTEGER REFERENCES voice_profiles(id) ON DELETE CASCADE,
+    priority               INTEGER NOT NULL DEFAULT 0,
+    cancel_requested       INTEGER NOT NULL DEFAULT 0,
+    attempt                INTEGER NOT NULL DEFAULT 0,
+
+    queued_at              TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    started_at             TEXT,
+    finished_at            TEXT,
+    updated_at             TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
+
+-- The claim query: WHERE status='queued' AND kind=? ORDER BY priority DESC, id.
+CREATE INDEX IF NOT EXISTS idx_jobs_claim
+    ON jobs (status, kind, id);
+
+-- The "Recent" view: newest-first, paginated.
+CREATE INDEX IF NOT EXISTS idx_jobs_queued
+    ON jobs (queued_at DESC);
+
+-- "Show everything queued for this voice."
+CREATE INDEX IF NOT EXISTS idx_jobs_profile
+    ON jobs (profile_id);

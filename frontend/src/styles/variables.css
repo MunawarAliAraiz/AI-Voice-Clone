@@ -16,11 +16,9 @@
   /* ── Accent — Warm Amber Copper ── */
   --accent: #e5a055;
   --accent-hover: #f2b978;
-  --accent-gradient: #e5a055;
   --accent-soft: rgba(229, 160, 85, 0.12);
   --accent-line: rgba(229, 160, 85, 0.34);
   --accent-ring: rgba(229, 160, 85, 0.45);
-  --accent-glow: rgba(229, 160, 85, 0.2);
   --on-accent: #1a1206;
 
   /* ── Text ── */
@@ -46,9 +44,6 @@
   --text-base: 13.5px;
   --text-md: 14.5px;
   --text-lg: 17px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
-  --text-3xl: 30px;
 
   /* ── Compact Spacing Scale ── */
   --space-1: 4px;
@@ -58,7 +53,6 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-  --space-12: 48px;
   --space-16: 64px;
 
   /* ── Radii ── */
@@ -75,7 +69,6 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ── Elevation ── */
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.3);
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.45);
 }

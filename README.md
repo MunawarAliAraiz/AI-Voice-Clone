@@ -10,9 +10,11 @@ external services, no per-character billing.
 > Design and rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md).
 > Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 > Working agreements for contributors and agents: [CLAUDE.md](CLAUDE.md).
+> What's done / in progress / planned next: [docs/ROADMAP.md](docs/ROADMAP.md).
 >
 > Base branch is `main`, which the rewrite was merged into on 2026-08-06. `dev` and
-> `feature/upgrade-tts-engines` are superseded.
+> `feature/upgrade-tts-engines` are superseded. An async job queue, Recent tab, mobile, and perf
+> pass landed 2026-08-09 on `feature/jobs-mobile-perf` (not yet merged) — see the roadmap.
 
 ## Languages
 

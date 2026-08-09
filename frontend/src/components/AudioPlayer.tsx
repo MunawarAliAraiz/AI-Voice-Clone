@@ -157,21 +157,12 @@ export function AudioPlayer({ src, compact, autoPlay, downloadName, label }: Pro
         )}
       </span>
 
-      <div className="download-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+      <div className="download-wrap">
         <select
           value={downloadFmt}
           onChange={(e) => setDownloadFmt(e.target.value)}
           aria-label="Download audio format"
           title="Choose audio format to download"
-          style={{
-            background: 'rgba(255, 255, 255, 0.07)',
-            color: 'var(--muted)',
-            border: '1px solid var(--line)',
-            borderRadius: '4px',
-            fontSize: compact ? '10px' : '11px',
-            padding: '2px 4px',
-            cursor: 'pointer',
-          }}
         >
           <option value="wav">WAV</option>
           <option value="mp3">MP3</option>

@@ -4,13 +4,16 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-06**, after the frontend revamp and the merge to `main`.
+Last updated: **2026-08-09**, after the async job queue / Recent tab / mobile / perf work.
 
 ---
 
 ## Where things stand
 
-**The product is complete and validated end-to-end on GPU with real cloned audio.**
+**The product is complete and validated end-to-end on GPU with real cloned audio.** A second body
+of work — async job queue, mobile responsiveness, LCP/FCP/TBT perf — landed 2026-08-09 on top of
+that, on a branch not yet merged to `main`. Full detail and forward roadmap:
+**[docs/ROADMAP.md](ROADMAP.md)**.
 
 | Wave | Status |
 |---|---|
@@ -24,9 +27,10 @@ Last updated: **2026-08-06**, after the frontend revamp and the merge to `main`.
 | **P6 — frontend** | ✅ Done, then revamped 2026-08-06: amber-on-navy tokens, lucide icons, rebuilt history (search / filter / day-grouping / pagination), accessibility pass. |
 | **P7 — CI/Docker** | ✅ CI green. Dockerfile rewritten CPU-slim but **not build-tested**. |
 | **Real-audio E2E** | ✅ Passed on an RTX A4500: enroll → route `voxcpm2`/`none` → real worker → RTF 1.10, valid WAV. |
+| **Jobs/mobile/perf** (2026-08-09) | ✅ Done, **not yet merged to `main`**. Async job queue (`jobs` table, `POST /api/generate` returns 202), TanStack Query + Recent tab, mobile fixes (375px/320px verified), LCP/FCP/TBT perf. Branch `feature/jobs-mobile-perf`, pushed to `fork`. Detail: [ROADMAP.md](ROADMAP.md). |
 
-**99 tests passing, ruff clean.** Branch: **`main`** (the rewrite was merged in on 2026-08-06;
-`rewrite/contracts` points at the same commit).
+**99 tests passing on `main`** (+34 more on `feature/jobs-mobile-perf`), ruff clean. Base branch:
+**`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same commit).
 
 ## Resuming on a new pod
 
@@ -126,13 +130,18 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 
 ## What's left to build
 
-- **B2** (next) — `main.py`, `config.py`, `db/**`, `api/**` routers, media tokens. Depends on
-  `SchedulerProtocol`, not the scheduler; tests against `tests/fakes/FakeScheduler`. Wire B1 in.
-- **F1–F4** — frontend, against `types/api.ts` and `lib/queryKeys.ts`. Node/npm are local-only.
-- **D1** — Docker, CI.
-- **Real runtimes** (was Wave 3) — implement against the verified snippets in `PHASE_A_RESULTS.md`.
-  Catalog now: `voxcpm2`, `chatterbox_ml_v3` (both permissive, measured), `f5_openbible_urdu`
-  (Devanagari-only, weak clone), `f5_indic` (gated). Given the Urdu report, VoxCPM2 is the priority.
+The backend-rewrite waves (B1–B3, P6, P7) above are all done — that list is stale, kept for
+history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
+
+- Merge `feature/jobs-mobile-perf` to `main` (open a PR — none exists yet as of 2026-08-09).
+- Phase 2: the Speech Direction layer (per-segment emotion/tone IR + a capability-declaring
+  renderer, so it doesn't repeat the Style Exaggeration mistake of a control nothing reads).
+- Phase 3: client-side audio extraction (move video→audio out of the backend, ffmpeg becomes the
+  fallback for formats `decodeAudioData` can't handle, not the only path).
+- Phase 4 (undesigned): Chatterbox runtime — catalog already declares its `exaggeration` param
+  ([catalog.py:155](../backend/app/inference/catalog.py)), no runtime implements it yet. Given the
+  Urdu report below, VoxCPM2 stays the cloning-quality priority regardless.
+- **D1** — Docker, CI. Dockerfile rewritten CPU-slim but still **not build-tested**.
 
 ## Non-negotiables (full detail in CLAUDE.md and docs/ARCHITECTURE.md)
 
@@ -164,8 +173,11 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 
 ## Next session — start here
 
-**B2 (API layer) on Sonnet.** Implementation against frozen contracts is what Sonnet is for. Wire the
-scheduler in behind `SchedulerProtocol`; test against `FakeScheduler`. Then F1–F4 (frontend, local).
+**Merge `feature/jobs-mobile-perf`, then start Phase 2** (see [docs/ROADMAP.md](ROADMAP.md)). The
+branch is pushed and verified (`pytest -m "not gpu"` + `npm run build` both pass, mobile checked
+in-browser at 375px/320px) but has no PR yet. Speech Direction (Phase 2) needs a plan written before
+any code — the capability-declaring renderer design in ROADMAP.md is a starting point, not a finished
+spec.
 
 **Token discipline (owner priority):** terse replies, no recaps, no exploratory pod runs without
 go-ahead, batch verification. Build inline when holding the contracts (B1/B3 were faster+cheaper that
@@ -181,5 +193,8 @@ way than spawning agents). Only spawn agents for genuinely parallel work.
 - [ ] Empty `LEGACY_TORCH_IMPORTERS` once the old engine layer is deleted (blocked on B1/B2/B3
       landing replacements — deleting it now would break the running app).
 - [ ] `NOTICE` file with CC-BY-SA attribution for OpenBible-Urdu.
-- [ ] `SettingsPage.tsx:88` says "Built with Tauri" — stale, F3's to fix.
-- [ ] `main.py:81-83` still lists `tauri://` CORS origins — B2's to remove.
+
+Resolved since last check (2026-08-09): `SettingsPage.tsx` no longer exists (the desktop shell was
+dropped project-wide) and `main.py` has no `tauri://` CORS origins — both stale items removed from
+this list. `frontend/src-tauri/` itself (leftover generated files, no Tauri config anywhere) was
+removed from git and gitignored the same day.
