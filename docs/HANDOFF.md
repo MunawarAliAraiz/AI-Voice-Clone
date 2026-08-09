@@ -36,16 +36,16 @@ commit but has drifted behind — treat as stale until re-synced).
 
 ## Resuming on a new pod
 
-The repo is **private**, so the pod cannot fetch it. Ship the tree, then run the bootstrap — both
-from the repo root on your machine:
+The repo is **public for read** — the pod clones anonymously, no token needed. Run the bootstrap
+directly against the feature branch (from your machine, repo root):
 
 ```bash
-git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p <PORT> root@<HOST> "tar -x -C /workspace"
+ssh -p <PORT> root@<HOST> "BRANCH=feature/speech-direction bash -s" < scripts/pod-bootstrap.sh
 ```
 
-```bash
-ssh -p <PORT> root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
-```
+Drop `BRANCH=...` once `feature/speech-direction` is merged to `main` (the script's default). `GH_USER`/
+`GH_TOKEN` are only needed for pushing commits *from* the pod, not for this clone — see
+[POD_SETUP.md](POD_SETUP.md) for the rare anonymous-clone-rejected case.
 
 Rebuilds caches, both venvs (API without torch, runtime **with torch pinned to cu128** — the default
 cu130 wheel silently reports `cuda.is_available() == False`), and re-downloads the ~7 GB of weights if
