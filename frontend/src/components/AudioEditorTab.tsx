@@ -13,6 +13,24 @@ interface Props {
   onEnrolled?: () => void;
 }
 
+// Plain-language buckets over the raw semitone/dB dials — nobody outside audio
+// engineering knows what "+3 semitones" means, but "Higher" is unambiguous.
+const PITCH_OPTIONS = [
+  { value: -6, label: '🔉 Much Lower' },
+  { value: -3, label: '🔉 Lower' },
+  { value: 0, label: '🎤 Normal' },
+  { value: 3, label: '🔊 Higher' },
+  { value: 6, label: '🔊 Much Higher' },
+];
+
+const VOLUME_OPTIONS = [
+  { value: -12, label: '🔈 Much Quieter' },
+  { value: -6, label: '🔈 Quieter' },
+  { value: 0, label: '🔉 Normal' },
+  { value: 6, label: '🔊 Louder' },
+  { value: 12, label: '📢 Much Louder' },
+];
+
 export function AudioEditorTab({ onEnrolled }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [duration, setDuration] = useState<number>(0);
@@ -265,15 +283,16 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                   </div>
                 </div>
                 <div className="field">
-                  <label className="field-label">Pitch Shift: {pitch > 0 ? `+${pitch}` : pitch} semitones</label>
-                  <input
-                    type="range"
-                    min={-12}
-                    max={12}
-                    step={1}
-                    value={pitch}
-                    onChange={(e) => setPitch(Number(e.target.value))}
-                  />
+                  <label className="field-label">Pitch</label>
+                  <div className="select-wrap">
+                    <select value={pitch} onChange={(e) => setPitch(Number(e.target.value))}>
+                      {PITCH_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -283,15 +302,16 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                   🔊 Volume & Fades
                 </h4>
                 <div className="field" style={{ marginBottom: 'var(--space-3)' }}>
-                  <label className="field-label">Gain / Volume: {gain > 0 ? `+${gain}` : gain} dB</label>
-                  <input
-                    type="range"
-                    min={-12}
-                    max={12}
-                    step={1}
-                    value={gain}
-                    onChange={(e) => setGain(Number(e.target.value))}
-                  />
+                  <label className="field-label">Volume</label>
+                  <div className="select-wrap">
+                    <select value={gain} onChange={(e) => setGain(Number(e.target.value))}>
+                      {VOLUME_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="row">
                   <div className="field">
@@ -339,7 +359,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                   checked={normalize}
                   onChange={(e) => setNormalize(e.target.checked)}
                 />
-                <span>Normalize LUFS (-16 LUFS broadcast standard)</span>
+                <span>Even Out Loudness (broadcast standard)</span>
               </label>
 
               <label className="consent" style={{ margin: 0 }}>
