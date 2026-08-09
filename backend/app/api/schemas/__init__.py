@@ -11,6 +11,16 @@ Two rules that keep the wire honest:
      never hand-edited, so the wire types cannot silently diverge.
 """
 
+from .direction import (
+    CapabilityReportOut,
+    DirectedSegmentOut,
+    DirectionAnalyzeRequest,
+    DirectionAnalyzeResponse,
+    DirectionPlanOut,
+    DirectionSummaryOut,
+    EmphasisSpanOut,
+    FieldCapabilityOut,
+)
 from .history import HistoryItem, HistoryList, HistoryUpdate
 from .jobs import JobList, JobStatusResponse
 from .models import (
@@ -57,6 +67,14 @@ __all__ = [
     "HistoryUpdate",
     "JobStatusResponse",
     "JobList",
+    "DirectionAnalyzeRequest",
+    "DirectionAnalyzeResponse",
+    "DirectionPlanOut",
+    "DirectedSegmentOut",
+    "DirectionSummaryOut",
+    "EmphasisSpanOut",
+    "CapabilityReportOut",
+    "FieldCapabilityOut",
     "GPUInfo",
     "SystemStatus",
     "HealthResponse",

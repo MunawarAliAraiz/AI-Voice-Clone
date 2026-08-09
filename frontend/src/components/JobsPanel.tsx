@@ -131,6 +131,11 @@ function JobRow({
           {job.route.model_display_name}
         </span>
         {job.route.lossy && <span className="tag warn">lossy</span>}
+        {job.result != null && job.result.segment_count > 1 && (
+          <span className="tag" title="Rendered as separately-synthesized, pause-joined segments">
+            directed · {job.result.segment_count} segments
+          </span>
+        )}
         {job.result?.duration_sec != null && (
           <>
             <span className="dot" />

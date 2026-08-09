@@ -113,6 +113,17 @@ class TTSGenerateRequest(BaseModel):
         default_factory=dict,
         description="Model-specific knobs. Validated against the spec; unknown keys are a 422.",
     )
+    apply_direction: bool = Field(
+        False,
+        description=(
+            "Apply Speech Direction. When true, the text is analyzed into "
+            "per-segment prosody (intensity->cfg_value, rate->tempo, "
+            "inter-segment pauses) and each segment is synthesized separately, "
+            "then joined. Only fields the routed model HONORS/APPROXIMATES take "
+            "effect — see GET /api/direction/analyze for the capability report. "
+            "Default false keeps the original single-shot behavior."
+        ),
+    )
 
 
 class TTSGenerateResponse(BaseModel):
@@ -131,6 +142,10 @@ class TTSGenerateResponse(BaseModel):
     #: Never optional. Every generation states what produced it.
     route: RouteInfo
     created_at: datetime
+    #: 1 for a normal single-shot generation; >1 when Speech Direction was
+    #: applied and the clip was rendered from several separately-synthesized,
+    #: pause-joined segments (see `apply_direction` on the request).
+    segment_count: int = 1
 
 
 class ScriptDetectRequest(BaseModel):

@@ -1,6 +1,7 @@
 // API client for the voice-clone backend. Plain fetch, problem+json aware.
 
 import type {
+  DirectionAnalyzeResponse,
   HistoryItem,
   HistoryList,
   JobList,
@@ -127,6 +128,12 @@ export const api = {
     }),
   detectScript: (text: string, language: string) =>
     request<ScriptDetectResponse>('/api/detect-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    }),
+  analyzeDirection: (text: string, language: string) =>
+    request<DirectionAnalyzeResponse>('/api/direction/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),

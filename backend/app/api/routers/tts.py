@@ -30,12 +30,14 @@ from fastapi import APIRouter, Depends, Response
 
 from ...config import Settings
 from ...db import Database
+from ...domain.direction_analyze import analyze as analyze_direction
 from ...domain.language import profile_text
 from ...domain.routing import RoutePlan, UrduStrategy, resolve
 from ...exceptions import GenerationError, InvalidParamsError, ProfileNotFoundError
 from ...inference.catalog import ModelCatalog
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
+from ...jobs.direction import render as render_direction
 from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
 from ..schemas.jobs import JobStatusResponse
 from ..schemas.tts import (
@@ -106,6 +108,32 @@ async def generate(
         else:
             synth_params["cfg_value"] = round(2.0 + ((body.stability - 70.0) / 30.0) * 0.5, 2)
 
+    # Speech Direction: analyze + render HERE, at enqueue, off the same pure
+    # `resolve()`-chosen spec — never re-derived at claim time (golden rule 4,
+    # same discipline as the route). `analyze` is a pure heuristic; the segments
+    # it renders (per-segment cfg_value/tempo/pause) are stored on the job and
+    # synthesized verbatim by the handler. `resolved_text == body.text` here
+    # because the transform is NONE (asserted above), so segmenting body.text is
+    # segmenting exactly what the model will see.
+    segments = None
+    if body.apply_direction:
+        rendered = render_direction(analyze_direction(body.text, body.language), spec)
+        if rendered.segments:
+            segments = [
+                {
+                    "index": s.index,
+                    "text": s.text,
+                    # Per-segment direction params (intensity->cfg_value) win over
+                    # the global stability-derived cfg; other user params carry through.
+                    "params": {**synth_params, **s.params},
+                    # Compose the user's global speed with the segment's rate,
+                    # clamped to atempo's supported range.
+                    "speed": max(0.5, min(2.0, body.speed * s.speed)),
+                    "pause_after_ms": s.pause_after_ms,
+                }
+                for s in rendered.segments
+            ]
+
     # output_path is chosen NOW, before any job row exists, and stored in the
     # job's params — the orphan rule (app/jobs/runner.py): no file is ever
     # written whose path is not already recorded in a job row.
@@ -125,6 +153,7 @@ async def generate(
             "sample_rate": settings.default_sample_rate,
             "params": synth_params,
             "speed": body.speed,
+            "segments": segments,
         },
         # Decided once, here, by the pure resolve() above — never recomputed
         # at claim time. See app/jobs/handlers/synthesize.py.

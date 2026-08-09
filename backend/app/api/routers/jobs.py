@@ -64,6 +64,7 @@ def _result_or_none(
         language=result.get("language", ""),
         route=route,
         created_at=result["created_at"],
+        segment_count=result.get("segment_count", 1),
     )
 
 

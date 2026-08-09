@@ -4,16 +4,16 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-09**, after the async job queue / Recent tab / mobile / perf work.
+Last updated: **2026-08-10**, after Speech Direction gained multi-segment generation.
 
 ---
 
 ## Where things stand
 
-**The product is complete and validated end-to-end on GPU with real cloned audio.** A second body
-of work — async job queue, mobile responsiveness, LCP/FCP/TBT perf — landed 2026-08-09 on top of
-that, on a branch not yet merged to `main`. Full detail and forward roadmap:
-**[docs/ROADMAP.md](ROADMAP.md)**.
+**The product is complete and validated end-to-end on GPU with real cloned audio.** Two bodies of
+work have landed on top of that since: async jobs/mobile/perf (merged to `main` via PR #1), and
+Speech Direction (pushed to `feature/speech-direction`, not yet merged — see below). Full detail
+and forward roadmap: **[docs/ROADMAP.md](ROADMAP.md)**.
 
 | Wave | Status |
 |---|---|
@@ -27,23 +27,25 @@ that, on a branch not yet merged to `main`. Full detail and forward roadmap:
 | **P6 — frontend** | ✅ Done, then revamped 2026-08-06: amber-on-navy tokens, lucide icons, rebuilt history (search / filter / day-grouping / pagination), accessibility pass. |
 | **P7 — CI/Docker** | ✅ CI green. Dockerfile rewritten CPU-slim but **not build-tested**. |
 | **Real-audio E2E** | ✅ Passed on an RTX A4500: enroll → route `voxcpm2`/`none` → real worker → RTF 1.10, valid WAV. |
-| **Jobs/mobile/perf** (2026-08-09) | ✅ Done, **not yet merged to `main`**. Async job queue (`jobs` table, `POST /api/generate` returns 202), TanStack Query + Recent tab, mobile fixes (375px/320px verified), LCP/FCP/TBT perf. Branch `feature/jobs-mobile-perf`, pushed to `fork`. Detail: [ROADMAP.md](ROADMAP.md). |
+| **Jobs/mobile/perf** | ✅ Done, **merged to `main`** via PR #1 (was branch `feature/jobs-mobile-perf`, now deleted). Async job queue (`jobs` table, `POST /api/generate` returns 202), TanStack Query + Recent tab, mobile fixes (375px/320px verified), LCP/FCP/TBT perf. |
+| **Speech Direction (Phase 2)** | 🚧 Audibly wired, **not yet merged**, pod-unverified. IR + heuristic analyzer + capability report + preview endpoint + UI chip + **multi-segment generation** (`apply_direction: true` on `/generate` now changes the actual audio). Branch `feature/speech-direction`, pushed to `fork`. Detail + what's still missing: [ROADMAP.md](ROADMAP.md). |
 
-**99 tests passing on `main`** (+34 more on `feature/jobs-mobile-perf`), ruff clean. Base branch:
-**`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same commit).
+**212 backend tests passing on `feature/speech-direction`** (verified 2026-08-10), ruff clean. Base
+branch: **`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same
+commit but has drifted behind — treat as stale until re-synced).
 
 ## Resuming on a new pod
 
-The repo is **private**, so the pod cannot fetch it. Ship the tree, then run the bootstrap — both
-from the repo root on your machine:
+The repo is **public for read** — the pod clones anonymously, no token needed. Run the bootstrap
+directly against the feature branch (from your machine, repo root):
 
 ```bash
-git archive --prefix=AI-Voice-Clone/ HEAD | ssh -p <PORT> root@<HOST> "tar -x -C /workspace"
+ssh -p <PORT> root@<HOST> "BRANCH=feature/speech-direction bash -s" < scripts/pod-bootstrap.sh
 ```
 
-```bash
-ssh -p <PORT> root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
-```
+Drop `BRANCH=...` once `feature/speech-direction` is merged to `main` (the script's default). `GH_USER`/
+`GH_TOKEN` are only needed for pushing commits *from* the pod, not for this clone — see
+[POD_SETUP.md](POD_SETUP.md) for the rare anonymous-clone-rejected case.
 
 Rebuilds caches, both venvs (API without torch, runtime **with torch pinned to cu128** — the default
 cu130 wheel silently reports `cuda.is_available() == False`), and re-downloads the ~7 GB of weights if
@@ -133,9 +135,13 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 The backend-rewrite waves (B1–B3, P6, P7) above are all done — that list is stale, kept for
 history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
 
-- Merge `feature/jobs-mobile-perf` to `main` (open a PR — none exists yet as of 2026-08-09).
-- Phase 2: the Speech Direction layer (per-segment emotion/tone IR + a capability-declaring
-  renderer, so it doesn't repeat the Style Exaggeration mistake of a control nothing reads).
+- Merge `feature/speech-direction` to `main` (open a PR — none exists yet as of 2026-08-10).
+  `feature/jobs-mobile-perf` is already merged (PR #1) and deleted.
+- **Pod validation of directed generation** (the immediate next step — see below): confirm real
+  VoxCPM2 audio through the multi-segment path, no clicks/discontinuities at segment joins.
+- The Qwen2.5-Instruct LLM analyzer (Apache-2.0, pod-only) behind the frozen `analyze()` signature.
+- Phase 2 remainder: the Advanced per-segment IR editor (preview + apply-checkbox shipped; full
+  editing did not).
 - Phase 3: client-side audio extraction (move video→audio out of the backend, ffmpeg becomes the
   fallback for formats `decodeAudioData` can't handle, not the only path).
 - Phase 4 (undesigned): Chatterbox runtime — catalog already declares its `exaggeration` param
@@ -166,18 +172,27 @@ history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
 4. **F5 blank `ref_text` silently loads Whisper** — always pass `ref_text`.
 5. **VRAM must be sampled concurrently** — post-hoc readings under-report peak ~5×. Scheduler sizes
    from recorded `vram_mb`, not live readings.
-6. **Roman Urdu → Devanagari is one MIT-licensed hop** (`ai4bharat-transliteration`), higher quality
-   than the Perso-Arabic path.
+6. **~~Roman Urdu → Devanagari via `ai4bharat-transliteration`~~ — dead, do not reintroduce.**
+   VoxCPM2 renders romanized Hindi/Urdu directly (tokenizer-free, owner-verified by ear); the whole
+   transliteration subsystem was deleted. `ai4bharat` was also a py3.12 dependency nightmare
+   (fairseq → tensorflow_addons → keras3 breakage, 9.8GB venv).
 7. **VoxCPM2 warm-up trap** — built-in warm-up skips the cloning path; first real clone eats +40–55 s
    unless warmed with a real reference.
 
 ## Next session — start here
 
-**Merge `feature/jobs-mobile-perf`, then start Phase 2** (see [docs/ROADMAP.md](ROADMAP.md)). The
-branch is pushed and verified (`pytest -m "not gpu"` + `npm run build` both pass, mobile checked
-in-browser at 375px/320px) but has no PR yet. Speech Direction (Phase 2) needs a plan written before
-any code — the capability-declaring renderer design in ROADMAP.md is a starting point, not a finished
-spec.
+**Pod validation of directed generation, then the Qwen2.5 analyzer** (see
+[docs/ROADMAP.md](ROADMAP.md)). `feature/speech-direction` is pushed and CPU-verified (212 tests,
+ruff clean, `npm run build` green, live HTTP wiring confirmed reaching the real scheduler) but the
+directed multi-segment path has never produced real audio — this box has no GPU. On the pod:
+
+1. `VCS_ALLOW_FAKE_RUNTIME=1` is not needed here; wire the real VoxCPM2 worker
+   (`VCS_VOXCPM_PYTHON`, `VCS_WORKER_CWD`, `HF_HOME`) the same way the Phase-1 real-audio E2E did.
+2. `POST /api/generate` with `apply_direction: true` on multi-sentence text; listen for clicks or
+   discontinuities at segment joins, and confirm `cfg_value` audibly changes delivery between
+   segments of different intensity.
+3. Then start the Qwen2.5-Instruct analyzer (needs the pod for the model itself, not just to test).
+4. Open a PR for `feature/speech-direction` once directed audio is confirmed clean.
 
 **Token discipline (owner priority):** terse replies, no recaps, no exploratory pod runs without
 go-ahead, batch verification. Build inline when holding the contracts (B1/B3 were faster+cheaper that

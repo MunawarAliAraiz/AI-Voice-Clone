@@ -14,12 +14,12 @@ must never break while you do it."
 ## Where things stand
 
 **Branch:** `feature/jobs-mobile-perf`, pushed to `fork` (`https://github.com/MunawarAliAraiz/AI-Voice-Clone`).
-Not yet merged to `main`, no PR opened yet as of 2026-08-09.
+Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 
 | Phase | Status | Summary |
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
-| **2 — Speech Direction layer** | 📋 Designed, not started | Per-segment emotion/tone/pacing IR + capability-declaring renderer. See design below. |
+| **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | 📋 Designed, not started | Move video→audio extraction into the browser; server-side ffmpeg becomes the fallback, not the only path. |
 | **4 — Chatterbox runtime + beyond** | 💭 Not designed | Real `exaggeration` knob, multi-speaker, dubbing, post-processing presets. |
 
@@ -151,7 +151,66 @@ callback-based level reporting.
 
 ---
 
-## Phase 2 — Speech Direction layer (designed, not built)
+## Phase 2 — Speech Direction layer (preview landed)
+
+### Landed (2026-08-09)
+
+The **read-only preview** is built, tested, and wired end-to-end:
+
+- **IR** — `backend/app/domain/direction.py`: the frozen, pure `DirectionPlan` (segments carrying
+  emotion / tone / intensity / energy / rate / emphasis / `pause_after_ms`, plus a `DirectionSummary`
+  for simple mode). Stdlib-only, no I/O, no inference imports.
+- **Heuristic analyzer** — `backend/app/domain/direction_analyze.py`: real per-language keyword
+  lexicon (English, Roman + Perso-Arabic Urdu, Roman + Devanagari Hindi) + punctuation/caps/intensifier
+  signals → `DirectionPlan`. Pure, deterministic, offline. `analyze()` signature is frozen so the LLM
+  analyzer drops in behind it. 32 tests in `test_direction_analyze.py`.
+- **Capability report + renderer** — `backend/app/jobs/direction.py`: `capability_for(spec)` declares,
+  per IR field, HONORED / APPROXIMATED / IGNORED (VoxCPM: honors segmentation/pause/rate, approximates
+  intensity→`cfg_value` and emphasis, **ignores emotion/tone/energy — visibly**). `render(plan, spec)`
+  maps the plan to per-segment knobs, and IGNORED fields provably never leak into params. 8 tests in
+  `test_direction_capability.py`, incl. the `DIRECTION_FIELDS`↔IR sync contract.
+- **Endpoint** — `POST /api/direction/analyze` (`routers/direction.py` + `schemas/direction.py`):
+  routes exactly like `/generate` (pure `resolve()`), returns the plan + capability report + the same
+  `RouteInfo` chip. Read-only: generates no audio, enqueues no job.
+- **UI** — `frontend/src/components/DirectionPanel.tsx`: the capability chip (honored→approximated→
+  ignored, rationale tooltips) + summary line + expandable per-segment detail, debounced into the
+  Composer behind a "Direction (preview)" disclosure. RTL keys off `source_script`, never `language`.
+- **Multi-segment generation (2026-08-10)** — direction now audibly affects output, not just the
+  preview. `POST /generate` gained `apply_direction: bool` (default false, unchanged behavior). When
+  true, the router calls `analyze()` + `render()` at enqueue (same pure-at-enqueue discipline as
+  routing — rule 4) and stores per-segment `{text, params, speed, pause_after_ms}` on the job.
+  `jobs/handlers/synthesize.py` branches on whether `segments` is present: directed jobs call
+  `scheduler.synthesize()` once **per segment** (own text/cfg_value/tempo), then
+  `audio.concat_wavs_with_pauses()` joins the real per-segment WAVs with real inter-segment silence —
+  every sample is either real model output or explicit silence, nothing fabricated (rule 1). Temp
+  segment files are always cleaned up (`finally`); the final path is recorded on the job row before
+  synthesis starts, same orphan rule as single-shot. `TTSGenerateResponse.segment_count` (1 for
+  normal, >1 when directed) surfaces in the Composer's result chip and the Recent tab, so a directed
+  clip visibly says so. The Composer only shows the "Apply this direction" checkbox *inside* the
+  capability-chip disclosure — the user must see what will/won't take effect before opting in.
+  33 new backend tests (concat primitive, the ffmpeg-missing-on-PATH graceful-degrade this surfaced as
+  a pre-existing gap and fixed the same way `routers/media.py`'s conversion path already was, the
+  directed job handler via a WAV-writing scheduler double, and the HTTP surface). 245 backend tests
+  total, ruff-clean, frontend build green. **Not yet validated with real audio — needs the pod** (this
+  box has no GPU/VoxCPM worker configured; local runs correctly reach the real scheduler and fail only
+  on `no interpreter configured for runtime 'voxcpm'`, the same failure single-shot generation already
+  hits here).
+
+### Remaining
+
+1. **Real-audio pod validation** — confirm actual VoxCPM2 output through the directed path: segment
+   boundaries land where expected, joined audio has no clicks/discontinuities at the splice points,
+   and per-segment `cfg_value` audibly changes delivery. Nothing here should differ from single-shot
+   VoxCPM2 behavior (same worker, same wire protocol, called N times instead of once), but it is
+   unverified until heard.
+2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0)** — the flagged second implementation behind the frozen
+   `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
+   API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
+   job `kind`. This is the "analyzer" half of the owner's "both, analyzer first" decision.
+3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
+   tab for pros") is not built. Simple mode (summary + chip + apply checkbox) is what shipped.
+
+**Original design notes (unchanged):**
 
 **Problem this solves:** today "Emotion" was a fake per-request DSP filter. A real one needs to (a)
 work per *segment* of the text, not the whole request, and (b) be honest about what each model can

@@ -84,6 +84,11 @@ export interface TTSGenerateRequest {
   speed?: number;
   stability?: number;
   params?: Record<string, number | string | boolean>;
+  /** Apply Speech Direction: analyze into per-segment prosody and render each
+   *  segment separately, joined with real inter-segment pauses. Only fields
+   *  the routed model HONORS/APPROXIMATES take effect (see DirectionPanel's
+   *  capability chip) — never a silent no-op. Defaults false. */
+  apply_direction?: boolean;
 }
 
 export interface TTSGenerateResponse {
@@ -95,6 +100,9 @@ export interface TTSGenerateResponse {
   language: string;
   route: RouteInfo;
   created_at: string;
+  /** 1 for a normal generation; >1 when Speech Direction rendered this clip
+   *  from several separately-synthesized, pause-joined segments. */
+  segment_count: number;
 }
 
 export interface ScriptDetectResponse {
@@ -104,6 +112,61 @@ export interface ScriptDetectResponse {
   routable: boolean;
   hint: string | null;
   would_route_to: RouteInfo | null;
+}
+
+/** Mirrors backend `EmphasisSpanOut`. Offsets into the segment's text. */
+export interface EmphasisSpan {
+  start: number;
+  end: number;
+}
+
+/** Mirrors backend `DirectedSegmentOut` field-for-field. */
+export interface DirectedSegment {
+  text: string;
+  index: number;
+  emotion: string; // "neutral" | "happy" | "sad" | "angry" | "excited" | "calm" | "serious" | "questioning"
+  tone: string; // "neutral" | "warm" | "firm" | "soft"
+  intensity: string; // "low" | "medium" | "high"
+  energy: string; // "low" | "medium" | "high"
+  rate: string; // "slow" | "normal" | "fast"
+  emphasis: EmphasisSpan[];
+  pause_after_ms: number;
+}
+
+/** Mirrors backend `DirectionSummaryOut`. Derived from `segments`. */
+export interface DirectionSummary {
+  emotion: string;
+  intensity: string;
+  rate: string;
+}
+
+/** Mirrors backend `DirectionPlanOut` field-for-field. */
+export interface DirectionPlan {
+  language: string;
+  source_script: string; // "latin" | "arabic" | "devanagari" | ...
+  segments: DirectedSegment[];
+  summary: DirectionSummary;
+}
+
+/** Mirrors backend `FieldCapabilityOut`. One row of the honesty chip. */
+export interface FieldCapability {
+  field: string; // "segmentation" | "pause_after" | "rate" | "emphasis" | "intensity" | "emotion" | "tone" | "energy"
+  support: string; // "honored" | "approximated" | "ignored"
+  rationale: string;
+}
+
+/** Mirrors backend `CapabilityReportOut`. What the routed model does with each `DirectionPlan` field. */
+export interface CapabilityReport {
+  model_id: string;
+  model_display_name: string;
+  fields: FieldCapability[];
+}
+
+/** `POST /api/direction/analyze`'s body — mirrors backend `DirectionAnalyzeResponse`. */
+export interface DirectionAnalyzeResponse {
+  plan: DirectionPlan;
+  capability: CapabilityReport;
+  route: RouteInfo;
 }
 
 export interface HistoryItem {
