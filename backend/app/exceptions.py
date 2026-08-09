@@ -48,6 +48,12 @@ __all__ = [
     "WorkerCrashedError",
     "GenerationTimeoutError",
     "GenerationError",
+    # Jobs (async queue)
+    "JobNotFoundError",
+    "JobQueueFullError",
+    "JobNotCancellableError",
+    "JobInterruptedError",
+    "JobExpiredError",
 ]
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
@@ -360,3 +366,87 @@ class GenerationError(AppError):
 
     def __init__(self, model_id: str, detail: str) -> None:
         super().__init__(detail, model_id=model_id)
+
+
+# ── Jobs (async queue) ───────────────────────────────────────────────────────
+#
+# The job queue moves synthesis off the request/response cycle: POST /generate
+# writes a row and returns 202, a pool claims it, and the client polls. These
+# five errors are distinct from the scheduler's own QueueFullError/GenerationTimeoutError
+# above (raised directly by a blocking synthesize() call) — a job error is raised
+# by the enqueue/poll/cancel surface, or stored on a job row by the runner. Two
+# (JobInterruptedError, JobExpiredError) are never raised into a live response;
+# they exist so the startup reaper can store a real RFC 9457 code, status, title,
+# and detail on a row, so the polling endpoint renders the identical problem+json
+# shape whether the failure is live or reaped.
+
+
+class JobNotFoundError(AppError):
+    code = "JOB_NOT_FOUND"
+    http_status = 404
+    title = "Job not found"
+
+    def __init__(self, job_id: int) -> None:
+        super().__init__(f"Job {job_id} does not exist.", job_id=job_id)
+
+
+class JobQueueFullError(AppError):
+    """
+    Queue depth bound reached.
+
+    Distinct from QueueFullError: that one means "the GPU is momentarily
+    saturated, retry in seconds" (a scheduler admission bound). This one means
+    "you already have `limit` jobs pending" — a much larger, durable bound on
+    the durable jobs table, not the in-memory admission semaphore.
+    """
+
+    code = "JOB_QUEUE_FULL"
+    http_status = 503
+    title = "Job queue full"
+
+    def __init__(self, limit: int, depth: int, retry_after_sec: int = 30) -> None:
+        super().__init__(
+            f"You already have {depth} jobs pending; the limit is {limit}.",
+            limit=limit,
+            depth=depth,
+            retry_after_sec=retry_after_sec,
+        )
+
+
+class JobNotCancellableError(AppError):
+    code = "JOB_NOT_CANCELLABLE"
+    http_status = 409
+    title = "Job cannot be cancelled"
+
+    def __init__(self, job_id: int, status: str) -> None:
+        super().__init__(
+            f"Job {job_id} is {status!r} and cannot be cancelled.",
+            job_id=job_id,
+            status=status,
+        )
+
+
+class JobInterruptedError(AppError):
+    """
+    Stored only. Written by the startup reaper for a `running` row found at
+    boot — dead by definition, since this app runs one uvicorn worker and the
+    only process that could have been running it just started.
+    """
+
+    code = "JOB_INTERRUPTED"
+    http_status = 503
+    title = "Job interrupted"
+
+    def __init__(self) -> None:
+        super().__init__("The server restarted while this job was running. Re-submit it.")
+
+
+class JobExpiredError(AppError):
+    """Stored only. A `queued` job older than `job_queue_max_age_sec` at boot."""
+
+    code = "JOB_EXPIRED"
+    http_status = 503
+    title = "Job expired"
+
+    def __init__(self) -> None:
+        super().__init__("This job sat queued too long across a server restart. Re-submit it.")

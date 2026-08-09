@@ -4,44 +4,37 @@
  * The user declares the language; the app detects the script. It deliberately
  * does not guess Roman Urdu from English — both are Latin — so `dir` keys off
  * the DETECTED script, never `language === 'ur'`.
+ *
+ * Generation is async: `generate()` enqueues a job and returns 202
+ * immediately; `useJob` polls it to a terminal status. Closing the tab (or
+ * this component unmounting) no longer loses the clip — it lands in the
+ * Recent tab regardless, because the job runs server-side independent of
+ * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
+import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
-import type { LanguageInfo, ScriptDetectResponse, TTSGenerateResponse, VoiceProfile } from '../types/api';
+import type { JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
-import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner } from './icons';
+import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner, IconX } from './icons';
 
 interface Props {
   voices: VoiceProfile[];
   languages: LanguageInfo[];
-  onGenerated: () => void;
+  /** Fires exactly once per job, the moment it first reaches a terminal status. */
+  onJobSettled?: (job: JobStatusResponse) => void;
 }
 
-export function Composer({ voices, languages, onGenerated }: Props) {
+export function Composer({ voices, languages, onJobSettled }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   const [speed, setSpeed] = useState<number>(1.0);
-  const [emotion, setEmotion] = useState<string>(() => {
-    try {
-      return localStorage.getItem('vcs_emotion') || 'neutral';
-    } catch {
-      return 'neutral';
-    }
-  });
   const [stability, setStability] = useState<number>(() => {
     try {
       const saved = localStorage.getItem('vcs_stability');
       return saved !== null ? Number(saved) : 70;
     } catch {
       return 70;
-    }
-  });
-  const [styleExaggeration, setStyleExaggeration] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('vcs_style_exaggeration');
-      return saved !== null ? Number(saved) : 0;
-    } catch {
-      return 0;
     }
   });
   const [expanded, setExpanded] = useState<boolean>(() => {
@@ -53,15 +46,29 @@ export function Composer({ voices, languages, onGenerated }: Props) {
   });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [result, setResult] = useState<TTSGenerateResponse | null>(null);
   const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
+
+  const [jobId, setJobId] = useState<number | null>(null);
+  const generateMutation = useGenerateMutation();
+  const cancelMutation = useCancelJobMutation();
+  const { data: job } = useJob(jobId);
+  const invalidateAfterSuccess = useInvalidateAfterJobSuccess();
+  const settledJobId = useRef<number | null>(null);
 
   useEffect(() => {
     const first = voices[0];
     if (profileId === null && first) setProfileId(first.id);
   }, [voices, profileId]);
+
+  // Fire the settle callback (toast) exactly once per job, the turn it first
+  // becomes terminal — not on every subsequent poll of the same finished job.
+  useEffect(() => {
+    if (!job || !isTerminal(job.status) || settledJobId.current === job.id) return;
+    settledJobId.current = job.id;
+    onJobSettled?.(job);
+    if (job.status === 'succeeded') invalidateAfterSuccess();
+  }, [job, onJobSettled, invalidateAfterSuccess]);
 
   // Adjust default speed when language changes (English speech defaults to 0.9x for natural pace)
   function handleLanguageChange(newLang: string) {
@@ -73,28 +80,10 @@ export function Composer({ voices, languages, onGenerated }: Props) {
     }
   }
 
-  function handleEmotionChange(val: string) {
-    setEmotion(val);
-    try {
-      localStorage.setItem('vcs_emotion', val);
-    } catch {
-      // storage unavailable
-    }
-  }
-
   function handleStabilityChange(val: number) {
     setStability(val);
     try {
       localStorage.setItem('vcs_stability', String(val));
-    } catch {
-      // storage unavailable
-    }
-  }
-
-  function handleStyleExaggerationChange(val: number) {
-    setStyleExaggeration(val);
-    try {
-      localStorage.setItem('vcs_style_exaggeration', String(val));
     } catch {
       // storage unavailable
     }
@@ -148,25 +137,19 @@ export function Composer({ voices, languages, onGenerated }: Props) {
   async function generate() {
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
-    setBusy(true);
     setErr(null);
-    setResult(null);
     try {
-      const res = await api.generate({
+      const newJob = await generateMutation.mutateAsync({
         profile_id: profileId,
         language,
         text: text.trim(),
         speed,
-        emotion,
         stability,
-        style_exaggeration: styleExaggeration,
       });
-      setResult(res);
-      onGenerated();
+      settledJobId.current = null;
+      setJobId(newJob.id);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : String(e));
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -180,6 +163,7 @@ export function Composer({ voices, languages, onGenerated }: Props) {
 
   const langs = languages.length ? languages : [];
   const rtl = detect?.is_rtl ?? false;
+  const busy = generateMutation.isPending || (job != null && !isTerminal(job.status));
   const disabled = busy || !voices.length;
 
   return (
@@ -235,22 +219,6 @@ export function Composer({ voices, languages, onGenerated }: Props) {
           </div>
         </label>
 
-        <label className="field">
-          <span className="field-label">Emotion</span>
-          <div className="select-wrap">
-            <select value={emotion} onChange={(e) => handleEmotionChange(e.target.value)}>
-              <option value="neutral">Neutral (Default)</option>
-              <option value="happy">Happy 😊</option>
-              <option value="sad">Sad 😢</option>
-              <option value="angry">Angry 😠</option>
-              <option value="excited">Excited 🎉</option>
-              <option value="calm">Calm 🌿</option>
-              <option value="whisper">Whisper 🤫</option>
-              <option value="narration">Narration 📖</option>
-            </select>
-          </div>
-        </label>
-
         <label className="field" style={{ gridColumn: '1 / -1' }}>
           <span className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Stability</span>
@@ -269,25 +237,6 @@ export function Composer({ voices, languages, onGenerated }: Props) {
             style={{ accentColor: 'var(--accent, #6366f1)', cursor: 'pointer', width: '100%', marginTop: '6px' }}
           />
         </label>
-
-        <label className="field" style={{ gridColumn: '1 / -1' }}>
-          <span className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>Style Exaggeration</span>
-            <span style={{ color: 'var(--muted)', fontSize: '11px', fontWeight: 400 }}>
-              {styleExaggeration}% — {styleExaggeration === 0 ? 'Natural (Default)' : styleExaggeration > 75 ? 'Highly Exaggerated' : styleExaggeration > 45 ? 'Dramatic' : 'Subtle Expressive'}
-            </span>
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={styleExaggeration}
-            onChange={(e) => handleStyleExaggerationChange(Number(e.target.value))}
-            aria-label="Style Exaggeration"
-            style={{ accentColor: 'var(--accent, #6366f1)', cursor: 'pointer', width: '100%', marginTop: '6px' }}
-          />
-        </label>
       </div>
 
       <div className="textarea-wrapper">
@@ -298,7 +247,7 @@ export function Composer({ voices, languages, onGenerated }: Props) {
           onKeyDown={onKeyDown}
           rows={expanded ? 16 : 5}
           style={{ height: expanded ? '360px' : '130px' }}
-          maxLength={50000}
+          maxLength={5000}
           dir={rtl ? 'rtl' : 'ltr'}
           placeholder={PLACEHOLDER[language] ?? 'Type your text…'}
           aria-label="Text to speak"
@@ -345,19 +294,70 @@ export function Composer({ voices, languages, onGenerated }: Props) {
         {busy ? 'Generating…' : 'Generate'}
       </button>
 
-      {busy && (
-        <p className="hint center" aria-live="polite">
-          First run after a restart loads the model — that one can take a minute.
-        </p>
-      )}
-
-      {result && <ResultCard result={result} />}
+      {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
     </section>
   );
 }
 
-function ResultCard({ result }: { result: TTSGenerateResponse }) {
-  const r = result.route;
+function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: () => void }) {
+  const r = job.route;
+
+  if (job.status === 'queued' || job.status === 'running') {
+    return (
+      <div className="result" aria-live="polite">
+        <div className="result-head">
+          <span className="route-chip solid" title={r.rationale}>
+            {r.model_display_name}
+            <span className="sep">·</span>
+            {r.transform === 'none' ? 'direct' : r.transform}
+          </span>
+          {r.lossy && <span className="tag warn">lossy</span>}
+        </div>
+        <p className="hint center">
+          {job.status === 'queued' ? (
+            job.position != null && job.position > 0 ? (
+              <>Queued — #{job.position + 1} in line{job.eta_sec != null && `, ~${Math.round(job.eta_sec)}s`}</>
+            ) : (
+              'Starting shortly…'
+            )
+          ) : (
+            <>
+              Generating…
+              {job.eta_sec != null && ` ~${Math.round(job.eta_sec)}s left`}
+              {' — first run after a restart loads the model, which can take a minute.'}
+            </>
+          )}
+        </p>
+        {job.status === 'queued' && (
+          <button type="button" className="btn-sm danger" onClick={onCancel} style={{ margin: '0 auto' }}>
+            <IconX size={13} /> Cancel
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (job.status === 'failed') {
+    return (
+      <div className="inline-error" role="alert">
+        <IconAlert size={14} />
+        <span>
+          <strong>{job.error?.code ?? 'GENERATION_FAILED'}</strong> — {job.error?.detail ?? 'Generation failed.'}
+        </span>
+      </div>
+    );
+  }
+
+  if (job.status === 'cancelled') {
+    return (
+      <p className="hint center" role="status">
+        Cancelled.
+      </p>
+    );
+  }
+
+  // succeeded
+  if (!job.result) return null;
   return (
     <div className="result">
       <div className="result-head">
@@ -369,16 +369,16 @@ function ResultCard({ result }: { result: TTSGenerateResponse }) {
         {r.lossy && <span className="tag warn">lossy</span>}
         <span className="grow" />
         <span className="v-meta">
-          {result.duration_sec != null && <span>{result.duration_sec.toFixed(1)}s</span>}
-          {result.rtf != null && (
+          {job.result.duration_sec != null && <span>{job.result.duration_sec.toFixed(1)}s</span>}
+          {job.result.rtf != null && (
             <>
               <span className="dot" />
-              <span>RTF {result.rtf.toFixed(2)}</span>
+              <span>RTF {job.result.rtf.toFixed(2)}</span>
             </>
           )}
         </span>
       </div>
-      <AudioPlayer autoPlay src={mediaUrl(result.audio_url)} label="generated audio" />
+      <AudioPlayer autoPlay src={mediaUrl(job.result.audio_url)} label="generated audio" />
     </div>
   );
 }

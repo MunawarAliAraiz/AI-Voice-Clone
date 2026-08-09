@@ -58,10 +58,12 @@ async def list_history(
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> HistoryList:
     rows = await db.list_generations(limit=page_size, offset=(page - 1) * page_size)
-    items = []
-    for r in rows:
-        prof = await db.get_profile(r["profile_id"])
-        items.append(_item(r, prof["name"] if prof else None, catalog, settings))
+    profiles = await db.get_profiles_by_ids([r["profile_id"] for r in rows])
+    items = [
+        _item(r, profiles[r["profile_id"]]["name"] if r["profile_id"] in profiles else None,
+              catalog, settings)
+        for r in rows
+    ]
     return HistoryList(
         items=items, total=await db.count_generations(), page=page, page_size=page_size
     )

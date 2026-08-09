@@ -4,7 +4,7 @@
  * Consent is a required field: the backend rejects the upload without it, and
  * voice recordings are biometric data in several jurisdictions.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../services/api';
 import type { LanguageInfo } from '../types/api';
 import { useRecorder } from '../hooks/useRecorder';
@@ -35,10 +35,24 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const rec = useRecorder();
+  const meterRef = useRef<HTMLDivElement | null>(null);
+  const rec = useRecorder(
+    useCallback((level: number) => {
+      meterRef.current?.style.setProperty('--level', String(level));
+    }, []),
+  );
 
   // Object URLs must be revoked or every re-render leaks one.
   const recUrl = useMemo(() => (rec.blob ? URL.createObjectURL(rec.blob) : null), [rec.blob]);
+
+  // Without this, a new File() is constructed on every re-render (e.g. every
+  // keystroke in the name field below) with a fresh identity, which re-fires
+  // AudioEditor's `[file]` effect — a new object URL and <audio> metadata
+  // fetch for audio that hasn't actually changed.
+  const recFile = useMemo(
+    () => (rec.blob ? new File([rec.blob], 'recording.wav', { type: 'audio/wav' }) : null),
+    [rec.blob],
+  );
   useEffect(() => {
     return () => {
       if (recUrl) URL.revokeObjectURL(recUrl);
@@ -152,7 +166,9 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
                 }}
               />
               <IconUpload size={15} />
-              <span>{fileName ?? 'Choose an audio or video file (WAV, MP3, MP4, MKV, etc.) — 6 to 15 seconds works best'}</span>
+              <span className="file-drop-label">
+                {fileName ?? 'Choose an audio or video file (WAV, MP3, MP4, MKV, etc.) — 6 to 15 seconds works best'}
+              </span>
             </div>
           </label>
         </div>
@@ -169,16 +185,15 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
             </button>
 
             {rec.recording && (
-              <div className="meter" aria-hidden="true">
+              // `--level` is written directly to this element by useRecorder's
+              // onLevel callback (see meterRef above) — bypassing React state
+              // so a ~60/s animation-frame update never re-renders this tree.
+              // Each bar's `--phase` is static per index, computed once here.
+              <div className="meter" ref={meterRef} aria-hidden="true">
                 {Array.from({ length: 14 }, (_, i) => (
                   <span
                     key={i}
-                    style={{
-                      transform: `scaleY(${Math.max(
-                        0.12,
-                        Math.min(1, rec.level * (0.55 + Math.sin(i * 1.3) * 0.45) * 2.2),
-                      )})`,
-                    }}
+                    style={{ '--phase': 0.55 + Math.sin(i * 1.3) * 0.45 } as React.CSSProperties}
                   />
                 ))}
               </div>
@@ -188,13 +203,9 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
       )}
 
       {/* Render Built-in Audio Editor when a reference file is selected or recorded */}
-      {((mode === 'upload' && selectedFile) || (mode === 'record' && rec.blob)) && (
+      {((mode === 'upload' && selectedFile) || (mode === 'record' && recFile)) && (
         <AudioEditor
-          file={
-            mode === 'record'
-              ? new File([rec.blob!], 'recording.wav', { type: 'audio/wav' })
-              : selectedFile!
-          }
+          file={mode === 'record' ? recFile! : selectedFile!}
           onApplyEdits={setEditOptions}
         />
       )}

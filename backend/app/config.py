@@ -78,6 +78,26 @@ class Settings(BaseSettings):
     max_upload_mb: int = 50
     default_sample_rate: int = 44_100
 
+    #: Async job queue (see `app/jobs/`). `job_concurrency` is per JobKind — the
+    #: default of 1 for SYNTHESIZE matches the scheduler's single GPU slot; a
+    #: second concurrent synth task would just block holding an admission
+    #: permit while making eviction thrash between two models possible.
+    job_concurrency: int = 1
+    #: Queue-depth backpressure at enqueue time (not the scheduler's in-memory
+    #: admission semaphore, which stays uncontended once the pool is the only
+    #: caller of synthesize()). A much larger, durable bound than "8 concurrent
+    #: HTTP requests" — see JobQueueFullError.
+    job_queue_limit: int = 32
+    #: How long the lifespan waits for an in-flight job before cancelling the
+    #: pool tasks at shutdown. Long enough for a warm 2-10s synth; short enough
+    #: not to hang a deploy behind a 124s cold load.
+    job_drain_timeout_sec: float = 30.0
+    #: A 'queued' job found at startup older than this is expired rather than
+    #: run, so a crashed pod doesn't synthesize a pile of stale clips on boot.
+    job_queue_max_age_sec: int = 3600
+    #: Terminal jobs are deleted at startup once older than this.
+    job_retention_hours: int = 72
+
     @model_validator(mode="after")
     def _default_media_secret(self) -> Settings:
         if not self.media_token_secret:

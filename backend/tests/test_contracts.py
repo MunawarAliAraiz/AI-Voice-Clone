@@ -330,6 +330,30 @@ def test_error_codes_are_unique() -> None:
     assert not dupes, f"duplicate error codes: {dupes}"
 
 
+# ── Job queue ────────────────────────────────────────────────────────────────
+
+
+def test_job_status_set_is_closed() -> None:
+    """
+    `JobStatus` (app/jobs/types.py) and the `CHECK (status IN (...))` clause on
+    the `jobs` table (db/schema.sql) are one fact stated twice. Under
+    `CREATE TABLE IF NOT EXISTS`, an existing table keeps its old CHECK
+    constraint forever — there is no migration path to add a sixth status —
+    so if these two ever drift, a status the enum allows could be silently
+    rejected by SQLite on a database that already exists, or vice versa. This
+    parses the literal list out of the SQL text itself, not a hand-maintained
+    copy, so the two truly cannot go out of sync without this test noticing.
+    """
+    from app.jobs.types import JobStatus
+
+    schema_sql = (BACKEND_ROOT / "app" / "db" / "schema.sql").read_text(encoding="utf-8")
+    match = re.search(r"CHECK\s*\(\s*status\s+IN\s*\(([^)]+)\)\s*\)", schema_sql)
+    assert match, "no `CHECK (status IN (...))` clause found on the jobs table"
+    sql_statuses = {s.strip().strip("'") for s in match.group(1).split(",")}
+
+    assert sql_statuses == {s.value for s in JobStatus}
+
+
 def test_no_route_error_enumerates_what_would_work() -> None:
     """
     The whole point of NoRouteError: never leave the user guessing.

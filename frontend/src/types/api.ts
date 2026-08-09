@@ -82,9 +82,7 @@ export interface TTSGenerateRequest {
   urdu_strategy?: string;
   output_format?: string;
   speed?: number;
-  emotion?: string;
   stability?: number;
-  style_exaggeration?: number;
   params?: Record<string, number | string | boolean>;
 }
 
@@ -125,6 +123,52 @@ export interface HistoryItem {
 
 export interface HistoryList {
   items: HistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** RFC 9457 problem+json, as stored on a failed job — same shape as ProblemJson. */
+export type JobError = ProblemJson;
+
+export type JobKind = 'synthesize';
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/**
+ * One job's state — the SAME shape whether it just came back from
+ * `POST /api/generate` (202, still 'queued'), a poll of
+ * `GET /api/jobs/{id}`, or an item inside `GET /api/jobs`' Recent list.
+ *
+ * `status` here is domain state, never transport state (see the backend's
+ * `JobStatusResponse` docstring) — a bad job id is a 404 problem+json
+ * response, never a 200 with an `error` field.
+ */
+export interface JobStatusResponse {
+  id: number;
+  kind: JobKind;
+  status: JobStatus;
+  profile_id: number | null;
+  profile_name: string | null;
+  input_text: string | null;
+  /** Never absent from 'queued' onward — routing is pure and already ran. */
+  route: RouteInfo;
+  /** 0-indexed jobs strictly ahead of this one. Only set while 'queued'. */
+  position: number | null;
+  /** Seconds. A UI estimate, not a promise. Set while 'queued' or 'running'. */
+  eta_sec: number | null;
+  /** Set once 'succeeded'. Same shape the old synchronous /generate returned. */
+  result: TTSGenerateResponse | null;
+  /** Set once 'failed'. */
+  error: JobError | null;
+  /** True only once a 'succeeded' job's audio came from the fake runtime. */
+  is_fake: boolean;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface JobList {
+  items: JobStatusResponse[];
   total: number;
   page: number;
   page_size: number;

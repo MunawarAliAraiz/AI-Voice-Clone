@@ -19,8 +19,16 @@ from ..db import Database
 from ..exceptions import PROBLEM_BASE_URI, PROBLEM_CONTENT_TYPE
 from ..inference.catalog import CATALOG, ModelCatalog
 from ..inference.protocol import SchedulerProtocol
+from ..jobs import JobRunner
 
-__all__ = ["get_settings", "get_scheduler", "get_catalog", "get_db", "ApiKeyMiddleware"]
+__all__ = [
+    "get_settings",
+    "get_scheduler",
+    "get_catalog",
+    "get_db",
+    "get_job_runner",
+    "ApiKeyMiddleware",
+]
 
 
 def get_settings(request: Request) -> Settings:
@@ -41,6 +49,11 @@ def get_scheduler(request: Request) -> SchedulerProtocol:
 
 def get_catalog() -> ModelCatalog:
     return CATALOG
+
+
+def get_job_runner(request: Request) -> JobRunner:
+    """The live job runner, started at app startup (or injected in tests)."""
+    return request.app.state.jobs
 
 
 #: Paths reachable without the API key. Media authenticates with its own signed

@@ -103,22 +103,11 @@ class TTSGenerateRequest(BaseModel):
         le=2.0,
         description="Speed multiplier for synthesized audio. 1.0 is original, <1.0 is slower, >1.0 is faster.",
     )
-    emotion: str = Field(
-        "neutral",
-        examples=["neutral", "happy", "sad", "angry", "excited", "calm", "whisper", "narration"],
-        description="Emotional expression style for speech synthesis.",
-    )
     stability: int = Field(
         70,
         ge=0,
         le=100,
         description="Speech stability percentage (0-100). Default 70. Higher values increase consistency, lower values increase expressiveness.",
-    )
-    style_exaggeration: int = Field(
-        0,
-        ge=0,
-        le=100,
-        description="Style exaggeration percentage (0-100). Default 0 (Natural). Higher values produce more dramatic delivery.",
     )
     params: dict[str, float | int | str | bool] = Field(
         default_factory=dict,

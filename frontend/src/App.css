@@ -17,6 +17,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'cv11', 'ss01';
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 ::selection {
@@ -41,6 +42,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-1) var(--space-6);
 }
 
@@ -234,6 +237,31 @@ input::placeholder, textarea::placeholder {
   color: var(--tertiary);
 }
 
+/* The global input rule above (width, padding, border, background) is meant
+   for text-like fields. Range and checkbox inputs have their own native box
+   model — inheriting that rule boxes a thin slider track in visible padding
+   and border, and stretches checkboxes to full width. */
+input[type='range'] {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  border-radius: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 textarea {
   resize: vertical;
   min-height: 108px;
@@ -285,6 +313,16 @@ textarea {
 
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr; }
+}
+
+.trim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .trim-grid { grid-template-columns: 1fr; }
 }
 
 .select-wrap {
@@ -339,7 +377,7 @@ textarea {
   height: 100%;
 }
 
-.file-drop span {
+.file-drop-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -568,6 +606,11 @@ textarea {
 .segmented button:hover { color: var(--text); }
 .segmented button.on { background: var(--accent-soft); color: var(--accent); }
 
+@media (max-width: 560px) {
+  .seg-label { display: none; }
+  .segmented button { padding: 8px; }
+}
+
 /* ── Recorder ────────────────────────────────────────────── */
 .recorder {
   display: flex;
@@ -621,6 +664,9 @@ textarea {
   opacity: 0.7;
   transform-origin: center;
   transition: transform 90ms linear;
+  /* --level is written directly (bypassing React) by useRecorder's onLevel
+     callback; --phase is a static per-bar multiplier set once at render. */
+  transform: scaleY(clamp(0.12, calc(var(--level, 0) * var(--phase, 1) * 2.2), 1));
 }
 
 .rec-preview {
@@ -744,6 +790,36 @@ textarea {
   text-overflow: ellipsis;
   display: inline-block;
   vertical-align: bottom;
+}
+
+.download-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.download-wrap select {
+  width: auto;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+/* At list-row widths (~271px inside a 375px viewport) the play button, track,
+   time, and format picker can't all fit on one line at 44px touch targets.
+   Wrap the track to its own row rather than letting the row overflow. */
+@media (max-width: 480px) {
+  .player { flex-wrap: wrap; }
+  .player-track {
+    order: 5;
+    flex-basis: 100%;
+    margin-top: var(--space-1);
+  }
 }
 
 /* ── Voice & History Lists ────────────────────────────────── */
@@ -1145,6 +1221,83 @@ textarea {
 }
 
 .spin { animation: spin 900ms linear infinite; }
+
+/* ── Job status chips (Recent tab) ───────────────────────────*/
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+}
+
+.status-chip.queued { background: var(--panel-raised); color: var(--muted); }
+.status-chip.running {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.status-chip.running svg { animation: spin 900ms linear infinite; }
+.status-chip.succeeded { background: rgba(89, 211, 169, 0.12); color: var(--success); }
+.status-chip.failed { background: var(--danger-soft); color: var(--danger); }
+.status-chip.cancelled { background: var(--panel-raised); color: var(--tertiary); }
+
+/* ── Toasts ───────────────────────────────────────────────── */
+/* Fixed to the viewport (not a card), because a job can finish while the
+   user has scrolled away or is on another tab — the inline `role="alert"`
+   blocks elsewhere in this app only work while their component is visible. */
+.toast-stack {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: min(360px, calc(100vw - var(--space-8)));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--panel-solid);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font-size: var(--text-sm);
+  animation: toast-in var(--dur-base) var(--ease-out);
+}
+
+.toast.success { border-color: var(--success-glow); }
+.toast.error { border-color: rgba(255, 107, 122, 0.32); }
+.toast.success svg { color: var(--success); flex-shrink: 0; margin-top: 2px; }
+.toast.error svg { color: var(--danger); flex-shrink: 0; margin-top: 2px; }
+
+.toast-msg { flex: 1; line-height: 1.4; }
+
+.toast-dismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.toast-dismiss:hover { color: var(--text); background: var(--panel-raised); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -1,59 +1,81 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiError } from './services/api';
-import type { HistoryItem, LanguageInfo, VoiceProfile } from './types/api';
-import { AudioEditorTab } from './components/AudioEditorTab';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ApiError } from './services/api';
+import type { JobStatusResponse } from './types/api';
 import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
+import { JobsPanel } from './components/JobsPanel';
+import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
-import { IconAlert, IconFileAudio, IconSettings, IconX } from './components/icons';
+import {
+  useHistory,
+  useInvalidateHistory,
+  useInvalidateVoices,
+  useLanguages,
+  useVoices,
+} from './hooks/queries';
+import { IconAlert, IconFileAudio, IconHistory, IconMic, IconSettings, IconX } from './components/icons';
 import './App.css';
 
+// 477 lines behind a tab most sessions never open — split out of the main bundle.
+const AudioEditorTab = lazy(() =>
+  import('./components/AudioEditorTab').then((m) => ({ default: m.AudioEditorTab })),
+);
+
 const PAGE_SIZE = 20;
+type Tab = 'studio' | 'recent' | 'editor';
+const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+  { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
+  { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
+  { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
+];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'studio' | 'editor'>('studio');
-  const [online, setOnline] = useState<boolean | null>(null);
-  const [languages, setLanguages] = useState<LanguageInfo[]>([]);
-  const [voices, setVoices] = useState<VoiceProfile[]>([]);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('studio');
+  const [pageCount, setPageCount] = useState(1);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastId = useRef(0);
+  const queryClient = useQueryClient();
 
-  const refresh = useCallback(async (pageCount = 1) => {
-    try {
-      const [langs, vs, hist] = await Promise.all([
-        api.languages(),
-        api.listVoices(),
-        api.history(1, PAGE_SIZE * pageCount),
-      ]);
-      setLanguages(langs.languages);
-      setVoices(vs.profiles);
-      setHistory(hist.items);
-      setTotal(hist.total);
-      setOnline(true);
-      setError(null);
-    } catch (e) {
-      setOnline(false);
-      setError(e instanceof ApiError ? e.message : String(e));
-    }
+  const languagesQ = useLanguages();
+  const voicesQ = useVoices();
+  const historyQ = useHistory(1, PAGE_SIZE * pageCount);
+  const invalidateVoices = useInvalidateVoices();
+  const invalidateHistory = useInvalidateHistory();
+
+  const anyError = languagesQ.error ?? voicesQ.error ?? historyQ.error;
+  const anySuccess = languagesQ.isSuccess && voicesQ.isSuccess && historyQ.isSuccess;
+  const online = anyError ? false : anySuccess ? true : null;
+  const error = anyError ? (anyError instanceof ApiError ? anyError.message : String(anyError)) : null;
+
+  const loadMore = useCallback(() => setPageCount((p) => p + 1), []);
+
+  const addToast = useCallback((tone: ToastItem['tone'], message: string) => {
+    const id = ++toastId.current;
+    setToasts((t) => [...t, { id, tone, message }]);
+  }, []);
+  const dismissToast = useCallback((id: number) => {
+    setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
 
-  useEffect(() => {
-    void refresh(1);
-  }, [refresh]);
+  const onJobSettled = useCallback(
+    (job: JobStatusResponse) => {
+      if (job.status === 'succeeded') {
+        addToast('success', 'Generation complete.');
+      } else if (job.status === 'failed') {
+        addToast('error', job.error?.detail ?? 'Generation failed.');
+      }
+      // 'cancelled' gets no toast — the user just clicked Cancel, they know.
+    },
+    [addToast]
+  );
 
-  const loadMore = useCallback(async () => {
-    setLoadingMore(true);
-    const next = pages + 1;
-    await refresh(next);
-    setPages(next);
-    setLoadingMore(false);
-  }, [pages, refresh]);
-
-  const reload = useCallback(() => void refresh(pages), [refresh, pages]);
+  // API key changed: every prior response may have been scoped to different
+  // credentials (or none). Nothing short of a full invalidation is safe.
+  const onApiKeySaved = useCallback(() => {
+    void queryClient.invalidateQueries();
+  }, [queryClient]);
 
   return (
     <div className="studio">
@@ -69,26 +91,28 @@ export default function App() {
           </span>
         </div>
 
-        {/* Main Application Tabs */}
-        <div className="segmented" style={{ flex: '0 0 auto' }}>
-          <button
-            type="button"
-            className={activeTab === 'studio' ? 'on' : ''}
-            onClick={() => setActiveTab('studio')}
-          >
-            🎙️ Voice Studio
-          </button>
-          <button
-            type="button"
-            className={activeTab === 'editor' ? 'on' : ''}
-            onClick={() => setActiveTab('editor')}
-          >
-            <IconFileAudio size={14} /> Audio Editor
-          </button>
+        <div className="segmented" role="tablist" aria-label="Studio sections">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              id={`tab-${t.id}`}
+              aria-selected={activeTab === t.id}
+              aria-controls={`panel-${t.id}`}
+              aria-label={t.label}
+              tabIndex={activeTab === t.id ? 0 : -1}
+              className={activeTab === t.id ? 'on' : ''}
+              onClick={() => setActiveTab(t.id)}
+            >
+              {t.icon}
+              <span className="seg-label">{t.label}</span>
+            </button>
+          ))}
         </div>
 
         <div className="topbar-right">
-          <ApiKeyControl onSaved={reload} />
+          <ApiKeyControl onSaved={onApiKeySaved} />
           <div className={`status ${online === null ? '' : online ? 'ok' : 'down'}`}>
             <span className="status-dot" aria-hidden="true" />
             {online === null ? 'connecting' : online ? 'online' : 'offline'}
@@ -100,36 +124,55 @@ export default function App() {
         <div className="banner error" role="alert">
           <IconAlert size={15} />
           <span>{error}</span>
-          <button type="button" className="link" onClick={reload}>
+          <button
+            type="button"
+            className="link"
+            onClick={() => void queryClient.invalidateQueries()}
+          >
             Retry
           </button>
         </div>
       )}
 
-      {activeTab === 'studio' ? (
-        <main className="grid">
-          <div className="col">
-            <EnrollCard languages={languages} onEnrolled={reload} />
-            <VoiceLibrary voices={voices} onDeleted={reload} />
-          </div>
+      <main
+        className={activeTab === 'studio' ? 'grid' : undefined}
+        role="tabpanel"
+        id={`panel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+      >
+        {activeTab === 'studio' && (
+          <>
+            <div className="col">
+              <EnrollCard languages={languagesQ.data?.languages ?? []} onEnrolled={invalidateVoices} />
+              <VoiceLibrary voices={voicesQ.data?.profiles ?? []} onDeleted={invalidateVoices} />
+            </div>
 
-          <div className="col">
-            <Composer voices={voices} languages={languages} onGenerated={reload} />
-            <HistoryPanel
-              items={history}
-              total={total}
-              loading={loadingMore}
-              hasMore={history.length < total}
-              onLoadMore={() => void loadMore()}
-              onChanged={reload}
-            />
-          </div>
-        </main>
-      ) : (
-        <main>
-          <AudioEditorTab onEnrolled={reload} />
-        </main>
-      )}
+            <div className="col">
+              <Composer
+                voices={voicesQ.data?.profiles ?? []}
+                languages={languagesQ.data?.languages ?? []}
+                onJobSettled={onJobSettled}
+              />
+              <HistoryPanel
+                items={historyQ.data?.items ?? []}
+                total={historyQ.data?.total ?? 0}
+                loading={historyQ.isFetching}
+                hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
+                onLoadMore={loadMore}
+                onChanged={invalidateHistory}
+              />
+            </div>
+          </>
+        )}
+        {activeTab === 'recent' && <JobsPanel />}
+        {activeTab === 'editor' && (
+          <Suspense fallback={<p className="hint center">Loading editor…</p>}>
+            <AudioEditorTab onEnrolled={invalidateVoices} />
+          </Suspense>
+        )}
+      </main>
+
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -144,7 +144,7 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
     <section className="card history" aria-labelledby="history-h">
       <header className="card-head">
         <h2 id="history-h">
-          Recent
+          History
           {total > 0 && <span className="count">{total}</span>}
         </h2>
 

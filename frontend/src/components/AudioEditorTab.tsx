@@ -165,7 +165,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
               aria-label="Upload Audio File for Editing"
             />
             <IconUpload size={32} />
-            <div>
+            <div style={{ width: '100%' }}>
               <strong style={{ display: 'block', fontSize: 'var(--text-md)', color: 'var(--text)' }}>
                 Drop an audio file here, or click to browse
               </strong>
@@ -212,7 +212,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
             </div>
 
             {/* Editing Controls Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 'var(--space-5)', marginBottom: 'var(--space-5)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-5)', marginBottom: 'var(--space-5)' }}>
               {/* Trimming Section */}
               <div style={{ background: 'var(--panel-inset)', padding: 'var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--line)' }}>
                 <h4 style={{ margin: '0 0 var(--space-3)', fontSize: 'var(--text-sm)', color: 'var(--text)', fontWeight: 600 }}>

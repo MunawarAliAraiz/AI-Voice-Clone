@@ -3,13 +3,14 @@
 import type {
   HistoryItem,
   HistoryList,
+  JobList,
+  JobStatusResponse,
   LanguageListResponse,
   ModelListResponse,
   ProblemJson,
   ScriptDetectResponse,
   SystemStatus,
   TTSGenerateRequest,
-  TTSGenerateResponse,
   VoiceProfile,
   VoiceProfileList,
 } from '../types/api';
@@ -116,9 +117,10 @@ export const api = {
   previewEditVoice: (form: FormData) =>
     request<{ preview_url: string; duration_sec?: number; peak_dbfs?: number; is_clipped?: boolean }>('/api/voices/preview-edit', { method: 'POST', body: form }),
 
-  // synthesis
+  // synthesis — POST /generate is async now: 202 with a job to poll, not a
+  // completed generation. See job() / jobs() / cancelJob() below.
   generate: (body: TTSGenerateRequest) =>
-    request<TTSGenerateResponse>('/api/generate', {
+    request<JobStatusResponse>('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -129,6 +131,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),
     }),
+
+  // jobs
+  job: (id: number) => request<JobStatusResponse>(`/api/jobs/${id}`),
+  jobs: (page = 1, pageSize = 50) =>
+    request<JobList>(`/api/jobs?page=${page}&page_size=${pageSize}`),
+  cancelJob: (id: number) => request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
 
   // history
   history: (page = 1, pageSize = 50) =>

@@ -10,38 +10,41 @@ layer applies any transform and hands the worker the FINAL string; the worker
 renders it or fails. Every response carries the route as a visible chip, and an
 unroutable request is a 422 that lists what would work — never a silent
 substitution.
+
+`POST /generate` used to block on `scheduler.synthesize()` here directly. It
+now does everything through `plan.needs_transform` unchanged — routing is
+still pure, still runs once, still fails loudly — then hands the resolved
+work to the job queue (`app/jobs/`) and returns 202. The actual synthesis call
+that used to be inline is now `app/jobs/handlers/synthesize.py`, unchanged in
+substance: same `SynthRequest`, same `apply_audio_effects`, same
+`create_generation`. See `app/jobs/__init__.py` for why the queue never
+touches `app/inference/scheduler.py`.
 """
 
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
-from ...audio import apply_audio_effects
 from ...config import Settings
 from ...db import Database
 from ...domain.language import profile_text
 from ...domain.routing import RoutePlan, UrduStrategy, resolve
-from ...exceptions import (
-    GenerationError,
-    InvalidParamsError,
-    ProfileNotFoundError,
-)
+from ...exceptions import GenerationError, InvalidParamsError, ProfileNotFoundError
 from ...inference.catalog import ModelCatalog
-from ...inference.protocol import SchedulerProtocol, SynthRequest
-from ...inference.spec import RuntimeKind
-from ..deps import get_catalog, get_db, get_scheduler, get_settings
-from ..media_tokens import make_media_url
+from ...inference.protocol import SchedulerProtocol
+from ...jobs import JobKind, JobRunner
+from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
+from ..schemas.jobs import JobStatusResponse
 from ..schemas.tts import (
     RouteInfo,
     ScriptDetectRequest,
     ScriptDetectResponse,
     TTSGenerateRequest,
-    TTSGenerateResponse,
 )
+from .jobs import build_job_status_response
 
 router = APIRouter(tags=["tts"])
 
@@ -59,7 +62,7 @@ def _route_info(plan: RoutePlan, catalog: ModelCatalog) -> RouteInfo:
     )
 
 
-@router.post("/generate", response_model=TTSGenerateResponse)
+@router.post("/generate", response_model=JobStatusResponse, status_code=202)
 async def generate(
     body: TTSGenerateRequest,
     response: Response,
@@ -67,13 +70,16 @@ async def generate(
     scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
     settings: Annotated[Settings, Depends(get_settings)],
-) -> TTSGenerateResponse:
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
+) -> JobStatusResponse:
     profile = await db.get_profile(body.profile_id)
     if profile is None:
         raise ProfileNotFoundError(body.profile_id)
 
-    # Pure routing. Raises NoRouteError (422, lists what works) / ModelNotFound /
-    # AmbiguousScriptError — all mapped to problem+json, none a silent fallback.
+    # Pure routing, still runs synchronously in the request — it's cheap and
+    # it MUST fail loudly here rather than after a job row exists. Raises
+    # NoRouteError (422, lists what works) / ModelNotFound / AmbiguousScriptError
+    # — all mapped to problem+json, none a silent fallback.
     text_profile = profile_text(body.text, body.language)
     plan = resolve(text_profile, body.model_id, catalog, _urdu_strategy(body.urdu_strategy))
 
@@ -93,8 +99,6 @@ async def generate(
     _validate_params(body.params, spec.params, plan.model_id)
 
     synth_params = dict(body.params)
-    synth_params["stability"] = body.stability
-    synth_params["style_exaggeration"] = body.style_exaggeration
     if "cfg_value" in spec.params and "cfg_value" not in body.params:
         # Map stability 0-100 to cfg_value 1.5-2.5 (where 70 maps exactly to default 2.0)
         if body.stability <= 70:
@@ -102,52 +106,33 @@ async def generate(
         else:
             synth_params["cfg_value"] = round(2.0 + ((body.stability - 70.0) / 30.0) * 0.5, 2)
 
+    # output_path is chosen NOW, before any job row exists, and stored in the
+    # job's params — the orphan rule (app/jobs/runner.py): no file is ever
+    # written whose path is not already recorded in a job row.
     out_path = settings.generated_dir / f"{uuid.uuid4().hex}.{body.output_format}"
-    result = await scheduler.synthesize(
-        SynthRequest(
-            model_id=plan.model_id,
-            text=plan.resolved_text,
-            reference_audio=Path(profile["audio_path"]),
-            output_path=out_path,
-            reference_text=profile["transcript"] if spec.needs_reference_text else None,
-            params=synth_params,
-            sample_rate=settings.default_sample_rate,
-        )
+
+    route = _route_info(plan, catalog)
+    job = await runner.enqueue(
+        JobKind.SYNTHESIZE,
+        params={
+            "text": plan.resolved_text,
+            "input_text": body.text,
+            "language": body.language,
+            "reference_audio": str(profile["audio_path"]),
+            "reference_text": profile["transcript"] if spec.needs_reference_text else None,
+            "output_path": str(out_path),
+            "output_format": body.output_format,
+            "sample_rate": settings.default_sample_rate,
+            "params": synth_params,
+            "speed": body.speed,
+        },
+        # Decided once, here, by the pure resolve() above — never recomputed
+        # at claim time. See app/jobs/handlers/synthesize.py.
+        route=route.model_dump(),
+        profile_id=body.profile_id,
     )
 
-    apply_audio_effects(
-        result.output_path,
-        speed=body.speed,
-        emotion=body.emotion,
-        style_exaggeration=body.style_exaggeration,
-    )
-
-    row = await db.create_generation(
-        profile_id=body.profile_id, input_text=body.text, language=body.language,
-        output_path=str(result.output_path), output_format=body.output_format,
-        duration_sec=result.duration_sec, gen_time_sec=result.gen_time_sec,
-        model_id=plan.model_id, transform=plan.transform.kind.value, is_lossy=plan.lossy,
-        source_script=plan.source_script.value, route_rationale=plan.rationale,
-        resolved_text=plan.resolved_text,
-    )
-
-
-    if spec.runtime is RuntimeKind.FAKE:
-        # Golden rule: fake audio is never silent about being fake.
-        response.headers["X-Fake-Audio"] = "true"
-
-    return TTSGenerateResponse(
-        id=row["id"],
-        audio_url=make_media_url(
-            f"history/{row['id']}", settings.media_token_secret, settings.media_token_ttl_sec
-        ),
-        duration_sec=result.duration_sec,
-        gen_time_sec=result.gen_time_sec,
-        rtf=result.rtf,
-        language=body.language,
-        route=_route_info(plan, catalog),
-        created_at=row["created_at"],
-    )
+    return await build_job_status_response(job, db, settings, scheduler, response)
 
 
 @router.post("/detect-script", response_model=ScriptDetectResponse)
