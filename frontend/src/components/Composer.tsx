@@ -14,8 +14,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
-import type { JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
+import type { DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
+import { DirectionPanel } from './DirectionPanel';
 import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner, IconX } from './icons';
 
 interface Props {
@@ -48,6 +49,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
+
+  const [showDirection, setShowDirection] = useState(false);
+  const [direction, setDirection] = useState<DirectionAnalyzeResponse | null>(null);
+  const [directionLoading, setDirectionLoading] = useState(false);
+  const [directionErr, setDirectionErr] = useState<string | null>(null);
 
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
@@ -133,6 +139,36 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     }, 400);
     return () => window.clearTimeout(h);
   }, [text, language]);
+
+  // Debounced direction analysis — same pattern as script detection, but only
+  // while the "Direction (preview)" disclosure is open, so the preview call
+  // doesn't fire on every keystroke for a panel nobody is looking at. A
+  // failure here must never block typing or generation — it's rendered as a
+  // small muted note inside DirectionPanel, never thrown.
+  useEffect(() => {
+    const t = text.trim();
+    if (!showDirection || !t) {
+      setDirection(null);
+      setDirectionErr(null);
+      setDirectionLoading(false);
+      return;
+    }
+    setDirectionLoading(true);
+    const h = window.setTimeout(() => {
+      api
+        .analyzeDirection(t, language)
+        .then((res) => {
+          setDirection(res);
+          setDirectionErr(null);
+        })
+        .catch((e) => {
+          setDirection(null);
+          setDirectionErr(e instanceof ApiError ? e.message : 'Direction preview unavailable.');
+        })
+        .finally(() => setDirectionLoading(false));
+    }, 400);
+    return () => window.clearTimeout(h);
+  }, [text, language, showDirection]);
 
   async function generate() {
     if (profileId === null) return setErr('Add and select a voice first.');
@@ -277,6 +313,20 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         </div>
         <kbd className="kbd">Ctrl + ↵</kbd>
       </div>
+
+      <button
+        type="button"
+        className="disclosure-btn"
+        onClick={() => setShowDirection((s) => !s)}
+        aria-expanded={showDirection}
+      >
+        {showDirection ? <IconChevronUp size={12} /> : <IconChevronDown size={12} />}
+        <span>Direction (preview)</span>
+      </button>
+
+      {showDirection && (
+        <DirectionPanel data={direction} loading={directionLoading} error={directionErr} />
+      )}
 
       {err && (
         <div className="inline-error" role="alert">

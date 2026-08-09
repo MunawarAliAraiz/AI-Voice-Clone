@@ -19,7 +19,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-09.
 | Phase | Status | Summary |
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
-| **2 — Speech Direction layer** | 📋 Designed, not started | Per-segment emotion/tone/pacing IR + capability-declaring renderer. See design below. |
+| **2 — Speech Direction layer** | 🚧 Preview landed | IR + heuristic analyzer + per-model capability report + read-only `POST /api/direction/analyze` + UI chip are in. Multi-segment *generation*, the LLM analyzer, and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | 📋 Designed, not started | Move video→audio extraction into the browser; server-side ffmpeg becomes the fallback, not the only path. |
 | **4 — Chatterbox runtime + beyond** | 💭 Not designed | Real `exaggeration` knob, multi-speaker, dubbing, post-processing presets. |
 
@@ -151,7 +151,45 @@ callback-based level reporting.
 
 ---
 
-## Phase 2 — Speech Direction layer (designed, not built)
+## Phase 2 — Speech Direction layer (preview landed)
+
+### Landed (2026-08-09)
+
+The **read-only preview** is built, tested, and wired end-to-end:
+
+- **IR** — `backend/app/domain/direction.py`: the frozen, pure `DirectionPlan` (segments carrying
+  emotion / tone / intensity / energy / rate / emphasis / `pause_after_ms`, plus a `DirectionSummary`
+  for simple mode). Stdlib-only, no I/O, no inference imports.
+- **Heuristic analyzer** — `backend/app/domain/direction_analyze.py`: real per-language keyword
+  lexicon (English, Roman + Perso-Arabic Urdu, Roman + Devanagari Hindi) + punctuation/caps/intensifier
+  signals → `DirectionPlan`. Pure, deterministic, offline. `analyze()` signature is frozen so the LLM
+  analyzer drops in behind it. 32 tests in `test_direction_analyze.py`.
+- **Capability report + renderer** — `backend/app/jobs/direction.py`: `capability_for(spec)` declares,
+  per IR field, HONORED / APPROXIMATED / IGNORED (VoxCPM: honors segmentation/pause/rate, approximates
+  intensity→`cfg_value` and emphasis, **ignores emotion/tone/energy — visibly**). `render(plan, spec)`
+  maps the plan to per-segment knobs, and IGNORED fields provably never leak into params. 8 tests in
+  `test_direction_capability.py`, incl. the `DIRECTION_FIELDS`↔IR sync contract.
+- **Endpoint** — `POST /api/direction/analyze` (`routers/direction.py` + `schemas/direction.py`):
+  routes exactly like `/generate` (pure `resolve()`), returns the plan + capability report + the same
+  `RouteInfo` chip. Read-only: generates no audio, enqueues no job.
+- **UI** — `frontend/src/components/DirectionPanel.tsx`: the capability chip (honored→approximated→
+  ignored, rationale tooltips) + summary line + expandable per-segment detail, debounced into the
+  Composer behind a "Direction (preview)" disclosure. RTL keys off `source_script`, never `language`.
+
+### Remaining
+
+1. **Multi-segment generation** — the renderer produces per-segment knobs, but the synth path still
+   generates one clip from the whole text. Wiring per-segment params + inter-segment pauses into actual
+   audio (a new job step) is the next build. It must not weaken golden rule 1, which is why it was held
+   out of the preview.
+2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0)** — the flagged second implementation behind the frozen
+   `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
+   API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
+   job `kind`. This is the "analyzer" half of the owner's "both, analyzer first" decision.
+3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
+   tab for pros") is not built. Simple mode (summary + chip) is what shipped.
+
+**Original design notes (unchanged):**
 
 **Problem this solves:** today "Emotion" was a fake per-request DSP filter. A real one needs to (a)
 work per *segment* of the text, not the whole request, and (b) be honest about what each model can

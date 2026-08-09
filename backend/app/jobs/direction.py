@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from ..domain.direction import DirectionPlan, Emotion, Level, Rate, Tone
+from ..domain.direction import DirectionPlan, Level, Rate
 from ..inference.spec import ModelSpec, RuntimeKind
 
 __all__ = [
@@ -147,7 +147,7 @@ _VOXCPM_FIELDS: tuple[tuple[str, Support, str], ...] = (
     ("segmentation", Support.HONORED, "each segment is a separate synthesis pass"),
     ("pause_after", Support.HONORED, "silence inserted between segments"),
     ("rate", Support.HONORED, "per-segment pitch-preserving tempo (ffmpeg atempo)"),
-    ("emphasis", Support.APPROXIMATED, "conveyed via punctuation/casing in the passed-through text"),
+    ("emphasis", Support.APPROXIMATED, "conveyed via punctuation/casing in passed-through text"),
     ("intensity", Support.APPROXIMATED, "mapped onto guidance (cfg_value)"),
     ("emotion", Support.IGNORED, "VoxCPM takes no emotion conditioning input"),
     ("tone", Support.IGNORED, "VoxCPM takes no tone conditioning input"),

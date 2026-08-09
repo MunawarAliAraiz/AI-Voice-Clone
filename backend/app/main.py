@@ -23,7 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
-from .api.routers import health, history, jobs, media, models, system, tts, voice
+from .api.routers import direction, health, history, jobs, media, models, system, tts, voice
 from .config import Settings, get_settings
 from .db import Database
 from .inference.catalog import CATALOG
@@ -85,7 +85,9 @@ def create_app(
                 try:
                     await app.state.scheduler.warm(model_id)
                 except Exception:
-                    logger.exception("startup warm of %r failed; will retry on first request", model_id)
+                    logger.exception(
+                        "startup warm of %r failed; will retry on first request", model_id
+                    )
 
             warm_task = asyncio.create_task(_warm())
             app.state.warm_task = warm_task
@@ -127,6 +129,7 @@ def create_app(
     app.include_router(system.router, prefix="/api")
     app.include_router(voice.router, prefix="/api")
     app.include_router(tts.router, prefix="/api")
+    app.include_router(direction.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(media.router, prefix="/api")
     app.include_router(history.router, prefix="/api")
