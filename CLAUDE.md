@@ -193,6 +193,13 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   it will cheerfully say "164 TB free" while the volume is full. Use `du -sh /workspace` against the volume
   size in the RunPod console. This already cost an hour: a real "disk quota exceeded" was dismissed as a
   misdiagnosis because `df` looked fine. Four runtime venvs plus the uv cache reached ~49 GB.
+- **`chatterbox-tts` needs `setuptools<81` in its own venv.** Its watermarking dependency
+  (`resemble-perth`) does `from pkg_resources import resource_filename`, an API `setuptools>=81`
+  removed outright. The failure is silent: `perth/__init__.py` wraps the real import in a bare
+  `except ImportError: PerthImplicitWatermarker = None`, so `import perth` succeeds and the actual
+  error only surfaces as an opaque `TypeError: 'NoneType' object is not callable` deep inside
+  `ChatterboxMultilingualTTS.from_local()`, nowhere near `pkg_resources`. `pod-bootstrap.sh`'s
+  Chatterbox section pins `setuptools<81` for exactly this reason — don't drop it.
 
 ## Conventions
 

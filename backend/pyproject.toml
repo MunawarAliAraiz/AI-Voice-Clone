@@ -43,13 +43,14 @@ f5 = [
 ]
 chatterbox = [
     # Confirmed on PyPI + a real pod install, Phase 4b (2026-08-11): the
-    # distribution is "chatterbox-tts", imported as `chatterbox`. Note this is
-    # NOT how the pod actually installs it today — pod-bootstrap.sh's
-    # equivalent step does `uv pip install --python <venv> chatterbox-tts`
-    # directly into its own venv, same as it does for voxcpm below, because
-    # `uv sync --extra` would install into the shared API env. This extra
-    # exists for documentation/pip-compat, not as the load-bearing install path.
-    "chatterbox-tts>=0.1.7",
+    # distribution is "chatterbox-tts>=0.1.7", imported as `chatterbox`. Left
+    # commented out rather than declared live: a real dependency line here
+    # forces uv to resolve the whole torch/transformers/accelerate tree on
+    # every local lockfile touch, including on this project's torch-less
+    # Windows dev machine, for an extra that isn't the load-bearing install
+    # path anyway — pod-bootstrap.sh's equivalent step does
+    # `uv pip install --python <venv> chatterbox-tts` directly into its own
+    # venv (same as voxcpm below), never `uv sync --extra`.
 ]
 voxcpm = [
     # TODO(R3): confirm the distribution name and version on PyPI.

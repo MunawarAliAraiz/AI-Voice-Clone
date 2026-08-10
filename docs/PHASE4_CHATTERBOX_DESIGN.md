@@ -294,11 +294,30 @@ every current renderer's capability chip until a real mapping (like §5) exists 
   rely on Chatterbox being the generic example — a known, planned breaking change at this step, not a
   surprise. `FakeScheduler`-based render tests mirror `backend/tests/test_jobs_direction_synthesize.py`'s
   existing pattern.
-- **Phase 4b** (GPU needed): real `app/inference/runtimes/chatterbox.py` (`ChatterboxBackend`), the
-  `make_backend()` dispatch branch, resolve the `pyproject.toml` extra staleness (§2), pod install +
-  smoke test. `ChatterboxBackend.synth()` correctness is only verifiable via `pytest -m gpu` on the
-  pod — `runtimes/` code is deliberately excluded from the CPU suite
-  (`tests/test_contracts.py::test_no_torch_outside_runtimes` is the one test that *does* touch that
-  directory, specifically to prove torch isn't imported elsewhere).
-- **Phase 4c** (GPU needed): Phase-A-style validation against §8's gate, flip `verified=True` only on
-  cells that measure a pass, delete any that fail — never pre-emptively.
+- **Phase 4b — done (2026-08-11), real GPU pod, real weights:** `app/inference/runtimes/chatterbox.py`
+  (`ChatterboxBackend`) landed, mirroring `voxcpm.py`'s shape but built against the corrected API facts
+  in §3 (pinned `snapshot_download` + `from_local()`, not `from_pretrained()`). `make_backend()`'s
+  dispatch branch and the `pyproject.toml` `chatterbox` extra (§2's staleness) are both resolved.
+  `pod-bootstrap.sh` gained a Chatterbox provisioning section mirroring VoxCPM's (steps 8–9), including
+  a real trap it hit: `chatterbox-tts`'s dependency `resemble-perth` imports the deprecated
+  `pkg_resources` API, which `setuptools>=81` removed outright — the failure is **silent**, `import
+  perth` still succeeds via a bare `except ImportError: PerthImplicitWatermarker = None`, and the real
+  error only surfaces as an opaque `TypeError: 'NoneType' object is not callable` deep inside
+  `from_local()`. Pinning `setuptools<81` in the Chatterbox venv fixes it. Documented in `CLAUDE.md`'s
+  traps list, so it isn't rediscovered on the next pod.
+
+  **No committed `pytest -m gpu` test exists yet for this** — the `gpu` marker is defined in
+  `pytest.ini` but nothing uses it in the repo today (true for VoxCPM too, not just Chatterbox), and a
+  test that imports `app.inference.runtimes.chatterbox` can only run under `.venv-chatterbox`'s
+  interpreter, not the API's own torch-free `.venv` that `uv run pytest` uses — so a real `pytest -m
+  gpu` file needs a per-runtime-interpreter test-running convention this project doesn't have yet, not
+  something to bolt on quietly here. Instead, validated via a direct smoke script on the pod (not
+  checked in): `ChatterboxBackend().load()` → two real `synth()` calls (English + Hindi, same loaded
+  checkpoint, proving reuse) → `unload()`, using a bundled speech sample (gradio's own demo asset,
+  incidentally present in `.venv-voxcpm` as a transitive dependency) as the reference clip. Real
+  results: load 35.2s (cold, cache-hit weights), English synth 6.36s of audio in 7.2s wall time (RTF ≈
+  1.1), Hindi synth 4.24s of audio in 3.2s, output sample rate 24000 Hz as declared, `unload()` dropped
+  GPU memory to ~2 MiB. This proves the mechanics work — it is **not** the CER/cosine accuracy
+  validation Phase 4c still needs; no `LanguageSupport.verified` flag was touched.
+- **Phase 4c** (GPU needed, not started): Phase-A-style validation against §8's gate, flip
+  `verified=True` only on cells that measure a pass, delete any that fail — never pre-emptively.

@@ -21,7 +21,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
-| **4 — Chatterbox runtime + beyond** | 🚧 4a done (CPU-only), 4b/4c need the pod | Capability table + exaggeration/cfg_weight blend mapping landed and tested. No real runtime yet — Chatterbox is still unroutable until Phase 4b/4c. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
+| **4 — Chatterbox runtime + beyond** | 🚧 4a+4b done, real audio on GPU; 4c (accuracy gate) not started | Capability/blend mapping, and now a real `ChatterboxBackend` smoke-tested on the pod (load/synth/unload, real weights, real audio, both English and Hindi). Still unroutable in production — no `LanguageSupport` cell is `verified=True` yet, that's 4c. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
 
 ---
 
@@ -301,7 +301,8 @@ per-field HONORED/APPROXIMATED/IGNORED table) and the `(intensity, energy, emoti
 exaggeration`, `rate → cfg_weight` blend functions from the design doc's §5, both clamped to the
 catalog spec's declared ranges. `render()` also injects `params["language_id"] = plan.language` for
 Chatterbox specifically, closing the `SynthRequest`-has-no-`language`-field gap the design doc
-flagged — pass-through, unverified against Chatterbox's actual expected codes until Phase 4b.
+flagged — pass-through, **confirmed correct by Phase 4b's introspection**: Chatterbox's
+`SUPPORTED_LANGUAGES` contains `'en'`/`'hi'` matching this project's `LanguageCode` values exactly.
 `tone` stays IGNORED, matching the design doc's explicit decision (nothing populates it, and the two
 knobs are already spoken for). `test_direction_capability.py`'s `_NON_VOXCPM` fixture was repointed
 at an F5 spec (was Chatterbox, which now has its own real mapping and could no longer serve as "the
@@ -309,9 +310,17 @@ generic example"). 6 new tests added, 223 total, all CPU-only; `ruff check` clea
 inert in production** — Chatterbox's `LanguageSupport` cells aren't `verified=True`, so
 `domain.routing.resolve()` cannot route to it yet (by design, the same gate VoxCPM had to clear).
 
-**Phase 4b (needs the pod, not started):** real `app/inference/runtimes/chatterbox.py`
-(`ChatterboxBackend`), the `make_backend()` dispatch branch, resolve the `pyproject.toml` extra
-staleness, pod install + smoke test.
+**Phase 4b — done (2026-08-11), real GPU pod:** `app/inference/runtimes/chatterbox.py`
+(`ChatterboxBackend`) landed, `make_backend()`'s dispatch branch wired, the `pyproject.toml`
+`chatterbox` extra filled in (`chatterbox-tts>=0.1.7`), and `pod-bootstrap.sh` now provisions a
+`.venv-chatterbox` alongside VoxCPM's. Real smoke test on the pod: load (35.2s), English synth (6.36s
+audio / 7.2s wall, RTF≈1.1), Hindi synth reusing the same loaded checkpoint, 24kHz output as declared,
+`unload()` verified to drop GPU memory back to ~0. Uncovered and fixed a real trap along the way:
+`chatterbox-tts`'s watermarking dependency silently no-ops under `setuptools>=81` (which removed
+`pkg_resources`) — pinned `setuptools<81` in the venv, documented in `CLAUDE.md`'s traps list. Also
+corrected two wrong API assumptions from the original design doc — see
+[PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) §3. Still not routable in production; no
+`pytest -m gpu` file exists for this yet (see the design doc's §11 for why, and what would be needed).
 
 **Phase 4c (needs the pod, not started):** Phase-A-style validation (CER via Whisper, speaker
 cosine, RTF) against `LanguageSupport.meets_gate()`, flip `verified=True` only on cells that measure

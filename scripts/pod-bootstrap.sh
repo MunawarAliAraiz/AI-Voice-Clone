@@ -109,7 +109,49 @@ p = snapshot_download("openbmb/VoxCPM2", revision=sys.argv[1])
 print("   weights at", p)
 PY
 
-echo "== 8. secrets (generated once, reused on every restart) =="
+echo "== 8. Chatterbox runtime env (separate interpreter, same reason as VoxCPM) =="
+# Not routable yet (LanguageSupport cells unverified — Phase 4c), but the
+# venv + weights are worth having warm so a pod is immediately useful for
+# Phase 4b/4c work rather than a 5-minute setup tax every time.
+CB_VENV="$REPO_DIR/backend/.venv-chatterbox"
+if [ ! -x "$CB_VENV/bin/python" ]; then
+  uv venv "$CB_VENV" --python 3.12
+fi
+uv pip install --python "$CB_VENV" chatterbox-tts 2>&1 | tail -2
+# Same cu130-silent-CPU trap as VoxCPM (step 6) — pin cu128 explicitly.
+uv pip install --python "$CB_VENV" \
+  torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+# CRITICAL, cost real debugging time (2026-08-11): chatterbox-tts depends on
+# resemble-perth for audio watermarking, whose perth_net/__init__.py does
+# `from pkg_resources import resource_filename` — an API setuptools>=81
+# removed outright. `uv venv` pulls whatever setuptools uv itself ships,
+# which was already past that line. The failure is SILENT at import time:
+# perth/__init__.py wraps the submodule import in a bare `except ImportError:
+# PerthImplicitWatermarker = None`, so `import perth` succeeds and the real
+# error only surfaces as `TypeError: 'NoneType' object is not callable` deep
+# inside ChatterboxMultilingualTTS.from_local(), nowhere near the real cause.
+uv pip install --python "$CB_VENV" "setuptools<81" 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$CB_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 9. Chatterbox weights (pinned revision, cached on /workspace) =="
+# Only the files ChatterboxMultilingualTTS.from_local() actually reads —
+# verified from its source, Phase 4b (see docs/PHASE4_CHATTERBOX_DESIGN.md §3).
+# Deliberately NOT calling from_pretrained(): it hardcodes revision="main"
+# internally and would silently ignore this pin (golden rule 7).
+CB_REV="5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18"
+"$CB_VENV/bin/python" - "$CB_REV" <<'PY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download(
+    "ResembleAI/chatterbox", revision=sys.argv[1],
+    allow_patterns=["ve.pt", "t3_mtl23ls_v2.safetensors", "s3gen.pt",
+                    "grapheme_mtl_merged_expanded_v1.json", "conds.pt"],
+)
+print("   weights at", p)
+PY
+
+echo "== 10. secrets (generated once, reused on every restart) =="
 # These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
 # frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
 # invalidates every signed audio URL already handed out. So they are generated
@@ -150,12 +192,12 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$SECRETS_FILE"; set +a
 
-echo "== 9. research lab =="
+echo "== 11. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 10. verify =="
+echo "== 12. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
 # VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
@@ -167,7 +209,7 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
   uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 11. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 13. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 # Remember the domain the same way FRONTEND_URL is remembered. A restart that
 # forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
 # the deployed frontend has no way to reach, so the app looks broken for a
@@ -201,7 +243,7 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
-echo "== 12. serve script (CORS baked in, remembered across runs) =="
+echo "== 14. serve script (CORS baked in, remembered across runs) =="
 # CORS is the easiest thing to get wrong here, and it fails in the least
 # obvious way: the origin must match the deployed frontend EXACTLY — scheme,
 # host, no trailing slash — or every request dies in preflight with "No
@@ -232,6 +274,10 @@ export HF_HOME=/workspace/hf-cache
 export VCS_CORS_ORIGINS='["${CORS_ORIGIN}"]'
 export VCS_WARM_ON_STARTUP=voxcpm2
 export VCS_VOXCPM_PYTHON=${VOX_VENV}/bin/python
+# Chatterbox is not yet routable (LanguageSupport cells unverified — Phase
+# 4c), but pointing this at the venv now means routing needs no redeploy the
+# moment a cell flips verified=True.
+export VCS_CHATTERBOX_PYTHON=${CB_VENV}/bin/python
 export VCS_WORKER_CWD=${REPO_DIR}/backend
 cd ${REPO_DIR}/backend
 exec uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -254,7 +300,7 @@ if [ "${START:-0}" = "1" ]; then
   done
 fi
 
-echo "== 13. current status =="
+echo "== 15. current status =="
 # Without START=1 bootstrap only provisions, so on a first run both of these are
 # expected to be down. The value is on a RE-RUN against a live pod, where it
 # answers "is the thing I already started still up?" without a second SSH trip.
@@ -296,6 +342,7 @@ echo
 echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
 echo "  runtime: $VOX_VENV  (torch cu128)"
+echo "  runtime: $CB_VENV  (torch cu128, not yet routable — Phase 4c)"
 echo "  lab:     /workspace/engines-lab/"
 echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"
 echo "  secrets: $SECRETS_FILE"
