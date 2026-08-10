@@ -16,9 +16,11 @@ Two jobs:
 
 2. **Render the plan into concrete synth knobs** — `render(plan, spec)` maps
    the IR to per-segment parameters the runtime actually consumes (for VoxCPM:
-   `cfg_value`, a tempo multiplier, inter-segment silence). Emotion/tone/energy
-   VoxCPM cannot take as input, so they are declared IGNORED and do not silently
-   leak into the params — exactly the honesty the report promises.
+   `cfg_value`, a tempo multiplier, inter-segment silence; for Chatterbox:
+   `exaggeration`/`cfg_weight`, blended from intensity/energy/emotion/rate —
+   see docs/PHASE4_CHATTERBOX_DESIGN.md §5). Fields a runtime declares IGNORED
+   do not silently leak into the params — exactly the honesty the report
+   promises.
 
 This module renders the *preview* (the analyze endpoint returns the report and
 the per-segment knob mapping so the user sees it before generating). Wiring the
@@ -31,7 +33,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from ..domain.direction import DirectionPlan, Level, Rate
+from ..domain.direction import DirectionPlan, Emotion, Level, Rate
 from ..inference.spec import ModelSpec, RuntimeKind
 
 __all__ = [
@@ -106,9 +108,11 @@ class SegmentRender:
 
     index: int
     text: str
-    #: Model-specific generation params (VoxCPM: cfg_value). Merged over the
-    #: user's base params by the caller; only keys the model declares appear.
-    params: dict[str, float | int]
+    #: Model-specific generation params (VoxCPM: cfg_value; Chatterbox:
+    #: exaggeration/cfg_weight/language_id). Merged over the user's base params
+    #: by the caller; only keys the model declares (plus language_id, see
+    #: render()'s Chatterbox branch) appear.
+    params: dict[str, float | int | str]
     #: ffmpeg tempo multiplier applied post-synth (real DSP, pitch-preserving).
     speed: float
     #: Silence to append after this segment, milliseconds.
@@ -154,6 +158,76 @@ _VOXCPM_FIELDS: tuple[tuple[str, Support, str], ...] = (
     ("energy", Support.IGNORED, "VoxCPM takes no energy conditioning input"),
 )
 
+# ── Chatterbox mapping constants ─────────────────────────────────────────────
+# Chatterbox exposes exactly two continuous knobs (exaggeration, cfg_weight) —
+# no discrete emotion/tone input. Four IR fields (intensity, energy, emotion,
+# rate) plausibly want to drive them; mapping each independently would let the
+# last one applied silently win, which is the kind of silent unpredictability
+# golden rule 5 exists to prevent. Instead: exaggeration is one blended value
+# from (intensity, energy, emotion-arousal); cfg_weight is driven by rate
+# alone. Disjoint inputs per knob, so no two fields compete to set the same
+# one. See docs/PHASE4_CHATTERBOX_DESIGN.md §5 for the full reasoning — these
+# numbers are a starting point pending a by-ear check once a real backend
+# exists, same as VoxCPM's own cfg_value range was tuned by ear.
+
+_CHATTERBOX_EXAGGERATION_BASE: dict[tuple[Level, Level], float] = {
+    # (intensity, energy) -> base exaggeration
+    (Level.LOW, Level.LOW): 0.25,
+    (Level.LOW, Level.MEDIUM): 0.35,
+    (Level.LOW, Level.HIGH): 0.45,
+    (Level.MEDIUM, Level.LOW): 0.35,
+    (Level.MEDIUM, Level.MEDIUM): 0.5,
+    (Level.MEDIUM, Level.HIGH): 0.6,
+    (Level.HIGH, Level.LOW): 0.45,
+    (Level.HIGH, Level.MEDIUM): 0.6,
+    (Level.HIGH, Level.HIGH): 0.75,
+}
+
+#: ANGRY/EXCITED nudge exaggeration up; CALM/SAD/ANXIOUS nudge it down — the
+#: same arousal grouping direction_analyze.py's _determine_energy already
+#: uses for the IR's own `energy` field. Every other emotion (NEUTRAL, HAPPY,
+#: SERIOUS, QUESTIONING) leaves the (intensity, energy) base untouched.
+_EXAGGERATION_AROUSAL_DELTA = 0.1
+
+#: Chatterbox's own docs note higher exaggeration speeds up speech and lower
+#: cfg_weight compensates with slower, more deliberate pacing — so cfg_weight
+#: is driven by rate, inverse to that relationship, independent of the fields
+#: feeding exaggeration above.
+_CHATTERBOX_CFG_WEIGHT_BY_RATE: dict[Rate, float] = {
+    Rate.SLOW: 0.6,
+    Rate.NORMAL: 0.5,
+    Rate.FAST: 0.35,
+}
+
+_CHATTERBOX_FIELDS: tuple[tuple[str, Support, str], ...] = (
+    ("segmentation", Support.HONORED, "each segment is a separate synthesis pass"),
+    ("pause_after", Support.HONORED, "silence inserted between segments"),
+    (
+        "rate", Support.APPROXIMATED,
+        "drives cfg_weight pre-synth; post-synth ffmpeg atempo still applies on top",
+    ),
+    (
+        "emphasis", Support.APPROXIMATED,
+        "conveyed via punctuation/casing in the passed-through text",
+    ),
+    (
+        "intensity", Support.APPROXIMATED,
+        "contributes to the blended exaggeration base, not a dedicated knob",
+    ),
+    (
+        "energy", Support.APPROXIMATED,
+        "contributes to the blended exaggeration base, not a dedicated knob",
+    ),
+    (
+        "emotion", Support.APPROXIMATED,
+        "nudges exaggeration by arousal grouping; not true per-category conditioning",
+    ),
+    (
+        "tone", Support.IGNORED,
+        "no analyzer-derived signal yet, and Chatterbox's two knobs are already spoken for",
+    ),
+)
+
 # Every other runtime: until its renderer is written, it honors only what any
 # TTS trivially can (segmentation + pauses + post-synth tempo), and everything
 # acoustic is IGNORED. Never claim HONORED without a renderer that proves it —
@@ -175,10 +249,16 @@ def capability_for(spec: ModelSpec) -> CapabilityReport:
     What `spec` does with each IR field. Pure lookup on `spec.runtime`.
 
     Returns a report whose `fields` covers exactly `DIRECTION_FIELDS`. VoxCPM
-    has a real mapping; every other runtime gets the honest generic baseline
-    (segmentation/pauses/tempo only) until its own renderer exists.
+    and Chatterbox each have a real mapping; every other runtime gets the
+    honest generic baseline (segmentation/pauses/tempo only) until its own
+    renderer exists.
     """
-    rows = _VOXCPM_FIELDS if spec.runtime is RuntimeKind.VOXCPM else _GENERIC_FIELDS
+    if spec.runtime is RuntimeKind.VOXCPM:
+        rows = _VOXCPM_FIELDS
+    elif spec.runtime is RuntimeKind.CHATTERBOX:
+        rows = _CHATTERBOX_FIELDS
+    else:
+        rows = _GENERIC_FIELDS
     return CapabilityReport(
         model_id=spec.id,
         fields=tuple(FieldCapability(field=f, support=s, rationale=r) for f, s, r in rows),
@@ -192,19 +272,47 @@ def render(plan: DirectionPlan, spec: ModelSpec) -> RenderedDirection:
     Only params the model declares (`spec.params`) are emitted, and only fields
     the capability report marks HONORED/APPROXIMATED influence them — an IGNORED
     field never silently leaks into the output. For VoxCPM: intensity →
-    cfg_value (clamped to declared range), rate → tempo multiplier.
+    cfg_value (clamped to declared range), rate → tempo multiplier. For
+    Chatterbox: (intensity, energy, emotion-arousal) → exaggeration, rate →
+    cfg_weight (both clamped to declared range) — see the constants above and
+    docs/PHASE4_CHATTERBOX_DESIGN.md §5.
     """
     cap = capability_for(spec)
     declares_cfg = "cfg_value" in spec.params
+    declares_chatterbox = "exaggeration" in spec.params and "cfg_weight" in spec.params
     segments: list[SegmentRender] = []
 
     for seg in plan.segments:
-        params: dict[str, float | int] = {}
+        params: dict[str, float | int | str] = {}
         if spec.runtime is RuntimeKind.VOXCPM and declares_cfg:
             cfg = _VOXCPM_CFG_BY_INTENSITY.get(seg.intensity, 2.0)
             lo = spec.params["cfg_value"].get("minimum", 1.0)
             hi = spec.params["cfg_value"].get("maximum", 3.0)
             params["cfg_value"] = max(lo, min(hi, cfg))
+        elif spec.runtime is RuntimeKind.CHATTERBOX and declares_chatterbox:
+            exaggeration = _CHATTERBOX_EXAGGERATION_BASE.get((seg.intensity, seg.energy), 0.5)
+            if seg.emotion in (Emotion.ANGRY, Emotion.EXCITED):
+                exaggeration += _EXAGGERATION_AROUSAL_DELTA
+            elif seg.emotion in (Emotion.CALM, Emotion.SAD, Emotion.ANXIOUS):
+                exaggeration -= _EXAGGERATION_AROUSAL_DELTA
+            exagg_lo = spec.params["exaggeration"].get("minimum", 0.0)
+            exagg_hi = spec.params["exaggeration"].get("maximum", 1.0)
+            params["exaggeration"] = round(max(exagg_lo, min(exagg_hi, exaggeration)), 3)
+
+            cfg_weight = _CHATTERBOX_CFG_WEIGHT_BY_RATE.get(seg.rate, 0.5)
+            cfgw_lo = spec.params["cfg_weight"].get("minimum", 0.0)
+            cfgw_hi = spec.params["cfg_weight"].get("maximum", 1.0)
+            params["cfg_weight"] = max(cfgw_lo, min(cfgw_hi, cfg_weight))
+
+            # SynthRequest has no `language` field (routing resolves it once,
+            # up front); DirectionPlan does. Injected here so a future
+            # ChatterboxBackend.synth() can read it via
+            # params.get("language_id", ...), matching voxcpm.py's
+            # .get()-defensive style. Pass-through of plan.language assumes
+            # Chatterbox's expected codes match this project's LanguageCode
+            # values ("hi"/"en"/"ur") — UNVERIFIED until Phase 4b's real
+            # backend exists against the actual Chatterbox docs.
+            params["language_id"] = plan.language
 
         speed = _SPEED_BY_RATE.get(seg.rate, 1.0)
         segments.append(

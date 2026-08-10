@@ -1,9 +1,15 @@
 # Phase 4 design — Chatterbox runtime & the emotion/tone mapping problem
 
-Written 2026-08-10. Companion to [ROADMAP.md](ROADMAP.md)'s Phase 4 entry. This is a design doc, not
-a build log — nothing in `app/inference/runtimes/`, `pyproject.toml`'s `chatterbox` extra, or
-`app/jobs/direction.py`'s capability table changes in the session that wrote this file. The only code
-that landed alongside this doc is the IR taxonomy addition described in §9.
+Written 2026-08-10. Companion to [ROADMAP.md](ROADMAP.md)'s Phase 4 entry. Originally a pure design
+doc — the session that wrote it landed only the IR taxonomy addition in §9, none of
+`app/inference/runtimes/`, `pyproject.toml`'s `chatterbox` extra, or `app/jobs/direction.py`'s
+capability table.
+
+**Update, same day:** §5's blend design (`_CHATTERBOX_FIELDS`, the exaggeration/cfg_weight mapping,
+the `language_id` injection) has since landed in `app/jobs/direction.py`, exactly as specified below
+— that is Phase 4a, done, CPU-only, tested (see ROADMAP.md's Phase 4 section for the summary). §§2–4,
+6–8, and 10–11 below are unchanged and still describe what's still ahead (Phase 4b/4c: the real
+`ChatterboxBackend`, GPU validation, `verified=True`).
 
 ## 1. Problem statement
 
@@ -70,44 +76,81 @@ codebase:
   voxcpm` into its own venv, per that script) before assuming the `pyproject.toml` extra is
   load-bearing. Worth resolving the staleness either way, but it is not blocking Phase 4b.
 
-## 3. Chatterbox API — confirmed findings (web search, 2026-08)
+## 3. Chatterbox API — VERIFIED against the real package (pod, 2026-08-10, `chatterbox-tts==0.1.7`)
 
-The multilingual variant this catalog entry targets:
+The §3 originally below this heading was written from a web search, before any pod install. Phase 4b
+pod-prep installed the real package (`.venv-chatterbox` on the GPU pod) and introspected it directly
+— several of the web-search claims were **wrong**, corrected here from the actual source:
 
 ```python
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-model = ChatterboxMultilingualTTS.from_pretrained(device="cuda", t3_model="v3")  # "v3" matches "Multilingual v3"
-wav = model.generate(
-    text, audio_prompt_path=<ref wav>, language_id=<lang code>,
-    exaggeration=<float>, cfg_weight=<float>,
+
+# WRONG (original §3 draft): from_pretrained(device="cuda", t3_model="v3") — no such parameter.
+# REAL signature, verified by inspect.signature():
+ChatterboxMultilingualTTS.from_pretrained(device: torch.device) -> 'ChatterboxMultilingualTTS'
+
+model.generate(
+    self, text, language_id, audio_prompt_path=None,
+    exaggeration=0.5, cfg_weight=0.5,
+    temperature=0.8, repetition_penalty=2.0, min_p=0.05, top_p=1.0,
 )  # -> torch tensor
 ```
 
-- Sample rate is **fixed at 24000 Hz** across the Chatterbox family (`model.sr`), unlike VoxCPM's
-  model-reported-but-effectively-fixed 48000 Hz. `synth()` must report whatever was actually written —
-  never silently resample — same discipline VoxCPM's own comment states (`voxcpm.py` lines 11–12).
+**Two corrections that change the implementation plan, not just the doc:**
+
+1. **`from_pretrained()` hardcodes `revision="main"`** (verified from its source — it calls
+   `snapshot_download(repo_id=REPO_ID, revision="main", allow_patterns=[...])` internally, with no way
+   to pass a pinned revision in). Calling it directly would violate golden rule 7. The fix mirrors what
+   `voxcpm.py` already does for the same reason: **don't call `from_pretrained()`** —
+   `ChatterboxBackend.load()` must do its own pinned `snapshot_download(repo_id, revision=hf_revision)`
+   and then call the lower-level `ChatterboxMultilingualTTS.from_local(ckpt_dir, device)`, which takes
+   an arbitrary checkpoint directory and has no revision opinion of its own. `from_local`'s exact
+   required files (verified from source): `ve.pt`, `t3_mtl23ls_v2.safetensors`, `s3gen.pt`,
+   `grapheme_mtl_merged_expanded_v1.json`, and an optional `conds.pt` — a *smaller* set than the
+   `allow_patterns` list `from_pretrained` uses internally (which also fetches an unused
+   `Cangjie5_TC.json`), so `ChatterboxBackend.load()`'s own `snapshot_download` should request exactly
+   those four-or-five files, not the catalog's whole repo.
+
+2. **The installed package only ever loads the v2 T3 checkpoint** — `from_local`'s source hardcodes
+   the filename `t3_mtl23ls_v2.safetensors`, even though the HF repo also contains
+   `t3_mtl23ls_v3.safetensors` and `t3_23lang.safetensors` (confirmed present via
+   `HfApi().model_info(..., revision=<pinned sha>).siblings`). **`chatterbox-tts==0.1.7`'s own loader
+   has no path to the v3 checkpoint at all.** This means `catalog.py`'s `display_name="Chatterbox
+   Multilingual v3"` is presently **not accurate** for what this package version actually runs — it
+   will load v2 weights regardless of the display name. This is a catalog correction (or a
+   newer-package-version question) for the owner, not something to silently rename or silently load
+   the v3 file with hand-rolled state-dict surgery. Flagged again in §10.
+
+**Findings that confirm the original draft was right:**
+
+- Sample rate is **fixed at 24000 Hz** (`S3GEN_SR = 24000`, verified constant — `model.sr` is set from
+  it in `__init__`), same as VoxCPM's discipline of reporting what was actually written, never
+  silently resampling (`voxcpm.py` lines 11–12).
+- `get_supported_languages()` returns a `SUPPORTED_LANGUAGES` dict — **verified to contain `'en':
+  'English'` and `'hi': 'Hindi'`**, exactly matching this project's `LanguageCode` values for the two
+  languages `catalog.py` already declares for Chatterbox. **No `'ur'` key exists** — consistent with
+  `CHATTERBOX_ML_V3.languages` correctly omitting Urdu already; nothing to fix there.
+  `generate()`'s own validation lowercases and checks `language_id` against this dict and raises if
+  unsupported, so Phase 4a's `params["language_id"] = plan.language` pass-through (§5, §9) is
+  **confirmed correct for en/hi**, no mapping table needed. (Chatterbox would reject a `"ur"` request
+  outright — moot today since `CHATTERBOX_ML_V3.languages` has no Urdu cell for `resolve()` to route
+  from in the first place.)
 - The tensor needs `.squeeze().cpu().numpy()` before `sf.write`, to match the one existing backend's
   `soundfile`-on-numpy pattern rather than introducing a second save path (`torchaudio.save`) for a
   future third backend to have to choose between. State this choice explicitly in the implementation,
   don't silently pick.
-- **Language plumbing gap, confirmed by reading the wire protocol directly**: `SynthRequest`
-  (`app/inference/protocol.py`, lines 101–120) has **no `language` field** — only `model_id, text,
-  reference_audio, output_path, reference_text, params, sample_rate`. `SynthesizeParams`
-  (`app/jobs/handlers/synthesize.py`, line 59) **does** carry `language: str`, one layer up, at
-  enqueue time. Chatterbox's `synth()` needs a `language_id` it currently has no path to receive.
-  Phase 4a's render layer (§5) should inject it into the `params` dict — e.g.
-  `params["language_id"] = <mapped code>` — read via `params.get("language_id", ...)` inside
-  `ChatterboxBackend.synth()`, matching `voxcpm.py`'s existing `.get()`-defensive style. The exact
-  code Chatterbox's `language_id` expects (e.g. `"hi"`/`"en"`) vs. this project's own
-  `domain.language.LanguageCode` values needs a one-time mapping check against the Chatterbox docs at
-  implementation time — not assumed identical.
-- Sources: [pypi.org/project/chatterbox-tts](https://pypi.org/project/chatterbox-tts/),
-  [github.com/resemble-ai/chatterbox](https://github.com/resemble-ai/chatterbox),
-  [huggingface.co/ResembleAI/chatterbox](https://huggingface.co/ResembleAI/chatterbox),
-  [huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-V3](https://huggingface.co/spaces/ResembleAI/Chatterbox-Multilingual-TTS-V3),
-  [github.com/davidbrowne17/chatterbox-streaming](https://github.com/davidbrowne17/chatterbox-streaming)
-  — this last one documents the load-bearing interaction quoted in §5: *"higher exaggeration tends to
-  speed up speech; reducing cfg_weight helps compensate with slower, more deliberate pacing."*
+- **Language plumbing gap** (`SynthRequest` has no `language` field; `SynthesizeParams` does, one layer
+  up) — Phase 4a already landed the fix this section originally proposed: `render()` in
+  `app/jobs/direction.py` injects `params["language_id"] = plan.language`, read via
+  `params.get("language_id", ...)` inside `ChatterboxBackend.synth()`, matching `voxcpm.py`'s
+  `.get()`-defensive style. Done, not just planned — see ROADMAP.md's Phase 4a entry.
+- Sources: package introspection on the pod (`.venv-chatterbox`, `chatterbox-tts==0.1.7`,
+  `chatterbox/mtl_tts.py`) is now authoritative over the earlier web-search sources
+  ([pypi.org/project/chatterbox-tts](https://pypi.org/project/chatterbox-tts/),
+  [github.com/resemble-ai/chatterbox](https://github.com/resemble-ai/chatterbox)) — the streaming-fork
+  citation for the exaggeration/cfg_weight pacing relationship
+  ([github.com/davidbrowne17/chatterbox-streaming](https://github.com/davidbrowne17/chatterbox-streaming))
+  is unrelated to the `from_pretrained`/v2-vs-v3 findings above and still stands as-is.
 
 ## 4. Why a blend table, not per-field overwrites
 
@@ -217,6 +260,14 @@ every current renderer's capability chip until a real mapping (like §5) exists 
 
 ## 10. Open questions requiring explicit owner sign-off
 
+- **`catalog.py`'s `CHATTERBOX_ML_V3.display_name = "Chatterbox Multilingual v3"` is not accurate for
+  `chatterbox-tts==0.1.7`, verified on the pod (§3).** The installed package's own loader
+  (`from_local`) hardcodes the v2 T3 checkpoint filename and has no code path to the v3 checkpoint that
+  does exist in the HF repo. Options for the owner to choose between at Phase 4b implementation time:
+  (a) rename the display name/id to reflect v2 honestly, (b) hold Phase 4b until a package version that
+  loads v3 ships, or (c) accept v2 now and revisit later — but not silently ship a "v3" label against
+  v2 weights, which would be exactly the unmeasured-catalog-claim defect `catalog.py`'s own module
+  docstring warns against elsewhere.
 - **`Tone.NARRATIVE` vs. `Tone.COMMENTARY` naming.** Chosen: `NARRATIVE`, reasoning that "commentary"
   reads as an appended opinion/critique where the actual ask was a delivery *style*. Cheap to rename
   before anything depends on the string value on the wire.
@@ -243,11 +294,30 @@ every current renderer's capability chip until a real mapping (like §5) exists 
   rely on Chatterbox being the generic example — a known, planned breaking change at this step, not a
   surprise. `FakeScheduler`-based render tests mirror `backend/tests/test_jobs_direction_synthesize.py`'s
   existing pattern.
-- **Phase 4b** (GPU needed): real `app/inference/runtimes/chatterbox.py` (`ChatterboxBackend`), the
-  `make_backend()` dispatch branch, resolve the `pyproject.toml` extra staleness (§2), pod install +
-  smoke test. `ChatterboxBackend.synth()` correctness is only verifiable via `pytest -m gpu` on the
-  pod — `runtimes/` code is deliberately excluded from the CPU suite
-  (`tests/test_contracts.py::test_no_torch_outside_runtimes` is the one test that *does* touch that
-  directory, specifically to prove torch isn't imported elsewhere).
-- **Phase 4c** (GPU needed): Phase-A-style validation against §8's gate, flip `verified=True` only on
-  cells that measure a pass, delete any that fail — never pre-emptively.
+- **Phase 4b — done (2026-08-11), real GPU pod, real weights:** `app/inference/runtimes/chatterbox.py`
+  (`ChatterboxBackend`) landed, mirroring `voxcpm.py`'s shape but built against the corrected API facts
+  in §3 (pinned `snapshot_download` + `from_local()`, not `from_pretrained()`). `make_backend()`'s
+  dispatch branch and the `pyproject.toml` `chatterbox` extra (§2's staleness) are both resolved.
+  `pod-bootstrap.sh` gained a Chatterbox provisioning section mirroring VoxCPM's (steps 8–9), including
+  a real trap it hit: `chatterbox-tts`'s dependency `resemble-perth` imports the deprecated
+  `pkg_resources` API, which `setuptools>=81` removed outright — the failure is **silent**, `import
+  perth` still succeeds via a bare `except ImportError: PerthImplicitWatermarker = None`, and the real
+  error only surfaces as an opaque `TypeError: 'NoneType' object is not callable` deep inside
+  `from_local()`. Pinning `setuptools<81` in the Chatterbox venv fixes it. Documented in `CLAUDE.md`'s
+  traps list, so it isn't rediscovered on the next pod.
+
+  **No committed `pytest -m gpu` test exists yet for this** — the `gpu` marker is defined in
+  `pytest.ini` but nothing uses it in the repo today (true for VoxCPM too, not just Chatterbox), and a
+  test that imports `app.inference.runtimes.chatterbox` can only run under `.venv-chatterbox`'s
+  interpreter, not the API's own torch-free `.venv` that `uv run pytest` uses — so a real `pytest -m
+  gpu` file needs a per-runtime-interpreter test-running convention this project doesn't have yet, not
+  something to bolt on quietly here. Instead, validated via a direct smoke script on the pod (not
+  checked in): `ChatterboxBackend().load()` → two real `synth()` calls (English + Hindi, same loaded
+  checkpoint, proving reuse) → `unload()`, using a bundled speech sample (gradio's own demo asset,
+  incidentally present in `.venv-voxcpm` as a transitive dependency) as the reference clip. Real
+  results: load 35.2s (cold, cache-hit weights), English synth 6.36s of audio in 7.2s wall time (RTF ≈
+  1.1), Hindi synth 4.24s of audio in 3.2s, output sample rate 24000 Hz as declared, `unload()` dropped
+  GPU memory to ~2 MiB. This proves the mechanics work — it is **not** the CER/cosine accuracy
+  validation Phase 4c still needs; no `LanguageSupport.verified` flag was touched.
+- **Phase 4c** (GPU needed, not started): Phase-A-style validation against §8's gate, flip
+  `verified=True` only on cells that measure a pass, delete any that fail — never pre-emptively.
