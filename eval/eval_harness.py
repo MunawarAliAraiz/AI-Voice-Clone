@@ -174,8 +174,21 @@ class EvalHarness:
         return self._spk
 
     def transcribe(self, wav_path: str | Path, language: Language) -> str:
+        # Decode with soundfile and pass a raw array rather than a path: the
+        # pipeline's own path-decoding branch imports TorchCodec internally,
+        # which hits the same CUDA-runtime mismatch documented in
+        # speaker_similarity() above. A raw-array input skips that branch.
+        import soundfile as sf
+        import torch
+        import torchaudio
+
+        data, sr = sf.read(str(wav_path), dtype="float32", always_2d=True)
+        audio = data.mean(axis=1)
+        if sr != 16000:
+            audio = torchaudio.functional.resample(torch.from_numpy(audio), sr, 16000).numpy()
+            sr = 16000
         out = self._asr_pipeline()(
-            str(wav_path),
+            {"raw": audio, "sampling_rate": sr},
             generate_kwargs={"language": _WHISPER_LANG[language], "task": "transcribe"},
         )
         return str(out["text"]).strip()
