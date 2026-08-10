@@ -53,6 +53,7 @@ class Emotion(StrEnum):
     NEUTRAL = "neutral"
     HAPPY = "happy"
     SAD = "sad"
+    ANXIOUS = "anxious"
     ANGRY = "angry"
     EXCITED = "excited"
     CALM = "calm"
@@ -67,6 +68,9 @@ class Tone(StrEnum):
     WARM = "warm"
     FIRM = "firm"
     SOFT = "soft"
+    #: Narrator / sports-commentator delivery style. Not yet analyzer-derived —
+    #: see direction_analyze.py's module docstring for why.
+    NARRATIVE = "narrative"
 
 
 class Level(StrEnum):

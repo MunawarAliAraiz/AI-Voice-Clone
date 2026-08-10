@@ -123,6 +123,37 @@ def test_devanagari_sad_keyword() -> None:
     assert seg.emotion is Emotion.SAD
 
 
+def test_english_anxious_keyword() -> None:
+    seg = _single_segment("I am so worried about this.", "en")
+    assert seg.emotion is Emotion.ANXIOUS
+
+
+def test_roman_urdu_anxious_keyword() -> None:
+    seg = _single_segment("Mujhe bohat fikar hai.", "ur")
+    assert seg.emotion is Emotion.ANXIOUS
+
+
+def test_devanagari_anxious_keyword() -> None:
+    seg = _single_segment("मुझे बहुत चिंतित हूं।", "hi")
+    assert seg.emotion is Emotion.ANXIOUS
+
+
+def test_anxious_keyword_beats_exclamation_punctuation() -> None:
+    """"!" alone means EXCITED, but an anxious-lexicon word wins regardless —
+    mirrors test_angry_keyword_beats_exclamation_punctuation, protecting
+    ANXIOUS's placement ahead of EXCITED in _EMOTION_PRIORITY."""
+    seg = _single_segment("I am so nervous right now!", "en")
+    assert seg.emotion is Emotion.ANXIOUS
+
+
+def test_sad_keyword_wins_over_anxious_keyword_in_same_segment() -> None:
+    """Protects SAD's placement ahead of ANXIOUS in _EMOTION_PRIORITY: when
+    both a sad-lexicon and an anxious-lexicon word appear, SAD wins regardless
+    of word order in the text."""
+    seg = _single_segment("Main bohat udaas hoon, aur thoda pareshan bhi.", "ur")
+    assert seg.emotion is Emotion.SAD
+
+
 # ── Intensity ────────────────────────────────────────────────────────────────
 
 

@@ -21,7 +21,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | 📋 Designed, not started | Move video→audio extraction into the browser; server-side ffmpeg becomes the fallback, not the only path. |
-| **4 — Chatterbox runtime + beyond** | 💭 Not designed | Real `exaggeration` knob, multi-speaker, dubbing, post-processing presets. |
+| **4 — Chatterbox runtime + beyond** | 📋 Designed, not started | Real `exaggeration`/`cfg_weight` knobs, multi-speaker, dubbing, post-processing presets. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
 
 ---
 
@@ -262,16 +262,30 @@ just on the upload path instead of the generation path.
 Also: relabel the Audio Editor tab to say it extracts audio *from video*, and prompt for a
 30-second clip at the file picker — the tab's current name is misleading about what it does.
 
-## Phase 4 — Not yet designed
+## Phase 4 — Chatterbox runtime + IR taxonomy expansion (designed, not built)
 
-- **Chatterbox runtime.** Unlocks a real `exaggeration` parameter — the thing that makes Phase 2's
-  "declared but ignored" list shorter. `catalog.py` already declares the parameter
-  ([catalog.py:155](../backend/app/inference/catalog.py)); there is no runtime and an empty
-  `[chatterbox]` extra in `pyproject.toml` behind it yet.
+**Problem this solves:** Speech Direction's `emotion`/`tone` fields are real in the IR but currently
+IGNORED by every runtime — VoxCPM takes no emotion/tone conditioning at all, so today "angry" has
+zero audible effect. Chatterbox (`RuntimeKind.CHATTERBOX`, already a researched stub in
+`catalog.py`) is the model that could change that: MIT-licensed, real `exaggeration`/`cfg_weight`
+params confirmed against the HF card/GitHub/PyPI. But it exposes exactly **two** continuous knobs
+while the IR has **four** fields that plausibly want to drive them (`emotion`, `tone`, `intensity`,
+`energy`) — deciding how those collapse onto two knobs, without one field silently overwriting
+another, is the actual design problem. Full write-up, including the proposed blend table, the
+`ChatterboxBackend` shape (mirroring `voxcpm.py`), the `language_id` plumbing gap, VRAM/licensing/
+routing risk, and a sequencing plan (4a: CPU-only mapping + tests → 4b: real backend, GPU → 4c:
+Phase-A validation): **[docs/PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md)**.
+
+**Landed now, ahead of the runtime work (2026-08-10):** the IR taxonomy gained `Emotion.ANXIOUS`
+(detected by the heuristic analyzer today, same as `ANGRY`) and `Tone.NARRATIVE` (narrator/
+commentary delivery style — not yet analyzer-derived, deliberately deferred rather than shipping a
+fabricated-looking heuristic; see `direction_analyze.py`'s docstring). Both are inert until a
+renderer honors them — same honest-until-proven-otherwise discipline as the rest of Phase 2.
+
 - Multi-speaker generation.
 - Dubbing pipeline.
 - Post-processing presets (building on the non-destructive edit primitives the Audio Editor already
   has: trim, speed, pitch, gain, fade, LUFS normalize, silence removal).
 
-None of these have a design write-up yet — start with a plan, the way Phase 1 and 2 did, before
-writing code.
+These three have no design write-up yet — start with a plan, the way Phase 1, 2, and Chatterbox did,
+before writing code.
