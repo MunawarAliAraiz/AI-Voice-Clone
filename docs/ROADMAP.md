@@ -21,7 +21,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
-| **4 — Chatterbox runtime + beyond** | 🚧 4a+4b done, real audio on GPU; 4c (accuracy gate) not started | Capability/blend mapping, and now a real `ChatterboxBackend` smoke-tested on the pod (load/synth/unload, real weights, real audio, both English and Hindi). Still unroutable in production — no `LanguageSupport` cell is `verified=True` yet, that's 4c. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
+| **4 — Chatterbox runtime + beyond** | 🔴 4a/4b/4c all done — **not verified, does not clone identity well enough to ship** | Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner verdict: "not that good... identity is matched around 60%". Same conclusion shape as the Urdu investigation — a speaker-encoder ceiling, not a tunable parameter. Still unroutable in production, and not currently planned to be revisited without a LoRA fine-tune. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) and [PHASE_A_RESULTS.md](PHASE_A_RESULTS.md). |
 
 ---
 
@@ -322,9 +322,17 @@ corrected two wrong API assumptions from the original design doc — see
 [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) §3. Still not routable in production; no
 `pytest -m gpu` file exists for this yet (see the design doc's §11 for why, and what would be needed).
 
-**Phase 4c (needs the pod, not started):** Phase-A-style validation (CER via Whisper, speaker
-cosine, RTF) against `LanguageSupport.meets_gate()`, flip `verified=True` only on cells that measure
-a pass.
+**Phase 4c — done (2026-08-11), concluded NOT VERIFIED:** real Phase-A gate run on the pod
+(`eval/run_chatterbox_synth.py` + `eval/eval_harness.py`) against the same reference speaker and
+target sentence used for F5/VoxCPM2. Hindi passed all three numeric gates on the first sample (CER
+0.0526, speaker cosine 0.7271, RTF 0.76); English missed the speaker gate at 0.6848 (borderline, n=1).
+Per the owner's listen — "not that good... identity is matched around 60%" — **neither cell is
+`verified=True`.** Same conclusion shape as the Urdu investigation below: a numeric pass is a screen,
+not a verdict, and a borderline-passing speaker-cosine score correctly predicted a borderline,
+unconvincing identity match by ear. Full writeup: [PHASE_A_RESULTS.md](PHASE_A_RESULTS.md). Not
+currently planned to be revisited without a LoRA fine-tune (see the Urdu report's same conclusion).
+Also fixed a real TorchCodec/CUDA-runtime-mismatch trap hit while building `.venv-eval`, now
+documented in `CLAUDE.md` and scripted into `pod-bootstrap.sh`.
 
 - Multi-speaker generation.
 - Dubbing pipeline.

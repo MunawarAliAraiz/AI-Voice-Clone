@@ -23,7 +23,7 @@ resolves nothing.** That is correct for this stage.
 | `f5_openbible_urdu` | `multilingual-tts/F5-TTS-OpenBible-Urdu` | CC-BY-SA-4.0 | ⏳ R1 | — |
 | `f5_indic` | `ai4bharat/IndicF5` | MIT | ⏳ R1 | — |
 | `f5_openf5_en` | *unresolved* | Apache-2.0? | ⏳ R1 | — |
-| `chatterbox_ml_v3` | `ResembleAI/chatterbox` | **MIT ✅** | ✅ real backend, n=1 gate run | hi PASS / en FAIL (borderline) |
+| `chatterbox_ml_v3` | `ResembleAI/chatterbox` | **MIT ✅** | ✅ real backend, gate run + human listen | **NOT VERIFIED** — ~60% identity match by ear |
 | `voxcpm2` | *unresolved* | Apache-2.0? | ⏳ R3 | — |
 
 ---
@@ -104,6 +104,25 @@ VoxCPM2's Hindi near-miss (0.014) that turned out, on more samples, not to be no
 this is **not yet a delete decision**: n=1, and the reference is Urdu-language speech being cloned into
 English — a real cross-lingual jump the model card itself calls out as accent-bleed-prone. Re-run with
 2-3 more English sentences before deciding.
+
+### Human verdict (owner, 2026-08-11) — NOT VERIFIED
+
+> "not that good but ok. identity is matched around 60%"
+
+This is the same category of finding as VoxCPM2's Hindi cell: a borderline-passing (Hindi) or
+borderline-failing (English) numeric score, and a human listen that lands below the bar a shipped
+"clones your voice" feature needs. **Neither `LanguageSupport` cell is flipped to `verified=True`.**
+Both stay unroutable — the numeric gate was never meant to be sufficient on its own (module docstring,
+top of this file), and "~60% identity" is a direct, human-sourced confirmation that it isn't here
+either, consistent with Hindi's speaker-cosine 0.7271 sitting only just over the 0.70 line rather than
+convincingly clear of it.
+
+**Not re-tested further, and not currently planned to be** — this is the same shape of result the
+Urdu investigation already concluded on (see "🔴 Urdu re-test" and "Urdu: the full experiment chain"
+above): identity comes from the reference-audio encoder, and no amount of additional sentences or knob
+tuning changes what a speaker encoder was trained to generalize to. If Chatterbox's identity match is
+revisited, the lead hypothesis from that investigation — LoRA fine-tuning on 2–10 min of the owner's
+own audio — applies here too, not more zero-shot sampling.
 
 **Operational note — TorchCodec.** `eval_harness.py` originally loaded audio via `torchaudio.load()`
 and passed file paths straight into the Whisper pipeline. Both routes now default to TorchCodec, whose
