@@ -4,10 +4,12 @@
  * Dedicated studio tab for non-destructive audio editing, processing,
  * previewing, format conversion, and optional voice enrollment.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../services/api';
 import { AudioPlayer } from './AudioPlayer';
+import { ClipRangeSelector } from './ClipRangeSelector';
 import { IconAlert, IconCheck, IconFileAudio, IconSpark, IconSpinner, IconUpload } from './icons';
+import { MAX_CLIENT_CLIP_SEC, decodeMediaFile, extractWavClip } from '../lib/clientAudioExtract';
 
 interface Props {
   onEnrolled?: () => void;
@@ -36,6 +38,19 @@ export function AudioEditorTab({ onEnrolled }: Props) {
   const [duration, setDuration] = useState<number>(0);
   const [trimStart, setTrimStart] = useState<number>(0);
   const [trimEnd, setTrimEnd] = useState<number>(0);
+
+  // Client-side extraction (Phase 3): decode the picked file in-browser and
+  // work with an already-clipped WAV instead of uploading the full original
+  // (which matters most for video — the original problem this tab had).
+  // `originalName`/`originalSizeMb` are kept separately because `file` gets
+  // replaced by the extracted clip, losing the source's own name/size.
+  const [decodeState, setDecodeState] = useState<'idle' | 'decoding' | 'ready' | 'unsupported'>('idle');
+  const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
+  const [clipStart, setClipStart] = useState(0);
+  const [originalName, setOriginalName] = useState<string | null>(null);
+  const [originalSizeMb, setOriginalSizeMb] = useState<number | null>(null);
+  const decodeReq = useRef(0);
+  const extractTimer = useRef<number | null>(null);
   const [speed, setSpeed] = useState<number>(1.0);
   const [pitch, setPitch] = useState<number>(0);
   const [gain, setGain] = useState<number>(0);
@@ -83,6 +98,61 @@ export function AudioEditorTab({ onEnrolled }: Props) {
       URL.revokeObjectURL(url);
     };
   }, [file]);
+
+  // Re-extract whenever the decoded source or the chosen 30s window changes,
+  // and swap `file` for the extracted clip — the trim/speed/pitch controls
+  // above then operate on the small clip, not the original upload. Debounced
+  // so dragging ClipRangeSelector doesn't spawn a worker per pixel.
+  useEffect(() => {
+    if (!decodedBuffer) return;
+    if (extractTimer.current !== null) window.clearTimeout(extractTimer.current);
+    extractTimer.current = window.setTimeout(() => {
+      const clipLen = Math.min(MAX_CLIENT_CLIP_SEC, decodedBuffer.duration);
+      extractWavClip(decodedBuffer, clipStart, clipStart + clipLen)
+        .then((blob) => {
+          setFile(new File([blob], 'clip.wav', { type: 'audio/wav' }));
+        })
+        .catch(() => setError('Could not extract the selected clip from this file.'));
+    }, 150);
+    return () => {
+      if (extractTimer.current !== null) window.clearTimeout(extractTimer.current);
+    };
+  }, [decodedBuffer, clipStart]);
+
+  function onFilePicked(f: File | null) {
+    setFile(f);
+    setOriginalName(f?.name ?? null);
+    setOriginalSizeMb(f ? f.size / (1024 * 1024) : null);
+    setDecodedBuffer(null);
+    setClipStart(0);
+    setDecodeState(f ? 'decoding' : 'idle');
+    const reqId = ++decodeReq.current;
+    if (!f) return;
+    decodeMediaFile(f)
+      .then((buf) => {
+        if (decodeReq.current !== reqId) return; // superseded by a newer pick
+        setDecodedBuffer(buf);
+        setDecodeState('ready');
+      })
+      .catch(() => {
+        if (decodeReq.current !== reqId) return;
+        // decodeAudioData can't demux this container (mkv/avi/flv are the
+        // known cases) — `file` stays the raw original and the existing
+        // server-side ffmpeg path in processAudio/saveAsVoiceProfile handles
+        // it, same as before this feature existed. Visible, not silent.
+        setDecodeState('unsupported');
+      });
+  }
+
+  function resetFile() {
+    ++decodeReq.current; // invalidate any in-flight decode
+    setFile(null);
+    setOriginalName(null);
+    setOriginalSizeMb(null);
+    setDecodedBuffer(null);
+    setClipStart(0);
+    setDecodeState('idle');
+  }
 
   async function processAudio() {
     if (!file) return;
@@ -170,7 +240,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
             <IconFileAudio size={20} />
             Audio Editor Studio
           </h2>
-          <span className="count">Non-Destructive Processing</span>
+          <span className="count">Extracts audio from video, too</span>
         </div>
 
         {/* File Drop Area */}
@@ -178,22 +248,43 @@ export function AudioEditorTab({ onEnrolled }: Props) {
           <div className="file-drop" style={{ padding: 'var(--space-8)', flexDirection: 'column', textAlign: 'center', gap: 'var(--space-3)' }}>
             <input
               type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              aria-label="Upload Audio File for Editing"
+              accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mkv,.mov,.avi,.webm,.flv,.wmv,.wma,.3gp"
+              onChange={(e) => onFilePicked(e.target.files?.[0] ?? null)}
+              aria-label="Upload an audio or video file for editing"
             />
             <IconUpload size={32} />
             <div style={{ width: '100%' }}>
               <strong style={{ display: 'block', fontSize: 'var(--text-md)', color: 'var(--text)' }}>
-                Drop an audio file here, or click to browse
+                Drop an audio or video file here, or click to browse
               </strong>
               <span className="muted" style={{ fontSize: 'var(--text-sm)' }}>
-                Supports WAV, MP3, FLAC, OGG, M4A, AAC audio formats
+                Video's audio track is extracted automatically, up to 30 seconds
               </span>
             </div>
           </div>
         ) : (
           <div>
+            {decodeState === 'decoding' && (
+              <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <IconSpinner size={12} /> Analyzing file in your browser…
+              </p>
+            )}
+
+            {decodeState === 'unsupported' && (
+              <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <IconAlert size={12} /> Couldn't preview this file's audio in your browser — it will be
+                uploaded as-is and processed on the server instead.
+              </p>
+            )}
+
+            {decodeState === 'ready' && decodedBuffer && decodedBuffer.duration > MAX_CLIENT_CLIP_SEC && (
+              <ClipRangeSelector
+                durationSec={decodedBuffer.duration}
+                startSec={clipStart}
+                onChangeStart={setClipStart}
+              />
+            )}
+
             {/* File Info Bar */}
             <div
               style={{
@@ -204,6 +295,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                 background: 'var(--panel-inset)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--line)',
+                marginTop: 'var(--space-3)',
                 marginBottom: 'var(--space-5)',
               }}
             >
@@ -211,10 +303,12 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                 <IconFileAudio size={20} />
                 <div style={{ overflow: 'hidden' }}>
                   <strong style={{ display: 'block', fontSize: 'var(--text-md)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {file.name}
+                    {originalName ?? file.name}
                   </strong>
                   <span className="muted" style={{ fontSize: 'var(--text-sm)' }}>
-                    Original Duration: {duration > 0 ? `${duration.toFixed(1)}s` : 'Loading…'} · {(file.size / (1024 * 1024)).toFixed(2)} MB
+                    {decodeState === 'ready'
+                      ? `${duration > 0 ? duration.toFixed(1) : '…'}s clip · ${(originalSizeMb ?? 0).toFixed(2)} MB original file`
+                      : `Duration: ${duration > 0 ? `${duration.toFixed(1)}s` : 'Loading…'} · ${(originalSizeMb ?? file.size / (1024 * 1024)).toFixed(2)} MB`}
                   </span>
                 </div>
               </div>
@@ -223,7 +317,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                 <button type="button" className="btn-sm" onClick={handleReset} title="Reset sliders">
                   <IconSpark size={14} /> Reset
                 </button>
-                <button type="button" className="btn-sm danger" onClick={() => setFile(null)}>
+                <button type="button" className="btn-sm danger" onClick={resetFile}>
                   Change File
                 </button>
               </div>
@@ -378,11 +472,15 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                 type="button"
                 className="btn primary"
                 onClick={() => void processAudio()}
-                disabled={processing}
+                disabled={processing || decodeState === 'decoding'}
                 style={{ flex: 1 }}
               >
-                {processing ? <IconSpinner size={16} /> : <IconSpark size={16} />}
-                {processing ? 'Processing Audio with FFmpeg…' : 'Process & Preview Edited Audio'}
+                {processing || decodeState === 'decoding' ? <IconSpinner size={16} /> : <IconSpark size={16} />}
+                {processing
+                  ? 'Processing Audio with FFmpeg…'
+                  : decodeState === 'decoding'
+                    ? 'Analyzing file…'
+                    : 'Process & Preview Edited Audio'}
               </button>
 
               {previewUrl && (
@@ -424,7 +522,7 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                 <AudioPlayer
                   src={previewUrl}
                   label="Edited audio output"
-                  downloadName={`${file.name.replace(/\.[^/.]+$/, '')}-edited.wav`}
+                  downloadName={`${(originalName ?? file.name).replace(/\.[^/.]+$/, '')}-edited.wav`}
                 />
               </div>
             )}

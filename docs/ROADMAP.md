@@ -20,7 +20,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
-| **3 — Client-side audio extraction** | 📋 Designed, not started | Move video→audio extraction into the browser; server-side ffmpeg becomes the fallback, not the only path. |
+| **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
 | **4 — Chatterbox runtime + beyond** | 📋 Designed, not started | Real `exaggeration`/`cfg_weight` knobs, multi-speaker, dubbing, post-processing presets. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
 
 ---
@@ -241,26 +241,40 @@ all; Chatterbox declares a real `exaggeration` parameter but has no runtime yet 
 declaration exists would just be Style Exaggeration again with extra steps. The capability-map design
 above is the part that makes it not a repeat of that mistake — build the declaration mechanism first.
 
-## Phase 3 — Client-side audio extraction (designed, not built)
+## Phase 3 — Client-side audio extraction (built)
 
-**Problem this solves:** the Audio Editor tab currently uploads full video files to the backend to
-extract audio server-side via ffmpeg — expensive in bandwidth and server time for what is usually a
-30-second clip.
+**Problem this solved:** uploading a full video file just to enroll a 6–15s reference clip was
+expensive in bandwidth and server time, and gave the user no way to pick *which* part of a longer
+recording to use.
 
-**Design:** decode in-browser via `AudioContext.decodeAudioData`, enforce a client-side ≤30s clip
-limit, send only the extracted WAV to the backend.
-[`useRecorder.ts`](../frontend/src/hooks/useRecorder.ts) already contains the exact
-`decodeAudioData` → `encodeWav` primitive this needs (and Phase 1 Part E already moved that encode
-step into a Web Worker, which this reuses directly).
+**What shipped:** [`frontend/src/lib/wavEncode.ts`](../frontend/src/lib/wavEncode.ts) factors the
+`encodeWavOffMainThread` primitive out of `useRecorder.ts` so both the recorder and the new
+extraction path share one Web-Worker encoder.
+[`frontend/src/lib/clientAudioExtract.ts`](../frontend/src/lib/clientAudioExtract.ts) adds
+`decodeMediaFile()` (`AudioContext.decodeAudioData`) and `extractWavClip()`, capped at
+`MAX_CLIENT_CLIP_SEC = 30`. `EnrollCard.tsx` decodes the picked file on selection: files ≤30s are
+extracted automatically; files >30s show
+[`ClipRangeSelector.tsx`](../frontend/src/components/ClipRangeSelector.tsx) — a single drag handle
+that positions a fixed 30s window over the source, defaulting to the first 30s — and the selected
+window is what gets extracted and uploaded, never the full file.
 
-**Caveat that must ship in the UI, not just the code:** `decodeAudioData` handles mp4/webm audio
-tracks in most browsers but **fails on mkv/avi/flv**, which `EnrollCard`'s current `accept` list
-allows. Keep the server-side ffmpeg path as an **explicit, visible fallback** for those formats —
-not a silent one. A silent fallback here is the same class of bug golden rule 5 exists to prevent,
-just on the upload path instead of the generation path.
+**The caveat this design flagged did ship, not just the code:** `decodeAudioData` handles mp4/webm
+audio tracks in most browsers but **fails on mkv/avi/flv**, which `EnrollCard`'s `accept` list still
+allows. When decode throws, `EnrollCard` shows a visible "couldn't preview this file's audio in your
+browser — it will be uploaded as-is and processed on the server instead" message and falls back to
+uploading the original file whole, letting the existing server-side ffmpeg path in
+`backend/app/audio.py::_transcode_to_wav` handle it — an explicit, visible fallback, not a silent
+one, per golden rule 5. Verified in-browser for all three paths (≤30s auto-extract, >30s drag-select
+with correct clamping, and the undecodable-format fallback message).
 
-Also: relabel the Audio Editor tab to say it extracts audio *from video*, and prompt for a
-30-second clip at the file picker — the tab's current name is misleading about what it does.
+**Audio Editor tab (`AudioEditorTab.tsx`) now covered too:** it accepts video the same way, decodes
+on file pick, and re-extracts (debounced) whenever the drag-selector's window changes — the working
+`file` becomes the extracted clip, and the existing trim/speed/pitch/gain/fade controls now operate
+on that clip instead of the full original upload. The original file's name/size are kept separately
+(`originalName`/`originalSizeMb`) purely for display, since the extracted `clip.wav` has neither. The
+undecodable-format fallback message and behavior mirror `EnrollCard` exactly. Verified in-browser for
+all three paths there too (≤30s auto-extract, >30s drag-select with correct re-extraction on drag,
+and the undecodable-format fallback).
 
 ## Phase 4 — Chatterbox runtime + IR taxonomy expansion (designed, not built)
 

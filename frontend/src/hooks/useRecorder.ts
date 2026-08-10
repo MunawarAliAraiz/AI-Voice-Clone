@@ -11,6 +11,7 @@
  * custom property, typically) instead of going through React.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { encodeAudioBufferAsWav } from '../lib/wavEncode';
 
 export interface Recorder {
   recording: boolean;
@@ -122,39 +123,8 @@ async function webmToWav(input: Blob): Promise<Blob> {
   const ctx = new AudioContext();
   try {
     const buf = await ctx.decodeAudioData(await input.arrayBuffer());
-    return await encodeWavOffMainThread(buf);
+    return await encodeAudioBufferAsWav(buf);
   } finally {
     await ctx.close();
   }
-}
-
-/**
- * Downmix + WAV byte-writing run in a worker (see wavEncoder.worker.ts) so
- * the ~1.4M-iteration encode for a 15s clip doesn't block the main thread
- * the instant the user hits Stop. `.slice()` copies each channel's samples
- * out of the AudioBuffer's own storage (which itself can't be transferred)
- * into a fresh, transferable ArrayBuffer.
- */
-function encodeWavOffMainThread(buffer: AudioBuffer): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('../workers/wavEncoder.worker.ts', import.meta.url), {
-      type: 'module',
-    });
-    const channels: Float32Array[] = [];
-    for (let c = 0; c < buffer.numberOfChannels; c++) {
-      channels.push(buffer.getChannelData(c).slice());
-    }
-    worker.onmessage = (e: MessageEvent<ArrayBuffer>) => {
-      resolve(new Blob([e.data], { type: 'audio/wav' }));
-      worker.terminate();
-    };
-    worker.onerror = (e) => {
-      reject(e.error instanceof Error ? e.error : new Error('WAV encoding failed'));
-      worker.terminate();
-    };
-    worker.postMessage(
-      { channels, sampleRate: buffer.sampleRate },
-      channels.map((c) => c.buffer),
-    );
-  });
 }
