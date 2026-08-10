@@ -21,7 +21,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
-| **4 — Chatterbox runtime + beyond** | 📋 Designed, not started | Real `exaggeration`/`cfg_weight` knobs, multi-speaker, dubbing, post-processing presets. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
+| **4 — Chatterbox runtime + beyond** | 🚧 4a done (CPU-only), 4b/4c need the pod | Capability table + exaggeration/cfg_weight blend mapping landed and tested. No real runtime yet — Chatterbox is still unroutable until Phase 4b/4c. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
 
 ---
 
@@ -276,7 +276,7 @@ undecodable-format fallback message and behavior mirror `EnrollCard` exactly. Ve
 all three paths there too (≤30s auto-extract, >30s drag-select with correct re-extraction on drag,
 and the undecodable-format fallback).
 
-## Phase 4 — Chatterbox runtime + IR taxonomy expansion (designed, not built)
+## Phase 4 — Chatterbox runtime + IR taxonomy expansion
 
 **Problem this solves:** Speech Direction's `emotion`/`tone` fields are real in the IR but currently
 IGNORED by every runtime — VoxCPM takes no emotion/tone conditioning at all, so today "angry" has
@@ -285,16 +285,37 @@ zero audible effect. Chatterbox (`RuntimeKind.CHATTERBOX`, already a researched 
 params confirmed against the HF card/GitHub/PyPI. But it exposes exactly **two** continuous knobs
 while the IR has **four** fields that plausibly want to drive them (`emotion`, `tone`, `intensity`,
 `energy`) — deciding how those collapse onto two knobs, without one field silently overwriting
-another, is the actual design problem. Full write-up, including the proposed blend table, the
+another, was the actual design problem. Full write-up, including the blend table, the
 `ChatterboxBackend` shape (mirroring `voxcpm.py`), the `language_id` plumbing gap, VRAM/licensing/
-routing risk, and a sequencing plan (4a: CPU-only mapping + tests → 4b: real backend, GPU → 4c:
-Phase-A validation): **[docs/PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md)**.
+routing risk, and the sequencing plan below:
+**[docs/PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md)**.
 
-**Landed now, ahead of the runtime work (2026-08-10):** the IR taxonomy gained `Emotion.ANXIOUS`
+**Landed 2026-08-10, ahead of the runtime work:** the IR taxonomy gained `Emotion.ANXIOUS`
 (detected by the heuristic analyzer today, same as `ANGRY`) and `Tone.NARRATIVE` (narrator/
 commentary delivery style — not yet analyzer-derived, deliberately deferred rather than shipping a
 fabricated-looking heuristic; see `direction_analyze.py`'s docstring). Both are inert until a
 renderer honors them — same honest-until-proven-otherwise discipline as the rest of Phase 2.
+
+**Phase 4a — done (CPU-only, no GPU):** `app/jobs/direction.py` gained `_CHATTERBOX_FIELDS` (the
+per-field HONORED/APPROXIMATED/IGNORED table) and the `(intensity, energy, emotion-arousal) →
+exaggeration`, `rate → cfg_weight` blend functions from the design doc's §5, both clamped to the
+catalog spec's declared ranges. `render()` also injects `params["language_id"] = plan.language` for
+Chatterbox specifically, closing the `SynthRequest`-has-no-`language`-field gap the design doc
+flagged — pass-through, unverified against Chatterbox's actual expected codes until Phase 4b.
+`tone` stays IGNORED, matching the design doc's explicit decision (nothing populates it, and the two
+knobs are already spoken for). `test_direction_capability.py`'s `_NON_VOXCPM` fixture was repointed
+at an F5 spec (was Chatterbox, which now has its own real mapping and could no longer serve as "the
+generic example"). 6 new tests added, 223 total, all CPU-only; `ruff check` clean. **This is still
+inert in production** — Chatterbox's `LanguageSupport` cells aren't `verified=True`, so
+`domain.routing.resolve()` cannot route to it yet (by design, the same gate VoxCPM had to clear).
+
+**Phase 4b (needs the pod, not started):** real `app/inference/runtimes/chatterbox.py`
+(`ChatterboxBackend`), the `make_backend()` dispatch branch, resolve the `pyproject.toml` extra
+staleness, pod install + smoke test.
+
+**Phase 4c (needs the pod, not started):** Phase-A-style validation (CER via Whisper, speaker
+cosine, RTF) against `LanguageSupport.meets_gate()`, flip `verified=True` only on cells that measure
+a pass.
 
 - Multi-speaker generation.
 - Dubbing pipeline.

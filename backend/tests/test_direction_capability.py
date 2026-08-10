@@ -37,7 +37,10 @@ from app.jobs.direction import (
 )
 
 _VOXCPM = CATALOG.require("voxcpm2")
-_NON_VOXCPM = CATALOG.by_runtime(RuntimeKind.CHATTERBOX)[0]
+_CHATTERBOX = CATALOG.require("chatterbox_ml_v3")
+#: A runtime with no Direction renderer at all — must stay generic, not
+#: Chatterbox (which got its own _CHATTERBOX_FIELDS table in Phase 4a).
+_NON_VOXCPM = CATALOG.by_runtime(RuntimeKind.F5)[0]
 
 
 def _plan(*segments: DirectedSegment) -> DirectionPlan:
@@ -99,6 +102,26 @@ def test_generic_capability_claims_no_acoustics():
         assert by_field[acoustic] is Support.IGNORED
 
 
+def test_chatterbox_capability_is_honest():
+    """Chatterbox has real acoustic knobs (exaggeration/cfg_weight) so several
+    fields are APPROXIMATED rather than IGNORED — but it takes no discrete tone
+    input, and nothing populates `tone` yet either, so tone stays IGNORED."""
+    report = capability_for(_CHATTERBOX)
+    by_field = {f.field: f.support for f in report.fields}
+
+    assert by_field["segmentation"] is Support.HONORED
+    assert by_field["pause_after"] is Support.HONORED
+    assert by_field["rate"] is Support.APPROXIMATED
+    assert by_field["emphasis"] is Support.APPROXIMATED
+    assert by_field["intensity"] is Support.APPROXIMATED
+    assert by_field["energy"] is Support.APPROXIMATED
+    assert by_field["emotion"] is Support.APPROXIMATED
+    assert by_field["tone"] is Support.IGNORED
+
+    assert report.model_id == _CHATTERBOX.id
+    assert set(report.ignored) == {"tone"}
+
+
 # ── Rendering ────────────────────────────────────────────────────────────────
 
 
@@ -143,6 +166,81 @@ def test_render_rate_maps_to_speed():
     speeds = [s.speed for s in render(plan, _VOXCPM).segments]
     assert speeds[0] < speeds[1] < speeds[2]
     assert speeds[1] == 1.0  # NORMAL is a true no-op
+
+
+def test_render_maps_intensity_energy_to_chatterbox_exaggeration():
+    """Higher (intensity, energy) should yield a higher blended exaggeration —
+    the same monotonic-with-intensity shape test_render_maps_intensity_to_cfg_in_range
+    checks for VoxCPM's cfg_value, on Chatterbox's own knob."""
+    plan = _plan(
+        DirectedSegment(text="A.", index=0, intensity=Level.LOW, energy=Level.LOW),
+        DirectedSegment(text="B.", index=1, intensity=Level.MEDIUM, energy=Level.MEDIUM),
+        DirectedSegment(text="C.", index=2, intensity=Level.HIGH, energy=Level.HIGH),
+    )
+    out = render(plan, _CHATTERBOX)
+    exaggerations = [s.params["exaggeration"] for s in out.segments]
+
+    assert exaggerations[0] < exaggerations[1] < exaggerations[2]
+    lo = _CHATTERBOX.params["exaggeration"]["minimum"]
+    hi = _CHATTERBOX.params["exaggeration"]["maximum"]
+    assert all(lo <= e <= hi for e in exaggerations)
+
+
+def test_render_arousal_emotion_nudges_chatterbox_exaggeration():
+    """ANGRY should push exaggeration up and CALM should pull it down, relative
+    to NEUTRAL at the same (intensity, energy) — proving the emotion-arousal
+    nudge in _EXAGGERATION_AROUSAL_DELTA actually applies."""
+    base = _plan(DirectedSegment(text="A.", index=0, intensity=Level.MEDIUM, energy=Level.MEDIUM))
+    angry = _plan(
+        DirectedSegment(
+            text="A.", index=0, intensity=Level.MEDIUM, energy=Level.MEDIUM, emotion=Emotion.ANGRY
+        )
+    )
+    calm = _plan(
+        DirectedSegment(
+            text="A.", index=0, intensity=Level.MEDIUM, energy=Level.MEDIUM, emotion=Emotion.CALM
+        )
+    )
+
+    base_exagg = render(base, _CHATTERBOX).segments[0].params["exaggeration"]
+    angry_exagg = render(angry, _CHATTERBOX).segments[0].params["exaggeration"]
+    calm_exagg = render(calm, _CHATTERBOX).segments[0].params["exaggeration"]
+
+    assert calm_exagg < base_exagg < angry_exagg
+
+
+def test_render_rate_maps_to_chatterbox_cfg_weight():
+    """SLOW -> higher cfg_weight (more deliberate pacing), FAST -> lower —
+    inverse of exaggeration's speed-it-up effect, per the cited Chatterbox
+    docs relationship."""
+    plan = _plan(
+        DirectedSegment(text="A.", index=0, rate=Rate.SLOW),
+        DirectedSegment(text="B.", index=1, rate=Rate.NORMAL),
+        DirectedSegment(text="C.", index=2, rate=Rate.FAST),
+    )
+    cfg_weights = [s.params["cfg_weight"] for s in render(plan, _CHATTERBOX).segments]
+    assert cfg_weights[0] > cfg_weights[1] > cfg_weights[2]
+
+    lo = _CHATTERBOX.params["cfg_weight"]["minimum"]
+    hi = _CHATTERBOX.params["cfg_weight"]["maximum"]
+    assert all(lo <= c <= hi for c in cfg_weights)
+
+
+def test_render_chatterbox_ignored_tone_does_not_leak():
+    """Tone is IGNORED for Chatterbox (no analyzer signal, no free knob) — a
+    FIRM tone on the segment must not appear anywhere in the emitted params."""
+    plan = _plan(DirectedSegment(text="Chala jao!", index=0, tone=Tone.FIRM))
+    out = render(plan, _CHATTERBOX)
+    assert set(out.segments[0].params) == {"exaggeration", "cfg_weight", "language_id"}
+
+
+def test_render_chatterbox_injects_language_id():
+    """SynthRequest has no language field; DirectionPlan does. render() must
+    carry it through in params so a future ChatterboxBackend.synth() can read
+    it — see the render() docstring for why this isn't in DIRECTION_FIELDS."""
+    plan = _plan(DirectedSegment(text="Hello.", index=0))
+    out = render(plan, _CHATTERBOX)
+    assert out.segments[0].params["language_id"] == plan.language
 
 
 def test_render_generic_emits_no_model_params():

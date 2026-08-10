@@ -1,9 +1,15 @@
 # Phase 4 design — Chatterbox runtime & the emotion/tone mapping problem
 
-Written 2026-08-10. Companion to [ROADMAP.md](ROADMAP.md)'s Phase 4 entry. This is a design doc, not
-a build log — nothing in `app/inference/runtimes/`, `pyproject.toml`'s `chatterbox` extra, or
-`app/jobs/direction.py`'s capability table changes in the session that wrote this file. The only code
-that landed alongside this doc is the IR taxonomy addition described in §9.
+Written 2026-08-10. Companion to [ROADMAP.md](ROADMAP.md)'s Phase 4 entry. Originally a pure design
+doc — the session that wrote it landed only the IR taxonomy addition in §9, none of
+`app/inference/runtimes/`, `pyproject.toml`'s `chatterbox` extra, or `app/jobs/direction.py`'s
+capability table.
+
+**Update, same day:** §5's blend design (`_CHATTERBOX_FIELDS`, the exaggeration/cfg_weight mapping,
+the `language_id` injection) has since landed in `app/jobs/direction.py`, exactly as specified below
+— that is Phase 4a, done, CPU-only, tested (see ROADMAP.md's Phase 4 section for the summary). §§2–4,
+6–8, and 10–11 below are unchanged and still describe what's still ahead (Phase 4b/4c: the real
+`ChatterboxBackend`, GPU validation, `verified=True`).
 
 ## 1. Problem statement
 
