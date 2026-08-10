@@ -20,7 +20,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
-| **3 — Client-side audio extraction** | ✅ Built (EnrollCard) | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Audio Editor tab video support still open — see below. |
+| **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
 | **4 — Chatterbox runtime + beyond** | 📋 Designed, not started | Real `exaggeration`/`cfg_weight` knobs, multi-speaker, dubbing, post-processing presets. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md). |
 
 ---
@@ -241,7 +241,7 @@ all; Chatterbox declares a real `exaggeration` parameter but has no runtime yet 
 declaration exists would just be Style Exaggeration again with extra steps. The capability-map design
 above is the part that makes it not a repeat of that mistake — build the declaration mechanism first.
 
-## Phase 3 — Client-side audio extraction (built, EnrollCard)
+## Phase 3 — Client-side audio extraction (built)
 
 **Problem this solved:** uploading a full video file just to enroll a 6–15s reference clip was
 expensive in bandwidth and server time, and gave the user no way to pick *which* part of a longer
@@ -267,9 +267,14 @@ uploading the original file whole, letting the existing server-side ffmpeg path 
 one, per golden rule 5. Verified in-browser for all three paths (≤30s auto-extract, >30s drag-select
 with correct clamping, and the undecodable-format fallback message).
 
-**Not done yet:** the Audio Editor tab (`AudioEditorTab.tsx`) still only accepts `audio/*` and reads
-duration via a plain `<audio>` element rather than this new pipeline — relabeling it to accept video
-and extract client-side too is a smaller follow-up, not started.
+**Audio Editor tab (`AudioEditorTab.tsx`) now covered too:** it accepts video the same way, decodes
+on file pick, and re-extracts (debounced) whenever the drag-selector's window changes — the working
+`file` becomes the extracted clip, and the existing trim/speed/pitch/gain/fade controls now operate
+on that clip instead of the full original upload. The original file's name/size are kept separately
+(`originalName`/`originalSizeMb`) purely for display, since the extracted `clip.wav` has neither. The
+undecodable-format fallback message and behavior mirror `EnrollCard` exactly. Verified in-browser for
+all three paths there too (≤30s auto-extract, >30s drag-select with correct re-extraction on drag,
+and the undecodable-format fallback).
 
 ## Phase 4 — Chatterbox runtime + IR taxonomy expansion (designed, not built)
 
