@@ -151,7 +151,31 @@ p = snapshot_download(
 print("   weights at", p)
 PY
 
-echo "== 10. secrets (generated once, reused on every restart) =="
+echo "== 10. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
+# A separate venv from every runtime, deliberately: the harness's own deps
+# (transformers, speechbrain) have no reason to co-resolve with a runtime's
+# torch pin, and mixing them risks silently upgrading the runtime's torch
+# (see docs/PHASE_A_RESULTS.md's note on .venv-eval drifting to 2.13.0+cu130
+# on an earlier pod).
+EVAL_VENV="$REPO_DIR/backend/.venv-eval"
+if [ ! -x "$EVAL_VENV/bin/python" ]; then
+  uv venv "$EVAL_VENV" --python 3.12
+fi
+uv pip install --python "$EVAL_VENV" torch torchaudio \
+  --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+uv pip install --python "$EVAL_VENV" \
+  transformers speechbrain jiwer soundfile accelerate 2>&1 | tail -2
+# DO NOT install torchcodec here. torchaudio.load() and the transformers ASR
+# pipeline both prefer it when present, but its prebuilt binaries are linked
+# against a specific CUDA runtime (observed: needs libnvrtc.so.13) independent
+# of whichever CUDA build of torch is actually installed — a real crash, not a
+# warning, and installing torchcodec to silence the first ImportError makes it
+# WORSE (transformers then prefers the broken binary over its working
+# fallback). eval_harness.py reads audio via soundfile everywhere for exactly
+# this reason — don't "fix" a torchcodec ModuleNotFoundError by installing it.
+"$EVAL_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 11. secrets (generated once, reused on every restart) =="
 # These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
 # frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
 # invalidates every signed audio URL already handed out. So they are generated
@@ -192,12 +216,12 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$SECRETS_FILE"; set +a
 
-echo "== 11. research lab =="
+echo "== 12. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 12. verify =="
+echo "== 13. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
 # VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
@@ -209,7 +233,7 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
   uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 13. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 14. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 # Remember the domain the same way FRONTEND_URL is remembered. A restart that
 # forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
 # the deployed frontend has no way to reach, so the app looks broken for a
@@ -243,7 +267,7 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
-echo "== 14. serve script (CORS baked in, remembered across runs) =="
+echo "== 15. serve script (CORS baked in, remembered across runs) =="
 # CORS is the easiest thing to get wrong here, and it fails in the least
 # obvious way: the origin must match the deployed frontend EXACTLY — scheme,
 # host, no trailing slash — or every request dies in preflight with "No
@@ -300,7 +324,7 @@ if [ "${START:-0}" = "1" ]; then
   done
 fi
 
-echo "== 15. current status =="
+echo "== 16. current status =="
 # Without START=1 bootstrap only provisions, so on a first run both of these are
 # expected to be down. The value is on a RE-RUN against a live pod, where it
 # answers "is the thing I already started still up?" without a second SSH trip.
@@ -343,6 +367,7 @@ echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
 echo "  runtime: $VOX_VENV  (torch cu128)"
 echo "  runtime: $CB_VENV  (torch cu128, not yet routable — Phase 4c)"
+echo "  eval:    $EVAL_VENV  (torch cu128, Whisper CER + ECAPA speaker cosine)"
 echo "  lab:     /workspace/engines-lab/"
 echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"
 echo "  secrets: $SECRETS_FILE"

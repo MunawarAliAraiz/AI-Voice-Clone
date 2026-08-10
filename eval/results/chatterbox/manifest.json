@@ -1,0 +1,22 @@
+[
+  {
+    "language_id": "hi",
+    "eval_language": "hi",
+    "text": "अगर तुम्हें फ़ारिग़ वक़्त मिले तो मुझे फ़ोन कर लेना, हम कहीं बाहर खाना खाने चलते हैं और थोड़ी देर गप शप भी कर लेंगे।",
+    "output": "/workspace/AI-Voice-Clone/eval/results/chatterbox/chatterbox_hi.wav",
+    "gen_time_sec": 5.814127206802368,
+    "wall_sec": 5.897271633148193,
+    "duration_sec": 7.7,
+    "sample_rate": 24000
+  },
+  {
+    "language_id": "en",
+    "eval_language": "en",
+    "text": "If you get some free time, give me a call and we'll go out to eat and chat for a while.",
+    "output": "/workspace/AI-Voice-Clone/eval/results/chatterbox/chatterbox_en.wav",
+    "gen_time_sec": 3.30584979057312,
+    "wall_sec": 3.3083744049072266,
+    "duration_sec": 4.02,
+    "sample_rate": 24000
+  }
+]

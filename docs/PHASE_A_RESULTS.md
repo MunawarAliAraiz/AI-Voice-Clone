@@ -23,7 +23,7 @@ resolves nothing.** That is correct for this stage.
 | `f5_openbible_urdu` | `multilingual-tts/F5-TTS-OpenBible-Urdu` | CC-BY-SA-4.0 | ⏳ R1 | — |
 | `f5_indic` | `ai4bharat/IndicF5` | MIT | ⏳ R1 | — |
 | `f5_openf5_en` | *unresolved* | Apache-2.0? | ⏳ R1 | — |
-| `chatterbox_ml_v3` | `ResembleAI/chatterbox` | **MIT ✅** | ⏳ R2b | — |
+| `chatterbox_ml_v3` | `ResembleAI/chatterbox` | **MIT ✅** | ✅ real backend, n=1 gate run | hi PASS / en FAIL (borderline) |
 | `voxcpm2` | *unresolved* | Apache-2.0? | ⏳ R3 | — |
 
 ---
@@ -68,8 +68,53 @@ unsatisfiable pin that broke the predecessor (`transformers>=4.57.6` vs fish-spe
 
 ### Not measured
 
-Peak VRAM · cold load time · RTF · reference-audio bounds · whether Hindi output actually clones the
-reference speaker rather than falling back to a generic voice.
+Peak VRAM · reference-audio bounds.
+
+### Phase 4c — real gate results (2026-08-11, RTX 4000 Ada 20GB)
+
+`ChatterboxBackend` (`backend/app/inference/runtimes/chatterbox.py`, real, not a stub — see
+`docs/PHASE4_CHATTERBOX_DESIGN.md`) loaded the pinned catalog revision and synthesized from the same
+reference speaker (`eval/fixtures/voice_urdu.wav`, the owner's own Urdu voice) and the same Devanagari
+target sentence F5/VoxCPM2 were scored against, plus an English translation of it (Chatterbox's
+`SUPPORTED_LANGUAGES` has no `'ur'`, so Urdu cannot be tested directly). Default params throughout
+(`exaggeration=0.5`, `cfg_weight=0.5`) — this validates the model itself, independent of Speech
+Direction's blend mapping. Driver: `eval/run_chatterbox_synth.py`. Scored with
+`eval/eval_harness.py` under a new `.venv-eval` (torch 2.11.0+cu128, transformers, speechbrain,
+jiwer — not scripted into `pod-bootstrap.sh` yet, see note below).
+
+| | CER (<0.25) | Speaker sim (>0.70) | RTF (<1.0) | Load |
+|---|---|---|---|---|
+| **Hindi** (Devanagari) | 0.0526 ✅ | 0.7271 ✅ | 0.7551 ✅ | 30.8s |
+| English (Latin) | 0.0000 ✅ | 0.6848 ❌ | 0.8224 ✅ | (warm reuse) |
+
+Whisper transcripts were clean on both — Hindi diverges from the target only in nuqta-dot
+normalization Whisper doesn't reproduce (`फ़ारिग़` → `फारिक`), and English was transcribed verbatim.
+
+**Hindi passes every numeric gate on the first sample.** Per this document's own precedent (VoxCPM2's
+Hindi cell scored a passing-looking 0.9926 on a proxy metric and 0.6859 — a near-miss — on the real
+ECAPA embedding, and even a 0.70+ pass was later judged by a native-speaker listen to "sound Hindi, not
+like him") **a numeric pass is a screen, not a verdict, and this is n=1.** `LanguageSupport.verified`
+is deliberately **not** flipped to `True` on this result alone — it needs the same human-listening step
+that overturned VoxCPM2's near-pass, plus more than one sentence before treating a borderline-adjacent
+number as stable. The two generated clips are committed at
+`eval/results/chatterbox/{chatterbox_hi,chatterbox_en}.wav` for that listen.
+
+**English misses the speaker gate at 0.6848 vs. 0.70** — a 0.015 miss, the same order of magnitude as
+VoxCPM2's Hindi near-miss (0.014) that turned out, on more samples, not to be noise. Per that precedent
+this is **not yet a delete decision**: n=1, and the reference is Urdu-language speech being cloned into
+English — a real cross-lingual jump the model card itself calls out as accent-bleed-prone. Re-run with
+2-3 more English sentences before deciding.
+
+**Operational note — TorchCodec.** `eval_harness.py` originally loaded audio via `torchaudio.load()`
+and passed file paths straight into the Whisper pipeline. Both routes now default to TorchCodec, whose
+prebuilt binaries are linked against a specific CUDA runtime (`libnvrtc.so.13`) independent of whatever
+CUDA build of torch is actually installed (`.venv-eval` has 2.11.0+cu128) — this surfaced as a hard
+crash, not a warning, and installing `torchcodec` to "fix" the `ModuleNotFoundError` made it *worse*
+(transformers then prefers it and hits the broken binary instead of falling back). Fixed by reading
+audio with `soundfile` everywhere in the harness and never letting `torchcodec` be importable in
+`.venv-eval`. `.venv-eval` itself isn't in `pod-bootstrap.sh` yet — built ad hoc for this run
+(`torch`/`torchaudio` off the cu128 index, then `transformers speechbrain jiwer soundfile accelerate`)
+and not yet promoted to a scripted step.
 
 ---
 
