@@ -4,16 +4,17 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-10**, after Speech Direction gained multi-segment generation.
+Last updated: **2026-08-10**, after Speech Direction + Phase 4 Chatterbox scoping merged to `main`.
 
 ---
 
 ## Where things stand
 
-**The product is complete and validated end-to-end on GPU with real cloned audio.** Two bodies of
-work have landed on top of that since: async jobs/mobile/perf (merged to `main` via PR #1), and
-Speech Direction (pushed to `feature/speech-direction`, not yet merged — see below). Full detail
-and forward roadmap: **[docs/ROADMAP.md](ROADMAP.md)**.
+**The product is complete and validated end-to-end on GPU with real cloned audio, including Speech
+Direction's multi-segment generation.** Three bodies of work have landed on `main` since the rewrite:
+async jobs/mobile/perf (PR #1), Speech Direction + UI plain-language pass (PR #3), and an IR taxonomy
+expansion + Phase 4 Chatterbox design doc (PR #4). Full detail and forward roadmap:
+**[docs/ROADMAP.md](ROADMAP.md)**.
 
 | Wave | Status |
 |---|---|
@@ -24,27 +25,29 @@ and forward roadmap: **[docs/ROADMAP.md](ROADMAP.md)**.
 | **B1 — scheduler** | ✅ Done. GPU-slot invariant asserted; tested against `FakeWorker`, no GPU. |
 | **Urdu** | ✅ Concluded — and then superseded: VoxCPM 2 renders **romanized** Hindi/Urdu directly, so the whole transliteration subsystem was deleted. Native Perso-Arabic is still unrouted (422, never mis-rendered). |
 | **B2 — API layer** | ✅ Done. Enrollment + consent, generate, media tokens, history (list/get/favorite/delete). |
-| **P6 — frontend** | ✅ Done, then revamped 2026-08-06: amber-on-navy tokens, lucide icons, rebuilt history (search / filter / day-grouping / pagination), accessibility pass. |
+| **P6 — frontend** | ✅ Done, then revamped 2026-08-06, then a plain-language pass 2026-08-10 (Stability/Pitch/Volume became worded comboboxes, Advanced editing collapsed behind a disclosure — see ROADMAP.md). |
 | **P7 — CI/Docker** | ✅ CI green. Dockerfile rewritten CPU-slim but **not build-tested**. |
-| **Real-audio E2E** | ✅ Passed on an RTX A4500: enroll → route `voxcpm2`/`none` → real worker → RTF 1.10, valid WAV. |
-| **Jobs/mobile/perf** | ✅ Done, **merged to `main`** via PR #1 (was branch `feature/jobs-mobile-perf`, now deleted). Async job queue (`jobs` table, `POST /api/generate` returns 202), TanStack Query + Recent tab, mobile fixes (375px/320px verified), LCP/FCP/TBT perf. |
-| **Speech Direction (Phase 2)** | 🚧 Audibly wired, **not yet merged**, pod-unverified. IR + heuristic analyzer + capability report + preview endpoint + UI chip + **multi-segment generation** (`apply_direction: true` on `/generate` now changes the actual audio). Branch `feature/speech-direction`, pushed to `fork`. Detail + what's still missing: [ROADMAP.md](ROADMAP.md). |
+| **Real-audio E2E** | ✅ Passed on an RTX A4500, then again on an RTX 4000 Ada pod 2026-08-10 (see Speech Direction row). |
+| **Jobs/mobile/perf** | ✅ Done, **merged to `main`** via PR #1. Async job queue, TanStack Query + Recent tab, mobile fixes, LCP/FCP/TBT perf. |
+| **Speech Direction (Phase 2)** | ✅ **Merged to `main`** via PR #3, then pod-validated for real: enrolled a real voice, ran `apply_direction: true` on multi-sentence Roman Urdu through both `curl` and the live browser UI against a real VoxCPM2 worker — 3 real segments, correct joins (waveform-inspected, no artifacts/clipping), warm RTF ≈1.0. Detail: [ROADMAP.md](ROADMAP.md). |
+| **Phase 4 scoping (Chatterbox)** | 📋 **Merged to `main`** via PR #4. `Emotion.ANXIOUS` + `Tone.NARRATIVE` added to the IR (ANXIOUS analyzer-detected now; NARRATIVE deliberately left undetected, documented why). Full Chatterbox design doc: [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) — no runtime code yet, that's Phase 4a/4b/4c. |
 
-**212 backend tests passing on `feature/speech-direction`** (verified 2026-08-10), ruff clean. Base
-branch: **`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same
-commit but has drifted behind — treat as stale until re-synced).
+**217 backend tests passing on `main`** (verified 2026-08-10), ruff clean on everything touched this
+session (25 pre-existing findings remain in untouched test files, same as always). Base branch:
+**`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same commit but
+has drifted behind — treat as stale until re-synced).
 
 ## Resuming on a new pod
 
-The repo is **public for read** — the pod clones anonymously, no token needed. Run the bootstrap
-directly against the feature branch (from your machine, repo root):
+The repo is **public for read** — the pod clones anonymously, no token needed. `main` now carries
+everything (Speech Direction, the plain-language UI pass, and the Phase 4 IR taxonomy), so the
+bootstrap's default branch is correct — no `BRANCH=...` override needed:
 
 ```bash
-ssh -p <PORT> root@<HOST> "BRANCH=feature/speech-direction bash -s" < scripts/pod-bootstrap.sh
+ssh -p <PORT> root@<HOST> "bash -s" < scripts/pod-bootstrap.sh
 ```
 
-Drop `BRANCH=...` once `feature/speech-direction` is merged to `main` (the script's default). `GH_USER`/
-`GH_TOKEN` are only needed for pushing commits *from* the pod, not for this clone — see
+`GH_USER`/`GH_TOKEN` are only needed for pushing commits *from* the pod, not for this clone — see
 [POD_SETUP.md](POD_SETUP.md) for the rare anonymous-clone-rejected case.
 
 Rebuilds caches, both venvs (API without torch, runtime **with torch pinned to cu128** — the default
@@ -181,18 +184,22 @@ history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
 
 ## Next session — start here
 
-**Pod validation of directed generation, then the Qwen2.5 analyzer** (see
-[docs/ROADMAP.md](ROADMAP.md)). `feature/speech-direction` is pushed and CPU-verified (212 tests,
-ruff clean, `npm run build` green, live HTTP wiring confirmed reaching the real scheduler) but the
-directed multi-segment path has never produced real audio — this box has no GPU. On the pod:
+Everything through Phase 4 *scoping* is merged and pod-validated. Two real options, not sequenced —
+pick based on what's wanted next:
 
-1. `VCS_ALLOW_FAKE_RUNTIME=1` is not needed here; wire the real VoxCPM2 worker
-   (`VCS_VOXCPM_PYTHON`, `VCS_WORKER_CWD`, `HF_HOME`) the same way the Phase-1 real-audio E2E did.
-2. `POST /api/generate` with `apply_direction: true` on multi-sentence text; listen for clicks or
-   discontinuities at segment joins, and confirm `cfg_value` audibly changes delivery between
-   segments of different intensity.
-3. Then start the Qwen2.5-Instruct analyzer (needs the pod for the model itself, not just to test).
-4. Open a PR for `feature/speech-direction` once directed audio is confirmed clean.
+1. **Phase 4a (Chatterbox capability/render mapping, CPU-only, no GPU needed)** — land
+   `_CHATTERBOX_FIELDS` + the exaggeration/cfg_weight blend table in `app/jobs/direction.py`, the
+   `language_id` plumbing change, and the associated tests (including repointing
+   `test_direction_capability.py`'s `_NON_VOXCPM` fixture off of Chatterbox — a known, planned
+   breaking change, see the design doc). Full spec: [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md)
+   §5 and §11. Buildable and testable entirely on this box.
+2. **Qwen2.5-Instruct analyzer** (the "analyzer" half of the earlier "both, analyzer first"
+   decision) — pod-only, needs the model download and a GPU worker to keep torch out of the API
+   process. See [ROADMAP.md](ROADMAP.md)'s Phase 2 "Remaining" list.
+
+A background task is independently auditing `direction_analyze.py`'s existing lexicon for the same
+`\b` + Devanagari-combining-mark bug found and worked around while adding `ANXIOUS` (see PR #4's
+commit message) — check its result before adding more lexicon entries by hand.
 
 **Token discipline (owner priority):** terse replies, no recaps, no exploratory pod runs without
 go-ahead, batch verification. Build inline when holding the contracts (B1/B3 were faster+cheaper that
