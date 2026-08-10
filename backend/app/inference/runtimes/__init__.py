@@ -69,6 +69,10 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .voxcpm import VoxCPMBackend
 
         return VoxCPMBackend()
+    if runtime == "chatterbox":
+        from .chatterbox import ChatterboxBackend
+
+        return ChatterboxBackend()
     if runtime == "fake":
         import os
 
