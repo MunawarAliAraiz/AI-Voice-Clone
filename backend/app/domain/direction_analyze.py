@@ -31,18 +31,25 @@ flag with this exact signature — keep the contract stable so it drops in.
 ── Implementation notes (this body) ─────────────────────────────────────────
 
 Emotion is decided by a fixed-priority lexicon scan (ANGRY, HAPPY, SAD,
-EXCITED, CALM, SERIOUS — first match wins, so "angry" always beats a trailing
-"!" turning into EXCITED) falling back to punctuation only when no lexicon
-word matched: `?` → QUESTIONING, `!` → EXCITED, trailing `...`/`—` → CALM,
-else NEUTRAL. QUESTIONING has no keyword lexicon on purpose — interrogative
-words like "kyun"/"kaise" appear too often in non-questions to be a reliable
-signal, so `?` alone carries that signal.
+ANXIOUS, EXCITED, CALM, SERIOUS — first match wins, so "angry" always beats a
+trailing "!" turning into EXCITED) falling back to punctuation only when no
+lexicon word matched: `?` → QUESTIONING, `!` → EXCITED, trailing `...`/`—` →
+CALM, else NEUTRAL. QUESTIONING has no keyword lexicon on purpose —
+interrogative words like "kyun"/"kaise" appear too often in non-questions to
+be a reliable signal, so `?` alone carries that signal.
+
+`tone` is NOT analyzer-derived. Every segment gets `Tone.NEUTRAL` by
+dataclass default (see `direction.py`), including the narrator/commentary
+`Tone.NARRATIVE` value — the taxonomy exists so a future renderer can honor it
+once some model actually takes tone conditioning, but no detection heuristic
+is built here. Inventing a shaky one just to populate the enum would be worse
+than leaving it honestly unset.
 
 Intensity and energy are small integer scores built from the same raw
 signals (exclamation count, an ALL-CAPS run, an intensifier word, a hedge
-word) — energy additionally weights EXCITED/ANGRY up and CALM/SAD down, since
-"energy" is meant to also track the emotion itself, not just punctuation.
-Score <= -1 → LOW, score == 0 → MEDIUM, score >= 1 → HIGH.
+word) — energy additionally weights EXCITED/ANGRY up and CALM/SAD/ANXIOUS
+down, since "energy" is meant to also track the emotion itself, not just
+punctuation. Score <= -1 → LOW, score == 0 → MEDIUM, score >= 1 → HIGH.
 
 Emphasis spans come from two sources: an ALL-CAPS run of >= 2 Latin letters
 (one run per word — "STOP NOW" yields two spans, not one merged span) and
@@ -99,6 +106,21 @@ EMOTION_KEYWORDS: dict[Emotion, tuple[str, ...]] = {
         "sad", "unhappy", "heartbroken", "sorrowful",
         "udaas", "dukhi", "اداس", "غمگین", "उदास", "दुखी",
     ),
+    # Starting list only — not verified against native speakers, same caveat
+    # the rest of this lexicon carries. "dar"/"डर" (fear) is short; worth a
+    # spot-check for false-positive matches inside unrelated longer words.
+    # "चिंतित" (adjective form), not "चिंता" (noun form): the noun ends in the
+    # combining vowel sign ा (Unicode category Mc), which Python's `\w` does
+    # not treat as a word character, so a `\b...\b` pattern never matches at
+    # its right edge — confirmed empirically, not a hypothetical. Any future
+    # Devanagari/Perso-Arabic keyword ending in a bare combining mark/matra
+    # needs the same check before being added.
+    Emotion.ANXIOUS: (
+        "worried", "anxious", "nervous", "scared", "afraid",
+        "pareshan", "fikar", "dar",
+        "پریشان", "فکر", "ڈر",
+        "परेशान", "चिंतित", "डर",
+    ),
     Emotion.EXCITED: (
         "excited", "amazing", "awesome", "thrilled",
         "josh", "shandar", "پرجوش", "उत्साहित", "जोश",
@@ -115,11 +137,17 @@ EMOTION_KEYWORDS: dict[Emotion, tuple[str, ...]] = {
 
 #: Fixed scan order. First match wins, which is what makes "!" turning into
 #: EXCITED-unless-angry deterministic: ANGRY is checked before EXCITED ever
-#: gets a chance to be inferred from punctuation.
+#: gets a chance to be inferred from punctuation. ANXIOUS sits between SAD and
+#: EXCITED: SAD first because SAD/ANXIOUS lexicons are the most likely pair to
+#: collide (both low-arousal negative affect) and SAD's tests must not shift;
+#: ANXIOUS ahead of EXCITED because anxious text can carry a "!" that would
+#: otherwise fall through to the punctuation-only EXCITED branch, mirroring
+#: the ANGRY-before-EXCITED precedent above.
 _EMOTION_PRIORITY: tuple[Emotion, ...] = (
     Emotion.ANGRY,
     Emotion.HAPPY,
     Emotion.SAD,
+    Emotion.ANXIOUS,
     Emotion.EXCITED,
     Emotion.CALM,
     Emotion.SERIOUS,
@@ -229,7 +257,7 @@ def _determine_energy(
         score += 1
     if emotion in (Emotion.EXCITED, Emotion.ANGRY):
         score += 1
-    if emotion in (Emotion.CALM, Emotion.SAD):
+    if emotion in (Emotion.CALM, Emotion.SAD, Emotion.ANXIOUS):
         score -= 1
     if has_intensifier:
         score += 1
