@@ -18,7 +18,9 @@ import {
   IconUpload,
 } from './icons';
 import { AudioEditor, type AudioEditState } from './AudioEditor';
-import { fmtSeconds } from '../lib/format';
+import { ClipRangeSelector } from './ClipRangeSelector';
+import { fmtSeconds, fmtDuration } from '../lib/format';
+import { MAX_CLIENT_CLIP_SEC, decodeMediaFile, extractWavClip } from '../lib/clientAudioExtract';
 
 interface Props {
   languages: LanguageInfo[];
@@ -42,6 +44,16 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Client-side extraction (Phase 3): decode the picked file in-browser so we
+  // can send a small WAV clip instead of the full upload. `decodedBuffer` is
+  // null both before decoding finishes AND when decodeMediaFile threw (e.g.
+  // mkv/avi/flv, which decodeAudioData can't demux) — decodeState tells the
+  // two apart so the "couldn't preview, uploading as-is" message is honest
+  // rather than silent, per golden rule 5.
+  const [decodeState, setDecodeState] = useState<'idle' | 'decoding' | 'ready' | 'unsupported'>('idle');
+  const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
+  const [clipStart, setClipStart] = useState(0);
+  const decodeReq = useRef(0);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const meterRef = useRef<HTMLDivElement | null>(null);
@@ -68,38 +80,68 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
     };
   }, [recUrl]);
 
+  function onFilePicked(f: File | null) {
+    setFileName(f?.name ?? null);
+    setSelectedFile(f);
+    setDecodedBuffer(null);
+    setClipStart(0);
+    setDecodeState(f ? 'decoding' : 'idle');
+    const reqId = ++decodeReq.current;
+    if (!f) return;
+    decodeMediaFile(f)
+      .then((buf) => {
+        if (decodeReq.current !== reqId) return; // superseded by a newer pick
+        setDecodedBuffer(buf);
+        setDecodeState('ready');
+      })
+      .catch(() => {
+        if (decodeReq.current !== reqId) return;
+        setDecodeState('unsupported');
+      });
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr(null);
 
     const picked = fileRef.current?.files?.[0] ?? selectedFile;
     const recordedFile = rec.blob ? new File([rec.blob], 'recording.wav', { type: 'audio/wav' }) : null;
-    const activeFile = mode === 'record' ? recordedFile : picked;
+    const rawFile = mode === 'record' ? recordedFile : picked;
 
-    if (!activeFile) return setErr(mode === 'record' ? 'Record a clip first.' : 'Choose an audio file.');
+    if (!rawFile) return setErr(mode === 'record' ? 'Record a clip first.' : 'Choose an audio file.');
     if (!name.trim()) return setErr('Give this voice a name.');
     if (!consent) return setErr('Please confirm you are authorized to clone this voice.');
 
-    const fd = new FormData();
-    fd.append('file', activeFile, mode === 'record' ? 'recording.wav' : (activeFile.name ?? 'audio.wav'));
-    fd.append('name', name.trim());
-    fd.append('language', language);
-    fd.append('consent', 'true');
-
-    if (editOptions) {
-      fd.append('trim_start', String(editOptions.trimStart));
-      if (editOptions.trimEnd !== null) fd.append('trim_end', String(editOptions.trimEnd));
-      fd.append('speed', String(editOptions.speed));
-      fd.append('pitch_semitones', String(editOptions.pitchSemitones));
-      fd.append('gain_db', String(editOptions.gainDb));
-      fd.append('fade_in_sec', String(editOptions.fadeInSec));
-      fd.append('fade_out_sec', String(editOptions.fadeOutSec));
-      fd.append('normalize_lufs', String(editOptions.normalizeLufs));
-      fd.append('remove_silence', String(editOptions.removeSilence));
-    }
-
     setBusy(true);
     try {
+      // Advanced editing already has its own trim; only auto-extract with the
+      // simple client-side pipeline when the user hasn't opened it, so the
+      // two trims can't disagree about what "the clip" is.
+      let activeFile = rawFile;
+      if (mode === 'upload' && decodedBuffer && !editOptions) {
+        const clipLen = Math.min(MAX_CLIENT_CLIP_SEC, decodedBuffer.duration);
+        const clipBlob = await extractWavClip(decodedBuffer, clipStart, clipStart + clipLen);
+        activeFile = new File([clipBlob], 'clip.wav', { type: 'audio/wav' });
+      }
+
+      const fd = new FormData();
+      fd.append('file', activeFile, mode === 'record' ? 'recording.wav' : (activeFile.name || 'audio.wav'));
+      fd.append('name', name.trim());
+      fd.append('language', language);
+      fd.append('consent', 'true');
+
+      if (editOptions) {
+        fd.append('trim_start', String(editOptions.trimStart));
+        if (editOptions.trimEnd !== null) fd.append('trim_end', String(editOptions.trimEnd));
+        fd.append('speed', String(editOptions.speed));
+        fd.append('pitch_semitones', String(editOptions.pitchSemitones));
+        fd.append('gain_db', String(editOptions.gainDb));
+        fd.append('fade_in_sec', String(editOptions.fadeInSec));
+        fd.append('fade_out_sec', String(editOptions.fadeOutSec));
+        fd.append('normalize_lufs', String(editOptions.normalizeLufs));
+        fd.append('remove_silence', String(editOptions.removeSilence));
+      }
+
       await api.createVoice(fd);
       setName('');
       setConsent(false);
@@ -107,6 +149,9 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
       setSelectedFile(null);
       setEditOptions(null);
       setShowAdvanced(false);
+      setDecodedBuffer(null);
+      setDecodeState('idle');
+      setClipStart(0);
       if (fileRef.current) fileRef.current.value = '';
       rec.reset();
       onEnrolled();
@@ -169,11 +214,7 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
                 ref={fileRef}
                 type="file"
                 accept="audio/*,video/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mkv,.mov,.avi,.webm,.flv,.wmv,.wma,.3gp"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  setFileName(f?.name ?? null);
-                  setSelectedFile(f);
-                }}
+                onChange={(e) => onFilePicked(e.target.files?.[0] ?? null)}
               />
               <IconUpload size={15} />
               <span className="file-drop-label">
@@ -181,6 +222,31 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
               </span>
             </div>
           </label>
+
+          {selectedFile && decodeState === 'decoding' && (
+            <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <IconSpinner size={12} /> Analyzing file in your browser…
+            </p>
+          )}
+
+          {selectedFile && decodeState === 'unsupported' && (
+            <p className="hint" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <IconAlert size={12} /> Couldn't preview this file's audio in your browser — it will be
+              uploaded as-is and processed on the server instead.
+            </p>
+          )}
+
+          {selectedFile && decodeState === 'ready' && decodedBuffer && !editOptions && !showAdvanced && (
+            decodedBuffer.duration > MAX_CLIENT_CLIP_SEC ? (
+              <ClipRangeSelector
+                durationSec={decodedBuffer.duration}
+                startSec={clipStart}
+                onChangeStart={setClipStart}
+              />
+            ) : (
+              <p className="hint">Detected {fmtDuration(decodedBuffer.duration)} of audio — ready to use.</p>
+            )
+          )}
         </div>
       ) : (
         <div className="recorder" role="tabpanel" id="panel-record" aria-labelledby="tab-record">
@@ -290,9 +356,14 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
         </div>
       )}
 
-      <button className="btn primary" type="submit" disabled={busy} aria-busy={busy}>
-        {busy ? <IconSpinner size={15} /> : null}
-        {busy ? 'Uploading…' : 'Add voice'}
+      <button
+        className="btn primary"
+        type="submit"
+        disabled={busy || decodeState === 'decoding'}
+        aria-busy={busy}
+      >
+        {busy || decodeState === 'decoding' ? <IconSpinner size={15} /> : null}
+        {busy ? 'Uploading…' : decodeState === 'decoding' ? 'Analyzing file…' : 'Add voice'}
       </button>
     </form>
   );
