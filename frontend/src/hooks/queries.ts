@@ -10,6 +10,7 @@ import type { JobStatusResponse } from '../types/api';
 export const queryKeys = {
   languages: ['languages'] as const,
   voices: ['voices'] as const,
+  models: ['models'] as const,
   history: (page: number, pageSize: number) => ['history', page, pageSize] as const,
   jobs: (page: number, pageSize: number) => ['jobs', page, pageSize] as const,
   job: (id: number) => ['job', id] as const,
@@ -17,6 +18,14 @@ export const queryKeys = {
 
 export function useLanguages() {
   return useQuery({ queryKey: queryKeys.languages, queryFn: api.languages, staleTime: 60_000 });
+}
+
+// Powers the Composer's model picker. Short staleTime (not 0): `state` and
+// `est_wait_sec` are live scheduler facts, but re-fetching on every keystroke
+// re-render would be wasted work for a value that changes on the order of
+// seconds, not milliseconds.
+export function useModels() {
+  return useQuery({ queryKey: queryKeys.models, queryFn: api.models, staleTime: 15_000 });
 }
 
 export function useVoices() {
