@@ -22,8 +22,34 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
 | **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
 | **4 — Chatterbox runtime + beyond** | 🔴 4a/4b/4c all done — **not verified, does not clone identity well enough to ship** | Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner verdict: "not that good... identity is matched around 60%". Same conclusion shape as the Urdu investigation — a speaker-encoder ceiling, not a tunable parameter. Still unroutable in production, and not currently planned to be revisited without a LoRA fine-tune. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) and [PHASE_A_RESULTS.md](PHASE_A_RESULTS.md). |
+| **Composer model picker** | ✅ Built | Backend already returned the full catalog (`GET /api/models`) and honored an explicit `model_id` override (`resolve()`'s `requested` param — honored or refused, never silently swapped); nothing in the frontend called either. Added `useModels()` + a "Model" select in `Composer.tsx`, filtered to specs that verifiably support the selected language, defaulting to Auto with the live-routed model shown as "(Recommended)" (reusing the existing `/api/detect-script` hint, no new endpoint). See below. |
 
 ---
+
+## Composer model picker (2026-08-11)
+
+**Problem this solved:** the backend has always been able to list every model and honor an explicit
+override (`domain/routing.py::resolve`'s `requested` param, `GET /api/models`) — but no UI ever called
+either. Every generation was fully automatic and invisible until *after* the job was queued (the
+route chip on the result card).
+
+**What shipped:** `frontend/src/hooks/queries.ts` gained `useModels()`. `Composer.tsx` gained a
+"Model" field between Language and Speed: options are every catalog spec that verifiably supports the
+selected language (`m.languages.some(l => l.language === language)` — a spec with no verified cell
+for this language is never offered, so the picker can't produce a request `resolve()` would 422), plus
+an "Auto" option that stays selected by default. The model `/api/detect-script` would actually route
+to (already computed for the existing live hint) is labeled "(Recommended)" on both the Auto option
+and its matching explicit entry, so the recommendation is visible whether or not the user overrides
+it. Picking a model no longer supported after a language change resets to Auto rather than sending a
+stale id. The bottom detect-hint line was updated to reflect the *effective* model (override or auto),
+not always the auto pick, so it can't look inconsistent with what Generate will actually do.
+
+**Deliberately not built alongside this:** a Tone selector. Tone is never analyzer-derived (every
+segment defaults to `Tone.NEUTRAL`) and no current runtime honors it — VoxCPM has no tone knob, and
+Chatterbox (the only model with any relevant params) was just concluded not accurate enough to ship
+(see Phase 4c below). A selectable control with a confirmed-zero audible effect is the exact
+no-op-slider pattern Phase 1 Part C deleted Emotion/Style Exaggeration for — skipped on the owner's
+explicit call, not an oversight.
 
 ## Phase 1 — Done (2026-08-09)
 
