@@ -82,11 +82,11 @@ logger = logging.getLogger("app.inference.analyzer_scheduler")
 #: outside the audio catalog.
 QWEN_ANALYZER_MODEL_ID = "qwen2.5-3b-instruct-analyzer"
 QWEN_ANALYZER_HF_REPO = "Qwen/Qwen2.5-3B-Instruct"
-#: PINNED per golden rule 7 (no unpinned `main`). Resolved on the pod via
-#: `huggingface_hub.HfApi().model_info("Qwen/Qwen2.5-3B-Instruct").sha` —
-#: see docs/HANDOFF.md for the date this was resolved and confirmed against
-#: a real load.
-QWEN_ANALYZER_HF_REVISION = "PENDING_PIN"
+#: PINNED per golden rule 7 (no unpinned `main`). Resolved on the pod
+#: (2026-08-12) via `huggingface_hub.HfApi().model_info(
+#: "Qwen/Qwen2.5-3B-Instruct").sha` — see docs/HANDOFF.md for the pod
+#: verification run against this exact sha.
+QWEN_ANALYZER_HF_REVISION = "aa8e72537993ba99e69dfaafa59ed015b17504d1"
 
 _LOAD_TIMEOUT_SEC = 300.0
 _CLASSIFY_TIMEOUT_SEC = 60.0
