@@ -89,6 +89,12 @@ def main(runtime: str) -> int:
                     sample_rate=int(payload.get("sample_rate", 44100)),
                     reference_text=payload.get("reference_text"),
                 )
+            elif op == WireOp.CLASSIFY:
+                result = backend.classify(
+                    language=payload["language"],
+                    sentences=payload["sentences"],
+                    params=payload.get("params") or {},
+                )
             elif op == WireOp.UNLOAD:
                 backend.unload()
                 result = {}

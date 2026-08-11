@@ -73,6 +73,10 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .chatterbox import ChatterboxBackend
 
         return ChatterboxBackend()
+    if runtime == "qwen_analyzer":
+        from .qwen_analyzer import QwenAnalyzerBackend
+
+        return QwenAnalyzerBackend()
     if runtime == "fake":
         import os
 

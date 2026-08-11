@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     chatterbox_python: str = ""
     f5_python: str = ""
     fake_python: str = ""
+    #: Absolute path to the Qwen Speech-Direction analyzer's venv python. NOT
+    #: part of `interpreters()`/`RuntimeKind` — that mechanism is specifically
+    #: for audio `ModelSpec` routing (`make_worker_factory`), and this
+    #: analyzer must never be reachable from `domain/routing.py`'s
+    #: `resolve()`. `AnalyzerScheduler` reads this directly.
+    qwen_analyzer_python: str = ""
+    #: Seconds of no `classify()` calls before `AnalyzerScheduler` kills its
+    #: worker subprocess to release VRAM. See `analyzer_scheduler.py`'s
+    #: docstring for why this exists (the audio scheduler's `budget_mb` is
+    #: sized assuming only audio models are resident).
+    qwen_analyzer_idle_unload_sec: float = 300.0
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 

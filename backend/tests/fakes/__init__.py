@@ -16,7 +16,8 @@ than a playable tone — on purpose. A fake that produces something audible is a
 fake that eventually gets mistaken for output.
 """
 
+from .analyzer_scheduler import FakeAnalyzerScheduler
 from .scheduler import FakeScheduler
 from .worker import FakeWorker, FakeWorkerCrash
 
-__all__ = ["FakeScheduler", "FakeWorker", "FakeWorkerCrash"]
+__all__ = ["FakeAnalyzerScheduler", "FakeScheduler", "FakeWorker", "FakeWorkerCrash"]

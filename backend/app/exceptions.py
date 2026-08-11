@@ -49,6 +49,8 @@ __all__ = [
     "WorkerCrashedError",
     "GenerationTimeoutError",
     "GenerationError",
+    "AnalyzerUnavailableError",
+    "AnalyzerResponseInvalidError",
     # Jobs (async queue)
     "JobNotFoundError",
     "JobQueueFullError",
@@ -392,6 +394,43 @@ class GenerationError(AppError):
 
     def __init__(self, model_id: str, detail: str) -> None:
         super().__init__(detail, model_id=model_id)
+
+
+class AnalyzerUnavailableError(AppError):
+    """
+    The Qwen Speech-Direction analyzer worker could not be started or died
+    before/during a request — no interpreter configured
+    (`Settings.qwen_analyzer_python` unset), the subprocess failed its READY
+    handshake, or it crashed mid-classify. 503, not 500: this is an
+    infrastructure failure a retry might just clear, distinct from
+    `AnalyzerResponseInvalidError` below, where the model itself violated
+    the contract and a bare retry would likely reproduce it.
+    """
+
+    code = "ANALYZER_UNAVAILABLE"
+    http_status = 503
+    title = "Speech-direction analyzer unavailable"
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+
+
+class AnalyzerResponseInvalidError(AppError):
+    """
+    The LLM analyzer's response failed validation: not JSON, not a list, the
+    wrong length, or an `emotion`/`intensity`/`energy`/`rate` value outside
+    `Emotion`/`Level`/`Rate`. Golden rule 5 (no silent fallback) applies here
+    exactly as it does to routing — `QwenAnalyzerBackend.classify()` raises
+    rather than substituting a default classification, and this is what that
+    raise becomes once it crosses the wire protocol back to the scheduler.
+    """
+
+    code = "ANALYZER_RESPONSE_INVALID"
+    http_status = 502
+    title = "Speech-direction analyzer returned an invalid response"
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
 
 
 # ── Jobs (async queue) ───────────────────────────────────────────────────────

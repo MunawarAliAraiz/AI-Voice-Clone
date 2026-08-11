@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..config import Settings
     from ..db import Database
+    from ..inference.analyzer_scheduler import AnalyzerScheduler
     from ..inference.catalog import ModelCatalog
     from ..inference.protocol import SchedulerProtocol
 
@@ -47,6 +48,10 @@ class JobKind(StrEnum):
     """
 
     SYNTHESIZE = "synthesize"
+    #: LLM-backed Speech Direction classification (`jobs/handlers/analyze_llm.py`).
+    #: No `generation_history` row, no audio, no `route` (never touches
+    #: `resolve()`/the audio catalog) — see that handler's docstring.
+    ANALYZE_LLM = "analyze_llm"
 
 
 class JobStatus(StrEnum):
@@ -174,6 +179,11 @@ class JobContext:
     scheduler: SchedulerProtocol
     catalog: ModelCatalog
     settings: Settings
+    #: The Qwen Speech-Direction analyzer's own scheduler (`analyzer_scheduler
+    #: .AnalyzerScheduler`) — a structurally separate worker kind from the
+    #: audio `scheduler`, never the same object. Only `analyze_llm.py` reads
+    #: this; every other handler ignores it.
+    analyzer: AnalyzerScheduler
 
 
 @dataclass(frozen=True, slots=True)

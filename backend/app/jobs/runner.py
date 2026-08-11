@@ -55,6 +55,7 @@ from .types import JobHandler, JobKind, JobRecord, JobStatus, job_record_from_ro
 if TYPE_CHECKING:
     from ..config import Settings
     from ..db import Database
+    from ..inference.analyzer_scheduler import AnalyzerScheduler
     from ..inference.catalog import ModelCatalog
     from ..inference.protocol import SchedulerProtocol
 
@@ -78,6 +79,7 @@ class JobRunner:
         catalog: ModelCatalog,
         settings: Settings,
         *,
+        analyzer: AnalyzerScheduler | None = None,
         concurrency: Mapping[JobKind, int] | None = None,
         poll_interval_sec: float = 0.25,
     ) -> None:
@@ -85,10 +87,24 @@ class JobRunner:
         self._scheduler = scheduler
         self._catalog = catalog
         self._settings = settings
+        #: The Qwen analyzer's own scheduler — optional so every existing
+        #: caller (tests that only ever enqueue SYNTHESIZE jobs, in
+        #: particular) keeps working unchanged. `None` is only a problem if
+        #: an ANALYZE_LLM job is actually claimed with no analyzer wired in,
+        #: which `main.py` never does in production.
+        self._analyzer = analyzer
         self._poll_interval_sec = poll_interval_sec
 
         self._concurrency: dict[JobKind, int] = dict(
-            concurrency or {JobKind.SYNTHESIZE: max(1, settings.job_concurrency)}
+            concurrency
+            or {
+                JobKind.SYNTHESIZE: max(1, settings.job_concurrency),
+                # One fixed model, one worker subprocess (see
+                # `AnalyzerScheduler`'s docstring for why this is not the
+                # audio scheduler's multi-model eviction problem) — a single
+                # concurrent classification matches that shape.
+                JobKind.ANALYZE_LLM: 1,
+            }
         )
         #: Wakes a parked worker loop the moment `enqueue()` inserts a row of
         #: its kind, so the common case doesn't wait out `poll_interval_sec`.
@@ -277,7 +293,11 @@ class JobRunner:
 
     async def _run_one(self, kind: JobKind, job: JobRecord, handler: JobHandler) -> None:
         ctx = JobContext(
-            db=self._db, scheduler=self._scheduler, catalog=self._catalog, settings=self._settings
+            db=self._db,
+            scheduler=self._scheduler,
+            catalog=self._catalog,
+            settings=self._settings,
+            analyzer=self._analyzer,
         )
         try:
             outcome = await handler(ctx, job)
