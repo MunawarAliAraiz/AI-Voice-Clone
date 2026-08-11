@@ -140,14 +140,22 @@ def main() -> int:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": build_prompt(sentences)},
         ]
+        # return_dict=True explicitly: newer transformers versions changed
+        # apply_chat_template's default return shape (observed: 5.15.0 no
+        # longer returns a bare tensor even without this kwarg), and
+        # model.generate(bare_tensor, ...) vs. model.generate(**batch_encoding)
+        # are not interchangeable — passing a BatchEncoding positionally fails
+        # deep inside generate() with an opaque AttributeError on `.shape`.
         inputs = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt"
+            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
         ).to(model.device)
 
         t0 = time.time()
-        out = model.generate(inputs, max_new_tokens=300, do_sample=False)
+        out = model.generate(**inputs, max_new_tokens=300, do_sample=False)
         gen_sec = time.time() - t0
-        response = tokenizer.decode(out[0][inputs.shape[1] :], skip_special_tokens=True)
+        response = tokenizer.decode(
+            out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        )
 
         rows, problems = validate_response(response, len(sentences))
         total_problems += len(problems)
