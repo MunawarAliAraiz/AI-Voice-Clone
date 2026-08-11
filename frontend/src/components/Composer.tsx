@@ -12,7 +12,7 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob } from '../hooks/queries';
+import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
@@ -29,6 +29,10 @@ interface Props {
 export function Composer({ voices, languages, onJobSettled }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
+  // null = Auto (let /api/generate's resolve() pick). An explicit id is
+  // honored or refused server-side — never silently swapped for something
+  // else (same rule routing itself follows, see domain/routing.py::resolve).
+  const [modelId, setModelId] = useState<string | null>(null);
   const [speed, setSpeed] = useState<number>(1.0);
   const [stability, setStability] = useState<number>(() => {
     try {
@@ -64,6 +68,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const generateMutation = useGenerateMutation();
   const cancelMutation = useCancelJobMutation();
   const { data: job } = useJob(jobId);
+  const { data: modelsData } = useModels();
   const invalidateAfterSuccess = useInvalidateAfterJobSuccess();
   const settledJobId = useRef<number | null>(null);
 
@@ -71,6 +76,27 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     const first = voices[0];
     if (profileId === null && first) setProfileId(first.id);
   }, [voices, profileId]);
+
+  // Only models that actually claim the selected language, so the picker
+  // can never offer a choice /api/generate would refuse with a 422 — same
+  // "an explicit id is honored or refused, never silently swapped" contract
+  // resolve() itself follows.
+  const compatibleModels = (modelsData?.models ?? []).filter((m) =>
+    m.languages.some((l) => l.language === language)
+  );
+
+  // A manually-picked model that no longer supports the language (the user
+  // switched languages after choosing one) falls back to Auto rather than
+  // silently sending an id that would now 422.
+  // Deliberately keyed on [language, modelsData], not compatibleModels: that
+  // array is a fresh reference every render (it's a .filter() above), and
+  // depending on it would re-run this effect every render instead of only
+  // when the inputs it's derived from actually change.
+  useEffect(() => {
+    if (modelId !== null && !compatibleModels.some((m) => m.id === modelId)) {
+      setModelId(null);
+    }
+  }, [language, modelsData]);
 
   // Fire the settle callback (toast) exactly once per job, the turn it first
   // becomes terminal — not on every subsequent poll of the same finished job.
@@ -183,6 +209,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
       const newJob = await generateMutation.mutateAsync({
         profile_id: profileId,
         language,
+        model_id: modelId,
         text: text.trim(),
         speed,
         stability,
@@ -241,6 +268,33 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
               {langs.map((l) => (
                 <option key={l.code} value={l.code}>
                   {l.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Model</span>
+          <div className="select-wrap">
+            <select
+              value={modelId ?? ''}
+              onChange={(e) => setModelId(e.target.value || null)}
+              disabled={!compatibleModels.length}
+              title={
+                modelId === null
+                  ? detect?.would_route_to?.rationale ?? 'Picked automatically for this language and text.'
+                  : undefined
+              }
+            >
+              <option value="">
+                {compatibleModels.length
+                  ? `Auto${detect?.routable && detect.would_route_to ? ` — ${detect.would_route_to.model_display_name}` : ''} (Recommended)`
+                  : 'Auto (Recommended)'}
+              </option>
+              {compatibleModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.id === detect?.would_route_to?.model_id ? `${m.display_name} (Recommended)` : m.display_name}
                 </option>
               ))}
             </select>
@@ -310,7 +364,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
             <span className={`detect ${detect.routable ? '' : 'bad'}`}>
               {detect.routable ? <IconCheck size={13} /> : <IconAlert size={13} />}
               {detect.routable
-                ? `${detect.script} · ${detect.would_route_to?.model_display_name ?? 'ready'}`
+                ? `${detect.script} · ${
+                    modelId
+                      ? compatibleModels.find((m) => m.id === modelId)?.display_name ?? modelId
+                      : detect.would_route_to?.model_display_name ?? 'ready'
+                  }`
                 : (detect.hint ?? 'This text cannot be routed.')}
             </span>
           )}
