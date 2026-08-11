@@ -4,38 +4,66 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-10**, after Speech Direction + Phase 4 Chatterbox scoping merged to `main`.
+Last updated: **2026-08-12**, mid-session, ahead of a context/usage limit — two background agents
+(Qwen analyzer production backend, VoxCPM2 LoRA POC) are still running; see "In flight right now"
+below before assuming anything about them.
 
 ---
 
 ## Where things stand
 
 **The product is complete and validated end-to-end on GPU with real cloned audio, including Speech
-Direction's multi-segment generation.** Three bodies of work have landed on `main` since the rewrite:
-async jobs/mobile/perf (PR #1), Speech Direction + UI plain-language pass (PR #3), and an IR taxonomy
-expansion + Phase 4 Chatterbox design doc (PR #4). Full detail and forward roadmap:
-**[docs/ROADMAP.md](ROADMAP.md)**.
+Direction's multi-segment generation.** Base branch is **`main`**, currently at commit `777a82a`.
+Landed since the rewrite: async jobs/mobile/perf, Speech Direction (preview → multi-segment audio →
+backend contract for edits → full Advanced per-segment editor UI), Phase 4 Chatterbox — designed,
+built, gated, and **concluded not shippable** (see below), a Composer model picker, and client-side
+audio extraction. Full detail and forward roadmap: **[docs/ROADMAP.md](ROADMAP.md)**.
 
-| Wave | Status |
+| Area | Status |
 |---|---|
-| **0 — Contracts** | ✅ Done. |
-| **X1 — Deletions** | ✅ Done. −5402 lines, then a further −4628 removing the legacy engines. |
-| **1 — Research** | ✅ Done. Catalog holds measured numbers. |
-| **B3 — domain layer** | ✅ Done. `detect_script`, `resolve`, `split_sentences`, `chunk_for_synthesis`. |
-| **B1 — scheduler** | ✅ Done. GPU-slot invariant asserted; tested against `FakeWorker`, no GPU. |
-| **Urdu** | ✅ Concluded — and then superseded: VoxCPM 2 renders **romanized** Hindi/Urdu directly, so the whole transliteration subsystem was deleted. Native Perso-Arabic is still unrouted (422, never mis-rendered). |
-| **B2 — API layer** | ✅ Done. Enrollment + consent, generate, media tokens, history (list/get/favorite/delete). |
-| **P6 — frontend** | ✅ Done, then revamped 2026-08-06, then a plain-language pass 2026-08-10 (Stability/Pitch/Volume became worded comboboxes, Advanced editing collapsed behind a disclosure — see ROADMAP.md). |
-| **P7 — CI/Docker** | ✅ CI green. Dockerfile rewritten CPU-slim but **not build-tested**. |
-| **Real-audio E2E** | ✅ Passed on an RTX A4500, then again on an RTX 4000 Ada pod 2026-08-10 (see Speech Direction row). |
-| **Jobs/mobile/perf** | ✅ Done, **merged to `main`** via PR #1. Async job queue, TanStack Query + Recent tab, mobile fixes, LCP/FCP/TBT perf. |
-| **Speech Direction (Phase 2)** | ✅ **Merged to `main`** via PR #3, then pod-validated for real: enrolled a real voice, ran `apply_direction: true` on multi-sentence Roman Urdu through both `curl` and the live browser UI against a real VoxCPM2 worker — 3 real segments, correct joins (waveform-inspected, no artifacts/clipping), warm RTF ≈1.0. Detail: [ROADMAP.md](ROADMAP.md). |
-| **Phase 4 scoping (Chatterbox)** | 📋 **Merged to `main`** via PR #4. `Emotion.ANXIOUS` + `Tone.NARRATIVE` added to the IR (ANXIOUS analyzer-detected now; NARRATIVE deliberately left undetected, documented why). Full Chatterbox design doc: [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) — no runtime code yet, that's Phase 4a/4b/4c. |
+| **Core rewrite (Waves 0/1/B1-B3/P6/P7)** | ✅ Done, stable. Not touched this session. |
+| **Async jobs / mobile / perf** | ✅ Done, merged. |
+| **Speech Direction (Phase 2)** | ✅ **Fully landed on `main`.** Heuristic analyzer + capability report + preview UI + multi-segment generation + client-edited per-segment override contract (`direction_plan` on `TTSGenerateRequest`, sparse/index-keyed, re-validated server-side, 422 on stale index) + the full Advanced per-segment IR editor UI (editable emotion/intensity/energy/rate/pause per segment). **Real-audio pod validation done 2026-08-12**: hit `POST /api/generate` with `apply_direction: true` against a live VoxCPM2 worker, downloaded the actual output, automated waveform check found zero click-threshold discontinuities and silence runs landing exactly at the expected segment boundaries — objectively sound, human listen still open. Clip at `eval/results/direction/pod_directed_hi.wav`. |
+| **Qwen2.5-Instruct LLM analyzer** | 🚧 **Capability probe passed** (0 problems, 6 cases, en/ur/hi) — `eval/run_qwen_analyzer_probe.py`. **Production build in progress in the background right now** on branch `feature/phase2-qwen-analyzer` (own worktree) — see "In flight right now". |
+| **Phase 4 (Chatterbox)** | 🔴 **Designed, built, gated, and concluded NOT shippable.** Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner's verdict: "not that good... identity is matched around 60%". Same failure shape as the Urdu investigation below — a speaker-encoder ceiling, not a tunable parameter. Not planned to be revisited without a LoRA fine-tune (see next row). |
+| **VoxCPM2 LoRA POC** | 🚧 **Just kicked off, running in the background right now** on branch `feature/voxcpm-lora-poc` (own worktree, `D:\Projects\voxcpm-lora-poc-worktree`). This is the identified path to real identity-preserving cloning. A real 36-clip (~4.8 min) dataset of the owner's own voice already exists, untracked, at `eval/training/` — **do not commit the raw audio without explicit owner sign-off**, that decision was deliberately left open. Early finding: the installed `voxcpm` package (2.0.3) has genuine first-class LoRA support built in (`voxcpm/modules/layers/lora.py`, `LoRAConfig`, a `voxcpm.training` submodule) — better-supported than expected going in. See "In flight right now". |
+| **Composer model picker** | ✅ Done, merged. Explicit model override + "(Recommended)" hint, no Tone control (confirmed no-op). |
+| **Client-side audio extraction (Phase 3)** | ✅ Done, merged. |
 
-**217 backend tests passing on `main`** (verified 2026-08-10), ruff clean on everything touched this
-session (25 pre-existing findings remain in untouched test files, same as always). Base branch:
-**`main`** (the rewrite was merged in on 2026-08-06; `rewrite/contracts` points at the same commit but
-has drifted behind — treat as stale until re-synced).
+**256 backend tests passing** as of the last full run this session (`feature/phase2-advanced-direction`
+before its merge), ruff clean on everything touched. `gh` CLI is now installed locally (`winget install
+GitHub.cli`), so PRs can be opened directly going forward instead of handed over as links.
+
+## In flight right now (2026-08-12) — check these before doing anything else
+
+Two background agents are mid-run as of this checkpoint. **Do not assume either is done, and do not
+duplicate their work** — check for a completion notification / the branch's actual git log first.
+
+1. **Qwen2.5 LLM analyzer production backend** — branch `feature/phase2-qwen-analyzer`, its own
+   isolated worktree (spawned with `isolation: "worktree"`, so it never touched the shared checkout).
+   Scope: `WireOp.CLASSIFY` on the existing worker protocol, a new `QwenAnalyzerBackend` under
+   `inference/runtimes/` (the only place allowed to import torch besides `inference/worker.py`), a new
+   `AnalyzerScheduler` (NOT `InferenceScheduler`, NOT a `scheduler.py` edit — rule 8), an idle-unload
+   timer (VRAM contention risk: Qwen-3B-bf16 (~6GB) resident alongside VoxCPM (~7.3GB) and Chatterbox
+   (~6GB) on a 20GB pod card), `JobKind.ANALYZE_LLM`, `POST /api/direction/analyze-llm`. Required to
+   pin a real HF revision and do a real pod smoke test before claiming anything works. **Backend only,
+   no frontend wiring this pass** — that's follow-up work once this lands.
+2. **VoxCPM2 LoRA POC** — branch `feature/voxcpm-lora-poc`, worktree at
+   `D:\Projects\voxcpm-lora-poc-worktree` (this one was **not** spawned with worktree isolation by
+   mistake — it briefly checked out a branch directly in the shared `D:\Projects\AI-Voice-Clone`
+   working tree, built on the wrong `origin` remote, and clobbered the main checkout mid-edit. It
+   self-corrected: found the `fork`-vs-`origin` mismatch on its own, and moved to the separate worktree
+   after being told to. See the new lesson below — **always pass `isolation: "worktree"` when a
+   subagent needs its own git branch**, no exceptions, even for "quick" tasks). Scope: validate the
+   dataset, research whether `voxcpm`'s built-in LoRA support has a runnable training entrypoint or
+   needs a training loop written against its primitives, run a minimal POC fine-tune if feasible,
+   evaluate with the same `eval_harness.py` methodology used for Chatterbox's gate, write
+   `docs/VOXCPM_LORA_POC.md`. Told explicitly not to commit the raw training audio without sign-off,
+   not to touch `backend/app/`, and not to claim `verified` on a cosine number alone.
+
+When either finishes: review its diff before merging (same pattern used this session for the frontend
+Advanced editor — it was cherry-picked onto the backend contract branch after a build+test check, not
+merged blind), run the full test suite, and update this file + `docs/ROADMAP.md` again.
 
 ## Resuming on a new pod
 
@@ -135,22 +163,18 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 
 ## What's left to build
 
-The backend-rewrite waves (B1–B3, P6, P7) above are all done — that list is stale, kept for
-history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
+**Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here. As of this checkpoint:
 
-- Merge `feature/speech-direction` to `main` (open a PR — none exists yet as of 2026-08-10).
-  `feature/jobs-mobile-perf` is already merged (PR #1) and deleted.
-- **Pod validation of directed generation** (the immediate next step — see below): confirm real
-  VoxCPM2 audio through the multi-segment path, no clicks/discontinuities at segment joins.
-- The Qwen2.5-Instruct LLM analyzer (Apache-2.0, pod-only) behind the frozen `analyze()` signature.
-- Phase 2 remainder: the Advanced per-segment IR editor (preview + apply-checkbox shipped; full
-  editing did not).
-- Phase 3: client-side audio extraction (move video→audio out of the backend, ffmpeg becomes the
-  fallback for formats `decodeAudioData` can't handle, not the only path).
-- Phase 4 (undesigned): Chatterbox runtime — catalog already declares its `exaggeration` param
-  ([catalog.py:155](../backend/app/inference/catalog.py)), no runtime implements it yet. Given the
-  Urdu report below, VoxCPM2 stays the cloning-quality priority regardless.
+- The two in-flight background agents above — review, merge, verify once they report back.
+- Once the Qwen analyzer backend lands: frontend wiring (a trigger in `DirectionPanel.tsx`/
+  `Composer.tsx` to call `POST /api/direction/analyze-llm` and let the user apply its suggestions,
+  same shape as the existing heuristic preview but async/job-polled). Not started, not designed yet.
+- Once the LoRA POC reports back: either a go/no-go on real production integration (how a fine-tuned
+  adapter would load into `VoxCPMBackend`), or — if it's a no-go — the Urdu product decision below
+  becomes live again (ship generic-voice MVP as the final answer, or look at another path).
 - **D1** — Docker, CI. Dockerfile rewritten CPU-slim but still **not build-tested**.
+- PR housekeeping: `main` currently has no open PRs; `gh` CLI is installed locally now, so future
+  branches can get a real PR instead of a handed-over compare link.
 
 ## Non-negotiables (full detail in CLAUDE.md and docs/ARCHITECTURE.md)
 
@@ -184,33 +208,37 @@ history. **Current priorities live in [docs/ROADMAP.md](ROADMAP.md)**, not here:
 
 ## Next session — start here
 
-Everything through Phase 4 *scoping* is merged and pod-validated. Two real options, not sequenced —
-pick based on what's wanted next:
-
-1. **Phase 4a (Chatterbox capability/render mapping, CPU-only, no GPU needed)** — land
-   `_CHATTERBOX_FIELDS` + the exaggeration/cfg_weight blend table in `app/jobs/direction.py`, the
-   `language_id` plumbing change, and the associated tests (including repointing
-   `test_direction_capability.py`'s `_NON_VOXCPM` fixture off of Chatterbox — a known, planned
-   breaking change, see the design doc). Full spec: [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md)
-   §5 and §11. Buildable and testable entirely on this box.
-2. **Qwen2.5-Instruct analyzer** (the "analyzer" half of the earlier "both, analyzer first"
-   decision) — pod-only, needs the model download and a GPU worker to keep torch out of the API
-   process. See [ROADMAP.md](ROADMAP.md)'s Phase 2 "Remaining" list.
-
-A background task is independently auditing `direction_analyze.py`'s existing lexicon for the same
-`\b` + Devanagari-combining-mark bug found and worked around while adding `ANXIOUS` (see PR #4's
-commit message) — check its result before adding more lexicon entries by hand.
+1. **Check on the two in-flight agents first** (Qwen analyzer backend, LoRA POC — see "In flight right
+   now" above). If either finished mid-session-boundary, its work is sitting on its own branch/worktree
+   unreviewed — read the diff, run tests, merge or send it back with feedback before starting anything
+   new.
+2. If both are genuinely done and merged: Qwen analyzer frontend wiring, or the LoRA POC's production
+   integration (if it was a go), are the next real pieces of work. See "What's left to build" above.
+3. **New operational lesson, read before spawning any subagent that needs its own git branch:**
+   **always pass `isolation: "worktree"`.** This session forgot it once (the LoRA POC agent) and it
+   checked out a branch directly in the shared `D:\Projects\AI-Voice-Clone\` working tree, clobbering
+   an in-progress edit mid-session. No exceptions for "this one's quick."
+4. **Second lesson: `origin` in this local repo is not `fork`.** `origin` →
+   `IftikharAhmedDev/AI-Voice-Clone.git` (an unrelated, stale predecessor fork — no rewrite, no
+   `docs/ROADMAP.md`, contains code this project's own `CLAUDE.md` says was deleted, e.g. "Style
+   Exaggeration"). `fork` → `MunawarAliAraiz/AI-Voice-Clone.git`, the real one. Always fetch/push/branch
+   off `fork`, never `origin`, in this repo specifically. Two different subagents hit this same trap
+   independently this session (the frontend Advanced-editor agent, and the LoRA POC agent) — it is not
+   a one-off, it's this repo's actual remote configuration. Tell every future subagent this explicitly
+   rather than assuming they'll discover it themselves.
 
 **Token discipline (owner priority):** terse replies, no recaps, no exploratory pod runs without
-go-ahead, batch verification. Build inline when holding the contracts (B1/B3 were faster+cheaper that
-way than spawning agents). Only spawn agents for genuinely parallel work.
+go-ahead, batch verification. Build inline when holding the contracts. Use subagents for genuinely
+parallel/independent work (this session ran two GPU-pod agents concurrently, plus a frontend UI agent
+earlier) — but isolate every one of them in a worktree, and give each one the correct `fork` remote
+explicitly rather than assuming it'll figure out which remote is real.
 
 ## Open items
 
 - [ ] **Rotate the GitHub PAT** (`ghp_...`) — pasted into the transcript, and written to two pods'
       `/root/.git-credentials`. Permanently logged.
-- [ ] **Urdu product decision (owner):** ship generic-voice MVP, or invest in LoRA fine-tune of
-      VoxCPM2. See `docs/URDU_CLONING_REPORT.md` §4.
+- [ ] **Urdu product decision (owner):** in progress, not resolved — the LoRA-fine-tune path is now
+      being probed (see "In flight right now"), not just proposed. See `docs/URDU_CLONING_REPORT.md` §4.
 - [ ] Accept the IndicF5 HF license + set `HF_TOKEN` on the pod (unblocks `f5_indic`).
 - [ ] Empty `LEGACY_TORCH_IMPORTERS` once the old engine layer is deleted (blocked on B1/B2/B3
       landing replacements — deleting it now would break the running app).
