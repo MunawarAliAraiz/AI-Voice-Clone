@@ -200,6 +200,16 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   error only surfaces as an opaque `TypeError: 'NoneType' object is not callable` deep inside
   `ChatterboxMultilingualTTS.from_local()`, nowhere near `pkg_resources`. `pod-bootstrap.sh`'s
   Chatterbox section pins `setuptools<81` for exactly this reason — don't drop it.
+- **Never let `torchcodec` be importable in `.venv-eval`.** `torchaudio.load()` and the transformers
+  ASR pipeline both prefer TorchCodec over their older decoders when it's merely *installed* — not
+  when you ask for it. Its prebuilt binaries are linked against a specific CUDA runtime
+  (observed: needs `libnvrtc.so.13`) independent of whatever CUDA build of torch is actually present,
+  so the failure is a hard crash (`OSError: libnvrtc.so.13: cannot open shared object file`), not a
+  graceful fallback. The trap: seeing `ModuleNotFoundError: No module named 'torchcodec'` and
+  installing it to fix that error makes things *worse* — transformers then prefers the broken binary
+  over the working fallback it was using before. `eval/eval_harness.py` reads every audio file with
+  `soundfile` (already a dependency) for exactly this reason — never `torchaudio.load()` or a bare
+  file-path string into the ASR pipeline.
 
 ## Conventions
 

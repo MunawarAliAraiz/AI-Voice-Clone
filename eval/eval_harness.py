@@ -174,21 +174,44 @@ class EvalHarness:
         return self._spk
 
     def transcribe(self, wav_path: str | Path, language: Language) -> str:
+        # Decode with soundfile and pass a raw array rather than a path: the
+        # pipeline's own path-decoding branch imports TorchCodec internally,
+        # which hits the same CUDA-runtime mismatch documented in
+        # speaker_similarity() above. A raw-array input skips that branch.
+        import soundfile as sf
+        import torch
+        import torchaudio
+
+        data, sr = sf.read(str(wav_path), dtype="float32", always_2d=True)
+        audio = data.mean(axis=1)
+        if sr != 16000:
+            audio = torchaudio.functional.resample(torch.from_numpy(audio), sr, 16000).numpy()
+            sr = 16000
         out = self._asr_pipeline()(
-            str(wav_path),
+            {"raw": audio, "sampling_rate": sr},
             generate_kwargs={"language": _WHISPER_LANG[language], "task": "transcribe"},
         )
         return str(out["text"]).strip()
 
     def speaker_similarity(self, a: str | Path, b: str | Path) -> float:
         """Cosine similarity between ECAPA-TDNN embeddings of two clips."""
+        import soundfile as sf
         import torch
         import torchaudio
 
         model = self._speaker_model()
 
         def embed(path: str | Path) -> "torch.Tensor":
-            wav, sr = torchaudio.load(str(path))
+            # soundfile, not torchaudio.load: newer torchaudio routes .load()
+            # through TorchCodec, which ships prebuilt binaries linked against
+            # a specific CUDA runtime (observed: libnvrtc.so.13) independent of
+            # whatever CUDA build of torch itself is installed — a real version
+            # mismatch, not a missing-package problem. soundfile does plain
+            # libsndfile I/O and sidesteps it; torchaudio is still used below
+            # for resampling only, which is pure tensor math and doesn't touch
+            # TorchCodec.
+            data, sr = sf.read(str(path), dtype="float32", always_2d=True)
+            wav = torch.from_numpy(data.T)            # (channels, samples)
             if wav.shape[0] > 1:                      # mixdown to mono
                 wav = wav.mean(dim=0, keepdim=True)
             if sr != 16000:                           # ECAPA expects 16 kHz
