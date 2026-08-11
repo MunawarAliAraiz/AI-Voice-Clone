@@ -137,6 +137,13 @@ class AnalyzerScheduler:
         #: loop kills the worker once `now - _last_activity >= idle_unload_sec`.
         self._last_activity = 0.0
         self._shutting_down = False
+        #: Seconds the most recent LOAD paid, consumed (reset to 0.0) by the
+        #: very next classify() so only the request that actually paid a
+        #: cold/warm start reports it on `AnalyzeResult.load_time_sec` —
+        #: `classify()`'s own wire response never carries load timing, only
+        #: `_load()`'s does, so this is how it crosses from one call to the
+        #: next.
+        self._pending_load_time_sec = 0.0
 
     async def classify(self, *, language: str, sentences: tuple[str, ...]) -> AnalyzeResult:
         if not self._python:
@@ -151,6 +158,7 @@ class AnalyzerScheduler:
             if not self._loaded:
                 await self._load()
             self._touch()
+            load_time_sec, self._pending_load_time_sec = self._pending_load_time_sec, 0.0
 
         try:
             response = await self._worker.call(
@@ -176,7 +184,7 @@ class AnalyzerScheduler:
         return AnalyzeResult(
             rows=tuple(result.get("rows") or ()),
             gen_time_sec=float(result.get("gen_time_sec", 0.0)),
-            load_time_sec=float(result.get("load_time_sec", 0.0)),
+            load_time_sec=load_time_sec,
         )
 
     async def shutdown(self) -> None:
@@ -224,6 +232,7 @@ class AnalyzerScheduler:
                 f"qwen analyzer failed to load: {response.error_message or 'unknown'}"
             )
         self._loaded = True
+        self._pending_load_time_sec = float(response.result.get("load_time_sec", 0.0))
 
     def _touch(self) -> None:
         self._last_activity = time.monotonic()
