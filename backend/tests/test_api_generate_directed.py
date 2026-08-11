@@ -152,6 +152,81 @@ def test_directed_generate_single_sentence_still_directs(tmp_path: Path) -> None
         assert r.json()["result"]["segment_count"] == 1
 
 
+def test_direction_plan_override_changes_rendered_params(tmp_path: Path) -> None:
+    """The Advanced editor's `direction_plan` overrides win over the
+    analyzer's own values — VoxCPM's intensity->cfg_value mapping is HIGH:
+    2.5 vs. the analyzer's default MEDIUM: 2.0 for a plain, unpunctuated
+    sentence (see `_VOXCPM_CFG_BY_INTENSITY` in app/jobs/direction.py)."""
+    client, sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "en")
+        r = _generate_and_poll(c, {
+            "profile_id": pid,
+            "text": "Hello there.",
+            "language": "en",
+            "apply_direction": True,
+            "direction_plan": {
+                "segments": [
+                    {"index": 0, "intensity": "high", "pause_after_ms": 0},
+                ]
+            },
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "succeeded", r.json()
+        assert len(sched.requests) == 1
+        assert sched.requests[0].params["cfg_value"] == 2.5
+
+
+def test_direction_plan_pause_override_lengthens_output(tmp_path: Path) -> None:
+    """A pause_after_ms override on the first of two segments should make the
+    joined clip measurably longer than the same text with no override."""
+    client, sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "en")
+        text = "Hello there. Goodbye now."
+
+        baseline = _generate_and_poll(c, {
+            "profile_id": pid, "text": text, "language": "en", "apply_direction": True,
+        })
+        assert baseline.status_code == 200, baseline.text
+        baseline_duration = baseline.json()["result"]["duration_sec"]
+
+        sched.requests.clear()
+        overridden = _generate_and_poll(c, {
+            "profile_id": pid,
+            "text": text,
+            "language": "en",
+            "apply_direction": True,
+            "direction_plan": {"segments": [{"index": 0, "pause_after_ms": 3000}]},
+        })
+        assert overridden.status_code == 200, overridden.text
+        overridden_duration = overridden.json()["result"]["duration_sec"]
+
+        # 3s inserted pause dwarfs any fake-scheduler/join-format variance.
+        assert overridden_duration - baseline_duration > 2.0
+
+
+def test_direction_plan_unknown_index_is_422(tmp_path: Path) -> None:
+    """A stale plan (text changed since the editor fetched it, or a bogus
+    index) is a 422 naming exactly what's wrong — never a silently-ignored
+    override, and never a bare 500."""
+    client, _sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "en")
+        r = c.post("/api/generate", json={
+            "profile_id": pid,
+            "text": "Hello there.",  # one segment: index 0 only
+            "language": "en",
+            "apply_direction": True,
+            "direction_plan": {"segments": [{"index": 5, "pause_after_ms": 0}]},
+        })
+        assert r.status_code == 422, r.text
+        body = r.json()
+        assert body["code"] == "INVALID_DIRECTION_PLAN"
+        assert body["unknown_indices"] == [5]
+        assert body["valid_indices"] == [0]
+
+
 def test_directed_generate_route_unaffected(tmp_path: Path) -> None:
     """Direction changes HOW audio is produced, never WHAT is routed to — the
     route chip is identical to the non-directed request."""

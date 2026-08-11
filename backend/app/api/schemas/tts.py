@@ -10,11 +10,14 @@ Failures are RFC 9457 problem+json (see `app/exceptions.py`).
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "RouteInfo",
+    "DirectedSegmentIn",
+    "DirectionPlanIn",
     "TTSGenerateRequest",
     "TTSGenerateResponse",
     "ScriptDetectRequest",
@@ -56,6 +59,61 @@ class RouteInfo(BaseModel):
         default_factory=list,
         description="Other model ids that could have served this request.",
     )
+
+
+class DirectedSegmentIn(BaseModel):
+    """
+    One segment of a user-EDITED `DirectionPlan`, submitted back via
+    `TTSGenerateRequest.direction_plan` from the Advanced editor.
+
+    Lives here rather than `schemas/direction.py` — that module already
+    imports `RouteInfo` from this one, and `TTSGenerateRequest` is what
+    actually needs this type, so the reverse import would be circular.
+
+    `text`, `index`, and `emphasis` are NOT here on purpose: the editor never
+    lets the user rewrite a segment's text or its emphasis spans, only the
+    prosody fields below. Those three are always carried through unchanged,
+    server-side, from the same `analyze()` call `GET /api/direction/analyze`
+    already ran for this text — accepting a client-supplied `text` here would
+    let "Generate" say something other than what the user actually typed,
+    with no visible sign that happened.
+
+    Enum fields are `Literal[...]`, not the plain `str` `schemas/direction.py`
+    uses for its read-only `*Out` mirrors — this one is an input, so a bad
+    value belongs in FastAPI's own 422 rather than surfacing as an opaque
+    `ValueError` two layers down where the wire string becomes a domain
+    `StrEnum`.
+
+    `tone` is deliberately absent: no current runtime honors it (see
+    `direction_analyze.py`'s module docstring), so there is nothing honest
+    for an edit to change yet — same reason the Composer's model picker
+    shipped without a Tone control.
+    """
+
+    index: int = Field(..., ge=0, description="Must match an index from the last analyze() call.")
+    emotion: Literal[
+        "neutral", "happy", "sad", "anxious", "angry", "excited", "calm", "serious", "questioning"
+    ] = "neutral"
+    intensity: Literal["low", "medium", "high"] = "medium"
+    energy: Literal["low", "medium", "high"] = "medium"
+    rate: Literal["slow", "normal", "fast"] = "normal"
+    pause_after_ms: int = Field(..., ge=0, le=5000)
+
+
+class DirectionPlanIn(BaseModel):
+    """
+    A user-edited `DirectionPlan`: per-segment prosody overrides, keyed by the
+    segment `index` the Advanced editor got from `GET /api/direction/analyze`.
+
+    Deliberately just `segments` — `language` and `source_script` are already
+    known from the enclosing `TTSGenerateRequest`/its routing, and `summary`
+    is derived, never independently set (`domain.direction`'s own rule). The
+    server re-analyzes `body.text` for segmentation/text/emphasis and applies
+    these overrides on top by index; it never trusts a client-supplied
+    language, summary, or segment text.
+    """
+
+    segments: list[DirectedSegmentIn] = Field(..., min_length=1)
 
 
 class TTSGenerateRequest(BaseModel):
@@ -122,6 +180,19 @@ class TTSGenerateRequest(BaseModel):
             "then joined. Only fields the routed model HONORS/APPROXIMATES take "
             "effect — see GET /api/direction/analyze for the capability report. "
             "Default false keeps the original single-shot behavior."
+        ),
+    )
+    direction_plan: DirectionPlanIn | None = Field(
+        None,
+        description=(
+            "Only read when apply_direction is true. Per-segment prosody "
+            "overrides from the Advanced editor, keyed by the segment index "
+            "GET /api/direction/analyze returned for this exact text. "
+            "Segmentation, segment text, and emphasis always come from a "
+            "fresh server-side analyze() of body.text, never from the "
+            "client — this can only override emotion/intensity/energy/rate/"
+            "pause_after_ms, never what text gets spoken. Omit to use the "
+            "analyzer's own values unedited."
         ),
     )
 
