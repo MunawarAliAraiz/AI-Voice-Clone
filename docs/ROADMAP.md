@@ -224,11 +224,20 @@ The **read-only preview** is built, tested, and wired end-to-end:
 
 ### Remaining
 
-1. **Real-audio pod validation** — confirm actual VoxCPM2 output through the directed path: segment
-   boundaries land where expected, joined audio has no clicks/discontinuities at the splice points,
-   and per-segment `cfg_value` audibly changes delivery. Nothing here should differ from single-shot
-   VoxCPM2 behavior (same worker, same wire protocol, called N times instead of once), but it is
-   unverified until heard.
+1. **Real-audio pod validation — objective checks passed (2026-08-12), human listen still open.**
+   Hit the real `POST /api/generate` with `apply_direction: true` on the pod against a live VoxCPM2
+   worker (3-sentence Hindi text mixing neutral/exclamatory/question segments, enrolled profile from
+   `eval/fixtures/voice_urdu.wav`), polled the job to `succeeded`, downloaded the resulting WAV
+   (`segment_count: 3`, `duration_sec: 4.252`, real 48kHz output — not resampled, matching VoxCPM2's
+   own rate as documented). Automated analysis of the actual samples: no NaN, no silence-only regions,
+   real RMS energy throughout, **zero sample-to-sample discontinuities above a 0.5 abs-diff click
+   threshold anywhere in the file**, and exactly 2 silence runs (~0.25s each) at the 2 expected
+   inter-segment boundaries for a 3-segment clip — `concat_wavs_with_pauses` is splicing where the
+   directed plan says it should, with no audible-discontinuity signature. **Not yet confirmed
+   perceptually** (does the emphasis/cfg_value difference actually sound like a delivery change,
+   independent of what's measurable in the raw samples) — the clip is saved at
+   `eval/results/direction/pod_directed_hi.wav`, awaiting a human listen before this line says
+   "verified" rather than "objectively sound."
 2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0)** — the flagged second implementation behind the frozen
    `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
    API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
