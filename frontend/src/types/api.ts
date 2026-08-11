@@ -74,6 +74,34 @@ export interface LanguageListResponse {
   languages: LanguageInfo[];
 }
 
+/**
+ * Mirrors backend `DirectedSegmentIn`. One segment's prosody OVERRIDE, keyed
+ * by `index` from the last `GET /api/direction/analyze` (`DirectionAnalyzeResponse.plan`)
+ * for the current text. Deliberately has no `text` or `tone` field: the
+ * Advanced editor can change how a segment is delivered, never what text it
+ * contains, and no current runtime honors `tone` (same reason the Composer's
+ * model picker shipped without a Tone control) — this must stay that way.
+ */
+export interface DirectedSegmentIn {
+  index: number;
+  emotion: string; // "neutral" | "happy" | "sad" | "anxious" | "angry" | "excited" | "calm" | "serious" | "questioning"
+  intensity: string; // "low" | "medium" | "high"
+  energy: string; // "low" | "medium" | "high"
+  rate: string; // "slow" | "normal" | "fast"
+  pause_after_ms: number; // 0-5000
+}
+
+/**
+ * Mirrors backend `DirectionPlanIn`. SPARSE — only segments the user actually
+ * edited belong here; any segment index not present keeps the analyzer's own
+ * value server-side. Submitting an index the server's fresh `analyze()` of
+ * the current text doesn't have (most often: the text changed after the
+ * editor fetched its plan) is a 422 `INVALID_DIRECTION_PLAN`.
+ */
+export interface DirectionPlanIn {
+  segments: DirectedSegmentIn[];
+}
+
 export interface TTSGenerateRequest {
   text: string;
   profile_id: number;
@@ -89,6 +117,11 @@ export interface TTSGenerateRequest {
    *  the routed model HONORS/APPROXIMATES take effect (see DirectionPanel's
    *  capability chip) — never a silent no-op. Defaults false. */
   apply_direction?: boolean;
+  /** Only read when apply_direction is true. Per-segment prosody overrides
+   *  from the Advanced editor, keyed by segment index from the last analyze()
+   *  call for this exact text. Omit/null to use the analyzer's own values
+   *  unedited. */
+  direction_plan?: DirectionPlanIn | null;
 }
 
 export interface TTSGenerateResponse {

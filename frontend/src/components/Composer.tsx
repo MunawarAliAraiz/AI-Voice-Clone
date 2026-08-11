@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
-import type { DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
+import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
 import { DirectionPanel } from './DirectionPanel';
 import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner, IconX } from './icons';
@@ -63,6 +63,17 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   // can opt into applying it. Not reset on collapse: an already-informed
   // choice stays in effect while the composer stays open.
   const [applyDirection, setApplyDirection] = useState(false);
+  // Advanced per-segment overrides from the "Advanced" editor inside
+  // DirectionPanel, keyed by segment index — SPARSE by construction (only
+  // touched segments ever get a key). Lives here, not in DirectionPanel,
+  // because it must survive into generate()'s payload and be clearable when
+  // a 422 INVALID_DIRECTION_PLAN says the indices went stale.
+  const [directionEdits, setDirectionEdits] = useState<Record<number, DirectedSegmentIn>>({});
+  // Signature (index:text pairs) of the last analyzed plan's segmentation —
+  // used to tell "the text changed enough that old edits may not line up
+  // anymore" apart from "the same plan was refetched" (e.g. re-opening the
+  // disclosure), which should NOT throw away what the user just customized.
+  const lastSegSignature = useRef<string | null>(null);
 
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
@@ -201,10 +212,41 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     return () => window.clearTimeout(h);
   }, [text, language, showDirection]);
 
+  // Drop stale Advanced edits when the underlying segmentation actually
+  // changed (different segment count/text) — not on every re-fetch, so
+  // closing and reopening "Direction (preview)" for the SAME text doesn't
+  // throw away what the user just customized.
+  useEffect(() => {
+    if (!direction) return;
+    const sig = direction.plan.segments.map((s) => `${s.index}:${s.text}`).join('|');
+    if (lastSegSignature.current !== null && lastSegSignature.current !== sig) {
+      setDirectionEdits({});
+    }
+    lastSegSignature.current = sig;
+  }, [direction]);
+
+  function handleEditSegment(segment: DirectedSegmentIn) {
+    setDirectionEdits((prev) => ({ ...prev, [segment.index]: segment }));
+  }
+
+  function handleResetSegment(index: number) {
+    setDirectionEdits((prev) => {
+      if (!(index in prev)) return prev;
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+  }
+
+  function handleResetAllEdits() {
+    setDirectionEdits({});
+  }
+
   async function generate() {
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
     setErr(null);
+    const editedSegments = Object.values(directionEdits);
     try {
       const newJob = await generateMutation.mutateAsync({
         profile_id: profileId,
@@ -214,11 +256,25 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         speed,
         stability,
         apply_direction: applyDirection,
+        direction_plan:
+          applyDirection && editedSegments.length > 0 ? { segments: editedSegments } : null,
       });
       settledJobId.current = null;
       setJobId(newJob.id);
     } catch (e) {
-      setErr(e instanceof ApiError ? e.message : String(e));
+      if (e instanceof ApiError && e.code === 'INVALID_DIRECTION_PLAN') {
+        // The text changed after the Advanced editor's overrides were made,
+        // so the segment indices no longer line up server-side (rule 5: no
+        // silent fallback — the backend refuses rather than guessing which
+        // segment an edit meant). Clear the stale edits and tell the user
+        // plainly rather than surfacing the raw 422.
+        setDirectionEdits({});
+        setErr(
+          'Your Speech Direction edits no longer match this text — it changed after you customized segments. The edits were cleared; reopen "Direction (preview)" to review the current segments, then Generate again.'
+        );
+      } else {
+        setErr(e instanceof ApiError ? e.message : String(e));
+      }
     }
   }
 
@@ -393,6 +449,10 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
           error={directionErr}
           applyDirection={applyDirection}
           onApplyDirectionChange={setApplyDirection}
+          edits={directionEdits}
+          onEditSegment={handleEditSegment}
+          onResetSegment={handleResetSegment}
+          onResetAllEdits={handleResetAllEdits}
         />
       )}
 

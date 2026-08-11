@@ -38,6 +38,7 @@ __all__ = [
     "NoRouteError",
     "AmbiguousScriptError",
     "InvalidParamsError",
+    "InvalidDirectionPlanError",
     "AuthenticationError",
     "MediaTokenError",
     # 5xx / capacity — the caller can retry
@@ -228,6 +229,31 @@ class InvalidParamsError(AppError):
             model_id=model_id,
             unknown=sorted(unknown),
             accepted=sorted(accepted),
+        )
+
+
+class InvalidDirectionPlanError(AppError):
+    """
+    `direction_plan` overrides a segment index that a fresh analyze() of
+    `body.text` doesn't have — most often the text was edited after the
+    Advanced editor fetched its plan, so the indices no longer line up.
+
+    422, not a silent "ignore the stale override": the same no-silent-fallback
+    discipline `NoRouteError`/`InvalidParamsError` already follow.
+    """
+
+    code = "INVALID_DIRECTION_PLAN"
+    http_status = 422
+    title = "Invalid direction plan"
+
+    def __init__(self, unknown_indices: tuple[int, ...], valid_indices: tuple[int, ...]) -> None:
+        super().__init__(
+            f"direction_plan overrides segment index(es) "
+            f"{', '.join(str(i) for i in sorted(unknown_indices))}, but analyzing this text "
+            f"produced segments {list(valid_indices)}. The text likely changed since the plan "
+            f"was fetched — re-run GET /api/direction/analyze and retry.",
+            unknown_indices=sorted(unknown_indices),
+            valid_indices=list(valid_indices),
         )
 
 

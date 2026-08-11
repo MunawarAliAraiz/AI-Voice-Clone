@@ -1201,6 +1201,35 @@ textarea {
   line-height: 1.45;
 }
 
+/* Row that holds the Advanced/Segments disclosure plus its "Reset all". */
+.disclosure-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Per-segment editable prosody form (Advanced tab). */
+.segment-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.segment-edit-grid {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--space-2);
+}
+
+.segment-edit-grid .field {
+  margin-bottom: 0;
+  gap: 4px;
+}
+
+.segment-edit-grid .field-label {
+  font-size: var(--text-xs);
+}
+
 /* ── Empty states ────────────────────────────────────────── */
 .empty { text-align: center; padding: var(--space-8) var(--space-4); }
 .empty-mark {

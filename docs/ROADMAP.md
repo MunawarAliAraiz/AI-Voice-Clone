@@ -233,8 +233,19 @@ The **read-only preview** is built, tested, and wired end-to-end:
    `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
    API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
    job `kind`. This is the "analyzer" half of the owner's "both, analyzer first" decision.
+   **Capability probe passed (2026-08-12):** `eval/run_qwen_analyzer_probe.py` against
+   `Qwen/Qwen2.5-3B-Instruct` (unpinned, probe-only) on the pod — 0 validation problems across 6 cases
+   spanning English/Roman-Urdu/Hindi and neutral/happy/sad/anxious/excited/angry, structured-JSON output,
+   2.1-3.7s generation per case, 19-27s cold load. Segmentation/emphasis/pause_after_ms stay on the
+   existing heuristic; the LLM classifies only emotion/intensity/energy/rate for already-segmented
+   sentences. Production build (`QwenAnalyzerBackend`, dedicated worker/protocol, `JobKind.ANALYZE_LLM`,
+   `POST /api/direction/analyze-llm`) now in progress — see the branch's commits for design decisions.
 3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
    tab for pros") is not built. Simple mode (summary + chip + apply checkbox) is what shipped.
+   **Backend contract landed (2026-08-11):** `direction_plan` on `TTSGenerateRequest` accepts
+   client-edited per-segment prosody overrides, sparse/index-keyed, re-validated server-side against a
+   fresh `analyze()` of the same text (422 on a stale/unknown index) — never a client-controlled segment
+   text or emphasis. Frontend editor UI in progress.
 
 **Original design notes (unchanged):**
 

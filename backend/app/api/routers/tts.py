@@ -24,16 +24,23 @@ touches `app/inference/scheduler.py`.
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
 from ...config import Settings
 from ...db import Database
+from ...domain.direction import DirectionPlan, Emotion, Level, Rate
 from ...domain.direction_analyze import analyze as analyze_direction
 from ...domain.language import profile_text
 from ...domain.routing import RoutePlan, UrduStrategy, resolve
-from ...exceptions import GenerationError, InvalidParamsError, ProfileNotFoundError
+from ...exceptions import (
+    GenerationError,
+    InvalidDirectionPlanError,
+    InvalidParamsError,
+    ProfileNotFoundError,
+)
 from ...inference.catalog import ModelCatalog
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
@@ -41,6 +48,7 @@ from ...jobs.direction import render as render_direction
 from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
 from ..schemas.jobs import JobStatusResponse
 from ..schemas.tts import (
+    DirectionPlanIn,
     RouteInfo,
     ScriptDetectRequest,
     ScriptDetectResponse,
@@ -49,6 +57,44 @@ from ..schemas.tts import (
 from .jobs import build_job_status_response
 
 router = APIRouter(tags=["tts"])
+
+
+def _apply_direction_overrides(
+    plan: DirectionPlan, overrides: DirectionPlanIn | None
+) -> DirectionPlan:
+    """
+    Overlay Advanced-editor prosody edits onto a freshly analyzed plan.
+
+    Segmentation, segment text, and emphasis always come from `plan` (a real,
+    just-run `analyze()`) — an override can change how a segment is
+    delivered, never what text it contains. An override index `analyze()`
+    doesn't currently produce (most often: the text changed since the editor
+    fetched its plan) is a 422, not a silently-ignored stale edit — the same
+    discipline `InvalidParamsError` already applies to unknown synth params.
+    """
+    if overrides is None:
+        return plan
+
+    by_index = {o.index: o for o in overrides.segments}
+    valid_indices = tuple(s.index for s in plan.segments)
+    unknown = tuple(i for i in by_index if i not in valid_indices)
+    if unknown:
+        raise InvalidDirectionPlanError(unknown, valid_indices)
+
+    segments = tuple(
+        replace(
+            seg,
+            emotion=Emotion(by_index[seg.index].emotion),
+            intensity=Level(by_index[seg.index].intensity),
+            energy=Level(by_index[seg.index].energy),
+            rate=Rate(by_index[seg.index].rate),
+            pause_after_ms=by_index[seg.index].pause_after_ms,
+        )
+        if seg.index in by_index
+        else seg
+        for seg in plan.segments
+    )
+    return replace(plan, segments=segments)
 
 
 def _route_info(plan: RoutePlan, catalog: ModelCatalog) -> RouteInfo:
@@ -117,7 +163,10 @@ async def generate(
     # segmenting exactly what the model will see.
     segments = None
     if body.apply_direction:
-        rendered = render_direction(analyze_direction(body.text, body.language), spec)
+        direction_plan = _apply_direction_overrides(
+            analyze_direction(body.text, body.language), body.direction_plan
+        )
+        rendered = render_direction(direction_plan, spec)
         if rendered.segments:
             segments = [
                 {

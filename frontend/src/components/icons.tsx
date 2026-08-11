@@ -20,6 +20,7 @@ import {
   Pause,
   Play,
   Plus,
+  RotateCcw,
   Search,
   Settings2,
   Sparkle,
@@ -72,6 +73,7 @@ export const IconOffline = make(WifiOff);
 export const IconRoute = make(ArrowUpRight);
 export const IconSpark = make(Sparkle);
 export const IconHistory = make(History);
+export const IconReset = make(RotateCcw);
 
 /** Spinner — the one icon that animates. */
 export function IconSpinner({ size = SIZE, className }: IconProps) {
