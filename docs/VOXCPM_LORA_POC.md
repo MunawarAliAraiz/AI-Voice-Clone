@@ -185,7 +185,49 @@ column. Sample size for the probe: **train.tsv 32 clips / val 4 clips** (`clip_3
 for the validation split — enough for the training script's built-in val-loss + audio-preview logging
 without meaningfully starving the tiny training set).
 
-## 5. Training run — PREPARED, NOT YET EXECUTED (blocked on pod access)
+## 5. Training run — COMPLETED on a second pod (2026-08-12), real numbers below
+
+**Update:** §5 below (the "PREPARED, NOT YET EXECUTED" account) describes the *first* pod attempt,
+which died mid-setup before training started, as documented. The project's pod was recreated
+(`157.157.221.29:22080`, GPU fully free this time — no concurrent job holding VRAM, unlike the first
+attempt's constraint), and training was re-run from scratch there: dataset re-uploaded (36 clips
+verified present), manifests regenerated (a Git-Bash path-mangling bug was hit and fixed in the
+process), both train/val manifests passed `voxcpm validate` as a pre-flight check, then
+`scripts/train_voxcpm_finetune.py` was launched under the GPU flock, nohup'd/backgrounded so it would
+survive the SSH session.
+
+**Real measured results, from the actual training log (not estimates):**
+- **Speed:** steady-state ~2.3-2.4 s/step (23-24s per 10-step logging interval). First 10-step
+  interval was 64.17s (one-time CUDA/compile warmup). One isolated outlier interval at step 210 took
+  50.51s — no OOM, no error, training continued normally immediately after.
+- **Total time:** all 300 steps completed in **~15 minutes wall clock**, including 4 validation
+  checkpoints (steps 0/100/200/299) each with 2-sample audio generation, which is folded into that
+  per-step average.
+- **`loss/stop`** dropped cleanly from 0.039 to ~0.00003-0.0001 — the model picked up this speaker's
+  utterance-length/stop-token behavior fast.
+- **`loss/diff`** stayed noisy in the 0.93-1.12 band throughout, no clear downward trend — expected
+  for 74 epochs over only 32 training clips, and **not itself informative about identity quality**
+  (that's what §6's eval step measures, not training loss).
+- **No crash, no OOM.** GPU sat around 17.6/20.5 GB throughout.
+- **Checkpoints saved** at `/workspace/engines-lab/voxcpm-lora/checkpoints/poc_lora/` on the (now-dead)
+  pod: `step_0000000`, `step_0000100`, `step_0000200`, `step_0000299`, `step_0000300`, and `latest/`.
+- **Rescued before the pod died again:** the `latest/` checkpoint (`lora_config.json`,
+  `lora_weights.safetensors` — 72 MB, `training_state.json`) was copied off the pod to
+  `eval/results/voxcpm_lora/checkpoint_backup/` on this Windows machine. **`lora_config.json` and
+  `training_state.json` are committed to this branch; `lora_weights.safetensors` itself is NOT** —
+  `.gitignore:23` excludes `*.safetensors` project-wide (matching this project's "never commit model
+  weights" convention, same reason VoxCPM2/Chatterbox weights are re-downloaded from HF rather than
+  versioned). The actual weights file exists ONLY on this local disk right now, nowhere else. If this
+  machine's copy is lost before a future session picks this up, retraining is cheap (~15 min measured
+  above, not a real setback) — but it is not currently backed up anywhere, which is worth knowing
+  before assuming it'll still be there.
+
+**What follows below (the original "PREPARED, NOT YET EXECUTED" account) is kept for the record of
+the first attempt's config decisions, which the second run mostly reused as-is** (same LoRA
+r=32/alpha=32 on LM+DiT, same `sample_rate: 16000`, same manifest structure) — only the pod, the GPU
+contention situation, and `batch_size`/`grad_accum_steps` tuning differed run-to-run.
+
+### First attempt (superseded) — PREPARED, NOT YET EXECUTED (blocked on pod access)
 
 Plan, config decided, not yet run:
 
@@ -236,7 +278,24 @@ over ~2.5 minutes) before the manifests could be copied over, before `voxcpm val
 manifest_lora_train.jsonl` could run as a pre-flight check, and before `train_voxcpm_finetune.py`
 started. **No training has run. No checkpoint exists.**
 
-## 6. Evaluation — NOT YET RUN (depends on §5)
+## 6. Evaluation — STARTED, INTERRUPTED before real numbers landed
+
+**Status as of this checkpoint (2026-08-12):** §5's training run completed successfully and a real
+checkpoint exists (`eval/results/voxcpm_lora/checkpoint_backup/`). The baseline-vs-LoRA comparison
+below was started on the second pod — but the pod was shut down (a planned, scheduled shutdown, not a
+crash — see `docs/HANDOFF.md`'s pod-deadline note) before it produced scored numbers. **No CER/cosine/
+RTF numbers exist yet for either the baseline or the LoRA checkpoint.** `eval/run_voxcpm_lora_eval.py`
+was written and is ready to run (in this branch), but was never executed to completion. This is
+exactly the kind of infrastructure interruption `docs/HANDOFF.md`'s "screenshot not verdict" discipline
+exists for: report what actually happened, not what was expected to happen. **The training success in
+§5 is real and independently valuable (proves the pipeline works end-to-end and produces a loadable
+checkpoint); it is NOT a stand-in for the identity-cosine numbers this whole POC exists to produce.**
+
+**Next session: resume from the existing checkpoint, do not retrain.** The rescued checkpoint at
+`eval/results/voxcpm_lora/checkpoint_backup/` is everything needed to run §6 to completion without
+touching the training pipeline again — get a pod, load `VoxCPM` with and without the LoRA weights
+applied, synthesize the standard target sentence both ways, score both with `eval_harness.py`, and
+fill in real numbers here.
 
 Planned, per the brief, once a checkpoint exists: reuse `eval/eval_harness.py` unmodified, the same
 reference (`eval/fixtures/voice_urdu.wav`) and the same standard target sentence
