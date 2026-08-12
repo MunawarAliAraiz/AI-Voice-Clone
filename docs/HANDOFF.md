@@ -4,11 +4,14 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-12**. All three pieces of this session's parallel work are resolved: Qwen
-analyzer backend + frontend wiring are both merged to `main` and done. The VoxCPM2 LoRA POC is also
-merged (PR #11) but is an **honest partial checkpoint, not a finished result** — training succeeded,
-the eval comparison that actually measures whether it worked never ran. See "What landed this session"
-below before assuming any of these are further along than they are.
+Last updated: **2026-08-13**. Qwen analyzer backend + frontend wiring are both merged to `main` and
+done. The VoxCPM2 LoRA POC's training checkpoint merged earlier (PR #11); the baseline-vs-LoRA eval
+comparison that was missing at that point has since run for real, with a **mixed result** — CER
+improved sharply, speaker-identity cosine regressed on Urdu and only marginally improved on Hindi —
+and the owner has now done a first, informal listen to the four clips (found the LoRA Urdu clip
+good, the rest okay). This is on branch `feature/voxcpm-lora-eval`, **PR #12, still open, not
+merged.** See "What landed this session" below before assuming any of these are further along than
+they are.
 
 ---
 
@@ -28,7 +31,7 @@ audio extraction. Full detail and forward roadmap: **[docs/ROADMAP.md](ROADMAP.m
 | **Speech Direction (Phase 2)** | ✅ **Fully landed on `main`.** Heuristic analyzer + capability report + preview UI + multi-segment generation + client-edited per-segment override contract (`direction_plan` on `TTSGenerateRequest`, sparse/index-keyed, re-validated server-side, 422 on stale index) + the full Advanced per-segment IR editor UI (editable emotion/intensity/energy/rate/pause per segment). **Real-audio pod validation done 2026-08-12**: hit `POST /api/generate` with `apply_direction: true` against a live VoxCPM2 worker, downloaded the actual output, automated waveform check found zero click-threshold discontinuities and silence runs landing exactly at the expected segment boundaries — objectively sound, human listen still open. Clip at `eval/results/direction/pod_directed_hi.wav`. |
 | **Qwen2.5-Instruct LLM analyzer** | ✅ **Production backend merged to `main` (2026-08-12)**. `QwenAnalyzerBackend`, `AnalyzerScheduler`, `JobKind.ANALYZE_LLM`, `POST /api/direction/analyze-llm`. Real pod-verified: direct backend, full worker-subprocess path, and the real HTTP path all passed clean on a fresh pod (0 problems, en/ur/hi) after a genuine bug (`load_time_sec` not threaded through) was found and fixed. 239 backend tests, ruff clean. **Frontend wiring not built** — no UI calls the endpoint yet. Known open risk: idle-unload timer is the only VRAM-contention mitigation vs. the audio scheduler, documented in `analyzer_scheduler.py`, not resolved. |
 | **Phase 4 (Chatterbox)** | 🔴 **Designed, built, gated, and concluded NOT shippable.** Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner's verdict: "not that good... identity is matched around 60%". Same failure shape as the Urdu investigation below — a speaker-encoder ceiling, not a tunable parameter. Not planned to be revisited without a LoRA fine-tune (see next row). |
-| **VoxCPM2 LoRA POC** | 🚧 **Merged to `main` via PR #11 — but still an INCOMPLETE probe, not a finished result.** Training succeeded with real numbers (300 steps, ~15 min, no OOM, `loss/stop` converged cleanly) and the checkpoint config/state are committed (`docs/VOXCPM_LORA_POC.md`, `eval/results/voxcpm_lora/checkpoint_backup/`). **The baseline-vs-LoRA eval comparison — the number that actually decides whether this POC worked — never ran**; the pod was shut down before it produced scored numbers. The actual `.safetensors` checkpoint weights are NOT in git (`.gitignore` excludes them project-wide) and exist only on the local Windows machine right now. Merging this PR was a deliberate choice to land the honest partial record rather than block on a rerun — **do not read the merge itself as "the POC succeeded."** The 36-clip training dataset (`eval/training/`) remains untracked/uncommitted, that consent decision is still open. Next step: get a pod, resume from the saved checkpoint (no retraining needed), run `eval/run_voxcpm_lora_eval.py` for real numbers. |
+| **VoxCPM2 LoRA POC** | 🚧 **Training merged to `main` (PR #11). Real eval numbers + a first human listen now exist on `feature/voxcpm-lora-eval`, PR #12 — open, not yet merged.** Baseline-vs-LoRA comparison: CER improved sharply on Urdu (0.0818 → 0.0091) but speaker cosine regressed on Urdu (0.7226 → 0.6859, pass → fail) and only marginally improved on Hindi (0.6863 → 0.6986, still under gate) — a mixed result, not a clean win. The owner listened to all four clips informally and found the LoRA Urdu clip good, the rest okay — consistent with this project's established finding that the ECAPA speaker-cosine metric is out-of-distribution for this voice, not a contradiction of the numbers. **Not a rigorous (blind) listen, and no `LanguageSupport.verified` flag touched.** The actual `.safetensors` checkpoint weights are NOT in git (`.gitignore` excludes them project-wide) and exist only on the local Windows machine right now. The 36-clip training dataset (`eval/training/`) remains untracked/uncommitted, that consent decision is still open. Next step: merge PR #12 if the owner agrees with its framing, and/or a rigorous blind listen before any ship/no-ship call. Full detail: `docs/VOXCPM_LORA_POC.md`. |
 | **Composer model picker** | ✅ Done, merged. Explicit model override + "(Recommended)" hint, no Tone control (confirmed no-op). |
 | **Client-side audio extraction (Phase 3)** | ✅ Done, merged. |
 
@@ -60,17 +63,22 @@ All three pieces of parallel work from this session are now resolved — nothing
    build, then committed/merged it manually. Frontend build green, backend untouched (239 still
    passing). Not click-tested against a live pod-backed backend (none was available) — TypeScript
    correctness and a mocked-response check were the extent of verification, noted explicitly as a gap.
-3. **VoxCPM2 LoRA POC — merged to `main` via PR #11, but still an INCOMPLETE probe.** Training
-   succeeded with real numbers (300 steps, ~15 min wall clock, ~2.3-2.4s/step steady-state, no OOM,
-   `loss/stop` converged cleanly 0.039 → ~0.0001). The trained checkpoint was rescued off the pod
-   before a scheduled shutdown — config/state committed at `eval/results/voxcpm_lora/checkpoint_backup/`,
-   but the actual `.safetensors` weights are **not** in git (`.gitignore` excludes them project-wide,
-   same as every other model's weights) and exist only on the local Windows machine right now.
-   **The baseline-vs-LoRA eval comparison — the number that actually decides whether this POC
-   worked — never ran.** The owner merged the PR anyway, as a deliberate checkpoint of honest partial
-   progress rather than blocking on a pod rerun. **Do not read this merge as "LoRA cloning works" —
-   nothing has been measured yet.** Next step: a fresh pod, resume from the saved checkpoint (no
-   retraining needed), run `eval/run_voxcpm_lora_eval.py`. Full detail: `docs/VOXCPM_LORA_POC.md`.
+3. **VoxCPM2 LoRA POC — training merged to `main` via PR #11; eval + human listen now done on PR #12
+   (open, not merged).** Training succeeded with real numbers (300 steps, ~15 min wall clock,
+   ~2.3-2.4s/step steady-state, no OOM, `loss/stop` converged cleanly 0.039 → ~0.0001). The trained
+   checkpoint was rescued off the pod before a scheduled shutdown — config/state committed at
+   `eval/results/voxcpm_lora/checkpoint_backup/`, but the actual `.safetensors` weights are **not** in
+   git (`.gitignore` excludes them project-wide, same as every other model's weights) and exist only
+   on the local Windows machine right now. **The baseline-vs-LoRA eval comparison ran on a later pod
+   (2026-08-13)**: CER improved sharply on the trained language (Urdu 0.0818 → 0.0091) but
+   speaker-identity cosine — the actual thing this POC exists to move — regressed on Urdu
+   (0.7226 → 0.6859, pass → fail) and only marginally improved on Hindi (0.6863 → 0.6986, still under
+   gate). **The owner then listened to all four clips informally** and found the LoRA Urdu clip good,
+   the rest okay — not a blind test, but consistent with this project's established finding
+   (`docs/URDU_CLONING_REPORT.md`) that the ECAPA cosine metric is out-of-distribution for this voice,
+   so a favorable human verdict on the one cell where cosine regressed is not a contradiction. **Still
+   not shipped, no `LanguageSupport.verified` flag touched** — a rigorous blind listen is the
+   recommended next step before any ship/no-ship call. Full detail: `docs/VOXCPM_LORA_POC.md`.
 
 ## Resuming on a new pod
 
@@ -215,12 +223,14 @@ in 200 GB, but not comfortably in 50 GB — `uv cache prune` is worth running be
 
 ## Next session — start here
 
-1. **Check on the two in-flight agents first** (Qwen analyzer backend, LoRA POC — see "In flight right
-   now" above). If either finished mid-session-boundary, its work is sitting on its own branch/worktree
-   unreviewed — read the diff, run tests, merge or send it back with feedback before starting anything
-   new.
-2. If both are genuinely done and merged: Qwen analyzer frontend wiring, or the LoRA POC's production
-   integration (if it was a go), are the next real pieces of work. See "What's left to build" above.
+1. **Nothing is in flight.** Qwen analyzer backend + frontend wiring are merged to `main`. The LoRA
+   POC's training is merged (PR #11); its real eval numbers + a first informal human listen are on
+   `feature/voxcpm-lora-eval` (PR #12, open, not merged) — see the LoRA POC row above and
+   `docs/VOXCPM_LORA_POC.md` for the full picture before deciding what's next.
+2. Open decisions for the owner, not yet made: whether to merge PR #12 as-is, whether a rigorous
+   blind listen is worth doing before any ship/no-ship call on LoRA, and whether to pursue another
+   LoRA config (`enable_proj: true`) if the identity regression turns out to be real rather than a
+   metric artifact. None of these should be decided unilaterally — see "What's left to build" above.
 3. **New operational lesson, read before spawning any subagent that needs its own git branch:**
    **always pass `isolation: "worktree"`.** This session forgot it once (the LoRA POC agent) and it
    checked out a branch directly in the shared `D:\Projects\AI-Voice-Clone\` working tree, clobbering
