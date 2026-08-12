@@ -82,6 +82,23 @@ export function useGenerateMutation() {
   });
 }
 
+/**
+ * Enqueue the LLM ("analyze_llm") Speech Direction classification. Mirrors
+ * useGenerateMutation() exactly — a distinct job kind on the same `jobs`
+ * table, invalidated the same way — but wraps `api.analyzeLlm`, which takes
+ * `(text, language)` rather than a request body object.
+ */
+export function useAnalyzeLlmMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ text, language }: { text: string; language: string }) =>
+      api.analyzeLlm(text, language),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
 export function useCancelJobMutation() {
   const queryClient = useQueryClient();
   return useMutation({

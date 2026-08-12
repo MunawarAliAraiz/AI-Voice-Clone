@@ -227,8 +227,36 @@ export interface HistoryList {
 /** RFC 9457 problem+json, as stored on a failed job — same shape as ProblemJson. */
 export type JobError = ProblemJson;
 
-export type JobKind = 'synthesize';
+export type JobKind = 'synthesize' | 'analyze_llm';
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/**
+ * One row of the LLM analyzer's `result.rows` (`jobs/handlers/analyze_llm.py`,
+ * `AnalyzeResult` in `inference/protocol.py`). Classification only — no
+ * `text`/`pause_after_ms`, those come from the heuristic `analyze()` plan at
+ * the same `index` (see `AnalyzeLlmResult`'s docstring below).
+ */
+export interface AnalyzeLlmRow {
+  index: number;
+  emotion: string; // same value set as DirectedSegmentIn.emotion
+  intensity: string; // "low" | "medium" | "high"
+  energy: string; // "low" | "medium" | "high"
+  rate: string; // "slow" | "normal" | "fast"
+}
+
+/**
+ * Mirrors the `analyze_llm` job's opaque `result` dict verbatim
+ * (`JobStatusResponse.result` in `api/schemas/jobs.py`: `{"rows": [...],
+ * "gen_time_sec": ..., "load_time_sec": ...}`). `rows` is indexed the same
+ * way as the heuristic `DirectionAnalyzeResponse.plan.segments` for the SAME
+ * text — the caller must pair `rows[i]` with `plan.segments[i]` to get a full
+ * `DirectedSegmentIn` (text + pause_after_ms the LLM never classifies).
+ */
+export interface AnalyzeLlmResult {
+  rows: AnalyzeLlmRow[];
+  gen_time_sec: number;
+  load_time_sec: number;
+}
 
 /**
  * One job's state — the SAME shape whether it just came back from
@@ -246,14 +274,20 @@ export interface JobStatusResponse {
   profile_id: number | null;
   profile_name: string | null;
   input_text: string | null;
-  /** Never absent from 'queued' onward — routing is pure and already ran. */
-  route: RouteInfo;
+  /** Never absent from 'queued' onward for kinds that route through the audio
+   *  catalog (currently only 'synthesize') — routing is pure and already ran.
+   *  `null` for kinds that never touch `resolve()`/the audio catalog at all
+   *  (currently only 'analyze_llm': the Qwen Speech Direction analyzer is not
+   *  audio and is not a routable ModelSpec). */
+  route: RouteInfo | null;
   /** 0-indexed jobs strictly ahead of this one. Only set while 'queued'. */
   position: number | null;
   /** Seconds. A UI estimate, not a promise. Set while 'queued' or 'running'. */
   eta_sec: number | null;
-  /** Set once 'succeeded'. Same shape the old synchronous /generate returned. */
-  result: TTSGenerateResponse | null;
+  /** Set once 'succeeded'. Same shape the old synchronous /generate returned
+   *  for 'synthesize'; for 'analyze_llm' it's the handler's opaque result dict
+   *  (`AnalyzeLlmResult`) instead — no `generation_history` row, no audio. */
+  result: TTSGenerateResponse | AnalyzeLlmResult | null;
   /** Set once 'failed'. */
   error: JobError | null;
   /** True only once a 'succeeded' job's audio came from the fake runtime. */

@@ -24,7 +24,7 @@
  */
 import { useState } from 'react';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse } from '../types/api';
-import { IconChevronDown, IconChevronUp, IconReset } from './icons';
+import { IconChevronDown, IconChevronUp, IconReset, IconSpark, IconSpinner } from './icons';
 
 interface Props {
   data: DirectionAnalyzeResponse | null;
@@ -44,6 +44,17 @@ interface Props {
   onEditSegment?: (segment: DirectedSegmentIn) => void;
   onResetSegment?: (index: number) => void;
   onResetAllEdits?: () => void;
+  /**
+   * "Let AI suggest emotion/tone" — enqueues the Qwen LLM analyzer job. Omit
+   * (along with the two props below) to hide the trigger entirely, e.g. a
+   * read-only render of this panel. This is a bulk action that pre-fills
+   * `edits` for every segment at once via `onEditSegment` — it does not
+   * bypass the manual editor, the LLM's output just lands there like any
+   * other edit, still reviewable/adjustable/resettable.
+   */
+  onSuggestAi?: () => void;
+  aiSuggestLoading?: boolean;
+  aiSuggestError?: string | null;
 }
 
 // Honored first, ignored last — the ordering that makes "this model honors
@@ -66,6 +77,9 @@ export function DirectionPanel({
   onEditSegment,
   onResetSegment,
   onResetAllEdits,
+  onSuggestAi,
+  aiSuggestLoading,
+  aiSuggestError,
 }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -149,12 +163,27 @@ export function DirectionPanel({
                 {editedCount > 0 && ` · ${editedCount} edited`}
               </span>
             </button>
+            {showAdvanced && editable && onSuggestAi && (
+              <button
+                type="button"
+                className="btn-sm on"
+                onClick={onSuggestAi}
+                disabled={aiSuggestLoading}
+                aria-busy={aiSuggestLoading}
+                title="Classify emotion/intensity/energy/rate for every segment with the Qwen LLM analyzer, then review/adjust below before generating."
+              >
+                {aiSuggestLoading ? <IconSpinner size={12} /> : <IconSpark size={12} />}
+                {aiSuggestLoading ? 'Asking AI…' : 'Let AI suggest emotion/tone'}
+              </button>
+            )}
             {showAdvanced && editable && editedCount > 0 && (
               <button type="button" className="btn-sm" onClick={onResetAllEdits}>
                 <IconReset size={12} /> Reset all
               </button>
             )}
           </div>
+
+          {showAdvanced && aiSuggestError && <p className="hint muted">{aiSuggestError}</p>}
 
           {showAdvanced && (
             <ul className="segment-list">

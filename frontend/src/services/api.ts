@@ -138,6 +138,17 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),
     }),
+  // LLM-backed Speech Direction classification — same {text, language} body
+  // as analyzeDirection() above, but async: 202 with a job to poll (kind
+  // 'analyze_llm'), same JobStatusResponse shape generate() returns. The
+  // job's eventual `result` is an `AnalyzeLlmResult` ({rows, gen_time_sec,
+  // load_time_sec}), not a TTSGenerateResponse — see types/api.ts.
+  analyzeLlm: (text: string, language: string) =>
+    request<JobStatusResponse>('/api/direction/analyze-llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    }),
 
   // jobs
   job: (id: number) => request<JobStatusResponse>(`/api/jobs/${id}`),
