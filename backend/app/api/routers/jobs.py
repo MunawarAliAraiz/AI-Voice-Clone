@@ -18,7 +18,7 @@ from ...config import Settings
 from ...db import Database
 from ...exceptions import JobNotFoundError
 from ...inference.protocol import SchedulerProtocol
-from ...jobs import JobRunner, JobStatus, job_record_from_row
+from ...jobs import JobKind, JobRunner, JobStatus, job_record_from_row
 from ...jobs.estimate import estimate_remaining_for_running, estimate_wait_seconds, queue_position
 from ...jobs.types import JobRecord
 from ..deps import get_db, get_job_runner, get_scheduler, get_settings
@@ -29,11 +29,18 @@ from ..schemas.tts import RouteInfo, TTSGenerateResponse
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _route_info(job: JobRecord) -> RouteInfo:
-    # `route` is never absent from 'queued' onward — the enqueue path in
-    # tts.py always stores it before creating the row. A missing route here
-    # is a bug in that path, not a state a client can trigger.
-    assert job.route is not None, f"job {job.id} has no route; bug in the enqueue path"
+def _route_info(job: JobRecord) -> RouteInfo | None:
+    """
+    `route` is set at enqueue for job kinds that route through the audio
+    catalog. Currently only SYNTHESIZE does — the enqueue path in tts.py
+    always stores one before creating the row, so a SYNTHESIZE job with no
+    route would be a bug in that path, not a state a client can trigger.
+    ANALYZE_LLM jobs never call `resolve()` (the Qwen analyzer is not audio
+    and is not reachable from `domain/routing.py`) and store `route=None`
+    on purpose — see `routers/direction.py`'s analyze-llm endpoint.
+    """
+    if job.route is None:
+        return None
     return RouteInfo(**job.route)
 
 
@@ -44,11 +51,20 @@ def _is_fake(job: JobRecord) -> bool:
 
 
 def _result_or_none(
-    job: JobRecord, route: RouteInfo, settings: Settings
-) -> TTSGenerateResponse | None:
+    job: JobRecord, route: RouteInfo | None, settings: Settings
+) -> TTSGenerateResponse | dict[str, Any] | None:
     if job.status is not JobStatus.SUCCEEDED:
         return None
     result = job.result or {}
+    if job.kind is not JobKind.SYNTHESIZE:
+        # Non-audio job kinds (currently only ANALYZE_LLM) have no RoutePlan
+        # and write no `generation_history` row — their result is the opaque
+        # dict the handler produced (`jobs/handlers/analyze_llm.py`),
+        # returned as-is. A future frontend pass reads e.g. `result.rows`.
+        return result
+    assert route is not None, (
+        f"job {job.id} is a SYNTHESIZE job with no route; bug in the enqueue path"
+    )
     history_id = result["history_id"]
     return TTSGenerateResponse(
         id=history_id,

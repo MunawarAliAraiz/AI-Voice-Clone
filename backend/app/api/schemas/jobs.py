@@ -39,11 +39,14 @@ class JobStatusResponse(BaseModel):
     #: stored params (set once at enqueue) — no extra query needed for it.
     input_text: str | None = None
 
-    #: Never absent, from 'queued' onward. Routing (`resolve()`) is pure, so
-    #: it costs nothing to know it before the job has even started — the UI's
-    #: route chip renders immediately, exactly as it does for a completed
-    #: generation.
-    route: RouteInfo
+    #: Never absent, from 'queued' onward, for job kinds that route through
+    #: the audio catalog (currently only 'synthesize'). Routing (`resolve()`)
+    #: is pure, so it costs nothing to know it before the job has even
+    #: started — the UI's route chip renders immediately, exactly as it does
+    #: for a completed generation. `None` for kinds that never touch
+    #: `resolve()` at all — currently only 'analyze_llm' (the Qwen Speech
+    #: Direction analyzer is not audio and is not a routable `ModelSpec`).
+    route: RouteInfo | None = None
 
     #: 0-indexed jobs strictly ahead of this one in its kind's queue (a
     #: running job, if any, counts as 1). Populated only while status is
@@ -53,12 +56,16 @@ class JobStatusResponse(BaseModel):
     #: Populated while status is 'queued' or 'running'.
     eta_sec: float | None = None
 
-    #: Populated once status == 'succeeded'. The SAME shape the old
-    #: synchronous `/generate` returned, so `ResultCard`/`AudioPlayer` need no
-    #: frontend change — `audio_url` is signed fresh on every read, never
-    #: stored (media tokens expire; storing one would eventually hand back a
-    #: dead link).
-    result: TTSGenerateResponse | None = None
+    #: Populated once status == 'succeeded'. For 'synthesize' this is the SAME
+    #: shape the old synchronous `/generate` returned, so `ResultCard`/
+    #: `AudioPlayer` need no frontend change — `audio_url` is signed fresh on
+    #: every read, never stored (media tokens expire; storing one would
+    #: eventually hand back a dead link). For job kinds with no audio and no
+    #: `generation_history` row (currently only 'analyze_llm'), this is the
+    #: handler's opaque result dict verbatim — e.g. `{"rows": [...],
+    #: "gen_time_sec": ..., "load_time_sec": ...}` for analyze_llm; a future
+    #: frontend pass reads `result.rows` directly.
+    result: TTSGenerateResponse | dict[str, Any] | None = None
     #: Populated once status == 'failed'. Exactly what `AppError.to_problem()`
     #: produces (`app/exceptions.py`) — the frontend's existing problem+json
     #: handling (`services/api.ts`) applies to this field unchanged.

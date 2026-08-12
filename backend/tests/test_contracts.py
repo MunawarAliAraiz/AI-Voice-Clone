@@ -429,6 +429,11 @@ def test_no_stray_modules_in_contract_packages() -> None:
         "worker", "runtimes",
         # Production factory that constructs+starts WorkerProcess for the scheduler.
         "factory",
+        # The Speech Direction LLM analyzer's OWN scheduler — deliberately NOT
+        # a change to `scheduler.py` (golden rule 8) and structurally separate
+        # from it (one fixed model, no VRAM-budget eviction). No torch here;
+        # see analyzer_scheduler.py's module docstring.
+        "analyzer_scheduler",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected

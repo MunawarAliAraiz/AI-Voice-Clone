@@ -17,6 +17,7 @@ import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,9 @@ from .inference.catalog import CATALOG
 from .inference.protocol import SchedulerProtocol
 from .jobs import JobRunner
 
+if TYPE_CHECKING:
+    from .inference.analyzer_scheduler import AnalyzerScheduler
+
 __all__ = ["create_app"]
 
 logger = logging.getLogger(__name__)
@@ -38,6 +42,7 @@ logger = logging.getLogger(__name__)
 def create_app(
     *,
     scheduler: SchedulerProtocol | None = None,
+    analyzer: AnalyzerScheduler | None = None,
     db: Database | None = None,
     settings: Settings | None = None,
     job_runner: JobRunner | None = None,
@@ -52,16 +57,23 @@ def create_app(
         if getattr(app.state, "scheduler", None) is None:
             app.state.scheduler = _build_scheduler(settings)
             app.state.owns_scheduler = True
+        if getattr(app.state, "analyzer", None) is None:
+            app.state.analyzer = _build_analyzer(settings)
+            app.state.owns_analyzer = True
         if getattr(app.state, "db", None) is None:
             app.state.db = Database(settings.db_path)
             await app.state.db.connect()
             app.state.owns_db = True
-        # The job queue always wraps whichever db/scheduler ended up above —
-        # real or fake, injected or built — so the API test suite gets a real
-        # JobRunner driving a real Database against FakeScheduler, same as
-        # every other dependency here. See app/jobs/__init__.py.
+        # The job queue always wraps whichever db/scheduler/analyzer ended up
+        # above — real or fake, injected or built — so the API test suite
+        # gets a real JobRunner driving a real Database against
+        # FakeScheduler, same as every other dependency here. See
+        # app/jobs/__init__.py.
         if getattr(app.state, "jobs", None) is None:
-            app.state.jobs = JobRunner(app.state.db, app.state.scheduler, CATALOG, settings)
+            app.state.jobs = JobRunner(
+                app.state.db, app.state.scheduler, CATALOG, settings,
+                analyzer=app.state.analyzer,
+            )
             app.state.owns_jobs = True
         if getattr(app.state, "owns_jobs", False):
             # A 'running' row found now is dead by definition — see
@@ -106,6 +118,8 @@ def create_app(
                 await app.state.jobs.stop(drain_timeout_sec=settings.job_drain_timeout_sec)
             if getattr(app.state, "owns_scheduler", False):
                 await app.state.scheduler.shutdown()
+            if getattr(app.state, "owns_analyzer", False):
+                await app.state.analyzer.shutdown()
             if getattr(app.state, "owns_db", False):
                 await app.state.db.close()
 
@@ -114,6 +128,9 @@ def create_app(
     if scheduler is not None:
         app.state.scheduler = scheduler
         app.state.owns_scheduler = False
+    if analyzer is not None:
+        app.state.analyzer = analyzer
+        app.state.owns_analyzer = False
     if db is not None:
         app.state.db = db
         app.state.owns_db = False
@@ -171,6 +188,21 @@ def _build_scheduler(settings: Settings) -> SchedulerProtocol:
     return InferenceScheduler(
         CATALOG, factory,
         SchedulerConfig(budget_mb=settings.budget_mb, max_workers=settings.max_workers),
+    )
+
+
+def _build_analyzer(settings: Settings) -> AnalyzerScheduler:
+    """Construct the real AnalyzerScheduler. Imported lazily, same reason as
+    `_build_scheduler`: a fake-injected app (and its tests) never even
+    imports the analyzer scheduler implementation."""
+    from .inference.analyzer_scheduler import AnalyzerScheduler
+
+    env = dict(os.environ)
+    return AnalyzerScheduler(
+        python_executable=settings.qwen_analyzer_python,
+        env=env,
+        cwd=settings.worker_cwd,
+        idle_unload_sec=settings.qwen_analyzer_idle_unload_sec,
     )
 
 

@@ -21,15 +21,19 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 
+from ...config import Settings
+from ...db import Database
 from ...domain.direction import DirectionPlan
 from ...domain.direction_analyze import analyze
 from ...domain.language import profile_text
 from ...domain.routing import resolve
 from ...inference.catalog import ModelCatalog
+from ...inference.protocol import SchedulerProtocol
+from ...jobs import JobKind, JobRunner
 from ...jobs.direction import capability_for
-from ..deps import get_catalog
+from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
 from ..schemas.direction import (
     CapabilityReportOut,
     DirectedSegmentOut,
@@ -40,6 +44,8 @@ from ..schemas.direction import (
     EmphasisSpanOut,
     FieldCapabilityOut,
 )
+from ..schemas.jobs import JobStatusResponse
+from .jobs import build_job_status_response
 from .tts import _route_info
 
 router = APIRouter(prefix="/direction", tags=["direction"])
@@ -74,6 +80,48 @@ async def analyze_direction(
         ),
         route=_route_info(plan, catalog),
     )
+
+
+@router.post("/analyze-llm", response_model=JobStatusResponse, status_code=202)
+async def analyze_direction_llm(
+    body: DirectionAnalyzeRequest,
+    response: Response,
+    db: Annotated[Database, Depends(get_db)],
+    scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
+) -> JobStatusResponse:
+    """
+    LLM-backed Speech Direction classification, queued — the second,
+    higher-quality `DirectionPlan` producer behind the same `analyze()`
+    signature/shape as `POST /direction/analyze`'s heuristic, but run on the
+    async job queue since a real generate call costs seconds, not
+    milliseconds. Reuses `DirectionAnalyzeRequest` (same `{text, language}`
+    shape `POST /direction/analyze` takes) rather than inventing a new
+    request schema.
+
+    Segmentation/sentence text is decided HERE, ONCE, by the exact same pure
+    `analyze()` the heuristic-only endpoint above calls — the enqueued job
+    carries only the resulting sentence strings. The handler
+    (`jobs/handlers/analyze_llm.py`) classifies exactly those sentences and
+    never re-segments `body.text` itself; this is the job-queue analog of
+    golden rule 4 that golden rule 8 calls out for routing, applied here to
+    segmentation instead.
+
+    `route=None`: this job never calls `resolve()` and never touches the
+    audio catalog — the Qwen analyzer is not audio and is not a routable
+    `ModelSpec`. The 202 body mirrors `POST /generate`'s shape exactly
+    (`build_job_status_response`, shared with `routers/tts.py`); the client
+    polls the existing generic `GET /api/jobs/{id}`.
+    """
+    plan = analyze(body.text, body.language)
+    job = await runner.enqueue(
+        JobKind.ANALYZE_LLM,
+        params={"language": body.language, "sentences": [seg.text for seg in plan.segments]},
+        route=None,
+        profile_id=None,
+    )
+    return await build_job_status_response(job, db, settings, scheduler, response)
 
 
 def _plan_out(plan: DirectionPlan) -> DirectionPlanOut:

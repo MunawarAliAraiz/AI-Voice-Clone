@@ -44,6 +44,8 @@ __all__ = [
     "WireResponse",
     "SynthRequest",
     "SynthResult",
+    "AnalyzeRequest",
+    "AnalyzeResult",
     "ModelStatus",
     "WorkerHandle",
     "SchedulerProtocol",
@@ -68,6 +70,10 @@ class WireOp(StrEnum):
     #: Graceful exit. The scheduler follows with SIGKILL after a grace period,
     #: because a wedged CUDA call cannot be interrupted any other way.
     SHUTDOWN = "shutdown"
+    #: Classify already-segmented sentences into per-sentence prosody labels
+    #: (emotion/intensity/energy/rate). Text-only — no audio, no file paths.
+    #: Served only by the `qwen_analyzer` runtime; see `analyzer_scheduler.py`.
+    CLASSIFY = "classify"
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +149,44 @@ class SynthResult:
         if self.duration_sec <= 0:
             return None
         return self.gen_time_sec / self.duration_sec
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyzeRequest:
+    """
+    A fully-resolved Speech Direction LLM-classification job.
+
+    Text-only sibling of `SynthRequest`: no reference audio, no output path —
+    there is no audio anywhere in this path. `sentences` are already
+    segmented by the deterministic heuristic (`domain.direction_analyze
+    .analyze`) before this ever reaches a worker; the analyzer classifies
+    each one, it never re-segments or invents a sentence.
+    """
+
+    model_id: str
+    language: str
+    sentences: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyzeResult:
+    """
+    What the Qwen analyzer worker produced. No file on disk — the whole
+    result is inline.
+
+    `rows` is one dict per input sentence, in order:
+    `{"index": int, "emotion": str, "intensity": str, "energy": str, "rate": str}`.
+    Golden rule 5 (no silent fallback) means a worker never returns a `rows`
+    entry with a value outside `Emotion`/`Level`/`Rate` — it raises instead
+    (see `runtimes/qwen_analyzer.py`), which the wire protocol turns into a
+    non-ok `WireResponse` rather than a malformed `AnalyzeResult`.
+    """
+
+    rows: tuple[dict[str, Any], ...]
+    gen_time_sec: float
+    #: Seconds spent loading, if this request paid a cold start. Zero once
+    #: the worker's checkpoint is already resident.
+    load_time_sec: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

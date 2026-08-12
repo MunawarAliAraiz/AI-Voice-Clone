@@ -20,10 +20,12 @@ prevent (see `app/domain/routing.py`).
 from __future__ import annotations
 
 from ..types import JobContext, JobHandler, JobKind, JobOutcome
+from .analyze_llm import run_analyze_llm
 from .synthesize import run_synthesize
 
 __all__ = ["JobContext", "JobOutcome", "JobHandler", "HANDLERS"]
 
 HANDLERS: dict[JobKind, JobHandler] = {
     JobKind.SYNTHESIZE: run_synthesize,
+    JobKind.ANALYZE_LLM: run_analyze_llm,
 }
