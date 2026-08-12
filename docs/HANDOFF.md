@@ -4,9 +4,10 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-12**, mid-session, ahead of a context/usage limit — two background agents
-(Qwen analyzer production backend, VoxCPM2 LoRA POC) are still running; see "In flight right now"
-below before assuming anything about them.
+Last updated: **2026-08-12**, mid-session. Qwen analyzer backend is done and merged. Two more agents
+are running: LoRA POC (training done with real numbers, eval comparison in progress, **pod dies in
+~1 hour from this checkpoint — see item 2 below**) and Qwen frontend wiring (no pod dependency). See
+"In flight right now" below before assuming anything about either.
 
 ---
 
@@ -52,22 +53,43 @@ notification / the branch's actual git log first.
    report), ruff clean. **Frontend wiring is NOT built** — that's the next real piece of this feature.
    **Open risk, not resolved**: the idle-unload timer is the only VRAM mitigation between this
    scheduler and the audio one; they don't share a real budget.
-2. **VoxCPM2 LoRA POC** — branch `feature/voxcpm-lora-poc`, worktree at
-   `D:\Projects\voxcpm-lora-poc-worktree` (this one was **not** spawned with worktree isolation by
-   mistake — it briefly checked out a branch directly in the shared `D:\Projects\AI-Voice-Clone`
-   working tree, built on the wrong `origin` remote, and clobbered the main checkout mid-edit. It
-   self-corrected: found the `fork`-vs-`origin` mismatch on its own, and moved to the separate worktree
-   after being told to. See the new lesson below — **always pass `isolation: "worktree"` when a
-   subagent needs its own git branch**, no exceptions, even for "quick" tasks). Scope: validate the
-   dataset, research whether `voxcpm`'s built-in LoRA support has a runnable training entrypoint or
-   needs a training loop written against its primitives, run a minimal POC fine-tune if feasible,
-   evaluate with the same `eval_harness.py` methodology used for Chatterbox's gate, write
-   `docs/VOXCPM_LORA_POC.md`. Told explicitly not to commit the raw training audio without sign-off,
-   not to touch `backend/app/`, and not to claim `verified` on a cosine number alone.
+2. **VoxCPM2 LoRA POC — training run DONE with real numbers, eval comparison in progress.**
+   Branch `feature/voxcpm-lora-poc`, worktree at `D:\Projects\voxcpm-lora-poc-worktree` (this one was
+   **not** spawned with worktree isolation initially — it briefly checked out a branch directly in the
+   shared working tree on the wrong `origin` remote before self-correcting; see the lesson below).
+   Dataset validated (36 clips, ~4.8 min, `perso_arabic_ur` chosen as training text — tokenizes
+   cleaner than the Devanagari ASR pass). Confirmed `voxcpm` 2.0.3 has real, working built-in LoRA
+   support (`scripts/train_voxcpm_finetune.py`, LoRA r=32/alpha=32 on LM+DiT). **Actual training run
+   completed on the (second, current) pod**: 300 steps in ~15 min wall clock, ~2.3-2.4s/step
+   steady-state, no OOM (GPU ~17.6/20.5 GB throughout), `loss/stop` dropped cleanly
+   (0.039 → ~0.0001), `loss/diff` stayed noisy 0.93-1.12 with no clear trend (expected for 74 epochs
+   over 32 clips — not itself informative, the eval step is). Checkpoints saved at
+   `/workspace/engines-lab/voxcpm-lora/checkpoints/poc_lora/` on the pod (steps 0/100/200/299/300 +
+   `latest/`). **Now running the baseline-vs-LoRA eval comparison** against the project's standard
+   reference/target sentence, using `eval_harness.py`'s existing CER/cosine/RTF methodology — this is
+   the number that actually decides whether the POC succeeded (training loss alone doesn't). **Told
+   explicitly not to commit the raw training audio without sign-off, not to touch `backend/app/`, and
+   not to claim `verified` on a cosine number alone.**
+   **⚠️ Pod deadline: the current pod (`157.157.221.29:22080`) is being shut down by the owner
+   ~1 hour after 2026-08-12 (this checkpoint's write time) — if you're reading this after that
+   window, assume the pod is dead and the checkpoint (if any) is whatever got committed before then.**
+   The agent was told to commit real numbers to `docs/VOXCPM_LORA_POC.md` and push incrementally
+   rather than wait for a "complete" report, and to copy anything irreplaceable (the checkpoint files,
+   any generated eval clips) off the pod before it dies. Check `docs/VOXCPM_LORA_POC.md` and the
+   branch's actual commits for what actually made it out before trusting this summary.
+3. **Qwen analyzer frontend wiring** — branch `feature/qwen-analyzer-frontend`, its own worktree, no
+   pod dependency (pure frontend, no GPU needed to build/verify most of it). Adds an "AI suggest"
+   button inside the existing Advanced per-segment editor that calls the new
+   `POST /api/direction/analyze-llm`, polls the job, and feeds the LLM's emotion/intensity/energy/rate
+   classifications into the *same* `directionEdits` state a manual edit already uses (suggest-then-
+   edit, not silent auto-apply) — segment text and `pause_after_ms` still come from the existing
+   heuristic segment at that index, never from the LLM. Can't be fully click-tested end-to-end without
+   a pod-backed backend; the agent was told to verify everything short of that for real and report the
+   gap honestly rather than claim full verification.
 
-When either finishes: review its diff before merging (same pattern used this session for the frontend
-Advanced editor — it was cherry-picked onto the backend contract branch after a build+test check, not
-merged blind), run the full test suite, and update this file + `docs/ROADMAP.md` again.
+When each finishes: review its diff before merging (same pattern used this session for the frontend
+Advanced editor and the Qwen backend — build+test check, then merge, not merged blind), run the full
+test suite, and update this file + `docs/ROADMAP.md` again.
 
 ## Resuming on a new pod
 
