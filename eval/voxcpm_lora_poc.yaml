@@ -1,0 +1,50 @@
+# VoxCPM2 LoRA POC — training config for the owner's-own-voice identity probe.
+#
+# Adapted from the upstream reference config
+# (OpenBMB/VoxCPM `conf/voxcpm_v2/voxcpm_finetune_lora.yaml`) for this POC's actual
+# constraints: a 36-clip / 4.8-minute dataset (not a production-scale corpus) and a
+# probe run meant to prove the pipeline produces a loadable, measurably-different
+# checkpoint — not to chase a final production-quality result.
+#
+# See docs/VOXCPM_LORA_POC.md for the full writeup. Paths below are pod-absolute
+# (this file is scp'd to the pod and run in place, never inside the repo tree).
+
+pretrained_path: /workspace/hf-cache/hub/models--openbmb--VoxCPM2/snapshots/bffb3df5a29440629464e5e839f4d214c8714c3d
+train_manifest: /workspace/engines-lab/voxcpm-lora/dataset/manifest_lora_train.jsonl
+val_manifest: /workspace/engines-lab/voxcpm-lora/dataset/manifest_lora_val.jsonl
+sample_rate: 16000        # AudioVAE encoder input rate — matches the dataset exactly, no resample.
+out_sample_rate: 48000    # AudioVAE decoder output rate — used only for TensorBoard audio logging.
+
+# Deliberately smaller than the upstream reference (batch_size=2, grad_accum_steps=8,
+# effective batch 16) because the reference's ~20GB VRAM estimate assumes a fully free
+# 20GB card and this is a probe, not a production run. Effective batch = 1 * 8 = 8.
+batch_size: 1
+grad_accum_steps: 8
+num_workers: 2
+
+num_iters: 300
+log_interval: 10
+valid_interval: 100
+save_interval: 100
+learning_rate: 0.0001
+weight_decay: 0.01
+warmup_steps: 30
+max_steps: 300
+max_batch_tokens: 8192
+max_grad_norm: 1.0
+
+save_path: /workspace/engines-lab/voxcpm-lora/checkpoints/poc_lora
+tensorboard: /workspace/engines-lab/voxcpm-lora/logs/poc_lora
+
+lambdas:
+  loss/diff: 1.0
+  loss/stop: 1.0
+
+# Upstream reference defaults — no reason to deviate for a first probe run.
+lora:
+  enable_lm: true
+  enable_dit: true
+  enable_proj: false
+  r: 32
+  alpha: 32
+  dropout: 0.0
