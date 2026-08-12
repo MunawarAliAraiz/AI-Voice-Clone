@@ -248,7 +248,18 @@ The **read-only preview** is built, tested, and wired end-to-end:
    2.1-3.7s generation per case, 19-27s cold load. Segmentation/emphasis/pause_after_ms stay on the
    existing heuristic; the LLM classifies only emotion/intensity/energy/rate for already-segmented
    sentences. Production build (`QwenAnalyzerBackend`, dedicated worker/protocol, `JobKind.ANALYZE_LLM`,
-   `POST /api/direction/analyze-llm`) now in progress — see the branch's commits for design decisions.
+   `POST /api/direction/analyze-llm`) **landed on `main` (2026-08-12)**, backend only. Real pod
+   verification (fresh RunPod instance): direct backend load→classify→unload (0 problems, en/ur/hi),
+   the full worker-subprocess + `AnalyzerScheduler` path, and the real HTTP path
+   (`POST /api/direction/analyze-llm` → 202 → polled `succeeded`, correct rows, one worker reused
+   across requests — `load_time_sec` nonzero only on the cold call). A real bug was found and fixed
+   during verification: `load_time_sec` wasn't threaded from the LOAD response into the following
+   classify call. 239 backend tests passing, ruff clean on all touched files. **Frontend wiring not
+   built yet** — the endpoint exists, nothing in the UI calls it. **Open risk, documented not
+   silently accepted**: the idle-unload timer is the only VRAM-contention mitigation between this
+   scheduler and the audio `InferenceScheduler` — they don't share a real budget, so a resident Qwen
+   worker (~6GB) alongside a resident audio model on the 20GB pod card is a real risk during
+   overlapping requests, not just at idle.
 3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
    tab for pros") is not built. Simple mode (summary + chip + apply checkbox) is what shipped.
    **Backend contract landed (2026-08-11):** `direction_plan` on `TTSGenerateRequest` accepts

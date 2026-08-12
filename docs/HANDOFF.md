@@ -24,7 +24,7 @@ audio extraction. Full detail and forward roadmap: **[docs/ROADMAP.md](ROADMAP.m
 | **Core rewrite (Waves 0/1/B1-B3/P6/P7)** | ✅ Done, stable. Not touched this session. |
 | **Async jobs / mobile / perf** | ✅ Done, merged. |
 | **Speech Direction (Phase 2)** | ✅ **Fully landed on `main`.** Heuristic analyzer + capability report + preview UI + multi-segment generation + client-edited per-segment override contract (`direction_plan` on `TTSGenerateRequest`, sparse/index-keyed, re-validated server-side, 422 on stale index) + the full Advanced per-segment IR editor UI (editable emotion/intensity/energy/rate/pause per segment). **Real-audio pod validation done 2026-08-12**: hit `POST /api/generate` with `apply_direction: true` against a live VoxCPM2 worker, downloaded the actual output, automated waveform check found zero click-threshold discontinuities and silence runs landing exactly at the expected segment boundaries — objectively sound, human listen still open. Clip at `eval/results/direction/pod_directed_hi.wav`. |
-| **Qwen2.5-Instruct LLM analyzer** | 🚧 **Capability probe passed** (0 problems, 6 cases, en/ur/hi) — `eval/run_qwen_analyzer_probe.py`. **Production build in progress in the background right now** on branch `feature/phase2-qwen-analyzer` (own worktree) — see "In flight right now". |
+| **Qwen2.5-Instruct LLM analyzer** | ✅ **Production backend merged to `main` (2026-08-12)**. `QwenAnalyzerBackend`, `AnalyzerScheduler`, `JobKind.ANALYZE_LLM`, `POST /api/direction/analyze-llm`. Real pod-verified: direct backend, full worker-subprocess path, and the real HTTP path all passed clean on a fresh pod (0 problems, en/ur/hi) after a genuine bug (`load_time_sec` not threaded through) was found and fixed. 239 backend tests, ruff clean. **Frontend wiring not built** — no UI calls the endpoint yet. Known open risk: idle-unload timer is the only VRAM-contention mitigation vs. the audio scheduler, documented in `analyzer_scheduler.py`, not resolved. |
 | **Phase 4 (Chatterbox)** | 🔴 **Designed, built, gated, and concluded NOT shippable.** Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner's verdict: "not that good... identity is matched around 60%". Same failure shape as the Urdu investigation below — a speaker-encoder ceiling, not a tunable parameter. Not planned to be revisited without a LoRA fine-tune (see next row). |
 | **VoxCPM2 LoRA POC** | 🚧 **Just kicked off, running in the background right now** on branch `feature/voxcpm-lora-poc` (own worktree, `D:\Projects\voxcpm-lora-poc-worktree`). This is the identified path to real identity-preserving cloning. A real 36-clip (~4.8 min) dataset of the owner's own voice already exists, untracked, at `eval/training/` — **do not commit the raw audio without explicit owner sign-off**, that decision was deliberately left open. Early finding: the installed `voxcpm` package (2.0.3) has genuine first-class LoRA support built in (`voxcpm/modules/layers/lora.py`, `LoRAConfig`, a `voxcpm.training` submodule) — better-supported than expected going in. See "In flight right now". |
 | **Composer model picker** | ✅ Done, merged. Explicit model override + "(Recommended)" hint, no Tone control (confirmed no-op). |
@@ -36,18 +36,22 @@ GitHub.cli`), so PRs can be opened directly going forward instead of handed over
 
 ## In flight right now (2026-08-12) — check these before doing anything else
 
-Two background agents are mid-run as of this checkpoint. **Do not assume either is done, and do not
-duplicate their work** — check for a completion notification / the branch's actual git log first.
+One background agent is still mid-run as of this checkpoint; the other finished and is merged.
+**Don't assume the running one is done, and don't duplicate its work** — check for a completion
+notification / the branch's actual git log first.
 
-1. **Qwen2.5 LLM analyzer production backend** — branch `feature/phase2-qwen-analyzer`, its own
-   isolated worktree (spawned with `isolation: "worktree"`, so it never touched the shared checkout).
-   Scope: `WireOp.CLASSIFY` on the existing worker protocol, a new `QwenAnalyzerBackend` under
-   `inference/runtimes/` (the only place allowed to import torch besides `inference/worker.py`), a new
-   `AnalyzerScheduler` (NOT `InferenceScheduler`, NOT a `scheduler.py` edit — rule 8), an idle-unload
-   timer (VRAM contention risk: Qwen-3B-bf16 (~6GB) resident alongside VoxCPM (~7.3GB) and Chatterbox
-   (~6GB) on a 20GB pod card), `JobKind.ANALYZE_LLM`, `POST /api/direction/analyze-llm`. Required to
-   pin a real HF revision and do a real pod smoke test before claiming anything works. **Backend only,
-   no frontend wiring this pass** — that's follow-up work once this lands.
+1. **Qwen2.5 LLM analyzer production backend — DONE, merged to `main` (commit `2be3759`).** Built
+   `WireOp.CLASSIFY`, `QwenAnalyzerBackend` under `inference/runtimes/`, `AnalyzerScheduler` (a
+   torch-free sibling to `InferenceScheduler`, not a `scheduler.py` edit), `JobKind.ANALYZE_LLM`,
+   `POST /api/direction/analyze-llm`, an idle-unload timer. Pinned HF revision
+   `aa8e72537993ba99e69dfaafa59ed015b17504d1`. Verified for real on a fresh pod (the original pod died
+   mid-build, this is a genuine redo not a reused result): direct backend, full worker-subprocess
+   path, and the real HTTP path all passed with 0 problems across en/ur/hi. Found and fixed a real bug
+   (`load_time_sec` wasn't threaded from LOAD into the following classify call) during verification.
+   239 backend tests passing (reverified independently after merge, not just trusted from the agent's
+   report), ruff clean. **Frontend wiring is NOT built** — that's the next real piece of this feature.
+   **Open risk, not resolved**: the idle-unload timer is the only VRAM mitigation between this
+   scheduler and the audio one; they don't share a real budget.
 2. **VoxCPM2 LoRA POC** — branch `feature/voxcpm-lora-poc`, worktree at
    `D:\Projects\voxcpm-lora-poc-worktree` (this one was **not** spawned with worktree isolation by
    mistake — it briefly checked out a branch directly in the shared `D:\Projects\AI-Voice-Clone`
