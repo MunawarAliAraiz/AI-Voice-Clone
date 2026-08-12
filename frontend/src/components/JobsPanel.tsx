@@ -115,6 +115,16 @@ function JobRow({
   onCancel: () => void;
   cancelling: boolean;
 }) {
+  // Recent lists every job kind on the shared `jobs` table (GET /api/jobs),
+  // but this row only knows how to render a 'synthesize' job's route chip
+  // and audio result. 'analyze_llm' jobs (route: null, result: an
+  // AnalyzeLlmResult with no `audio_url`) never had a UI surface here and
+  // still don't — the "AI suggest" flow lives entirely inside the Composer's
+  // Advanced editor (Composer.tsx), never in Recent. Skip rather than crash
+  // on `job.route.source_script` if one shows up in this list.
+  if (!job.route) return null;
+  if (job.result !== null && !('audio_url' in job.result)) return null;
+
   const rtl = job.route.source_script === 'arabic';
   return (
     <li className="hist-row">

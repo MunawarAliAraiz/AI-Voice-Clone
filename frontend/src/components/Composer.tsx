@@ -12,7 +12,7 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
+import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
@@ -82,6 +82,16 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const { data: modelsData } = useModels();
   const invalidateAfterSuccess = useInvalidateAfterJobSuccess();
   const settledJobId = useRef<number | null>(null);
+
+  // "AI suggest" (LLM-backed classification) — an independent job id/poll
+  // from the main generate job above. Its result never touches audio; it
+  // only pre-fills `directionEdits` (handleEditSegment below), same as a
+  // manual per-segment edit.
+  const [llmJobId, setLlmJobId] = useState<number | null>(null);
+  const [aiSuggestErr, setAiSuggestErr] = useState<string | null>(null);
+  const analyzeLlmMutation = useAnalyzeLlmMutation();
+  const { data: llmJob } = useJob(llmJobId);
+  const settledLlmJobId = useRef<number | null>(null);
 
   useEffect(() => {
     const first = voices[0];
@@ -242,6 +252,52 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     setDirectionEdits({});
   }
 
+  // Fire exactly once per LLM job, the turn it first goes terminal — mirrors
+  // the main job's settle effect above. On success, pair each classified row
+  // with the heuristic plan's segment at the same index (for `text`/
+  // `pause_after_ms`, which the LLM never classifies) and feed it through
+  // handleEditSegment exactly as a manual edit would — this IS the apply
+  // step, no separate one.
+  useEffect(() => {
+    if (!llmJob || !isTerminal(llmJob.status) || settledLlmJobId.current === llmJob.id) return;
+    settledLlmJobId.current = llmJob.id;
+
+    if (llmJob.status === 'succeeded') {
+      const result = llmJob.result;
+      if (result && 'rows' in result && direction) {
+        for (const row of result.rows) {
+          const seg = direction.plan.segments.find((s) => s.index === row.index);
+          if (!seg) continue; // stale index (text changed after the job was enqueued) — skip rather than guess
+          handleEditSegment({
+            index: row.index,
+            emotion: row.emotion,
+            intensity: row.intensity,
+            energy: row.energy,
+            rate: row.rate,
+            pause_after_ms: seg.pause_after_ms,
+          });
+        }
+        setAiSuggestErr(null);
+      }
+    } else if (llmJob.status === 'failed') {
+      setAiSuggestErr(llmJob.error?.detail ?? 'AI suggestion failed.');
+    }
+    // 'cancelled' needs no message — the user asked for it.
+  }, [llmJob, direction]);
+
+  async function handleSuggestAi() {
+    const t = text.trim();
+    if (!t) return;
+    setAiSuggestErr(null);
+    try {
+      const newJob = await analyzeLlmMutation.mutateAsync({ text: t, language });
+      settledLlmJobId.current = null;
+      setLlmJobId(newJob.id);
+    } catch (e) {
+      setAiSuggestErr(e instanceof ApiError ? e.message : String(e));
+    }
+  }
+
   async function generate() {
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
@@ -290,6 +346,8 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const rtl = detect?.is_rtl ?? false;
   const busy = generateMutation.isPending || (job != null && !isTerminal(job.status));
   const disabled = busy || !voices.length;
+  const aiSuggestBusy =
+    analyzeLlmMutation.isPending || (llmJob != null && !isTerminal(llmJob.status));
 
   return (
     <section className="card composer" aria-labelledby="composer-h">
@@ -453,6 +511,9 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
           onEditSegment={handleEditSegment}
           onResetSegment={handleResetSegment}
           onResetAllEdits={handleResetAllEdits}
+          onSuggestAi={handleSuggestAi}
+          aiSuggestLoading={aiSuggestBusy}
+          aiSuggestError={aiSuggestErr}
         />
       )}
 
@@ -479,6 +540,12 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
 
 function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: () => void }) {
   const r = job.route;
+  // This card is only ever rendered for the main generate job (kind
+  // 'synthesize'), which per JobStatusResponse's contract always has a route
+  // from 'queued' onward — `analyze_llm` jobs (route: null) never reach here,
+  // see handleSuggestAi/llmJob above. Guard anyway rather than asserting, so
+  // a future misuse fails quiet instead of crashing on `r.rationale`.
+  if (!r) return null;
 
   if (job.status === 'queued' || job.status === 'running') {
     return (
@@ -534,8 +601,10 @@ function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: ()
     );
   }
 
-  // succeeded
-  if (!job.result) return null;
+  // succeeded. 'audio_url' distinguishes a TTSGenerateResponse from an
+  // AnalyzeLlmResult — this card is only used for 'synthesize' jobs, but the
+  // type is shared, so narrow explicitly rather than casting.
+  if (!job.result || !('audio_url' in job.result)) return null;
   return (
     <div className="result">
       <div className="result-head">
