@@ -1,16 +1,23 @@
 # VoxCPM2 LoRA fine-tuning — feasibility probe
 
-> **Status: COMPLETE — training ran, evaluation ran, real numbers exist, and they are a MIXED
-> result, not a clean win.** Dataset validated (§2), LoRA training completed cleanly (300 steps,
+> **Status: COMPLETE — training ran, evaluation ran, real numbers exist, and a first human listen
+> has now happened too.** Dataset validated (§2), LoRA training completed cleanly (300 steps,
 > ~15 min, no OOM — §5), and the baseline-vs-LoRA evaluation (§6) has been run to completion on a
 > fresh pod (2026-08-13) using the rescued checkpoint. Headline finding: LoRA substantially improved
 > CER (intelligibility) on the training language (Urdu: 0.0818 → 0.0091), but speaker-identity cosine
 > — the actual thing this POC exists to move — did **not** improve on Urdu (0.7226 → 0.6859, a
 > regression that flips a passing cell to failing) and only marginally improved on Hindi (0.6863 →
-> 0.6986), not enough to cross the 0.70 gate. See §6 for full numbers and §8 for the revised
-> recommendation. **No `LanguageSupport.verified` flag has been touched and this is not being called
-> production-ready** — that call needs a human listening to the actual clips first (both are
-> committed at `eval/results/voxcpm_lora/`).
+> 0.6986), not enough to cross the 0.70 gate. **The owner has now listened to all four clips
+> (informally, not a blind comparison) and reports `voxcpm_lora_lora_ur.wav` — the LoRA Urdu clip,
+> the one cell where the automated cosine metric regressed — sounds good; the other three are okay,
+> not notably worse.** This is the same pattern already on record for this project (see
+> `docs/URDU_CLONING_REPORT.md`): the ECAPA speaker-identity cosine is English-trained and known to be
+> out-of-distribution for this voice, so a human verdict diverging from — and in this case being more
+> favorable than — the automated score is consistent with prior findings, not a contradiction. See §6
+> for full numbers and the listen writeup, and §8 for the revised recommendation. **No
+> `LanguageSupport.verified` flag has been touched and this is still not being called
+> production-ready** — one informal listen from one person is a signal, not a rigorous evaluation
+> (see §7/§8 for what a fuller pass would need).
 
 ## 1. Problem statement
 
@@ -342,11 +349,36 @@ sound and comparable to the number on record, not a fresh unrelated measurement.
 **Clips for a human listen** (per `eval_harness.py`'s "a PASS means worth listening to, not that it's
 usable" discipline): `eval/results/voxcpm_lora/voxcpm_lora_{baseline,lora}_{ur,hi}.wav` (4 files) and
 `eval/results/voxcpm_lora/manifest.json` (generation metadata: text, gen time, duration, sample rate
-for each), all committed on this branch. **Nobody has listened to these yet** — the numbers above are
-the full extent of what's been verified so far.
+for each), all committed on this branch.
+
+### Human listen (2026-08-13, owner, informal)
+
+The owner listened to all four clips and reported: **`voxcpm_lora_lora_ur.wav` — the LoRA-trained
+Urdu clip — is good.** The other three (`baseline_ur`, `baseline_hi`, `lora_hi`) are okay, not
+notably worse than each other or than `lora_ur`. No clip was singled out as bad.
+
+This is worth reading against the automated numbers directly: `lora_ur` is the exact cell where
+speaker-identity cosine *regressed* (0.7226 → 0.6859, passing → failing) and CER improved the most
+(0.0818 → 0.0091). The owner's ear ranks it as the *best*-sounding clip of the four, not the worst —
+the opposite of what the cosine regression alone would suggest.
+
+This divergence is not new or unexplained for this project. `docs/URDU_CLONING_REPORT.md` already
+established that the ECAPA speaker-identity encoder behind the cosine metric is trained
+predominantly on English speech and is known to be out-of-distribution for this specific voice —
+the same root cause invoked when VoxCPM2's original near-miss Hindi cosine was overturned by ear
+earlier in this project's history (see this doc's §1). A human verdict that disagrees with — and
+here is more favorable than — the automated cosine score on exactly the cell where the encoder is
+least trustworthy fits that established pattern rather than contradicting it. It does not, by
+itself, prove the cosine regression is pure metric noise; it's one listener's informal impression,
+not a blind A/B test, and is treated as a signal in §8, not a verdict.
 
 ## 7. Open questions for the owner
 
+- **A rigorous listen, not just the informal one.** The owner's quick pass (§6) found `lora_ur` good
+  and the rest okay, which is enough to say this isn't a clear regression by ear — but it was one
+  person, once, not blind, and not scored. If this direction is pursued further, a blind A/B
+  (listener doesn't know which clip is baseline vs. LoRA) across more than 4 clips would be needed
+  before treating "LoRA sounds fine" as settled rather than a first impression.
 - **Commit the training dataset?** `eval/training/wav/*.wav` (36 clips, ~13 MB, the owner's own voice)
   is currently untracked and has **not** been committed or pushed, per the explicit instruction not to
   decide this. Same reasoning as `eval/fixtures/README.md`'s consent writeup for `voice_urdu.wav`
@@ -398,13 +430,15 @@ noise before drawing a stronger conclusion either way.
 
 **Recommendation: do not ship this checkpoint, and do not close out the LoRA direction on this
 single result.** Concretely, if this is picked up again:
-1. **Listen to the four clips first** (`eval/results/voxcpm_lora/voxcpm_lora_{baseline,lora}_{ur,hi}.wav`)
-   — before any further engineering, since every prior numeric near-miss in this project (VoxCPM2's
-   original Hindi cell, §1) was overturned or confirmed by ear, not by the gate number alone. That
-   human-listen step is explicitly out of scope for the session that produced these numbers.
-2. If a listen suggests the identity regression is real (not just a metric artifact), try
-   `enable_proj: true` and/or more steps/clips before concluding LoRA doesn't help — this run only
-   tested one configuration point, not the design space.
+1. **The first listen has happened** (§6): the owner's informal pass found `lora_ur` — the cell
+   where cosine regressed — good, and the rest okay, consistent with this project's established
+   finding that the cosine metric is unreliable for this voice, not proof the LoRA identity
+   regression is real. That said, it was one person, once, not blind — treat it as "not an alarming
+   regression by ear" rather than "confirmed fine." A blind A/B (§7) is the next step before either
+   shipping or ruling out the identity concern.
+2. If a rigorous listen still suggests the identity regression is real (not just a metric artifact),
+   try `enable_proj: true` and/or more steps/clips before concluding LoRA doesn't help — this run
+   only tested one configuration point, not the design space.
 3. Do not flip any `LanguageSupport.verified` flag or call anything production-ready regardless of
    future numbers — that has needed a human-listen step every time in this project's history and
    this result is no exception.
