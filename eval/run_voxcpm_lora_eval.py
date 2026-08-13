@@ -55,9 +55,29 @@ TARGET_TEXT_HI = (
 
 OUT_DIR = _REPO_ROOT / "eval" / "results" / "voxcpm_lora"
 
-# Must match the `lora:` block in eval/voxcpm_lora_poc.yaml exactly, or
-# load_lora() will load weights into a differently-shaped adapter.
-LORA_KWARGS = dict(enable_lm=True, enable_dit=True, enable_proj=False, r=32, alpha=32, dropout=0.0)
+_LORA_KWARG_KEYS = ("enable_lm", "enable_dit", "enable_proj", "r", "alpha", "dropout")
+
+
+def _load_lora_kwargs(checkpoint_dir: Path) -> dict:
+    """
+    Read the LoRA shape config from the checkpoint's own `lora_config.json`
+    (written by scripts/train_voxcpm_finetune.py) rather than hardcoding it.
+
+    Getting this wrong doesn't raise — load_lora() silently loads weights
+    into a differently-shaped adapter (e.g. missing the proj-layer LoRA
+    entirely if enable_proj is wrong), producing a real number that measures
+    the WRONG checkpoint. Every LoRA variant this project trains carries its
+    own config alongside the weights for exactly this reason.
+    """
+    config_path = checkpoint_dir / "lora_config.json"
+    if not config_path.exists():
+        raise SystemExit(
+            f"{config_path} not found — cannot safely infer the LoRA shape "
+            f"this checkpoint was trained with. Pass a checkpoint dir that "
+            f"has lora_config.json alongside lora_weights.safetensors."
+        )
+    raw = json.loads(config_path.read_text(encoding="utf-8"))["lora_config"]
+    return {k: raw[k] for k in _LORA_KWARG_KEYS}
 
 
 def main() -> int:
@@ -76,15 +96,17 @@ def main() -> int:
     from voxcpm.core import VoxCPM
     from voxcpm.model.voxcpm2 import LoRAConfig
 
+    lora_kwargs = _load_lora_kwargs(Path(args.lora_checkpoint))
+
     model_path = snapshot_download(repo_id=HF_REPO, revision=HF_REVISION)
-    print(f"Loading {MODEL_ID} from {model_path} with lora_config={LORA_KWARGS}...", file=sys.stderr)
+    print(f"Loading {MODEL_ID} from {model_path} with lora_config={lora_kwargs}...", file=sys.stderr)
 
     t0 = time.time()
     model = VoxCPM(
         voxcpm_model_path=model_path,
         enable_denoiser=False,
         optimize=False,
-        lora_config=LoRAConfig(**LORA_KWARGS),
+        lora_config=LoRAConfig(**lora_kwargs),
     )
     print(f"Loaded in {time.time() - t0:.2f}s", file=sys.stderr)
 
