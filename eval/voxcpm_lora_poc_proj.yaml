@@ -1,0 +1,41 @@
+# VoxCPM2 LoRA POC — enable_proj variant. Identical to voxcpm_lora_poc.yaml
+# except lora.enable_proj: true and a distinct save_path/tensorboard, so this
+# is a single-variable comparison against the original run per
+# docs/VOXCPM_LORA_POC.md §8's recommendation (identity regression may live
+# in the projection layers the first run left untouched).
+
+pretrained_path: /workspace/hf-cache/hub/models--openbmb--VoxCPM2/snapshots/bffb3df5a29440629464e5e839f4d214c8714c3d
+train_manifest: /workspace/engines-lab/voxcpm-lora/dataset/manifest_lora_train.jsonl
+val_manifest: /workspace/engines-lab/voxcpm-lora/dataset/manifest_lora_val.jsonl
+sample_rate: 16000
+out_sample_rate: 48000
+
+batch_size: 1
+grad_accum_steps: 8
+num_workers: 2
+
+num_iters: 300
+log_interval: 10
+valid_interval: 100
+save_interval: 100
+learning_rate: 0.0001
+weight_decay: 0.01
+warmup_steps: 30
+max_steps: 300
+max_batch_tokens: 8192
+max_grad_norm: 1.0
+
+save_path: /workspace/engines-lab/voxcpm-lora/checkpoints/poc_lora_proj
+tensorboard: /workspace/engines-lab/voxcpm-lora/logs/poc_lora_proj
+
+lambdas:
+  loss/diff: 1.0
+  loss/stop: 1.0
+
+lora:
+  enable_lm: true
+  enable_dit: true
+  enable_proj: true
+  r: 32
+  alpha: 32
+  dropout: 0.0

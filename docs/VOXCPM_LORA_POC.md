@@ -1,23 +1,21 @@
 # VoxCPM2 LoRA fine-tuning — feasibility probe
 
-> **Status: COMPLETE — training ran, evaluation ran, real numbers exist, and a first human listen
-> has now happened too.** Dataset validated (§2), LoRA training completed cleanly (300 steps,
-> ~15 min, no OOM — §5), and the baseline-vs-LoRA evaluation (§6) has been run to completion on a
-> fresh pod (2026-08-13) using the rescued checkpoint. Headline finding: LoRA substantially improved
-> CER (intelligibility) on the training language (Urdu: 0.0818 → 0.0091), but speaker-identity cosine
-> — the actual thing this POC exists to move — did **not** improve on Urdu (0.7226 → 0.6859, a
-> regression that flips a passing cell to failing) and only marginally improved on Hindi (0.6863 →
-> 0.6986), not enough to cross the 0.70 gate. **The owner has now listened to all four clips
-> (informally, not a blind comparison) and reports `voxcpm_lora_lora_ur.wav` — the LoRA Urdu clip,
-> the one cell where the automated cosine metric regressed — sounds good; the other three are okay,
-> not notably worse.** This is the same pattern already on record for this project (see
-> `docs/URDU_CLONING_REPORT.md`): the ECAPA speaker-identity cosine is English-trained and known to be
-> out-of-distribution for this voice, so a human verdict diverging from — and in this case being more
-> favorable than — the automated score is consistent with prior findings, not a contradiction. See §6
-> for full numbers and the listen writeup, and §8 for the revised recommendation. **No
-> `LanguageSupport.verified` flag has been touched and this is still not being called
-> production-ready** — one informal listen from one person is a signal, not a rigorous evaluation
-> (see §7/§8 for what a fuller pass would need).
+> **Status: TWO training + eval runs complete, one informal human listen done, one still open.**
+> Dataset validated (§2). **Run 1** (§5/§6, LM+DiT LoRA only, `enable_proj: false`): training
+> completed cleanly, baseline-vs-LoRA eval found CER improved sharply on Urdu (0.0818 → 0.0091) but
+> speaker cosine regressed on Urdu (0.7226 → 0.6859, pass → fail) and barely improved on Hindi
+> (0.6863 → 0.6986, still under gate). The owner listened to these four clips informally and liked
+> the LoRA Urdu one despite the cosine regression — see §6. **Run 2** (§8, same config but
+> `enable_proj: true`, testing whether the projection layers explain the identity regression):
+> training again completed cleanly on a fresh pod (2026-08-14); the same-run delta shows the Urdu
+> regression roughly **halved** (−0.0151 vs run 1's −0.0367) but Hindi now regresses too (−0.0130,
+> where run 1 had a small improvement) — a different mixed result, not a fix. **Nobody has listened
+> to run 2's clips yet.** Both are consistent with this project's established finding
+> (`docs/URDU_CLONING_REPORT.md`) that the ECAPA speaker-identity cosine is out-of-distribution for
+> this voice — a human verdict diverging from the automated score is not a contradiction. See §6 and
+> §8 for full numbers, §9 for the revised recommendation. **No `LanguageSupport.verified` flag has
+> been touched and neither checkpoint is being called production-ready** — informal single-listener
+> passes are a signal, not a rigorous evaluation (see §7/§9 for what a fuller pass would need).
 
 ## 1. Problem statement
 
@@ -374,11 +372,14 @@ not a blind A/B test, and is treated as a signal in §8, not a verdict.
 
 ## 7. Open questions for the owner
 
-- **A rigorous listen, not just the informal one.** The owner's quick pass (§6) found `lora_ur` good
-  and the rest okay, which is enough to say this isn't a clear regression by ear — but it was one
-  person, once, not blind, and not scored. If this direction is pursued further, a blind A/B
-  (listener doesn't know which clip is baseline vs. LoRA) across more than 4 clips would be needed
-  before treating "LoRA sounds fine" as settled rather than a first impression.
+- **A rigorous listen, not just the informal ones.** The owner's quick pass on §6's clips found
+  `lora_ur` good and the rest okay — enough to say that checkpoint isn't a clear regression by ear,
+  but it was one person, once, not blind, and not scored. **§8's clips (the `enable_proj: true`
+  checkpoint) have not been listened to at all yet** — that's the more pressing gap now, since the
+  numbers alone don't say whether halving the Urdu regression while adding a Hindi one is an
+  improvement by ear. If this direction is pursued further, a blind A/B (listener doesn't know which
+  clip is baseline vs. which LoRA variant) across both checkpoints' clips would be needed before
+  treating either "LoRA sounds fine" as settled rather than two first impressions.
 - **Commit the training dataset?** `eval/training/wav/*.wav` (36 clips, ~13 MB, the owner's own voice)
   is currently untracked and has **not** been committed or pushed, per the explicit instruction not to
   decide this. Same reasoning as `eval/fixtures/README.md`'s consent writeup for `voice_urdu.wav`
@@ -397,48 +398,116 @@ not a blind A/B test, and is treated as a signal in §8, not a verdict.
   identity) even fits this product's model, which serves many different users' voices from the same
   base checkpoint today.
 
-## 8. Recommendation (real, based on §6's measured numbers)
+## 8. `enable_proj: true` retrain — real numbers (2026-08-14)
 
-**This is not a clean win, and it is not a clean loss either — it's a mixed result that argues for
-more investigation before either shipping or abandoning LoRA fine-tuning for this use case.**
+§9's plausible-explanation (a) — the identity regression might live in the projection layers
+(`enc_to_lm_proj`/`lm_to_dit_proj`/`res_to_dit_proj`/`fusion_concat_proj`), which §5's config left
+untouched (`enable_proj: false`) — has now actually been tried, not just proposed.
 
-What §6 actually shows:
+**What ran:** a fresh pod (`194.68.245.161:22064`, RTX A5000, 24 GB). Same dataset (32 train / 4 val
+clips, `perso_arabic_ur` transcripts), same hyperparameters as §5 (r=32/alpha=32, batch_size=1,
+grad_accum_steps=8, 300 steps, lr 1e-4) — the **only** change is `lora.enable_proj: true` in a new
+config, `eval/voxcpm_lora_poc_proj.yaml`. Training completed cleanly in ~13 minutes, no OOM (peak
+~22.6 GB of 24.5 GB — noticeably tighter than §5's run despite the bigger card, since the extra
+adapters cost real VRAM), `loss/stop` converged to near-zero same as before. Checkpoint config/state
+committed at `eval/results/voxcpm_lora_proj/checkpoint_backup/`; `lora_weights.safetensors`
+(74 MB, slightly bigger than §5's 72 MB from the extra adapters) is gitignored, same as every other
+run's weights.
 
-- The pipeline works end-to-end, confirmed twice over: training converges cleanly (§5) and a trained
-  checkpoint loads and generates via the exact production-shaped call path (`VoxCPM.generate()` +
-  `load_lora()`) with no errors.
-- LoRA fine-tuning did exactly what you'd expect to *pronunciation/script accuracy*: CER on the
-  trained language (Urdu) fell 89% (0.0818 → 0.0091). If the goal were "make the model read Perso-
-  Arabic Urdu more accurately," this alone would be a strong result.
-- LoRA did **not** do what this POC exists to test — move the *speaker-identity* cosine that
-  motivated it in the first place (§1: "a speaker-encoder ceiling, not a knob to tune"). On Urdu it
-  went the wrong way (−0.0367, passing → failing); on Hindi it moved the right way but only barely
-  (+0.0123) and still misses the gate. Neither result supports "LoRA fixes the identity ceiling" as
-  currently configured (r=32/alpha=32 on LM+DiT, 32 training clips, 300 steps).
+**A real bug was caught and fixed before trusting these numbers**: `eval/run_voxcpm_lora_eval.py`
+hardcoded `enable_proj=False` when reconstructing the model to load the checkpoint into — a leftover
+from when only one config existed. Loading a `enable_proj=True` checkpoint against that hardcoded
+`False` doesn't raise; `load_lora()` silently drops the mismatched projection-layer weights, which
+would have produced a real-looking but wrong number (effectively re-measuring the §6 checkpoint's
+shape while claiming to measure this one). Fixed to read `lora_config.json` from the checkpoint
+itself instead of hardcoding — confirmed working via the load log: `Loaded 392 LoRA parameters ...
+skipped 0`.
 
-**Plausible explanations, not yet distinguished:** (a) 32 clips / 300 steps is simply not enough
-signal to move a speaker-identity representation that lives deeper in the architecture than the
-LM/DiT layers this LoRA config targets — `enable_proj` was left `False` (§3), and the projection
-layers are exactly where cross-modal (text→speaker-conditioned-audio) fusion happens, so a config
-that also adapts `enc_to_lm_proj`/`lm_to_dit_proj`/etc. is an untried, plausible next lever; (b) the
-Urdu regression could be a training-data artifact — the 32 training clips and the `voice_urdu.wav`
-reference are different recordings of the same speaker, and the LoRA may be overfitting to the
-training clips' specific acoustic conditions in a way that pulls the embedding away from this
-particular reference clip; (c) n=1 per cell means both deltas could partly be sampling noise
-(VoxCPM2's decoding is stochastic) — repeat runs with different seeds would separate signal from
-noise before drawing a stronger conclusion either way.
+### Results
 
-**Recommendation: do not ship this checkpoint, and do not close out the LoRA direction on this
-single result.** Concretely, if this is picked up again:
-1. **The first listen has happened** (§6): the owner's informal pass found `lora_ur` — the cell
-   where cosine regressed — good, and the rest okay, consistent with this project's established
-   finding that the cosine metric is unreliable for this voice, not proof the LoRA identity
-   regression is real. That said, it was one person, once, not blind — treat it as "not an alarming
-   regression by ear" rather than "confirmed fine." A blind A/B (§7) is the next step before either
-   shipping or ruling out the identity concern.
-2. If a rigorous listen still suggests the identity regression is real (not just a metric artifact),
-   try `enable_proj: true` and/or more steps/clips before concluding LoRA doesn't help — this run
-   only tested one configuration point, not the design space.
-3. Do not flip any `LanguageSupport.verified` flag or call anything production-ready regardless of
+| Clip | CER | speaker cosine | RTF | gate result |
+|---|---|---|---|---|
+| baseline_ur (no LoRA, Urdu) | 0.0182 | **0.7080** | 3.177¹ | CER pass, cosine pass, RTF fail |
+| lora_ur (LoRA+proj, Urdu) | **0.0091** | 0.6929 | 0.985 | CER pass, cosine fail (barely), RTF pass |
+| baseline_hi (no LoRA, Hindi) | 0.0526 | 0.6893 | 0.917 | CER pass, cosine fail, RTF pass |
+| lora_hi (LoRA+proj, Hindi) | **0.0614** | 0.6763 | 0.935 | CER pass, cosine fail, RTF pass |
+
+¹ Same one-time CUDA warmup artifact as §6's `baseline_ur` — not comparable, ignore.
+
+**Same-run delta (the fair comparison — baseline and LoRA generated in the same process, same
+sampling conditions, isolating exactly the LoRA effect):**
+
+- **Urdu (the trained language): −0.0151** (0.7080 → 0.6929) — still a regression, but **smaller
+  than §6's −0.0367** (0.7226 → 0.6859) with the same-language, same-config comparison. Enabling the
+  projection-layer adapters roughly **halved** the Urdu identity regression without eliminating it.
+- **Hindi: −0.0130** (0.6893 → 0.6763) — this is the surprise. §6's Hindi delta was **positive**
+  (+0.0123, 0.6863 → 0.6986); with `enable_proj: true`, Hindi now regresses too. Adapting the
+  projection layers helped the trained language and hurt the untrained one — plausible if the shared
+  fusion layers, once adapted toward this speaker's Urdu-specific characteristics, generalize *less*
+  well to Hindi than the LM/DiT-only adapters did.
+- **CER stays excellent on both**, consistent with §6: LoRA fine-tuning reliably improves
+  pronunciation/script accuracy regardless of `enable_proj`; that was never in question.
+- **n=1 per cell, same caveat as always** — a single-sample delta either direction could partly be
+  the model's own stochastic decoding, not a clean read on `enable_proj`'s true effect. The absolute
+  swing here (halved Urdu regression) is larger than typical sampling noise observed elsewhere in
+  this project, but is not proven signal on its own.
+
+**Verdict on the lever, not on LoRA overall: `enable_proj: true` measurably changes the outcome — in
+a mixed direction, not a clean fix.** It moves the metric closer to passing on the language that was
+trained and further from passing on the language that wasn't. This is new information, not a
+resolution: it neither confirms nor rules out plausible-explanation (a) from §8, and doesn't touch
+explanations (b) or (c), which remain untested.
+
+**Clips for a human listen** (same discipline as §6): `eval/results/voxcpm_lora_proj/voxcpm_lora_{baseline,lora}_{ur,hi}.wav`,
+committed on this branch. **Nobody has listened to these specific four clips yet** — §6's informal
+listen was on the *first* checkpoint's clips, not this one, and does not carry over.
+
+## 9. Recommendation (revised — includes both §6 and §8's measured numbers)
+
+**Still not a clean win, and still not a clean loss — two real experiments in, this remains a mixed
+result that argues for a rigorous listen before either shipping or abandoning LoRA for this use
+case.** What's different from the original recommendation: explanation (a) below has now been
+tested, not just proposed, and the result is itself mixed rather than a fix.
+
+What §6 and §8 together show:
+
+- The pipeline works end-to-end, confirmed three times over: training converges cleanly on two
+  different configs (§5, §8) and both trained checkpoints load and generate via the exact
+  production-shaped call path (`VoxCPM.generate()` + `load_lora()`) with no errors.
+- LoRA fine-tuning reliably does what you'd expect to *pronunciation/script accuracy* regardless of
+  configuration: CER on the trained language (Urdu) fell 89% in §6 (0.0818 → 0.0091) and landed at
+  the same 0.0091 in §8. If the goal were "make the model read Perso-Arabic Urdu more accurately,"
+  this alone would be a strong, reproducible result.
+- LoRA still does **not** cleanly do what this POC exists to test — move the *speaker-identity*
+  cosine that motivated it in the first place (§1: "a speaker-encoder ceiling, not a knob to tune").
+  §6 (LM+DiT only): Urdu −0.0367 (passing → failing), Hindi +0.0123 (still short of gate). §8
+  (+ projection layers): Urdu −0.0151 (still regresses, but about half as much), Hindi −0.0130 (now
+  regresses too, where §6 had a small improvement). **Enabling the projection-layer adapters traded
+  a smaller Urdu regression for a new Hindi one** — not a fix, a different mixed result.
+
+**Plausible explanations, now partially distinguished:** (a) *tested in §8* — projection layers do
+measurably affect the outcome, so they were part of the picture, but adapting them didn't resolve the
+identity gap, it moved it around; not ruled out, but no longer a purely theoretical lever. (b) the
+Urdu regression as a training-data artifact (the 32 training clips and `voice_urdu.wav` are different
+recordings of the same speaker) — still untested, and now the more likely remaining explanation given
+(a) didn't fully explain the pattern. (c) n=1 per cell in both runs means every delta above could
+partly be sampling noise (VoxCPM2's decoding is stochastic) — still untested; repeat runs with
+different seeds would separate signal from noise before drawing a stronger conclusion either way.
+
+**Recommendation: do not ship either checkpoint, and do not close out the LoRA direction on these two
+results.** Concretely, if this is picked up again:
+1. **Two informal listens are now relevant, on two different clip sets.** §6's clips (LM+DiT only)
+   got an informal thumbs-up from the owner despite the cosine regression. §8's clips
+   (+ projection layers) **have not been listened to yet** — that's the immediate next step, and
+   it's a genuinely open question whether halving the Urdu cosine regression while adding a Hindi one
+   sounds better, worse, or about the same by ear.
+2. A rigorous blind A/B (§7) across both checkpoints' clips is the next real step before treating
+   either "LoRA sounds fine" or "the identity regression is real" as settled — four clips, two
+   informal opinions, is still a first impression twice over, not a rigorous evaluation.
+3. Explanations (b) and (c) from above remain the most promising untested levers — a training-data
+   artifact check (e.g. training against a held-out reference from the same recording session as
+   `voice_urdu.wav`) or a multi-seed repeat would do more to separate signal from noise than another
+   single-point LoRA-shape sweep.
+4. Do not flip any `LanguageSupport.verified` flag or call anything production-ready regardless of
    future numbers — that has needed a human-listen step every time in this project's history and
-   this result is no exception.
+   both results so far are no exception.

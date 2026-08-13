@@ -1,0 +1,38 @@
+[
+  {
+    "tag": "baseline_ur",
+    "language": "ur",
+    "text": "اگر تمہیں فارغ وقت ملے تو مجھے فون کر لینا، ہم کہیں باہر کھانا کھانے چلتے ہیں اور تھوڑی دیر گپ شپ بھی کر لیں گے۔",
+    "output": "/workspace/AI-Voice-Clone/eval/results/voxcpm_lora_proj/voxcpm_lora_baseline_ur.wav",
+    "gen_time_sec": 18.30074167251587,
+    "duration_sec": 5.76,
+    "sample_rate": 48000
+  },
+  {
+    "tag": "baseline_hi",
+    "language": "hi",
+    "text": "अगर तुम्हें फ़ारिग़ वक़्त मिले तो मुझे फ़ोन कर लेना, हम कहीं बाहर खाना खाने चलते हैं और थोड़ी देर गप शप भी कर लेंगे।",
+    "output": "/workspace/AI-Voice-Clone/eval/results/voxcpm_lora_proj/voxcpm_lora_baseline_hi.wav",
+    "gen_time_sec": 6.452613353729248,
+    "duration_sec": 7.04,
+    "sample_rate": 48000
+  },
+  {
+    "tag": "lora_ur",
+    "language": "ur",
+    "text": "اگر تمہیں فارغ وقت ملے تو مجھے فون کر لینا، ہم کہیں باہر کھانا کھانے چلتے ہیں اور تھوڑی دیر گپ شپ بھی کر لیں گے۔",
+    "output": "/workspace/AI-Voice-Clone/eval/results/voxcpm_lora_proj/voxcpm_lora_lora_ur.wav",
+    "gen_time_sec": 5.986233234405518,
+    "duration_sec": 6.08,
+    "sample_rate": 48000
+  },
+  {
+    "tag": "lora_hi",
+    "language": "hi",
+    "text": "अगर तुम्हें फ़ारिग़ वक़्त मिले तो मुझे फ़ोन कर लेना, हम कहीं बाहर खाना खाने चलते हैं और थोड़ी देर गप शप भी कर लेंगे।",
+    "output": "/workspace/AI-Voice-Clone/eval/results/voxcpm_lora_proj/voxcpm_lora_lora_hi.wav",
+    "gen_time_sec": 7.178620100021362,
+    "duration_sec": 7.68,
+    "sample_rate": 48000
+  }
+]

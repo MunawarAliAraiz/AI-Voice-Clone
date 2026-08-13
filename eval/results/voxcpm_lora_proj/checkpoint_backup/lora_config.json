@@ -1,0 +1,29 @@
+{
+  "base_model": "/workspace/hf-cache/hub/models--openbmb--VoxCPM2/snapshots/bffb3df5a29440629464e5e839f4d214c8714c3d",
+  "lora_config": {
+    "enable_lm": true,
+    "enable_dit": true,
+    "enable_proj": true,
+    "r": 32,
+    "alpha": 32,
+    "dropout": 0.0,
+    "target_modules_lm": [
+      "q_proj",
+      "v_proj",
+      "k_proj",
+      "o_proj"
+    ],
+    "target_modules_dit": [
+      "q_proj",
+      "v_proj",
+      "k_proj",
+      "o_proj"
+    ],
+    "target_proj_modules": [
+      "enc_to_lm_proj",
+      "lm_to_dit_proj",
+      "res_to_dit_proj",
+      "fusion_concat_proj"
+    ]
+  }
+}
