@@ -52,6 +52,11 @@ class SpecView(Protocol):
         """True only for pairs verified by Phase A."""
         ...
 
+    def supports_experimental(self, language: str, script: Script) -> bool:
+        """True for a claimed pair on a spec explicitly opted into listing
+        despite being unverified. See `ModelSpec.supports_experimental`."""
+        ...
+
 
 @runtime_checkable
 class CatalogView(Protocol):

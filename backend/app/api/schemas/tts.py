@@ -59,6 +59,14 @@ class RouteInfo(BaseModel):
         default_factory=list,
         description="Other model ids that could have served this request.",
     )
+    experimental: bool = Field(
+        False,
+        description=(
+            "True only when the caller explicitly picked an unverified model "
+            "AND set allow_experimental=True. Never true for Auto routing. "
+            "The UI must render this distinctly from a normal route."
+        ),
+    )
 
 
 class DirectedSegmentIn(BaseModel):
@@ -144,6 +152,15 @@ class TTSGenerateRequest(BaseModel):
         None,
         examples=["f5_openbible_urdu"],
         description="Pin a specific model. Refused with 422 if it cannot serve the text.",
+    )
+    allow_experimental: bool = Field(
+        False,
+        description=(
+            "Required in addition to model_id to route to a model that hasn't "
+            "passed its own accuracy gate (e.g. Chatterbox). Still refused with "
+            "422 if the model doesn't even claim the language/script. Ignored "
+            "when model_id is unset (Auto never picks an experimental model)."
+        ),
     )
     urdu_strategy: str = Field(
         "native",

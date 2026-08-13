@@ -32,9 +32,15 @@ class StubSpec:
     id: str
     display_name: str
     pairs: tuple[tuple[str, Script], ...]
+    #: Pairs this stub CLAIMS but is not verified for — mirrors a real spec
+    #: with experimental_listing=True and an unverified LanguageSupport cell.
+    experimental_pairs: tuple[tuple[str, Script], ...] = ()
 
     def supports(self, language: str, script: Script) -> bool:
         return (language, script) in self.pairs
+
+    def supports_experimental(self, language: str, script: Script) -> bool:
+        return (language, script) in self.experimental_pairs
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,14 @@ HINDI_B = StubSpec("voxcpm2", "VoxCPM 2", (
     ("ur", Script.LATIN), ("en", Script.LATIN),
 ))
 CATALOG = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B))
+
+#: Mirrors Chatterbox: claims (ur, ARABIC) but only experimentally — not in
+#: `.pairs` (so `.supports()` is False), only in `.experimental_pairs`.
+EXPERIMENTAL_SPEC = StubSpec(
+    "experimental_model", "Experimental Model", pairs=(),
+    experimental_pairs=(("ur", Script.ARABIC),),
+)
+CATALOG_WITH_EXPERIMENTAL = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B, EXPERIMENTAL_SPEC))
 
 
 # ── Script detection ─────────────────────────────────────────────────────────
@@ -267,6 +281,43 @@ def test_explicit_model_that_cannot_serve_is_refused_not_swapped() -> None:
 def test_unknown_model_id_raises() -> None:
     with pytest.raises(ModelNotFoundError):
         resolve(profile_text(HINDI, "hi"), "does_not_exist", CATALOG)
+
+
+def test_experimental_model_refused_by_default() -> None:
+    """allow_experimental defaults False — an unverified explicit pick is
+    still refused, not silently allowed just because the spec claims it."""
+    with pytest.raises(NoRouteError):
+        resolve(profile_text(URDU, "ur"), "experimental_model", CATALOG_WITH_EXPERIMENTAL)
+
+
+def test_experimental_model_honored_with_explicit_opt_in() -> None:
+    plan = resolve(
+        profile_text(URDU, "ur"), "experimental_model", CATALOG_WITH_EXPERIMENTAL,
+        allow_experimental=True,
+    )
+    assert plan.model_id == "experimental_model"
+    assert plan.experimental is True
+    assert "EXPERIMENTAL" in plan.rationale
+
+
+def test_experimental_opt_in_does_not_rescue_a_pair_not_even_claimed() -> None:
+    """allow_experimental only widens supports() -> supports_experimental();
+    it must not become a second, looser claims() check for ANY pair."""
+    with pytest.raises(NoRouteError):
+        resolve(
+            profile_text(HINDI, "hi"), "experimental_model", CATALOG_WITH_EXPERIMENTAL,
+            allow_experimental=True,
+        )
+
+
+def test_experimental_opt_in_never_affects_auto_routing() -> None:
+    """allow_experimental is only consulted for an explicit `requested` id.
+    Auto (requested=None) must never pick an experimental-only spec."""
+    plan = resolve(
+        profile_text(URDU, "ur"), None, CATALOG_WITH_EXPERIMENTAL, allow_experimental=True,
+    )
+    assert plan.model_id == "f5_openbible_urdu"
+    assert plan.experimental is False
 
 
 def test_alternatives_exclude_the_chosen_model() -> None:

@@ -29,7 +29,9 @@ class LanguageSupportInfo(BaseModel):
 
     language: str = Field(..., examples=["ur"])
     script: str = Field(..., examples=["arabic"])
-    #: Measured in Phase A. Only verified pairs are ever returned to a client.
+    #: Measured in Phase A. Verified pairs are always returned; an unverified
+    #: pair is only ever included when the owning model has explicitly opted
+    #: into experimental listing (`ModelSummary.experimental`) — never silently.
     verified: bool
     cer: float | None = Field(None, description="Character error rate, Whisper-large-v3.")
     speaker_cosine: float | None = None
@@ -47,6 +49,10 @@ class ModelSummary(BaseModel):
     #: they may legally do with the output.
     license: str = Field(..., examples=["CC-BY-SA-4.0", "MIT", "Apache-2.0"])
     languages: list[LanguageSupportInfo]
+    #: True if this model failed (or never ran) its own Phase A accuracy gate
+    #: and is only listed because a human explicitly opted it in for display.
+    #: The UI must badge it distinctly and never auto-select it.
+    experimental: bool = False
 
     #: resident | warm | cold | not_downloaded
     state: str = Field(..., examples=["cold"])

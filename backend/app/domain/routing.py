@@ -114,6 +114,12 @@ class RoutePlan:
     #: candidates ONLY on hard failure (worker crash), never on cold-start —
     #: preferring a resident model over the right one is the original sin here.
     alternatives: tuple[str, ...] = ()
+    #: True when this route only exists because the caller explicitly named
+    #: an unverified model AND set `allow_experimental=True` — never true for
+    #: Auto routing. The UI must render this distinctly (rule 5's spirit:
+    #: routing to a model that failed its own accuracy gate must never look
+    #: like routing to a verified one).
+    experimental: bool = False
 
     @property
     def lossy(self) -> bool:
@@ -144,6 +150,7 @@ def resolve(
     requested: str | None,
     catalog: CatalogView,
     strategy: UrduStrategy = UrduStrategy.NATIVE,
+    allow_experimental: bool = False,
 ) -> RoutePlan:
     """
     Decide which spec should render `profile`, and how the text must be shaped.
@@ -161,6 +168,11 @@ def resolve(
             than `ModelCatalog` so the domain layer never imports the inference
             layer — the dependency arrow runs inference -> domain only.
         strategy: how to treat Perso-Arabic Urdu.
+        allow_experimental: only meaningful together with `requested`. If the
+            requested spec doesn't verifiably support the pair but has opted
+            into experimental listing (`ModelSpec.experimental_listing`) and
+            claims the pair anyway, honor it with `RoutePlan.experimental=True`
+            instead of raising. Never consulted for Auto routing.
 
     Returns:
         A RoutePlan naming exactly one spec.
@@ -200,6 +212,7 @@ def resolve(
     target, transform = _plan_transform(profile, strategy, catalog)
     candidates = catalog.candidates(target.language, target.script)
 
+    experimental = False
     if requested is not None:
         spec = catalog.get(requested)
         if spec is None:
@@ -207,15 +220,20 @@ def resolve(
         # An explicit request is honored or refused. It is NEVER silently
         # swapped — that substitution is the whole defect being designed out.
         if not spec.supports(target.language, target.script):
-            raise NoRouteError(
-                language=profile.language,
-                script=profile.script.value,
-                supported=_supported(catalog),
-                suggestion=(
-                    f"Model {requested!r} cannot render {profile.language!r} in "
-                    f"{profile.script.value} script."
-                ),
-            )
+            if allow_experimental and spec.supports_experimental(
+                target.language, target.script
+            ):
+                experimental = True
+            else:
+                raise NoRouteError(
+                    language=profile.language,
+                    script=profile.script.value,
+                    supported=_supported(catalog),
+                    suggestion=(
+                        f"Model {requested!r} cannot render {profile.language!r} in "
+                        f"{profile.script.value} script."
+                    ),
+                )
         chosen: SpecView = spec
     else:
         if not candidates:
@@ -236,8 +254,9 @@ def resolve(
         resolved_text=profile.text,
         requested_language=profile.language,
         source_script=profile.script,
-        rationale=_rationale(profile, chosen, transform),
+        rationale=_rationale(profile, chosen, transform, experimental=experimental),
         alternatives=tuple(c.id for c in candidates if c.id != chosen.id),
+        experimental=experimental,
     )
 
 
@@ -308,15 +327,27 @@ def _suggest(profile: TextProfile) -> str | None:
 
 
 def _rationale(
-    profile: TextProfile, spec: SpecView, transform: TextTransform
+    profile: TextProfile,
+    spec: SpecView,
+    transform: TextTransform,
+    *,
+    experimental: bool = False,
 ) -> str:
     """User-facing prose for the route chip. Displayed verbatim."""
     name = getattr(spec, "display_name", spec.id)
     if transform.kind is TransformKind.ROMAN_TO_DEVA:
-        return f"Roman Urdu transliterated to Devanagari and rendered by {name}"
-    if transform.kind is TransformKind.ARAB_TO_DEVA:
-        return (
+        base = f"Roman Urdu transliterated to Devanagari and rendered by {name}"
+    elif transform.kind is TransformKind.ARAB_TO_DEVA:
+        base = (
             f"Urdu transliterated from Perso-Arabic to Devanagari and rendered "
             f"by {name}. Short vowels are inferred, so pronunciation may differ."
         )
-    return f"{profile.language} in {profile.script.value} script rendered by {name}"
+    else:
+        base = f"{profile.language} in {profile.script.value} script rendered by {name}"
+    if experimental:
+        return (
+            f"{base} — EXPERIMENTAL: you explicitly picked this model despite it "
+            f"not passing its own accuracy gate. Voice-identity match is known to "
+            f"be weaker than the recommended model."
+        )
+    return base

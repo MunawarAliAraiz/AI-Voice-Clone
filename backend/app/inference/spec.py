@@ -184,6 +184,15 @@ class ModelSpec:
     phase_a_verified: bool = False
     notes: str = ""
 
+    #: Deliberate, per-model, human-approved opt-in to advertise this spec's
+    #: unverified cells as an EXPLICITLY LABELED experimental choice — set by
+    #: hand on a specific spec (see CHATTERBOX_ML_V3), never inferred. Everything
+    #: `verified=False` implies (failed or never-run Phase A) still applies; this
+    #: only controls whether the model picker LISTS it, honestly marked, instead
+    #: of hiding it outright. Auto-routing never consults this — see
+    #: `supports_experimental()`.
+    experimental_listing: bool = False
+
     def supports(self, language: str, script: Script) -> bool:
         """
         True if this spec natively handles (language, script).
@@ -196,12 +205,27 @@ class ModelSpec:
             for ls in self.languages
         )
 
+    def supports_experimental(self, language: str, script: Script) -> bool:
+        """
+        True if this spec claims (language, script) AND has been explicitly
+        opted into experimental listing (`experimental_listing=True`).
+
+        This is the ONLY sanctioned way an unverified cell reaches a user: an
+        explicit `requested` model id, on a spec a human deliberately flagged,
+        rendered with a route marked `experimental=True` so the honesty chip
+        says so. Auto-routing (`requested is None`) never calls this — picking
+        an unverified model for someone who didn't ask for it by name is
+        exactly the silent-fallback defect rule 5 exists to prevent.
+        """
+        return self.experimental_listing and self.claims(language, script)
+
     def claims(self, language: str, script: Script) -> bool:
         """
         True if this spec *claims* (language, script), verified or not.
 
         For diagnostics and the Phase A harness only. Never call this from
-        routing — that is how unproven claims reach users.
+        routing directly — `supports_experimental()` is the one narrow,
+        explicitly-labeled exception, gated on `experimental_listing`.
         """
         return any(
             ls.language == language and ls.script is script for ls in self.languages

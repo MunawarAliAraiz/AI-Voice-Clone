@@ -181,7 +181,15 @@ CHATTERBOX_ML_V3 = ModelSpec(
             "title": "Guidance",
         },
     },
-    notes="R2: verify the advertised 23-language list; claims are not support.",
+    notes=(
+        "R2: verify the advertised 23-language list; claims are not support. "
+        "Phase 4c ran a real gate + human listen (2026-08-11) and the owner's "
+        "own verdict was 'not that good but ok, identity is matched around "
+        "60%' — see docs/PHASE_A_RESULTS.md. Listed in the picker as an "
+        "explicit, labeled experimental choice (experimental_listing=True) "
+        "despite that; Auto-routing never selects it."
+    ),
+    experimental_listing=True,
 )
 
 

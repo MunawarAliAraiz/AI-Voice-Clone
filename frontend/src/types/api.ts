@@ -9,6 +9,7 @@ export interface RouteInfo {
   rationale: string;
   source_script: string; // "latin" | "arabic" | "devanagari" | ...
   alternatives: string[];
+  experimental: boolean;
 }
 
 export interface VoiceProfile {
@@ -45,6 +46,7 @@ export interface ModelSummary {
   runtime: string;
   license: string;
   languages: LanguageSupportInfo[];
+  experimental: boolean;
   state: string; // resident | warm | cold | not_downloaded
   est_wait_sec: number;
   vram_mb: number;
@@ -107,6 +109,9 @@ export interface TTSGenerateRequest {
   profile_id: number;
   language: string;
   model_id?: string | null;
+  /** Required alongside model_id to route to a model that hasn't passed its
+   *  own accuracy gate (e.g. Chatterbox). Ignored when model_id is unset. */
+  allow_experimental?: boolean;
   urdu_strategy?: string;
   output_format?: string;
   speed?: number;

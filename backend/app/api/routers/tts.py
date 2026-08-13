@@ -107,6 +107,7 @@ def _route_info(plan: RoutePlan, catalog: ModelCatalog) -> RouteInfo:
         rationale=plan.rationale,
         source_script=plan.source_script.value,
         alternatives=list(plan.alternatives),
+        experimental=plan.experimental,
     )
 
 
@@ -129,7 +130,10 @@ async def generate(
     # NoRouteError (422, lists what works) / ModelNotFound / AmbiguousScriptError
     # — all mapped to problem+json, none a silent fallback.
     text_profile = profile_text(body.text, body.language)
-    plan = resolve(text_profile, body.model_id, catalog, _urdu_strategy(body.urdu_strategy))
+    plan = resolve(
+        text_profile, body.model_id, catalog, _urdu_strategy(body.urdu_strategy),
+        allow_experimental=body.allow_experimental,
+    )
 
     spec = catalog.get(plan.model_id)
     assert spec is not None  # resolve() only returns catalog ids

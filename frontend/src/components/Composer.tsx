@@ -54,13 +54,18 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
 
-  const [showDirection, setShowDirection] = useState(false);
+  // Runs automatically once there's text — no click needed to see what
+  // Speech Direction would do. `applyDirection` below stays opt-in: seeing
+  // the analysis is automatic, but affecting the actual generated audio
+  // still requires the explicit toggle, so nothing changes without review.
+  const [showDirection, setShowDirection] = useState(true);
   const [direction, setDirection] = useState<DirectionAnalyzeResponse | null>(null);
   const [directionLoading, setDirectionLoading] = useState(false);
   const [directionErr, setDirectionErr] = useState<string | null>(null);
-  // Gated behind the disclosure being opened at least once — the user must
-  // have seen the honesty chip (what this model honors/ignores) before they
-  // can opt into applying it. Not reset on collapse: an already-informed
+  // Off by default even though the preview above is automatic — applying
+  // Direction to the actual audio is a separate, explicit opt-in so the
+  // user has seen the honesty chip (what this model honors/ignores) before
+  // it affects real output. Not reset on collapse: an already-informed
   // choice stays in effect while the composer stays open.
   const [applyDirection, setApplyDirection] = useState(false);
   // Advanced per-segment overrides from the "Advanced" editor inside
@@ -105,6 +110,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const compatibleModels = (modelsData?.models ?? []).filter((m) =>
     m.languages.some((l) => l.language === language)
   );
+  const selectedModel = modelId ? compatibleModels.find((m) => m.id === modelId) : undefined;
 
   // A manually-picked model that no longer supports the language (the user
   // switched languages after choosing one) falls back to Auto rather than
@@ -308,6 +314,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         profile_id: profileId,
         language,
         model_id: modelId,
+        allow_experimental: selectedModel?.experimental ?? false,
         text: text.trim(),
         speed,
         stability,
@@ -408,11 +415,21 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
               </option>
               {compatibleModels.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.id === detect?.would_route_to?.model_id ? `${m.display_name} (Recommended)` : m.display_name}
+                  {m.id === detect?.would_route_to?.model_id
+                    ? `${m.display_name} (Recommended)`
+                    : m.experimental
+                      ? `${m.display_name} (Experimental — lower accuracy)`
+                      : m.display_name}
                 </option>
               ))}
             </select>
           </div>
+          {selectedModel?.experimental && (
+            <p className="hint muted">
+              Experimental: this model didn't pass its own voice-identity accuracy check
+              ({selectedModel.notes || 'see model notes'}). Auto never picks it — you chose it explicitly.
+            </p>
+          )}
         </label>
 
         <label className="field">
@@ -557,6 +574,7 @@ function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: ()
             {r.transform === 'none' ? 'direct' : r.transform}
           </span>
           {r.lossy && <span className="tag warn">lossy</span>}
+          {r.experimental && <span className="tag warn" title={r.rationale}>experimental</span>}
         </div>
         <p className="hint center">
           {job.status === 'queued' ? (
