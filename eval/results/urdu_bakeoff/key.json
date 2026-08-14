@@ -1,7 +1,7 @@
 {
   "_warning": "UNBLINDING KEY — do not open until scoring is done.",
   "key": {
-    "a648d7bd3b5410ce": {
+    "c64a337a5164c1d4": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -13,7 +13,7 @@
       "speaker_sim": 0.8309339284896851,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_owner_01_sick.wav"
     },
-    "2d568b2c43d60bd7": {
+    "8aed3b166d5137ba": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -25,7 +25,7 @@
       "speaker_sim": 0.8078870177268982,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_owner_02_file.wav"
     },
-    "d9f867e4bdcdffa2": {
+    "ca75a5d1ccacedf9": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -37,7 +37,7 @@
       "speaker_sim": 0.7743430137634277,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_owner_03_deadline.wav"
     },
-    "f605c839ec780347": {
+    "d4245631d335b8d5": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -49,7 +49,7 @@
       "speaker_sim": 0.6823961734771729,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_owner_04_late.wav"
     },
-    "d472c34edb062ac0": {
+    "055382714eb8dbc4": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -61,7 +61,7 @@
       "speaker_sim": 0.8085538148880005,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_owner_05_github.wav"
     },
-    "7c44fc2a4a0761ce": {
+    "b61988fa4b068e48": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -73,7 +73,7 @@
       "speaker_sim": 0.8123685121536255,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_num_ascii.wav"
     },
-    "880c90e2082bc5d5": {
+    "9d405aa42dcf3d87": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -85,7 +85,7 @@
       "speaker_sim": 0.7853611707687378,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_num_eastern.wav"
     },
-    "c8206246e0f550bb": {
+    "2d0decfecf43acaa": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -97,7 +97,7 @@
       "speaker_sim": 0.7711914777755737,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_date.wav"
     },
-    "8a141dd303f8bbf1": {
+    "d010f210c30b02ec": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -109,7 +109,7 @@
       "speaker_sim": 0.7902349233627319,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_names.wav"
     },
-    "5b7663e534c0ac10": {
+    "80cf7c176d26dd98": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -121,7 +121,7 @@
       "speaker_sim": 0.8212494850158691,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_abbreviations.wav"
     },
-    "c741478f609ba533": {
+    "873cd380f30536d7": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -133,7 +133,7 @@
       "speaker_sim": 0.7949707508087158,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_technical.wav"
     },
-    "3ef5aa603594523f": {
+    "fcfb6f17c1f8be3e": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -145,7 +145,7 @@
       "speaker_sim": 0.8020963668823242,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_colloquial.wav"
     },
-    "ea6594393f1e6368": {
+    "bde768687b8f0046": {
       "arm": "A",
       "model": "voxcpm2",
       "representation": "roman",
@@ -157,163 +157,7 @@
       "speaker_sim": 0.7975186109542847,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_female/A_female_long_multiclause.wav"
     },
-    "660edb22fb890e39": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "owner_01_sick",
-      "reference_id": "owner",
-      "input_text": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
-      "cer": 0.03125,
-      "speaker_sim": 0.6997467279434204,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_owner_01_sick.wav"
-    },
-    "9e2cea7980fdc9d4": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "owner_02_file",
-      "reference_id": "owner",
-      "input_text": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
-      "cer": 0.020833333333333332,
-      "speaker_sim": 0.6712141633033752,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_owner_02_file.wav"
-    },
-    "0e70bc24b52c842f": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "owner_03_deadline",
-      "reference_id": "owner",
-      "input_text": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
-      "cer": 0.0,
-      "speaker_sim": 0.6849680542945862,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_owner_03_deadline.wav"
-    },
-    "dfc4367e2c23b5ae": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "owner_04_late",
-      "reference_id": "owner",
-      "input_text": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
-      "cer": 0.20754716981132076,
-      "speaker_sim": 0.6473983526229858,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_owner_04_late.wav"
-    },
-    "7a7c851c07705d5f": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "owner_05_github",
-      "reference_id": "owner",
-      "input_text": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
-      "cer": 0.4925373134328358,
-      "speaker_sim": 0.7037352919578552,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_owner_05_github.wav"
-    },
-    "112f321bb7eca12a": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "num_ascii",
-      "reference_id": "owner",
-      "input_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
-      "cer": 0.06382978723404255,
-      "speaker_sim": 0.7031785249710083,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_num_ascii.wav"
-    },
-    "d39339c8d1da4a16": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "num_eastern",
-      "reference_id": "owner",
-      "input_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
-      "cer": 0.0,
-      "speaker_sim": 0.7574437856674194,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_num_eastern.wav"
-    },
-    "810cda436f440fa4": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "date",
-      "reference_id": "owner",
-      "input_text": "Yeh report 14 August 2026 tak jama karani hai.",
-      "cer": 17.405405405405407,
-      "speaker_sim": 0.47790947556495667,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_date.wav"
-    },
-    "8b67bbbfffb96457": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "names",
-      "reference_id": "owner",
-      "input_text": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
-      "cer": 0.06,
-      "speaker_sim": 0.6509160399436951,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_names.wav"
-    },
-    "efe51c172410bca2": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "abbreviations",
-      "reference_id": "owner",
-      "input_text": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
-      "cer": 0.38596491228070173,
-      "speaker_sim": 0.7290260195732117,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_abbreviations.wav"
-    },
-    "59bea1b782327b33": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "technical",
-      "reference_id": "owner",
-      "input_text": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
-      "cer": 0.38666666666666666,
-      "speaker_sim": 0.6572680473327637,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_technical.wav"
-    },
-    "77c208de0de8a331": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "colloquial",
-      "reference_id": "owner",
-      "input_text": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
-      "cer": 0.057692307692307696,
-      "speaker_sim": 0.7095981240272522,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_colloquial.wav"
-    },
-    "7b7819a63d658430": {
-      "arm": "A",
-      "model": "voxcpm2",
-      "representation": "roman",
-      "lora": false,
-      "item_id": "long_multiclause",
-      "reference_id": "owner",
-      "input_text": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
-      "cer": 0.0625,
-      "speaker_sim": 0.7304099202156067,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_A_owner/A_owner_long_multiclause.wav"
-    },
-    "5284eb2ba63969c0": {
+    "28dda56dacd452e4": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -325,7 +169,7 @@
       "speaker_sim": 0.762025773525238,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_owner_01_sick.wav"
     },
-    "00a47ffcd69ba612": {
+    "a247d03810b6b464": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -337,7 +181,7 @@
       "speaker_sim": 0.7298167943954468,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_owner_02_file.wav"
     },
-    "5066dd1ab45e3ae3": {
+    "006e7bf3733c284f": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -349,7 +193,7 @@
       "speaker_sim": 0.8089869022369385,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_owner_03_deadline.wav"
     },
-    "acad2500e91ffb0c": {
+    "f9a34e571eec1176": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -361,7 +205,7 @@
       "speaker_sim": 0.8400475978851318,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_owner_04_late.wav"
     },
-    "680954dcc30ed543": {
+    "4ef066987c3995f4": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -373,7 +217,7 @@
       "speaker_sim": 0.6821056604385376,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_owner_05_github.wav"
     },
-    "6c3ad39b387eab1a": {
+    "ba83834831f3905a": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -385,7 +229,7 @@
       "speaker_sim": 0.7962021827697754,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_num_ascii.wav"
     },
-    "8b1636bdaa86961d": {
+    "aa40de65a1e9e4a0": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -397,7 +241,7 @@
       "speaker_sim": 0.7520797848701477,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_num_eastern.wav"
     },
-    "aca4bad44159a35e": {
+    "3d11ed89f027c66f": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -409,7 +253,7 @@
       "speaker_sim": 0.741296648979187,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_date.wav"
     },
-    "5dd22ded17d2e695": {
+    "869b14a0f7ddfbd5": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -421,7 +265,7 @@
       "speaker_sim": 0.7167059779167175,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_names.wav"
     },
-    "21b590e3dbc1d01d": {
+    "a4a8576e9a16b441": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -433,7 +277,7 @@
       "speaker_sim": 0.6045455932617188,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_abbreviations.wav"
     },
-    "53343e69f7d3cd54": {
+    "b0b47954ded17bae": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -445,7 +289,7 @@
       "speaker_sim": 0.7489423751831055,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_technical.wav"
     },
-    "53f1d897db3cfda0": {
+    "d25728f441ac1d31": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -457,7 +301,7 @@
       "speaker_sim": 0.8255119919776917,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_colloquial.wav"
     },
-    "d07b09effa395f43": {
+    "efe4db3d33b32dda": {
       "arm": "B",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -469,163 +313,7 @@
       "speaker_sim": 0.7482963800430298,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_female/B_female_long_multiclause.wav"
     },
-    "51595c5d6ab65d25": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "owner_01_sick",
-      "reference_id": "owner",
-      "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
-      "cer": 0.015625,
-      "speaker_sim": 0.659546971321106,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_owner_01_sick.wav"
-    },
-    "58050ce38471d90e": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "owner_02_file",
-      "reference_id": "owner",
-      "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6712957620620728,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_owner_02_file.wav"
-    },
-    "e440511d77b13a1f": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "owner_03_deadline",
-      "reference_id": "owner",
-      "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
-      "cer": 0.057692307692307696,
-      "speaker_sim": 0.674776554107666,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_owner_03_deadline.wav"
-    },
-    "ada5ab43edf233ad": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "owner_04_late",
-      "reference_id": "owner",
-      "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
-      "cer": 0.18867924528301888,
-      "speaker_sim": 0.6868029832839966,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_owner_04_late.wav"
-    },
-    "66c77c944f143ea8": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "owner_05_github",
-      "reference_id": "owner",
-      "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
-      "cer": 0.4626865671641791,
-      "speaker_sim": 0.6079387664794922,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_owner_05_github.wav"
-    },
-    "1356a72e84c328cf": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "num_ascii",
-      "reference_id": "owner",
-      "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
-      "cer": 0.3617021276595745,
-      "speaker_sim": 0.6388500928878784,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_num_ascii.wav"
-    },
-    "70cb7fe7a0f83b74": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "num_eastern",
-      "reference_id": "owner",
-      "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
-      "cer": 0.23404255319148937,
-      "speaker_sim": 0.7127629518508911,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_num_eastern.wav"
-    },
-    "a5b7ff422a75e97e": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "date",
-      "reference_id": "owner",
-      "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
-      "cer": 0.1891891891891892,
-      "speaker_sim": 0.6033217906951904,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_date.wav"
-    },
-    "135077d24e46245b": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "names",
-      "reference_id": "owner",
-      "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6289772987365723,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_names.wav"
-    },
-    "bd8d338e83fd1efa": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "abbreviations",
-      "reference_id": "owner",
-      "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
-      "cer": 0.42105263157894735,
-      "speaker_sim": 0.7118192315101624,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_abbreviations.wav"
-    },
-    "b0698053821bf6b7": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "technical",
-      "reference_id": "owner",
-      "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
-      "cer": 0.37333333333333335,
-      "speaker_sim": 0.6517854928970337,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_technical.wav"
-    },
-    "c01ed748a88cd0b1": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "colloquial",
-      "reference_id": "owner",
-      "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
-      "cer": 0.019230769230769232,
-      "speaker_sim": 0.6664021015167236,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_colloquial.wav"
-    },
-    "4aaf2ac0da88d816": {
-      "arm": "B",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": false,
-      "item_id": "long_multiclause",
-      "reference_id": "owner",
-      "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
-      "cer": 0.04375,
-      "speaker_sim": 0.7333880662918091,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_B_owner/B_owner_long_multiclause.wav"
-    },
-    "118d5e1f052a0fb1": {
+    "b3b3f3743b4cca07": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -637,7 +325,7 @@
       "speaker_sim": 0.8066359758377075,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_owner_01_sick.wav"
     },
-    "8c38f556818e0098": {
+    "efafe59b1b2eea82": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -649,7 +337,7 @@
       "speaker_sim": 0.8390775918960571,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_owner_02_file.wav"
     },
-    "44e32c752b900115": {
+    "4e75651a157ba692": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -661,7 +349,7 @@
       "speaker_sim": 0.8126050233840942,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_owner_03_deadline.wav"
     },
-    "26effb0f3bac60a5": {
+    "79208cc4758fcb08": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -673,7 +361,7 @@
       "speaker_sim": 0.7828434705734253,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_owner_04_late.wav"
     },
-    "23c5032e58aa75a4": {
+    "9205d14bcc942f41": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -685,7 +373,7 @@
       "speaker_sim": 0.7587952017784119,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_owner_05_github.wav"
     },
-    "b8356f2485098edf": {
+    "ceaa84c6001b1254": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -697,7 +385,7 @@
       "speaker_sim": 0.7670780420303345,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_num_ascii.wav"
     },
-    "aa4e74e00b10d17b": {
+    "b0a8b460d75f9b0f": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -709,7 +397,7 @@
       "speaker_sim": 0.7693278789520264,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_num_eastern.wav"
     },
-    "9eab81dc70f355db": {
+    "4297521e660f2c8d": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -721,7 +409,7 @@
       "speaker_sim": 0.7902418375015259,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_date.wav"
     },
-    "72ff0a027f52ffa8": {
+    "c808096c31338816": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -733,7 +421,7 @@
       "speaker_sim": 0.8203305006027222,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_names.wav"
     },
-    "69f857034512bb90": {
+    "97d94fa4b02232d9": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -745,7 +433,7 @@
       "speaker_sim": 0.7723801136016846,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_abbreviations.wav"
     },
-    "fdf0ceeafc8f96cf": {
+    "bf70013ac152bb8f": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -757,7 +445,7 @@
       "speaker_sim": 0.7463503479957581,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_technical.wav"
     },
-    "df4e12c557848c2d": {
+    "47970080e1d84f6e": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -769,7 +457,7 @@
       "speaker_sim": 0.7569519877433777,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_colloquial.wav"
     },
-    "76e40a6c7c606210": {
+    "def5c232587e764b": {
       "arm": "C",
       "model": "voxcpm2",
       "representation": "devanagari",
@@ -781,163 +469,7 @@
       "speaker_sim": 0.8229156136512756,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_female/C_female_long_multiclause.wav"
     },
-    "0e4e7cf8ab4dba33": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "owner_01_sick",
-      "reference_id": "owner",
-      "input_text": "यार, आज मैं ऑफ़िस नहीं आ सकूँ गा क्योंकि मेरी तबीयत कुछ ठीक नहीं है।",
-      "cer": 0.09375,
-      "speaker_sim": 0.5957233309745789,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_owner_01_sick.wav"
-    },
-    "e44698efd24b1fb0": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "owner_02_file",
-      "reference_id": "owner",
-      "input_text": "आप ने जो फ़ाइल भेजी थी, मैं ने उसे चेक कर लिया है।",
-      "cer": 0.0,
-      "speaker_sim": 0.7079588174819946,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_owner_02_file.wav"
-    },
-    "fac0ba4f6ad11f13": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "owner_03_deadline",
-      "reference_id": "owner",
-      "input_text": "मुझे लगता है के हमें यह काम कल तक मुकम्मल कर लेना चाहिए।",
-      "cer": 0.0,
-      "speaker_sim": 0.7134556770324707,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_owner_03_deadline.wav"
-    },
-    "ab4d8b31b18e8c15": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "owner_04_late",
-      "reference_id": "owner",
-      "input_text": "यार, आज office में काफ़ी काम था, इस लिए मैं late हो गया।",
-      "cer": 0.2641509433962264,
-      "speaker_sim": 0.6722733974456787,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_owner_04_late.wav"
-    },
-    "cf3612acf659f226": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "owner_05_github",
-      "reference_id": "owner",
-      "input_text": "मैं ने GitHub पर pull request create कर दी है, आप उसे review कर लेना।",
-      "cer": 0.4626865671641791,
-      "speaker_sim": 0.5979640483856201,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_owner_05_github.wav"
-    },
-    "4df0848670ee2967": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "num_ascii",
-      "reference_id": "owner",
-      "input_text": "मीटिंग 3 बजे शुरू होगी और तक़रीबन 45 मिनट चलेगी।",
-      "cer": 0.0,
-      "speaker_sim": 0.7432132959365845,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_num_ascii.wav"
-    },
-    "649d0e502aaa4bb9": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "num_eastern",
-      "reference_id": "owner",
-      "input_text": "मीटिंग ३ बजे शुरू होगी और तक़रीबन ४५ मिनट चलेगी।",
-      "cer": 0.1702127659574468,
-      "speaker_sim": 0.7391090393066406,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_num_eastern.wav"
-    },
-    "c79a55f4cfb5de52": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "date",
-      "reference_id": "owner",
-      "input_text": "यह रिपोर्ट 14 अगस्त 2026 तक जमा करानी है।",
-      "cer": 0.0,
-      "speaker_sim": 0.6276806592941284,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_date.wav"
-    },
-    "4622533a3ac7d52e": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "names",
-      "reference_id": "owner",
-      "input_text": "अली अहमद और फ़ातिमा ने कराची से लाहौर तक का सफ़र किया।",
-      "cer": 0.0,
-      "speaker_sim": 0.5806289911270142,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_names.wav"
-    },
-    "357e6ea79920a72b": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "abbreviations",
-      "reference_id": "owner",
-      "input_text": "बराए मेहरबानी PDF फ़ाइल ईमेल कर दें और URL भी साथ भेज दें।",
-      "cer": 0.3333333333333333,
-      "speaker_sim": 0.6881273984909058,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_abbreviations.wav"
-    },
-    "c4c5ba738a73c292": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "technical",
-      "reference_id": "owner",
-      "input_text": "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
-      "cer": 0.37333333333333335,
-      "speaker_sim": 0.622322678565979,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_technical.wav"
-    },
-    "e6b0f67c4c16f2c1": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "colloquial",
-      "reference_id": "owner",
-      "input_text": "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
-      "cer": 0.0,
-      "speaker_sim": 0.7254586815834045,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_colloquial.wav"
-    },
-    "abb30c68abc7509c": {
-      "arm": "C",
-      "model": "voxcpm2",
-      "representation": "devanagari",
-      "lora": false,
-      "item_id": "long_multiclause",
-      "reference_id": "owner",
-      "input_text": "कल जब मैं दफ़्तर पहुँचा तो पता चला के मीटिंग मुल्तवी हो गई है, इस लिए मैं ने सोचा के पहले बाक़ी काम मुकम्मल कर लूँ, और फिर दोपहर के खाने के बाद रिपोर्ट पर काम शुरू करूँगा।",
-      "cer": 0.01875,
-      "speaker_sim": 0.7154735922813416,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_C_owner/C_owner_long_multiclause.wav"
-    },
-    "093720edaf339042": {
+    "09f53591469c862c": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -949,7 +481,7 @@
       "speaker_sim": 0.7561434507369995,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_owner_01_sick.wav"
     },
-    "36c2cc6c2559ee47": {
+    "7ed3f04f52512e4b": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -961,7 +493,7 @@
       "speaker_sim": 0.6684834957122803,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_owner_02_file.wav"
     },
-    "1647ce649542f129": {
+    "2730dca93b75dce5": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -973,7 +505,7 @@
       "speaker_sim": 0.5556969046592712,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_owner_03_deadline.wav"
     },
-    "8ddeef30511c4a83": {
+    "e4a3e84d188587dd": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -985,7 +517,7 @@
       "speaker_sim": 0.6069825887680054,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_owner_04_late.wav"
     },
-    "ceb732c744cd5371": {
+    "5899ce8beb2203b2": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -997,7 +529,7 @@
       "speaker_sim": 0.6664556860923767,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_owner_05_github.wav"
     },
-    "e15fb9fbd229cc45": {
+    "6afea263cc35f30e": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1009,7 +541,7 @@
       "speaker_sim": 0.6888983249664307,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_num_ascii.wav"
     },
-    "faf4492ca08aac5d": {
+    "00080f44e1ed5306": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1021,7 +553,7 @@
       "speaker_sim": 0.6603686809539795,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_num_eastern.wav"
     },
-    "94cd10ea241afb39": {
+    "d00049b8f83352e9": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1033,7 +565,7 @@
       "speaker_sim": 0.717129111289978,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_date.wav"
     },
-    "7b2a6d6c231547d0": {
+    "a4221258d3d7c739": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1045,7 +577,7 @@
       "speaker_sim": 0.7597604393959045,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_names.wav"
     },
-    "01ae1c625305252e": {
+    "7269e5c599bfa9e9": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1057,7 +589,7 @@
       "speaker_sim": 0.7115525007247925,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_abbreviations.wav"
     },
-    "18b96cc4819e1a8a": {
+    "b7d95c838ab5bcd7": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1069,7 +601,7 @@
       "speaker_sim": 0.68711256980896,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_technical.wav"
     },
-    "4e37c84b38cd0957": {
+    "acdf13aadec598fa": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1081,7 +613,7 @@
       "speaker_sim": 0.7777996063232422,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_colloquial.wav"
     },
-    "33adf67d17e22303": {
+    "3812499b8cfa4019": {
       "arm": "D",
       "model": "voxcpm2",
       "representation": "perso_arabic",
@@ -1093,163 +625,7 @@
       "speaker_sim": 0.7826146483421326,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_female/D_female_long_multiclause.wav"
     },
-    "ac4f6b9a67ea5fb9": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "owner_01_sick",
-      "reference_id": "owner",
-      "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
-      "cer": 0.0625,
-      "speaker_sim": 0.7208340167999268,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_owner_01_sick.wav"
-    },
-    "300eff0cae2f4049": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "owner_02_file",
-      "reference_id": "owner",
-      "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6972109079360962,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_owner_02_file.wav"
-    },
-    "4a36af2c79961b1a": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "owner_03_deadline",
-      "reference_id": "owner",
-      "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
-      "cer": 0.0,
-      "speaker_sim": 0.7262089252471924,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_owner_03_deadline.wav"
-    },
-    "6e033bb9683aacfa": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "owner_04_late",
-      "reference_id": "owner",
-      "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
-      "cer": 0.20754716981132076,
-      "speaker_sim": 0.652816891670227,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_owner_04_late.wav"
-    },
-    "6d85a5e0767cae82": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "owner_05_github",
-      "reference_id": "owner",
-      "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
-      "cer": 0.44776119402985076,
-      "speaker_sim": 0.6280242204666138,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_owner_05_github.wav"
-    },
-    "6f1719382802ae3d": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "num_ascii",
-      "reference_id": "owner",
-      "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6620727181434631,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_num_ascii.wav"
-    },
-    "d7b9a7431fecde2b": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "num_eastern",
-      "reference_id": "owner",
-      "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
-      "cer": 0.3617021276595745,
-      "speaker_sim": 0.760179877281189,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_num_eastern.wav"
-    },
-    "7e9d9e3afca4b55a": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "date",
-      "reference_id": "owner",
-      "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6652494072914124,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_date.wav"
-    },
-    "19503cb487f8b7dd": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "names",
-      "reference_id": "owner",
-      "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
-      "cer": 0.0,
-      "speaker_sim": 0.6096872091293335,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_names.wav"
-    },
-    "22e3286b15771642": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "abbreviations",
-      "reference_id": "owner",
-      "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
-      "cer": 0.2807017543859649,
-      "speaker_sim": 0.7638751268386841,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_abbreviations.wav"
-    },
-    "4ed0bdf00bf2c890": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "technical",
-      "reference_id": "owner",
-      "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
-      "cer": 0.36,
-      "speaker_sim": 0.6462454199790955,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_technical.wav"
-    },
-    "18bc8de7977352d2": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "colloquial",
-      "reference_id": "owner",
-      "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
-      "cer": 0.038461538461538464,
-      "speaker_sim": 0.6574227809906006,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_colloquial.wav"
-    },
-    "fe722736ef1bd1b1": {
-      "arm": "D",
-      "model": "voxcpm2",
-      "representation": "perso_arabic",
-      "lora": true,
-      "item_id": "long_multiclause",
-      "reference_id": "owner",
-      "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
-      "cer": 0.0375,
-      "speaker_sim": 0.6498445272445679,
-      "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_D_owner/D_owner_long_multiclause.wav"
-    },
-    "ce7b697025b721b8": {
+    "0d1c6c7f73cd92bc": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1261,7 +637,7 @@
       "speaker_sim": 0.8263173699378967,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_owner_01_sick.wav"
     },
-    "a3de02a528c8c1bf": {
+    "32db3f10070b454e": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1273,7 +649,7 @@
       "speaker_sim": 0.8038428425788879,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_owner_02_file.wav"
     },
-    "745dab9f248ec199": {
+    "9224bb1e64008a3f": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1285,7 +661,7 @@
       "speaker_sim": 0.8105993270874023,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_owner_03_deadline.wav"
     },
-    "e1d01016cc4e8281": {
+    "342451f79846068d": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1297,7 +673,7 @@
       "speaker_sim": 0.7502425312995911,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_owner_04_late.wav"
     },
-    "2d64bc3f8984556c": {
+    "67f182848f72eb03": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1309,7 +685,7 @@
       "speaker_sim": 0.7774651050567627,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_owner_05_github.wav"
     },
-    "1cfd7c1faa4f40c6": {
+    "50dfac42b56539eb": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1321,7 +697,7 @@
       "speaker_sim": 0.7937662601470947,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_num_ascii.wav"
     },
-    "088fbbf123c7623f": {
+    "f7ffd0d60ea55f4d": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1333,7 +709,7 @@
       "speaker_sim": 0.7231981158256531,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_num_eastern.wav"
     },
-    "0ef54f7185e57bc2": {
+    "cfb06647f9eaaf7a": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1345,7 +721,7 @@
       "speaker_sim": 0.776613175868988,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_date.wav"
     },
-    "41a8fc1702f143fd": {
+    "f922848c36be293a": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1357,7 +733,7 @@
       "speaker_sim": 0.8510849475860596,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_names.wav"
     },
-    "6fae298acc0006b2": {
+    "65fdaa1c1e09e776": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1369,7 +745,7 @@
       "speaker_sim": 0.7933496236801147,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_abbreviations.wav"
     },
-    "3ff58199859e5bd1": {
+    "75f5771afdeb6132": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1381,7 +757,7 @@
       "speaker_sim": 0.839516282081604,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_technical.wav"
     },
-    "a2c1b881fa6747d1": {
+    "d12d2c051deb4902": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1393,7 +769,7 @@
       "speaker_sim": 0.6844512224197388,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_colloquial.wav"
     },
-    "5c57d84479d72a7e": {
+    "43016a207eff793d": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1405,7 +781,7 @@
       "speaker_sim": 0.8574010133743286,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_female/E_female_long_multiclause.wav"
     },
-    "25bcac7fcf35997e": {
+    "59831e8e6e001d4e": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1417,7 +793,7 @@
       "speaker_sim": 0.7786968946456909,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_owner_01_sick.wav"
     },
-    "30148e51532059ed": {
+    "a26dac1235b90878": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1429,7 +805,7 @@
       "speaker_sim": 0.7601602077484131,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_owner_02_file.wav"
     },
-    "50814bed046e8218": {
+    "5320bad933593ca3": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1441,7 +817,7 @@
       "speaker_sim": 0.7279047966003418,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_owner_03_deadline.wav"
     },
-    "d699687da064f7cc": {
+    "193f07edd2499459": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1453,7 +829,7 @@
       "speaker_sim": 0.7367532253265381,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_owner_04_late.wav"
     },
-    "ad7cd47c2a288631": {
+    "d0f0729070117735": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1465,7 +841,7 @@
       "speaker_sim": 0.7228686213493347,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_owner_05_github.wav"
     },
-    "00a03d10169ad35f": {
+    "1f665dee7fcc2d0c": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1477,7 +853,7 @@
       "speaker_sim": 0.7305371761322021,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_num_ascii.wav"
     },
-    "d269497d0d07ee9b": {
+    "7d3574366849c5db": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1489,7 +865,7 @@
       "speaker_sim": 0.7271188497543335,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_num_eastern.wav"
     },
-    "2a36dee5b69d55a2": {
+    "e5deab3666d7716c": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1501,7 +877,7 @@
       "speaker_sim": 0.7305017113685608,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_date.wav"
     },
-    "d72f99c4c4530cad": {
+    "0de15d27d388bb91": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1513,7 +889,7 @@
       "speaker_sim": 0.7495062947273254,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_names.wav"
     },
-    "63cb0a00a663da69": {
+    "f4247008e23d24c5": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1525,7 +901,7 @@
       "speaker_sim": 0.7789504528045654,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_abbreviations.wav"
     },
-    "7b8e0be15147277d": {
+    "56a74687698b2946": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1537,7 +913,7 @@
       "speaker_sim": 0.778469979763031,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_technical.wav"
     },
-    "4373d7fb327a4714": {
+    "b2bc80fb501f55c0": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
@@ -1549,7 +925,7 @@
       "speaker_sim": 0.7304395437240601,
       "source_wav": "/workspace/AI-Voice-Clone/eval/results/urdu_bakeoff/arm_E_owner/E_owner_colloquial.wav"
     },
-    "9d38623d8c218b25": {
+    "db88744e8ffb3029": {
       "arm": "E",
       "model": "omnivoice",
       "representation": "perso_arabic",
