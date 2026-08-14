@@ -144,6 +144,43 @@ def test_generate_unknown_profile_and_bad_params(tmp_path: Path) -> None:
         assert c.get("/api/jobs").json()["total"] == 0
 
 
+def test_unimplemented_transform_is_a_422_not_a_crash(tmp_path: Path) -> None:
+    """
+    `urdu_strategy="translit"` on Perso-Arabic Urdu is the one input that still
+    makes `resolve()` return a plan with a non-identity transform: it targets
+    Hindi via ARAB_TO_DEVA, and the Hindi/Devanagari cell IS routable, so the
+    plan builds successfully and reaches the service layer.
+
+    Nothing implements that transform (the ai4bharat hop was deleted when
+    VoxCPM2 turned out to read romanized text directly). This asserts the
+    refusal is a clean 422 NO_ROUTE listing what would work.
+
+    Regression: this branch previously called `GenerationError(detail)` with a
+    single argument against a two-argument `__init__(model_id, detail)`, so the
+    "fail loudly" path raised `TypeError` instead of the error it meant to —
+    a 500 with no explanation, on an input a user can actually send.
+    """
+    client, _ = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "ur")
+        r = c.post("/api/generate", json={
+            "profile_id": pid,
+            "text": "مجھے آج دفتر جانا ہے",
+            "language": "ur",
+            "urdu_strategy": "translit",
+        })
+        assert r.status_code == 422, r.text
+        body = r.json()
+        assert body["code"] == "NO_ROUTE"
+        # The body must enumerate what WOULD work — a bare "unsupported" is
+        # barely better than the sine wave this rewrite exists to kill.
+        assert {"language": "ur", "script": "latin"} in body["supported"]
+        assert "arab_to_deva" in body["suggestion"]
+
+        # Refused before any job row exists, like every other routing failure.
+        assert c.get("/api/jobs").json()["total"] == 0
+
+
 def test_history_records_the_generation(tmp_path: Path) -> None:
     client, _ = _client(tmp_path)
     with client as c:
