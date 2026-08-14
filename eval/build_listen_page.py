@@ -27,6 +27,8 @@ CER and nearly passed cosine while still sounding like a stranger to the owner.
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 import json
 import random
 import secrets
@@ -44,6 +46,32 @@ CRITERIA = [
     ("prosody", "Prosody"),
     ("codeswitch", "Urdu-English code switching"),
 ]
+
+
+def _audio_src(path: Path, embed: bool, fallback: str) -> str:
+    """
+    A `src` for one clip.
+
+    Embedded by default, as a base64 MP3 data URI, because a page that
+    references `blind/xxx.wav` relatively only plays when it is opened in a way
+    that preserves the directory — and it silently does NOT when the file is
+    viewed through a preview pane, a `data:` URL, a snapshot, or anywhere the
+    HTML has been moved without its folder. The failure mode is the worst kind:
+    the page renders perfectly and the play button just does nothing.
+
+    Embedding makes the file self-contained, so it works over file://, http://,
+    copied to another machine, or emailed. MP3 rather than the source WAV
+    because it is ~10x smaller (35 KB vs 345 KB per clip, so ~2 MB total rather
+    than ~24 MB) and is the one codec every browser decodes.
+    """
+    if not embed:
+        return fallback
+    import soundfile as sf
+
+    data, sr = sf.read(str(path))
+    buf = io.BytesIO()
+    sf.write(buf, data, sr, format="MP3")
+    return "data:audio/mpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def _resolve(p: str | Path) -> Path:
@@ -225,6 +253,11 @@ def main() -> int:
     p.add_argument("--results-dir", default=str(RESULTS))
     p.add_argument("--seed", type=int, default=None,
                    help="Shuffle seed. Omit for a fresh random order.")
+    p.add_argument("--no-embed", dest="embed", action="store_false",
+                   help="Reference blind/*.wav by path instead of embedding the "
+                        "audio. Smaller file, but only plays when opened next to "
+                        "its blind/ folder.")
+    p.set_defaults(embed=True)
     args = p.parse_args()
 
     root = Path(args.results_dir)
@@ -261,6 +294,9 @@ def main() -> int:
         groups.setdefault((s["item_id"], s["reference_id"]), []).append(s)
 
     data = []
+    #: The reference clip repeats on every row; encode it once per speaker
+    #: rather than 13 times, which would triple the page for no benefit.
+    ref_cache: dict[str, str] = {}
     for (item_id, ref_id), clips in sorted(groups.items()):
         rng.shuffle(clips)
         ref_path = _resolve(clips[0]["reference_path"])
@@ -269,16 +305,23 @@ def main() -> int:
         ref_name = f"reference_{ref_id}.wav"
         if ref_path.exists() and not (blind_dir / ref_name).exists():
             shutil.copy2(ref_path, blind_dir / ref_name)
+        if ref_path.exists():
+            ref_src = ref_cache.setdefault(
+                ref_id, _audio_src(ref_path, args.embed, f"blind/{ref_name}")
+            )
+        else:
+            ref_src = ""
         info = corpus_text.get(item_id, {})
         data.append({
             "item_id": item_id,
             "reference_id": ref_id,
-            "reference": f"blind/{ref_name}",
+            "reference": ref_src,
             "text": info.get("cer_reference", ""),
             "stresses": info.get("stresses", []),
             "clips": [
                 {"label": f"Sample {i + 1}", "token": c["token"],
-                 "src": f"blind/{c['token']}.wav"}
+                 "src": _audio_src(blind_dir / f"{c['token']}.wav", args.embed,
+                                   f"blind/{c['token']}.wav")}
                 for i, c in enumerate(clips)
             ],
         })
