@@ -182,14 +182,24 @@ class ModelSpec:
 
     #: Local filesystem path to a directory holding `lora_config.json` +
     #: `lora_weights.safetensors`, applied on top of `hf_repo`/`hf_revision`
-    #: after the base checkpoint loads. Deliberately NOT a pinned HF repo like
-    #: the base weights: this is a personal fine-tune, never redistributed, so
-    #: there is nothing to pin a public revision of. The path itself is
-    #: expected to come from an environment variable at the call site (mirrors
-    #: `Settings.{voxcpm,chatterbox,f5}_python`) — a fresh pod without it
-    #: restored is a load failure, not a silent skip. None means "no adapter,
-    #: load the base checkpoint as-is."
+    #: after the base checkpoint loads. Optional fast path: if this directory
+    #: already has the files (e.g. a pod that trained the adapter itself, or
+    #: has downloaded it before), the runtime uses it directly with no
+    #: network call. Expected to come from an environment variable at the call
+    #: site (mirrors `Settings.{voxcpm,chatterbox,f5}_python`). None means
+    #: "no local cache — fall through to `lora_hf_repo` if set, else no
+    #: adapter, load the base checkpoint as-is."
     lora_local_path: str | None = None
+
+    #: Pinned HF repo + revision for a LoRA adapter, downloaded via the same
+    #: `snapshot_download` path as `hf_repo`/`hf_revision` when
+    #: `lora_local_path` has no local cache. Unlike the base checkpoint this
+    #: MAY be a private repo (a personal fine-tune, never meant for public
+    #: redistribution) — see `gated`. Requires an `HF_TOKEN` with read access
+    #: at download time; a fresh pod with no local cache and no token gets a
+    #: clear download-time error, never a silent fallback to un-tuned weights.
+    lora_hf_repo: str | None = None
+    lora_hf_revision: str | None = None
 
     #: True once Phase A has produced audible proof on the target GPU.
     phase_a_verified: bool = False

@@ -257,13 +257,10 @@ VOXCPM2 = ModelSpec(
 )
 
 
-#: Directory holding `lora_config.json` + `lora_weights.safetensors` for the
-#: Urdu LoRA (bake-off arm D). Personal fine-tune, never redistributed — there
-#: is no HF repo to pin, so this is host-local by design, not a gap in golden
-#: rule 7. The pod path is confirmed present at the default below; a fresh pod
-#: without it needs the checkpoint restored from the durable local-disk backup
-#: (`eval/results/voxcpm_lora_proj/checkpoint_backup/`, 74 MB) or the LoRA
-#: retrained (~15 min) before this spec can load — see docs/HANDOFF.md.
+#: Local cache directory for the Urdu LoRA (bake-off arm D) — checked first,
+#: before the pinned HF fallback below. Confirmed present at the default on
+#: the pod this was developed on; if absent, VoxCPMBackend downloads from
+#: `lora_hf_repo`/`lora_hf_revision` instead (needs HF_TOKEN — see there).
 _VOXCPM_URDU_LORA_DIR = os.environ.get(
     "VCS_VOXCPM_URDU_LORA_DIR", "/workspace/engines-lab/lora-proj"
 )
@@ -279,6 +276,15 @@ VOXCPM2_URDU_LORA = ModelSpec(
     hf_repo=VOXCPM2.hf_repo,
     hf_revision=VOXCPM2.hf_revision,
     lora_local_path=_VOXCPM_URDU_LORA_DIR,
+    # Durable, pinned copy — uploaded 2026-08-15 from the local backup at
+    # eval/results/voxcpm_lora_proj/checkpoint_backup/ (74 MB: lora_config.json,
+    # lora_weights.safetensors, training_state.json). PRIVATE repo, not gated
+    # in the "accept a license" sense IndicF5 is — there is no license to
+    # accept, only ownership — but it needs the same HF_TOKEN mechanism to
+    # download, so `gated=True` below reuses that existing, already-correct
+    # scheduler/error-handling path rather than inventing a second one.
+    lora_hf_repo="munawaraliaraiz/voxcpm2-urdu-lora",
+    lora_hf_revision="b571d9244a02fdcd84a7e5ed87724444a9b22800",
     # Urdu bake-off arm D (docs/URDU_BAKEOFF_RESULTS.md), 2026-08-14. Perso-
     # Arabic input DIRECTLY — no transliteration step, unlike arm C.
     #
@@ -315,6 +321,7 @@ VOXCPM2_URDU_LORA = ModelSpec(
     est_rtf=0.943,
     needs_reference_text=False,
     params=VOXCPM2.params,
+    gated=True,
     experimental_listing=True,
     notes=(
         "Personal LoRA fine-tune of VoxCPM2 on the owner's own Urdu recordings "
@@ -322,11 +329,12 @@ VOXCPM2_URDU_LORA = ModelSpec(
         "choice, exactly like Chatterbox: real positive blind-listening "
         "results, but the automated speaker-cosine gate does not clear this "
         "catalog's own 0.70 threshold at either reference. Full numbers and "
-        "methodology: docs/URDU_BAKEOFF_RESULTS.md. Requires "
-        "VCS_VOXCPM_URDU_LORA_DIR (or the pod-local default) to point at a "
-        "directory holding lora_config.json + lora_weights.safetensors; a "
-        "missing checkpoint is a clear load-time RuntimeError, never a silent "
-        "fallback to the base (non-Urdu-tuned) weights."
+        "methodology: docs/URDU_BAKEOFF_RESULTS.md. Checkpoint resolution: "
+        "VCS_VOXCPM_URDU_LORA_DIR (or the pod-local default) first, else "
+        "downloaded from the pinned private repo above — either way needs an "
+        "HF_TOKEN with read access on a pod with no local cache. A missing "
+        "checkpoint AND a failed download is a clear load-time RuntimeError, "
+        "never a silent fallback to the base (non-Urdu-tuned) weights."
     ),
 )
 

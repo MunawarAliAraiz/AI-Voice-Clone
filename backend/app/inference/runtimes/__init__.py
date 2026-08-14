@@ -38,14 +38,16 @@ class RuntimeBackend(Protocol):
     def load(
         self, model_id: str, hf_repo: str, hf_revision: str,
         *, lora_local_path: str | None = None,
+        lora_hf_repo: str | None = None, lora_hf_revision: str | None = None,
     ) -> float:
         """
         Load a checkpoint at a PINNED revision. Returns load seconds.
 
-        `lora_local_path` is only ever passed to a backend whose spec declared
-        `ModelSpec.lora_local_path` (currently just VoxCPM's Urdu LoRA) — see
-        `worker.py`. A backend that has no notion of a LoRA adapter simply
-        never receives the kwarg; it does not need to accept or ignore it.
+        The `lora_*` kwargs are only ever passed to a backend whose spec
+        declared them (`ModelSpec.lora_local_path`/`lora_hf_repo` —
+        currently just VoxCPM's Urdu LoRA) — see `worker.py`. A backend with
+        no notion of a LoRA adapter simply never receives them; it does not
+        need to accept or ignore them.
         """
         ...
 

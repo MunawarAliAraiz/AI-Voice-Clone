@@ -316,9 +316,12 @@ class InferenceScheduler:
         payload = {"model_id": spec.id, "hf_repo": spec.hf_repo, "hf_revision": spec.hf_revision}
         # Only present for specs carrying a LoRA adapter (currently
         # voxcpm2_urdu_lora) — omitted entirely for every other spec, so
-        # runtimes that don't know about it never see the key.
+        # runtimes that don't know about it never see the keys.
         if spec.lora_local_path is not None:
             payload["lora_local_path"] = spec.lora_local_path
+        if spec.lora_hf_repo is not None:
+            payload["lora_hf_repo"] = spec.lora_hf_repo
+            payload["lora_hf_revision"] = spec.lora_hf_revision
         response = await worker.call(
             WireOp.LOAD, payload, timeout=self._config.load_timeout_sec,
         )

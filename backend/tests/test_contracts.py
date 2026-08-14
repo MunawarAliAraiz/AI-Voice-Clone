@@ -256,6 +256,21 @@ def test_voxcpm2_urdu_lora_shares_base_checkpoint() -> None:
     assert lora.lora_local_path is not None
 
 
+def test_voxcpm2_urdu_lora_has_a_durable_pinned_fallback() -> None:
+    """
+    lora_local_path is a fast-path CACHE, not the source of truth — a fresh
+    pod with none of the previous pod's local state must still be able to
+    fetch this from somewhere pinned, exactly like every other spec's base
+    weights. gated=True because the private repo needs an HF_TOKEN to
+    download, same mechanism IndicF5 already requires (no license to accept
+    here, just ownership — see the spec's own notes for that distinction).
+    """
+    lora = CATALOG.require("voxcpm2_urdu_lora")
+    assert lora.lora_hf_repo == "munawaraliaraiz/voxcpm2-urdu-lora"
+    assert lora.lora_hf_revision is not None
+    assert lora.gated is True
+
+
 def test_voxcpm2_urdu_lora_is_experimental_not_verified() -> None:
     """
     Mirrors CHATTERBOX_ML_V3 exactly: real positive blind-listening results,
@@ -348,12 +363,20 @@ def test_all_revisions_pinned() -> None:
     It matters most for IndicF5, which is CONFIRMED to require
     `trust_remote_code=True`: an unpinned `main` would mean the code executing
     on this machine is whatever the repo owner pushed last.
+
+    A spec's OPTIONAL LoRA adapter (`lora_hf_repo`/`lora_hf_revision`) is held
+    to the same rule when present — golden rule 7 doesn't stop applying just
+    because the second asset is a private repo rather than the base weights.
     """
     sha = re.compile(r"^[0-9a-f]{40}$")
     for spec in CATALOG.specs:
         assert spec.hf_revision != PENDING_PIN, f"{spec.id} revision is unpinned"
         assert spec.hf_repo != PENDING_REPO, f"{spec.id} repo is unresolved"
         assert sha.match(spec.hf_revision), f"{spec.id} revision is not a commit sha"
+        if spec.lora_hf_repo is not None:
+            assert sha.match(spec.lora_hf_revision or ""), (
+                f"{spec.id} lora_hf_revision is not a pinned commit sha"
+            )
 
 
 def test_attribution_required_for_cc_by_sa() -> None:

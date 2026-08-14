@@ -289,6 +289,7 @@ async def test_lora_local_path_only_sent_when_the_spec_declares_one(
         id="lora", display_name="lora", runtime=RuntimeKind.VOXCPM,
         license=License.MIT, hf_repo="x/y", hf_revision="a" * 40, languages=(),
         vram_mb=6000, est_load_sec=10.0, lora_local_path="/fake/lora-dir",
+        lora_hf_repo="someone/lora-repo", lora_hf_revision="b" * 40,
     )
     catalog = build_catalog((plain, lora))
 
@@ -309,5 +310,8 @@ async def test_lora_local_path_only_sent_when_the_spec_declares_one(
         payload for op, payload in made[RuntimeKind.VOXCPM].calls if op is WireOp.LOAD
     ]
     assert len(load_payloads) == 2, "same runtime -> WARM swap, not a new worker"
-    assert "lora_local_path" not in load_payloads[0]
+    for key in ("lora_local_path", "lora_hf_repo", "lora_hf_revision"):
+        assert key not in load_payloads[0]
     assert load_payloads[1]["lora_local_path"] == "/fake/lora-dir"
+    assert load_payloads[1]["lora_hf_repo"] == "someone/lora-repo"
+    assert load_payloads[1]["lora_hf_revision"] == "b" * 40
