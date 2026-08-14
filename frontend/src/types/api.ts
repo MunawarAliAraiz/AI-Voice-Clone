@@ -45,6 +45,8 @@ export interface ModelSummary {
   display_name: string;
   runtime: string;
   license: string;
+  /** False for CC-BY-NC weights — personal use only, never for a shipped product. */
+  commercial_use: boolean;
   languages: LanguageSupportInfo[];
   experimental: boolean;
   state: string; // resident | warm | cold | not_downloaded

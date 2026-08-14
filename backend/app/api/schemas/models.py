@@ -48,6 +48,13 @@ class ModelSummary(BaseModel):
     #: Shown in the picker. Users of a self-hosted cloner need to know what
     #: they may legally do with the output.
     license: str = Field(..., examples=["CC-BY-SA-4.0", "MIT", "Apache-2.0"])
+    #: False for CC-BY-NC weights (golden rule 6's 2026-08-15 amendment): legal
+    #: in this catalog for the owner's personal use behind VCS_API_KEY, but
+    #: never for a shipped product. The UI renders a "Non-commercial" chip
+    #: distinct from — and independent of — the `experimental` badge; a model
+    #: can be non-commercial and verified (nothing wrong with the audio) or
+    #: experimental and fully commercial (nothing wrong with the license).
+    commercial_use: bool = True
     languages: list[LanguageSupportInfo]
     #: True if this model failed (or never ran) its own Phase A accuracy gate
     #: and is only listed because a human explicitly opted it in for display.

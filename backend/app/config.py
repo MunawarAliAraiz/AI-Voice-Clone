@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     voxcpm_python: str = ""
     chatterbox_python: str = ""
     f5_python: str = ""
+    omnivoice_python: str = ""
     fake_python: str = ""
     #: Absolute path to the Qwen Speech-Direction analyzer's venv python. NOT
     #: part of `interpreters()`/`RuntimeKind` — that mechanism is specifically
@@ -165,6 +166,8 @@ class Settings(BaseSettings):
             m[RuntimeKind.CHATTERBOX] = self.chatterbox_python
         if self.f5_python:
             m[RuntimeKind.F5] = self.f5_python
+        if self.omnivoice_python:
+            m[RuntimeKind.OMNIVOICE] = self.omnivoice_python
         if self.allow_fake_runtime:
             m[RuntimeKind.FAKE] = self.fake_python or sys.executable
         return m

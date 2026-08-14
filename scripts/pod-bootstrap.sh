@@ -151,7 +151,40 @@ p = snapshot_download(
 print("   weights at", p)
 PY
 
-echo "== 10. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
+echo "== 10. OmniVoice runtime env (separate interpreter, same reason as VoxCPM) =="
+# CC-BY-NC weights — personal use only, see docs/URDU_MODEL_LICENSING.md and
+# golden rule 6's 2026-08-15 amendment. Not routable by default (unverified
+# cell — Phase 1 pod smoke test needed before verified=True), but the venv +
+# weights are worth having warm the same way Chatterbox's are (step 8).
+OV_VENV="$REPO_DIR/backend/.venv-omnivoice"
+if [ ! -x "$OV_VENV/bin/python" ]; then
+  uv venv "$OV_VENV" --python 3.12
+fi
+uv pip install --python "$OV_VENV" omnivoice 2>&1 | tail -2
+# Same cu130-silent-CPU trap as VoxCPM (step 6) and Chatterbox (step 8) — pin
+# cu128 explicitly rather than trust whatever the package resolves.
+uv pip install --python "$OV_VENV" \
+  torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$OV_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 11. OmniVoice weights (pinned revision, ~1.2GB, cached on /workspace) =="
+# Revision resolved during the bake-off (2026-08-14), recorded in
+# catalog.py's OMNIVOICE_URDU spec and both arm-E manifests. Passed through
+# OmniVoiceBackend.load()'s own from_pretrained(revision=...) call — NOT yet
+# pod-verified that OmniVoice actually honors this kwarg the way Chatterbox's
+# from_pretrained() silently does NOT (see chatterbox.py's module docstring
+# for that exact trap). If the Phase 1 smoke test shows it's ignored, switch
+# to snapshot_download + a local-path load, same bypass chatterbox.py uses.
+OV_REV="c5fdb5ccb189668d56333f77ba2629f4cd7535f4"
+"$OV_VENV/bin/python" - "$OV_REV" <<'PY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download("k2-fsa/OmniVoice", revision=sys.argv[1])
+print("   weights at", p)
+PY
+
+echo "== 12. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
 # A separate venv from every runtime, deliberately: the harness's own deps
 # (transformers, speechbrain) have no reason to co-resolve with a runtime's
 # torch pin, and mixing them risks silently upgrading the runtime's torch
@@ -175,7 +208,7 @@ uv pip install --python "$EVAL_VENV" \
 # this reason — don't "fix" a torchcodec ModuleNotFoundError by installing it.
 "$EVAL_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
 
-echo "== 11. secrets (generated once, reused on every restart) =="
+echo "== 13. secrets (generated once, reused on every restart) =="
 # These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
 # frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
 # invalidates every signed audio URL already handed out. So they are generated
@@ -216,12 +249,12 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$SECRETS_FILE"; set +a
 
-echo "== 12. research lab =="
+echo "== 14. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 13. verify =="
+echo "== 15. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
 # VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
@@ -233,7 +266,7 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
   uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 14. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 16. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 # Remember the domain the same way FRONTEND_URL is remembered. A restart that
 # forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
 # the deployed frontend has no way to reach, so the app looks broken for a
@@ -267,7 +300,7 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
-echo "== 15. serve script (CORS baked in, remembered across runs) =="
+echo "== 17. serve script (CORS baked in, remembered across runs) =="
 # CORS is the easiest thing to get wrong here, and it fails in the least
 # obvious way: the origin must match the deployed frontend EXACTLY — scheme,
 # host, no trailing slash — or every request dies in preflight with "No
@@ -302,6 +335,9 @@ export VCS_VOXCPM_PYTHON=${VOX_VENV}/bin/python
 # 4c), but pointing this at the venv now means routing needs no redeploy the
 # moment a cell flips verified=True.
 export VCS_CHATTERBOX_PYTHON=${CB_VENV}/bin/python
+# omnivoice_urdu is likewise unverified (experimental_listing=True only) —
+# same reasoning as Chatterbox above.
+export VCS_OMNIVOICE_PYTHON=${OV_VENV}/bin/python
 export VCS_WORKER_CWD=${REPO_DIR}/backend
 cd ${REPO_DIR}/backend
 exec uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -324,7 +360,7 @@ if [ "${START:-0}" = "1" ]; then
   done
 fi
 
-echo "== 16. current status =="
+echo "== 18. current status =="
 # Without START=1 bootstrap only provisions, so on a first run both of these are
 # expected to be down. The value is on a RE-RUN against a live pod, where it
 # answers "is the thing I already started still up?" without a second SSH trip.

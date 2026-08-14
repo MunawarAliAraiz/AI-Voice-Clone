@@ -85,6 +85,10 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .chatterbox import ChatterboxBackend
 
         return ChatterboxBackend()
+    if runtime == "omnivoice":
+        from .omnivoice import OmniVoiceBackend
+
+        return OmniVoiceBackend()
     if runtime == "qwen_analyzer":
         from .qwen_analyzer import QwenAnalyzerBackend
 

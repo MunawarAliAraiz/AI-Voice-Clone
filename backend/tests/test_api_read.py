@@ -58,6 +58,22 @@ def test_models_list_surfaces_urdu_arabic_as_experimental(tmp_path: Path) -> Non
         assert ur["verified"] is False, "gate-failing cell must not read as verified"
 
 
+def test_models_list_badges_non_commercial_weights(tmp_path: Path) -> None:
+    """
+    omnivoice_urdu is CC-BY-NC (golden rule 6's 2026-08-15 amendment) — the
+    picker must be able to badge it distinctly from `experimental`, which is
+    an independent axis (a model can be non-commercial and fully verified).
+    """
+    with _client(tmp_path) as c:
+        body = c.get("/api/models").json()
+        omni = next(m for m in body["models"] if m["id"] == "omnivoice_urdu")
+        assert omni["commercial_use"] is False
+        assert omni["license"] == "CC-BY-NC"
+        # Every other spec today is permissively licensed.
+        others = [m for m in body["models"] if m["id"] != "omnivoice_urdu"]
+        assert all(m["commercial_use"] is True for m in others)
+
+
 def test_languages_lists_en_hi_ur(tmp_path: Path) -> None:
     with _client(tmp_path) as c:
         r = c.get("/api/languages")

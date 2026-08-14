@@ -195,18 +195,36 @@ def test_catalog_rejects_duplicate_ids() -> None:
         build_catalog((spec, spec))
 
 
-def test_every_shipped_license_is_permissive() -> None:
+def test_no_research_only_or_worse_weights() -> None:
     """
-    No CC-BY-NC or research-only weights, ever.
+    RESEARCH_ONLY (or anything stricter) never appears, catalog or not.
 
-    This is a product constraint, not a preference: XTTS v2 (CPML) and Fish
-    Speech (research license) were removed for exactly this reason, and the
-    easiest way to undo that decision is to add a spec without checking.
+    This is the one tier golden rule 6's 2026-08-15 amendment did NOT relax:
+    XTTS v2 (CPML) and Fish Speech (research license) were removed for this
+    reason, and Higgs Audio v3's terms are stricter than CC-BY-NC — that's
+    exactly why it's still unintegrated despite being in the bake-off. The
+    easiest way to undo any of that is to add a spec without checking.
     """
-    assert CATALOG.unshippable() == (), (
-        f"non-permissive weights in catalog: "
-        f"{[(s.id, s.license.value) for s in CATALOG.unshippable()]}"
-    )
+    for spec in CATALOG.specs:
+        assert spec.license.personal_use_ok, (
+            f"{spec.id} carries {spec.license.value}, stricter than personal "
+            "use permits"
+        )
+
+
+def test_non_commercial_weights_are_badged_and_documented() -> None:
+    """
+    CC-BY-NC specs (golden rule 6, amended 2026-08-15) are legal in the
+    catalog for the owner's personal use behind VCS_API_KEY, but every one
+    must be identifiable as non-commercial by license alone — `unshippable()`
+    is what a commercial-audit pass reads, and it must never silently include
+    a spec nobody flagged.
+    """
+    for spec in CATALOG.unshippable():
+        assert spec.license is License.CC_BY_NC, (
+            f"{spec.id} is unshippable under {spec.license.value}, which is "
+            "not the one tier personal-use is meant to permit"
+        )
 
 
 def test_experimental_specs_have_a_caveat() -> None:
@@ -226,7 +244,7 @@ def test_experimental_specs_have_a_caveat() -> None:
             )
 
 
-def test_three_runtimes_five_specs() -> None:
+def test_four_runtimes_six_specs() -> None:
     """
     The lineup is a decision, not an accident. Changing it is a plan change.
 
@@ -239,18 +257,24 @@ def test_three_runtimes_five_specs() -> None:
     then that spec was withdrawn 2026-08-15 on the owner's real-use verdict
     (base VoxCPM2 sounded better than the fine-tune) and replaced by
     `voxcpm2_urdu_arabic` (arm B, same base checkpoint, no LoRA) so
-    Perso-Arabic Urdu keeps a working answer. Same VOXCPM runtime either way,
-    not a new runtime, so the runtime set below is unchanged even though the
-    spec count moved.
+    Perso-Arabic Urdu keeps a working answer — still the VOXCPM runtime, no
+    new runtime for that swap.
+
+    Six specs / four runtimes as of 2026-08-15: `omnivoice_urdu` (bake-off
+    arm E, the best pronunciation result of the whole bake-off) is a genuinely
+    new runtime — the first CC-BY-NC spec in the catalog, legal only under
+    golden rule 6's personal-use amendment.
     """
-    assert len(CATALOG.specs) == 5
+    assert len(CATALOG.specs) == 6
     assert {s.runtime for s in CATALOG.specs} == {
         RuntimeKind.F5,
         RuntimeKind.CHATTERBOX,
         RuntimeKind.VOXCPM,
+        RuntimeKind.OMNIVOICE,
     }
     assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
     assert len(CATALOG.by_runtime(RuntimeKind.VOXCPM)) == 2
+    assert len(CATALOG.by_runtime(RuntimeKind.OMNIVOICE)) == 1
     assert CATALOG.get("f5_openf5_en") is None
     assert CATALOG.get("voxcpm2_urdu_lora") is None, "withdrawn 2026-08-15"
 
@@ -315,6 +339,46 @@ def test_voxcpm2_urdu_arabic_requires_explicit_opt_in() -> None:
     assert plan.model_id == "voxcpm2_urdu_arabic"
     assert plan.experimental is True
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
+
+
+def test_omnivoice_urdu_is_cc_by_nc_and_experimental() -> None:
+    """
+    Bake-off arm E: the best pronunciation result of the whole bake-off, and
+    the only Urdu cell whose automated gate passes on both references — but
+    it is CC-BY-NC (personal use only, see docs/URDU_MODEL_LICENSING.md) and
+    verified=False until the PRODUCTION runtime (OmniVoiceBackend, not the
+    eval harness's isolated loader) has its own pod smoke test.
+    """
+    omni = CATALOG.require("omnivoice_urdu")
+    assert omni.runtime is RuntimeKind.OMNIVOICE
+    assert omni.license is License.CC_BY_NC
+    assert not omni.license.is_permissive, "CC-BY-NC must never read as commercially shippable"
+    assert omni.license.personal_use_ok, "but it must be legal for personal use"
+    assert omni.experimental_listing is True
+    assert omni.claims("ur", Script.ARABIC)
+    assert not omni.supports("ur", Script.ARABIC), (
+        "verified=False until the production runtime is pod-verified"
+    )
+    assert omni.caveat, "an experimental spec must carry a user-facing caveat"
+
+
+def test_omnivoice_urdu_requires_explicit_opt_in() -> None:
+    profile = profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur")
+    plan = resolve(profile, "omnivoice_urdu", CATALOG, allow_experimental=True)
+    assert plan.model_id == "omnivoice_urdu"
+    assert plan.experimental is True
+    assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
+
+
+def test_auto_urdu_routing_still_prefers_no_model_over_an_nc_one() -> None:
+    """
+    Two experimental candidates now claim (ur, ARABIC) — voxcpm2_urdu_arabic
+    and omnivoice_urdu — and NEITHER may be Auto-selected, licensing aside.
+    A CC-BY-NC spec being the "best" one must never tempt Auto routing into
+    picking it silently; only an explicit, named request may reach it.
+    """
+    with pytest.raises(NoRouteError):
+        resolve(profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur"), None, CATALOG)
 
 
 def test_fake_runtime_is_not_in_the_catalog() -> None:
@@ -388,10 +452,14 @@ def test_all_revisions_pinned() -> None:
             )
 
 
-def test_attribution_required_for_cc_by_sa() -> None:
-    """CC-BY-SA weights need a NOTICE entry. Wave 4 audits the file itself."""
+def test_attribution_required_for_the_by_licenses() -> None:
+    """
+    CC-BY-SA and CC-BY-NC both carry the "BY" (attribution-required) clause
+    and need a NOTICE entry; they differ in ShareAlike vs NonCommercial, not
+    in whether attribution is owed. Wave 4 audits the file itself.
+    """
     for spec in CATALOG.needs_attribution():
-        assert spec.license is License.CC_BY_SA_4_0
+        assert spec.license in {License.CC_BY_SA_4_0, License.CC_BY_NC}
 
 
 # ── Exceptions ───────────────────────────────────────────────────────────────

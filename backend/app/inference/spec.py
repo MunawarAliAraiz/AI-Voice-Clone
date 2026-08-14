@@ -41,6 +41,7 @@ class RuntimeKind(StrEnum):
     F5 = "f5"
     CHATTERBOX = "chatterbox"
     VOXCPM = "voxcpm"
+    OMNIVOICE = "omnivoice"
 
     #: Test-only. Produces deterministic silence, never audio that could be
     #: mistaken for a clone. Gated behind VCS_ALLOW_FAKE_RUNTIME.
@@ -51,28 +52,53 @@ class License(StrEnum):
     """
     Weight licenses.
 
-    Only permissive entries may appear in the shipped catalog. `CC_BY_NC` and
-    `RESEARCH_ONLY` exist solely so the license audit in Wave 4 can *name* what
-    it rejected — no shipped spec may carry them.
+    `is_permissive` entries may ship in a commercial product. `CC_BY_NC` may
+    appear in the catalog ONLY for the owner's personal use behind the
+    `VCS_API_KEY` gate — golden rule 6, amended 2026-08-15 after
+    docs/URDU_MODEL_LICENSING.md established that no permissively-licensed
+    model both lists Urdu and clones from reference audio. `personal_use_ok`
+    is what the catalog test enforces; `is_permissive` is stricter, for
+    anything that claims to be shippable. `RESEARCH_ONLY` exists solely so
+    the license audit can *name* what it rejected — no shipped spec, personal
+    or otherwise, may carry it (Higgs Audio v3's terms are stricter than
+    CC-BY-NC and it is not integrated for exactly that reason).
     """
 
     MIT = "MIT"
     APACHE_2_0 = "Apache-2.0"
     CC_BY_SA_4_0 = "CC-BY-SA-4.0"
 
-    # Non-shippable. Present for the audit's vocabulary only.
+    # Personal-use-only: permitted in the catalog, gated by
+    # `ModelSummary.commercial_use` = False so the UI badges it "Non-commercial".
     CC_BY_NC = "CC-BY-NC"
+
+    # Non-shippable, period. Present for the audit's vocabulary only.
     RESEARCH_ONLY = "research-only"
 
     @property
     def is_permissive(self) -> bool:
-        """True if weights under this license may ship in this product."""
+        """True if weights under this license may ship in a commercial product."""
         return self in _PERMISSIVE
 
     @property
+    def personal_use_ok(self) -> bool:
+        """
+        True if this license may appear in the catalog AT ALL — permissive
+        licenses, plus CC-BY-NC for personal use behind the API-key gate.
+        `RESEARCH_ONLY` is the one tier stricter than that and stays excluded.
+        """
+        return self.is_permissive or self is License.CC_BY_NC
+
+    @property
     def requires_attribution(self) -> bool:
-        """True if NOTICE must carry an attribution entry for these weights."""
-        return self is License.CC_BY_SA_4_0
+        """
+        True if NOTICE must carry an attribution entry for these weights.
+
+        Both CC-BY-SA and CC-BY-NC carry the "BY" (attribution-required)
+        clause — they differ in ShareAlike vs NonCommercial, not in whether
+        attribution is owed.
+        """
+        return self in {License.CC_BY_SA_4_0, License.CC_BY_NC}
 
 
 _PERMISSIVE: frozenset[License] = frozenset(

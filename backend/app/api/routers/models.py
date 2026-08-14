@@ -56,7 +56,8 @@ def _summary(status: ModelStatus) -> ModelSummary:
     spec = status.spec
     return ModelSummary(
         id=spec.id, display_name=spec.display_name, runtime=spec.runtime.value,
-        license=spec.license.value, languages=_listed_langs(spec),
+        license=spec.license.value, commercial_use=spec.license.is_permissive,
+        languages=_listed_langs(spec),
         experimental=spec.experimental_listing,
         state=status.state.value, est_wait_sec=status.est_wait_sec,
         vram_mb=spec.vram_mb, est_rtf=spec.est_rtf, params=spec.params,

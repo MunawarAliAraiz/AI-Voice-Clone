@@ -26,6 +26,20 @@ interface Props {
   onJobSettled?: (job: JobStatusResponse) => void;
 }
 
+/**
+ * The picker's dropdown option label suffix for a non-recommended model.
+ * `experimental` and `commercial_use` are independent axes — a model can be
+ * non-commercial and fully verified (OmniVoice), or experimental and fully
+ * commercial (the LoRA-less base-checkpoint arms) — so both are named when
+ * both apply, rather than one hiding the other.
+ */
+function modelSuffix(m: { experimental: boolean; commercial_use: boolean }): string {
+  const tags: string[] = [];
+  if (m.experimental) tags.push('Experimental — lower accuracy');
+  if (!m.commercial_use) tags.push('Non-commercial');
+  return tags.length ? ` (${tags.join(', ')})` : '';
+}
+
 export function Composer({ voices, languages, onJobSettled }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
@@ -417,9 +431,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
                 <option key={m.id} value={m.id}>
                   {m.id === detect?.would_route_to?.model_id
                     ? `${m.display_name} (Recommended)`
-                    : m.experimental
-                      ? `${m.display_name} (Experimental — lower accuracy)`
-                      : m.display_name}
+                    : `${m.display_name}${modelSuffix(m)}`}
                 </option>
               ))}
             </select>
@@ -428,6 +440,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
             <p className="hint muted">
               Experimental — Auto never picks it, you chose it explicitly.
               {selectedModel.caveat ? ` ${selectedModel.caveat}` : ''}
+            </p>
+          )}
+          {selectedModel && !selectedModel.commercial_use && (
+            <p className="hint muted">
+              Non-commercial license — fine for your own personal use, not for a shipped product.
             </p>
           )}
         </label>

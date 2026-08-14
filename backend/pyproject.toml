@@ -55,6 +55,15 @@ chatterbox = [
 voxcpm = [
     # TODO(R3): confirm the distribution name and version on PyPI.
 ]
+omnivoice = [
+    # Same reasoning as chatterbox above: left commented rather than declared
+    # live, so a local `uv sync` on this torch-less Windows dev machine never
+    # pays to resolve OmniVoice's torch/transformers tree. pod-bootstrap.sh's
+    # equivalent step does `uv pip install --python <venv> omnivoice` directly
+    # into its own venv — never `uv sync --extra`. Distribution name and
+    # import name are both `omnivoice` (k2-fsa/OmniVoice), confirmed against
+    # the bake-off's `/workspace/engines-lab/omnivoice/` venv, 2026-08-14.
+]
 
 [dependency-groups]
 dev = [
@@ -81,6 +90,7 @@ conflicts = [
         { extra = "f5" },
         { extra = "chatterbox" },
         { extra = "voxcpm" },
+        { extra = "omnivoice" },
     ],
 ]
 
