@@ -33,9 +33,27 @@ Those axes are now scored separately.
 | `eval/score_urdu_bakeoff.py` | ✅ Scoring, runs in `.venv-eval`. |
 | `eval/build_listen_page.py` | ✅ Blind listening page, verified in-browser. |
 | `docs/URDU_MODEL_LICENSING.md` | ✅ Full report, code-vs-weights checked separately. |
-| Arms A/B/C (VoxCPM2) | 🚧 Running on the pod. |
-| Arms D–J | ⬜ Not started. |
-| Blind listen | ⬜ Not started — **this is the decision**. |
+| `docs/URDU_BAKEOFF_RESULTS.md` | ✅ Written, **§5 decision table deliberately empty** until the listen. |
+| Arms A/B/C/D (VoxCPM2 ×3 repr + LoRA) | ✅ 13 items × 2 references each. Scored. |
+| Arm E (OmniVoice) | ✅ 13 items × 2 references. Scored. Lightest arm: 4.5 GB, 0.44 RTF. |
+| Arm F (Higgs v3) | ⛔ **could_not_run, recorded with the reason** — see below. |
+| Arm G (code-switch) | ✅ Reporting slice over A–E. Numbers are a **metric artifact**, see results §4. |
+| Arms H/I/J (IndicF5) | ⏸ **Blocked on an `HF_TOKEN`** + the female transcript. venv pre-built at `/workspace/engines-lab/r1-f5/`. |
+| Blind listen | ⬜ **Not started — this is the decision.** 130 clips ready, page verified playing. |
+
+**Arm F is genuinely impossible on this pod, not skipped.** transformers 5.15.0 has no
+`higgs_multimodal_qwen3`; `config.json` has `auto_map: null` so `trust_remote_code` can't rescue it;
+the only documented self-hosting path is the `lmsysorg/sglang-omni:dev` Docker image and Docker is
+not installed (a RunPod container can't nest one); and mainline pip `sglang` has zero Higgs models
+(0 GitHub code-search hits). Boson lists ≥40 GB as known-good, 24 GB as unverified. **Don't retry
+this without either Docker or a ≥40 GB card.** `_load_higgs` now preflights and raises with that
+whole diagnosis, which the harness records as `could_not_run`.
+
+**Arms H/I/J need one click from the owner.** `ai4bharat/IndicF5` is `gated=auto` — metadata reads
+fine anonymously, but `model.safetensors` (1.4 GB) returns `GatedRepoError: 401`. Because the whole
+repo is gated, `trust_remote_code` can't fetch the shipped `f5_tts/` modules either. `gated=auto`
+means approval is **automatic on accepting the terms**, so this is a token, not an application.
+Arm I is the plan's central question, so this is the highest-value unblock available.
 
 **Devanagari is hand-authored gold, deliberately.** Arms C/I/J are therefore a **ceiling test**: if a
 model fails on perfect Devanagari, no converter rescues the route; if it succeeds, a converter is
@@ -53,10 +71,23 @@ then worth building. Do not read those arms as "our transliterator works".
   `training_state.json` survive at `eval/results/voxcpm_lora/checkpoint_backup/`. Only run 2
   (`voxcpm_lora_proj`, `enable_proj:true`, 74 MB) still has weights, so **arm D uses run 2**.
   Retraining run 1 is ~15 min if it is ever wanted back.
-- **Reference-speaker gap:** only `eval/fixtures/voice_urdu.wav` exists, run as `--reference-id owner`.
-  The plan requires a **second reference of a different gender**; it has not been sourced, and every
-  candidate model's terms require consent for a cloned voice. Until then, generalisation across
-  speakers is untested and must be reported as a coverage gap.
+- **Reference-speaker gap: CLOSED.** The owner supplied a consented female recording; it is
+  `eval/fixtures/voice_urdu_female.wav` (`--reference-id female`) and every runnable arm ran against
+  both speakers. **It is deliberately not committed** — a real person's voice, and the standing rule
+  is no voice data in git without explicit sign-off. It exists on the pod and on local disk only, so
+  a pod loss *and* a local loss would require re-recording. **Its transcript is still missing**, and
+  IndicF5 needs one (`ref_text`); `_load_indicf5` raises rather than silently Whisper-ing the
+  reference, because that would change what is being measured without saying so.
+- **Every female cell scores a higher speaker cosine than its owner counterpart, in all five arms**
+  (0.689–0.798 vs 0.662–0.737). A uniform offset across unrelated models points at ECAPA or the
+  recordings, **not** at model quality. Do not read it as "these models clone women better."
+- **The Perso-Arabic→Arabic-phonology hypothesis is NOT confirmed.** Arm B's owner cell has the
+  worst CER in the table (0.189), which fits — but arm B's *female* cell is 0.0385, among the best.
+  A model applying Arabic phonology to Arabic script would do it regardless of the target voice.
+  Still `[INFER]`; only listening settles it.
+- **Arm C (Devanagari) has the lowest CER at both references — treat that as a warning, not a win.**
+  It is equally consistent with Devanagari producing Hindi-accented speech that Whisper transcribes
+  *more* confidently, which is exactly the outcome the owner already rejected by ear.
 - **Ladder rung B is untestable on this corpus:** `normalize_urdu` is a measured no-op on 13/13
   items because they were authored with clean Urdu codepoints. A null there means "input was already
   clean", not "normalization does not help".
