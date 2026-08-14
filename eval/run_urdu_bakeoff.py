@@ -218,6 +218,11 @@ def _load_indicf5(reference: Path, reference_text: str):
 
 
 def _load_omnivoice(reference: Path, reference_text: str):
+    """
+    OmniVoice. Licence: Apache-2.0 CODE but **CC-BY-NC WEIGHTS** — permitted
+    here for the owner's personal, API-key-gated use only, NOT commercially
+    deployable. See docs/URDU_MODEL_LICENSING.md.
+    """
     import torch
     from omnivoice import OmniVoice
 
@@ -226,13 +231,26 @@ def _load_omnivoice(reference: Path, reference_text: str):
         device_map="cuda:0" if torch.cuda.is_available() else "cpu",
         dtype=torch.float16,
     )
+    # Verified against the installed package rather than the model card:
+    # generate(text, language=None, ref_text=None, ref_audio=None, ...)
+    # -> list[np.ndarray].
+    sr = int(getattr(model, "sample_rate", None) or getattr(model, "sr", None) or 24000)
 
     def synth(text: str):
-        # ref_text is optional here (Whisper auto-transcribes when omitted), but
+        # Pass `language` EXPLICITLY. OmniVoice really does support Urdu (211 h
+        # in its language table), and naming it removes the language-detection
+        # step entirely — which is the exact failure suspected of VoxCPM2, where
+        # Urdu is absent from the supported list and Perso-Arabic input may be
+        # taken for Arabic. Leaving this to auto-detection would reintroduce
+        # the variable this arm exists to eliminate.
+        #
+        # ref_text is optional (Whisper auto-transcribes when omitted) but
         # supplying it removes a source of run-to-run variance.
         kwargs = {"ref_text": reference_text} if reference_text.strip() else {}
-        audio = model.generate(text=text, ref_audio=str(reference), **kwargs)
-        return (audio[0] if isinstance(audio, list) else audio), 24000
+        audio = model.generate(
+            text=text, language="ur", ref_audio=str(reference), **kwargs
+        )
+        return (audio[0] if isinstance(audio, list) else audio), sr
 
     return synth, _resolve_revision(OMNIVOICE_REPO)
 
