@@ -203,7 +203,16 @@ class ModelSpec:
 
     #: True once Phase A has produced audible proof on the target GPU.
     phase_a_verified: bool = False
+    #: Maintainer prose — env var names, RuntimeError semantics, doc paths.
+    #: Written for whoever reads this file next, not for the UI. See `caveat`
+    #: for the one field that IS meant to reach a user.
     notes: str = ""
+    #: The ONE user-facing sentence for an experimental spec, shown next to it
+    #: in the model picker. Short on purpose — it answers "why is this
+    #: labeled experimental?", not "how does this spec's loader work?". Every
+    #: spec with `experimental_listing=True` must set this; a contract test
+    #: enforces it (`test_contracts.py::test_experimental_specs_have_a_caveat`).
+    caveat: str = ""
 
     #: Deliberate, per-model, human-approved opt-in to advertise this spec's
     #: unverified cells as an EXPLICITLY LABELED experimental choice — set by

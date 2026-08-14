@@ -54,7 +54,8 @@ export interface ModelSummary {
   params: Record<string, Record<string, unknown>>;
   needs_reference_text: boolean;
   reference_max_sec: number | null;
-  notes: string;
+  /** The one user-facing sentence for an experimental model. Empty otherwise. */
+  caveat: string;
 }
 
 export interface ModelListResponse {

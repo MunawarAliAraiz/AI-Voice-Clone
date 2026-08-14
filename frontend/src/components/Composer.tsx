@@ -426,8 +426,8 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
           </div>
           {selectedModel?.experimental && (
             <p className="hint muted">
-              Experimental: this model didn't pass its own voice-identity accuracy check
-              ({selectedModel.notes || 'see model notes'}). Auto never picks it — you chose it explicitly.
+              Experimental — Auto never picks it, you chose it explicitly.
+              {selectedModel.caveat ? ` ${selectedModel.caveat}` : ''}
             </p>
           )}
         </label>

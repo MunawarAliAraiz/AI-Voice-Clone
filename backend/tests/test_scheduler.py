@@ -278,8 +278,9 @@ async def test_lora_local_path_only_sent_when_the_spec_declares_one(
 ) -> None:
     """
     `_load_into` must add `lora_local_path` to the LOAD payload for a spec
-    that carries one (voxcpm2_urdu_lora) and omit the key entirely for one
-    that doesn't (every other spec) — not send it as null/empty. A separate,
+    that carries one and omit the key entirely for one that doesn't (every
+    catalog spec today, since voxcpm2_urdu_lora was withdrawn 2026-08-15) —
+    not send it as null/empty. A separate,
     local catalog is used here rather than the module-level CATALOG/A/B/C so
     this doesn't perturb the VRAM-budget and eviction-order assumptions the
     rest of this file's tests make about that shared fixture.

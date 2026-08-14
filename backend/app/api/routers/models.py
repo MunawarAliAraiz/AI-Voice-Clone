@@ -61,7 +61,7 @@ def _summary(status: ModelStatus) -> ModelSummary:
         state=status.state.value, est_wait_sec=status.est_wait_sec,
         vram_mb=spec.vram_mb, est_rtf=spec.est_rtf, params=spec.params,
         needs_reference_text=spec.needs_reference_text,
-        reference_max_sec=spec.reference_max_sec, notes=spec.notes,
+        reference_max_sec=spec.reference_max_sec, caveat=spec.caveat,
     )
 
 

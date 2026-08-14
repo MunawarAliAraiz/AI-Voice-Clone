@@ -209,6 +209,23 @@ def test_every_shipped_license_is_permissive() -> None:
     )
 
 
+def test_experimental_specs_have_a_caveat() -> None:
+    """
+    `ModelSpec.notes` is maintainer prose (env var names, RuntimeError
+    semantics, doc paths) and must never reach a user. `caveat` is the one
+    field the picker renders, so every spec that opts into experimental
+    listing must set a short one — this is what stopped the picker from
+    dumping voxcpm2_urdu_lora's full engineering note into the UI.
+    """
+    for spec in CATALOG.specs:
+        if spec.experimental_listing:
+            assert spec.caveat, f"{spec.id} is experimental but has no caveat"
+            assert len(spec.caveat) <= 140, (
+                f"{spec.id}'s caveat is {len(spec.caveat)} chars — "
+                "this is a UI hint, not documentation"
+            )
+
+
 def test_three_runtimes_five_specs() -> None:
     """
     The lineup is a decision, not an accident. Changing it is a plan change.
@@ -218,9 +235,13 @@ def test_three_runtimes_five_specs() -> None:
     every candidate is license-washed on top of SWivid/F5-TTS's CC-BY-NC
     weights. English routes to Chatterbox (MIT) instead.
 
-    Back to five with `voxcpm2_urdu_lora` (Urdu bake-off arm D, 2026-08-14):
-    same VOXCPM runtime as the base spec, not a new runtime, so the runtime
-    set below is unchanged even though the spec count grew.
+    Back to five with `voxcpm2_urdu_lora` (Urdu bake-off arm D, 2026-08-14),
+    then that spec was withdrawn 2026-08-15 on the owner's real-use verdict
+    (base VoxCPM2 sounded better than the fine-tune) and replaced by
+    `voxcpm2_urdu_arabic` (arm B, same base checkpoint, no LoRA) so
+    Perso-Arabic Urdu keeps a working answer. Same VOXCPM runtime either way,
+    not a new runtime, so the runtime set below is unchanged even though the
+    spec count moved.
     """
     assert len(CATALOG.specs) == 5
     assert {s.runtime for s in CATALOG.specs} == {
@@ -231,6 +252,7 @@ def test_three_runtimes_five_specs() -> None:
     assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
     assert len(CATALOG.by_runtime(RuntimeKind.VOXCPM)) == 2
     assert CATALOG.get("f5_openf5_en") is None
+    assert CATALOG.get("voxcpm2_urdu_lora") is None, "withdrawn 2026-08-15"
 
 
 def test_gated_specs_are_flagged() -> None:
@@ -243,48 +265,35 @@ def test_gated_specs_are_flagged() -> None:
     assert indic.gated, "ai4bharat/IndicF5 is gated ('gated': 'auto' on the HF API)"
 
 
-def test_voxcpm2_urdu_lora_shares_base_checkpoint() -> None:
+def test_voxcpm2_urdu_arabic_shares_base_checkpoint() -> None:
     """
-    The LoRA spec is a delta on VOXCPM2, not a separate download — same repo,
-    same pinned revision, so the two can never silently drift apart.
+    Same repo, same pinned revision as VOXCPM2 — a second catalog entry for an
+    unverified cell on an otherwise-verified spec (see spec.py's
+    `experimental_listing` docstring: no per-cell flag exists, only per-spec),
+    not a different download, so the two can never silently drift apart.
     """
     base = CATALOG.require("voxcpm2")
-    lora = CATALOG.require("voxcpm2_urdu_lora")
-    assert lora.hf_repo == base.hf_repo
-    assert lora.hf_revision == base.hf_revision
-    assert lora.runtime is RuntimeKind.VOXCPM
-    assert lora.lora_local_path is not None
+    arabic = CATALOG.require("voxcpm2_urdu_arabic")
+    assert arabic.hf_repo == base.hf_repo
+    assert arabic.hf_revision == base.hf_revision
+    assert arabic.runtime is RuntimeKind.VOXCPM
+    assert arabic.lora_local_path is None, "no fine-tune — base checkpoint only"
 
 
-def test_voxcpm2_urdu_lora_has_a_durable_pinned_fallback() -> None:
+def test_voxcpm2_urdu_arabic_is_experimental_not_verified() -> None:
     """
-    lora_local_path is a fast-path CACHE, not the source of truth — a fresh
-    pod with none of the previous pod's local state must still be able to
-    fetch this from somewhere pinned, exactly like every other spec's base
-    weights. gated=True because the private repo needs an HF_TOKEN to
-    download, same mechanism IndicF5 already requires (no license to accept
-    here, just ownership — see the spec's own notes for that distinction).
+    Bake-off arm B: real [BENCH]/[LISTEN] results, but the automated
+    speaker-cosine gate (0.70) does not clear at the owner reference (0.6664
+    measured) — see docs/URDU_BAKEOFF_RESULTS.md. Must still show up as
+    verified=False regardless of the listening score.
     """
-    lora = CATALOG.require("voxcpm2_urdu_lora")
-    assert lora.lora_hf_repo == "munawaraliaraiz/voxcpm2-urdu-lora"
-    assert lora.lora_hf_revision is not None
-    assert lora.gated is True
-
-
-def test_voxcpm2_urdu_lora_is_experimental_not_verified() -> None:
-    """
-    Mirrors CHATTERBOX_ML_V3 exactly: real positive blind-listening results,
-    but the automated speaker-cosine gate (0.70) does not clear at either
-    reference (0.6621 / 0.6889 measured) — see docs/URDU_BAKEOFF_RESULTS.md.
-    A failing automated metric must not be silently rounded away by good
-    listening scores; it must still show up as verified=False.
-    """
-    lora = CATALOG.require("voxcpm2_urdu_lora")
-    assert lora.experimental_listing is True
-    assert lora.claims("ur", Script.ARABIC)
-    assert not lora.supports("ur", Script.ARABIC), (
+    arabic = CATALOG.require("voxcpm2_urdu_arabic")
+    assert arabic.experimental_listing is True
+    assert arabic.claims("ur", Script.ARABIC)
+    assert not arabic.supports("ur", Script.ARABIC), (
         "verified=False is required until the automated gate clears too"
     )
+    assert arabic.caveat, "an experimental spec must carry a user-facing caveat"
 
 
 def test_urdu_perso_arabic_still_has_no_auto_route() -> None:
@@ -297,13 +306,13 @@ def test_urdu_perso_arabic_still_has_no_auto_route() -> None:
         resolve(profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur"), None, CATALOG)
 
 
-def test_voxcpm2_urdu_lora_requires_explicit_opt_in() -> None:
+def test_voxcpm2_urdu_arabic_requires_explicit_opt_in() -> None:
     profile = profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur")
     with pytest.raises(NoRouteError):
-        resolve(profile, "voxcpm2_urdu_lora", CATALOG)
+        resolve(profile, "voxcpm2_urdu_arabic", CATALOG)
 
-    plan = resolve(profile, "voxcpm2_urdu_lora", CATALOG, allow_experimental=True)
-    assert plan.model_id == "voxcpm2_urdu_lora"
+    plan = resolve(profile, "voxcpm2_urdu_arabic", CATALOG, allow_experimental=True)
+    assert plan.model_id == "voxcpm2_urdu_arabic"
     assert plan.experimental is True
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 

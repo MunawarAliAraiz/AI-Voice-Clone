@@ -41,17 +41,19 @@ def test_models_list_reports_verified_latin_cells(tmp_path: Path) -> None:
         assert body["vram_budget_mb"] > 0
 
 
-def test_models_list_surfaces_urdu_lora_as_experimental(tmp_path: Path) -> None:
+def test_models_list_surfaces_urdu_arabic_as_experimental(tmp_path: Path) -> None:
     """
-    voxcpm2_urdu_lora is `verified=False` but `experimental_listing=True` —
+    voxcpm2_urdu_arabic is `verified=False` but `experimental_listing=True` —
     the picker must still list it (mirroring Chatterbox) rather than hiding an
-    unverified spec entirely, with its Urdu cell honestly marked unverified.
+    unverified spec entirely, with its Urdu cell honestly marked unverified,
+    and a non-empty user-facing caveat rather than the raw maintainer notes.
     """
     with _client(tmp_path) as c:
         body = c.get("/api/models").json()
-        lora = next(m for m in body["models"] if m["id"] == "voxcpm2_urdu_lora")
-        assert lora["experimental"] is True
-        ur = next(x for x in lora["languages"] if x["language"] == "ur")
+        spec = next(m for m in body["models"] if m["id"] == "voxcpm2_urdu_arabic")
+        assert spec["experimental"] is True
+        assert spec["caveat"], "experimental specs must carry a user-facing caveat"
+        ur = next(x for x in spec["languages"] if x["language"] == "ur")
         assert ur["script"] == "arabic"
         assert ur["verified"] is False, "gate-failing cell must not read as verified"
 

@@ -73,7 +73,11 @@ class ModelSummary(BaseModel):
             "The trim editor exists so WHICH seconds get used is not arbitrary."
         ),
     )
-    notes: str = ""
+    #: The ONE user-facing sentence explaining why an experimental model is
+    #: labeled experimental. NOT `ModelSpec.notes` — that field is maintainer
+    #: prose (env var names, RuntimeError semantics, doc paths) and must never
+    #: reach this response. Empty for a non-experimental model.
+    caveat: str = ""
 
 
 class ModelListResponse(BaseModel):

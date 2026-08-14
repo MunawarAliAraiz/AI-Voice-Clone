@@ -292,6 +292,33 @@ Question 8 is unconditionally answered. Questions 2, 4, 5, 7 have real answers n
 "among the arms that ran." Questions 1, 3, 6 stay open until arm I either runs or is explicitly
 deferred by the owner.
 
+### 5a. Arm D shipped, then withdrawn on owner listening (2026-08-15)
+
+Arm D was integrated as `voxcpm2_urdu_lora` on 2026-08-14 (§6 below, item 3's "owner decides" — the
+owner picked D). It was tested end-to-end the following day through the real running app, on the
+pod's real GPU, with a real enrolled voice — not just the bake-off's isolated clips. **The owner's
+verdict on that real-use test was that base VoxCPM2 sounded better than the LoRA.**
+
+This directly contradicts D's blind-listen median in §3a (4.0/5 across the board, tied with C). Per
+this project's own repeatedly-stated rule — owner listening is authoritative over an automated
+metric — the same principle extends here: a *later, more direct* listen (the actual voice, the actual
+app, not an isolated 4-second clip in a randomized listening page) overrides an earlier one. The spec
+was removed from the catalog the same day.
+
+**What this most likely means, in light of Q5's own caveat above:** Q5 already flagged that D's gain
+over B "may be from matching C's representation rather than the fine-tune itself; not disentangled."
+The withdrawal is consistent with that — the fine-tune itself may not have been doing much, and 36
+clips / 300 steps was always a small POC (`docs/VOXCPM_LORA_POC.md`). This is *not* evidence that
+LoRA fine-tuning can't work for Urdu, only that this particular small personal one didn't hold up.
+
+**What replaced it:** `voxcpm2_urdu_arabic` — arm B's config (base VoxCPM2, Perso-Arabic input, no
+fine-tune), still `experimental_listing=True`, still `verified=False`. Mediocre (3.0/5 pronunciation)
+but the working, honest baseline for Perso-Arabic Urdu until a better arm (OmniVoice, IndicF5, or a
+properly-scaled fine-tune) is integrated and verified. The runtime's LoRA-loading plumbing
+(`lora_local_path`/`lora_hf_repo` on `ModelSpec`, `VoxCPMBackend.load()`'s kwargs) was kept — it is
+generic, tested, and costs nothing unused — so any future LoRA, on a larger dataset, ships without
+re-threading the wire protocol.
+
 ---
 
 ## 6. What happens next
