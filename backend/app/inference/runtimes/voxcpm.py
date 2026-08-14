@@ -17,6 +17,21 @@ Design facts fixed by Phase-A / E1-E2 validation (2026-08-05, RTX 4000 Ada):
     buys RTF ~0.83 vs ~1.05, so it is a deliberate opt-in that also needs a
     raised load timeout and a persistent TORCHINDUCTOR_CACHE_DIR. Off, load is
     seconds (weights cached) and the first request is normal speed, no trap.
+
+LoRA loading (added for `voxcpm2_urdu_lora`, the Urdu bake-off's arm D) mirrors
+`eval/run_urdu_bakeoff.py::_load_voxcpm` exactly, because that function is the
+one that was actually measured end-to-end against real weights — this is a
+port, not a reimplementation from the model card. Two things carry over
+unchanged:
+  * The LoRA shape (`enable_lm`/`enable_dit`/`enable_proj`/`r`/`alpha`/
+    `dropout`) is read from the checkpoint's OWN `lora_config.json`, never
+    hardcoded. Constructing the wrong shape does not raise — `load_lora()`
+    silently drops mismatched weights and returns a real-looking number for
+    the wrong checkpoint. This exact bug was found and fixed once already.
+  * ANY skipped weight is a hard failure, not a warning. A partially-applied
+    adapter is a model that is only partly the thing that was measured in the
+    bake-off — shipping it anyway would mean the blind-listen scores no
+    longer describe what is actually running.
 """
 
 from __future__ import annotations
@@ -44,28 +59,69 @@ class VoxCPMBackend:
         self._sr: int | None = None
         self.loaded_model_id: str | None = None
 
-    def load(self, model_id: str, hf_repo: str, hf_revision: str) -> float:
+    def load(
+        self, model_id: str, hf_repo: str, hf_revision: str,
+        *, lora_local_path: str | None = None,
+    ) -> float:
         t0 = time.time()
         from huggingface_hub import snapshot_download
         from voxcpm.core import VoxCPM
+
+        kwargs: dict = {}
+        if lora_local_path is not None:
+            kwargs["lora_config"] = self._read_lora_config(lora_local_path)
 
         # Honour the pinned revision (golden rule 7): resolve the exact snapshot
         # on disk and load from that path, rather than trusting `main`.
         model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
         try:
             self._model = VoxCPM(
-                voxcpm_model_path=model_path, load_denoiser=False, optimize=False
+                voxcpm_model_path=model_path, load_denoiser=False, optimize=False,
+                **kwargs,
             )
         except TypeError:
             # Older/newer signature: fall back to from_pretrained (cache already
             # holds the pinned revision from the snapshot_download above).
             self._model = VoxCPM.from_pretrained(
-                hf_repo, load_denoiser=False, optimize=False
+                hf_repo, load_denoiser=False, optimize=False, **kwargs
             )
+        if lora_local_path is not None:
+            self._apply_lora(lora_local_path)
         self._sr = int(self._model.tts_model.sample_rate)
         self.loaded_model_id = model_id
         self._warm()
         return time.time() - t0
+
+    @staticmethod
+    def _read_lora_config(lora_local_path: str) -> Any:
+        import json
+        from pathlib import Path
+
+        from voxcpm.model.voxcpm2 import LoRAConfig
+
+        cfg_path = Path(lora_local_path) / "lora_config.json"
+        if not cfg_path.exists():
+            raise RuntimeError(
+                f"{cfg_path} missing — cannot infer the LoRA shape safely. A "
+                f"fresh pod needs this checkpoint restored (see "
+                f"VCS_VOXCPM_URDU_LORA_DIR) before this spec can load."
+            )
+        raw = json.loads(cfg_path.read_text(encoding="utf-8"))["lora_config"]
+        keys = ("enable_lm", "enable_dit", "enable_proj", "r", "alpha", "dropout")
+        return LoRAConfig(**{k: raw[k] for k in keys})
+
+    def _apply_lora(self, lora_local_path: str) -> None:
+        loaded, skipped = self._model.load_lora(lora_local_path)
+        if skipped:
+            # A skipped weight means the reconstructed adapter shape disagrees
+            # with the checkpoint on disk — the loaded model is only PARTLY
+            # the thing the bake-off measured. Serving it anyway would silently
+            # decouple what runs from what was scored; refuse instead.
+            raise RuntimeError(
+                f"LoRA load for {lora_local_path!r} skipped {len(skipped)} of "
+                f"{len(loaded) + len(skipped)} weights — refusing to serve a "
+                f"partially-applied adapter."
+            )
 
     def _warm(self) -> None:
         """

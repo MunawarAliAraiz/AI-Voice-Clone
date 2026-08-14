@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.language import Script
+from app.domain.language import Script, profile_text
+from app.domain.routing import resolve
 from app.exceptions import AppError, NoRouteError, QueueFullError
 from app.inference.catalog import CATALOG, PENDING_PIN, PENDING_REPO, build_catalog
 from app.inference.protocol import SchedulerProtocol
@@ -208,22 +209,27 @@ def test_every_shipped_license_is_permissive() -> None:
     )
 
 
-def test_three_runtimes_four_specs() -> None:
+def test_three_runtimes_five_specs() -> None:
     """
     The lineup is a decision, not an accident. Changing it is a plan change.
 
-    Was five specs until `f5_openf5_en` was dropped: R1b established that no
-    genuinely permissive English F5 checkpoint exists — every candidate is
-    license-washed on top of SWivid/F5-TTS's CC-BY-NC weights. English routes to
-    Chatterbox (MIT) instead.
+    Was five specs, dropped to four when `f5_openf5_en` was removed: R1b
+    established that no genuinely permissive English F5 checkpoint exists —
+    every candidate is license-washed on top of SWivid/F5-TTS's CC-BY-NC
+    weights. English routes to Chatterbox (MIT) instead.
+
+    Back to five with `voxcpm2_urdu_lora` (Urdu bake-off arm D, 2026-08-14):
+    same VOXCPM runtime as the base spec, not a new runtime, so the runtime
+    set below is unchanged even though the spec count grew.
     """
-    assert len(CATALOG.specs) == 4
+    assert len(CATALOG.specs) == 5
     assert {s.runtime for s in CATALOG.specs} == {
         RuntimeKind.F5,
         RuntimeKind.CHATTERBOX,
         RuntimeKind.VOXCPM,
     }
     assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
+    assert len(CATALOG.by_runtime(RuntimeKind.VOXCPM)) == 2
     assert CATALOG.get("f5_openf5_en") is None
 
 
@@ -235,6 +241,56 @@ def test_gated_specs_are_flagged() -> None:
     """
     indic = CATALOG.require("f5_indic")
     assert indic.gated, "ai4bharat/IndicF5 is gated ('gated': 'auto' on the HF API)"
+
+
+def test_voxcpm2_urdu_lora_shares_base_checkpoint() -> None:
+    """
+    The LoRA spec is a delta on VOXCPM2, not a separate download — same repo,
+    same pinned revision, so the two can never silently drift apart.
+    """
+    base = CATALOG.require("voxcpm2")
+    lora = CATALOG.require("voxcpm2_urdu_lora")
+    assert lora.hf_repo == base.hf_repo
+    assert lora.hf_revision == base.hf_revision
+    assert lora.runtime is RuntimeKind.VOXCPM
+    assert lora.lora_local_path is not None
+
+
+def test_voxcpm2_urdu_lora_is_experimental_not_verified() -> None:
+    """
+    Mirrors CHATTERBOX_ML_V3 exactly: real positive blind-listening results,
+    but the automated speaker-cosine gate (0.70) does not clear at either
+    reference (0.6621 / 0.6889 measured) — see docs/URDU_BAKEOFF_RESULTS.md.
+    A failing automated metric must not be silently rounded away by good
+    listening scores; it must still show up as verified=False.
+    """
+    lora = CATALOG.require("voxcpm2_urdu_lora")
+    assert lora.experimental_listing is True
+    assert lora.claims("ur", Script.ARABIC)
+    assert not lora.supports("ur", Script.ARABIC), (
+        "verified=False is required until the automated gate clears too"
+    )
+
+
+def test_urdu_perso_arabic_still_has_no_auto_route() -> None:
+    """
+    Adding an unverified experimental candidate must not change Auto routing.
+    Only an explicit, opted-in request may reach an unverified cell — see
+    domain.routing's NO SILENT FALLBACK rule.
+    """
+    with pytest.raises(NoRouteError):
+        resolve(profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur"), None, CATALOG)
+
+
+def test_voxcpm2_urdu_lora_requires_explicit_opt_in() -> None:
+    profile = profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur")
+    with pytest.raises(NoRouteError):
+        resolve(profile, "voxcpm2_urdu_lora", CATALOG)
+
+    plan = resolve(profile, "voxcpm2_urdu_lora", CATALOG, allow_experimental=True)
+    assert plan.model_id == "voxcpm2_urdu_lora"
+    assert plan.experimental is True
+    assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 
 
 def test_fake_runtime_is_not_in_the_catalog() -> None:

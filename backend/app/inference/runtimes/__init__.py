@@ -35,8 +35,18 @@ class RuntimeBackend(Protocol):
     #: Currently loaded spec id, or None. Read by PING; never touches the GPU.
     loaded_model_id: str | None
 
-    def load(self, model_id: str, hf_repo: str, hf_revision: str) -> float:
-        """Load a checkpoint at a PINNED revision. Returns load seconds."""
+    def load(
+        self, model_id: str, hf_repo: str, hf_revision: str,
+        *, lora_local_path: str | None = None,
+    ) -> float:
+        """
+        Load a checkpoint at a PINNED revision. Returns load seconds.
+
+        `lora_local_path` is only ever passed to a backend whose spec declared
+        `ModelSpec.lora_local_path` (currently just VoxCPM's Urdu LoRA) — see
+        `worker.py`. A backend that has no notion of a LoRA adapter simply
+        never receives the kwarg; it does not need to accept or ignore it.
+        """
         ...
 
     def synth(

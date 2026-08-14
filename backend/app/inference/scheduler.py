@@ -313,10 +313,14 @@ class InferenceScheduler:
 
     async def _load_into(self, worker: WorkerHandle, spec: ModelSpec) -> None:
         """Load `spec` into an existing worker. Caller holds the slot."""
+        payload = {"model_id": spec.id, "hf_repo": spec.hf_repo, "hf_revision": spec.hf_revision}
+        # Only present for specs carrying a LoRA adapter (currently
+        # voxcpm2_urdu_lora) — omitted entirely for every other spec, so
+        # runtimes that don't know about it never see the key.
+        if spec.lora_local_path is not None:
+            payload["lora_local_path"] = spec.lora_local_path
         response = await worker.call(
-            WireOp.LOAD,
-            {"model_id": spec.id, "hf_repo": spec.hf_repo, "hf_revision": spec.hf_revision},
-            timeout=self._config.load_timeout_sec,
+            WireOp.LOAD, payload, timeout=self._config.load_timeout_sec,
         )
         if not response.ok:
             raise self._error_from(spec, response)

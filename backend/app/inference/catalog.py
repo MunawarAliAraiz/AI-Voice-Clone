@@ -28,6 +28,7 @@ failed the gate. Do not pre-emptively set verified=True to make a test pass.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from ..domain.language import LanguageCode, Script
@@ -256,13 +257,89 @@ VOXCPM2 = ModelSpec(
 )
 
 
-#: 3 runtimes, 4 specs. Was 5 until f5_openf5_en was dropped for licensing —
-#: see the note where it used to be defined.
+#: Directory holding `lora_config.json` + `lora_weights.safetensors` for the
+#: Urdu LoRA (bake-off arm D). Personal fine-tune, never redistributed — there
+#: is no HF repo to pin, so this is host-local by design, not a gap in golden
+#: rule 7. The pod path is confirmed present at the default below; a fresh pod
+#: without it needs the checkpoint restored from the durable local-disk backup
+#: (`eval/results/voxcpm_lora_proj/checkpoint_backup/`, 74 MB) or the LoRA
+#: retrained (~15 min) before this spec can load — see docs/HANDOFF.md.
+_VOXCPM_URDU_LORA_DIR = os.environ.get(
+    "VCS_VOXCPM_URDU_LORA_DIR", "/workspace/engines-lab/lora-proj"
+)
+
+VOXCPM2_URDU_LORA = ModelSpec(
+    id="voxcpm2_urdu_lora",
+    display_name="VoxCPM 2 (Urdu LoRA)",
+    runtime=RuntimeKind.VOXCPM,
+    license=License.APACHE_2_0,
+    # Same base checkpoint as VOXCPM2 — the LoRA is a delta on top of it, not a
+    # different download. Referencing the sibling spec's fields rather than
+    # retyping the literal so the two can never drift apart.
+    hf_repo=VOXCPM2.hf_repo,
+    hf_revision=VOXCPM2.hf_revision,
+    lora_local_path=_VOXCPM_URDU_LORA_DIR,
+    # Urdu bake-off arm D (docs/URDU_BAKEOFF_RESULTS.md), 2026-08-14. Perso-
+    # Arabic input DIRECTLY — no transliteration step, unlike arm C.
+    #
+    # [BENCH] (both references; the worse of the two recorded here, the better
+    # one noted below): CER 0.0385 (owner) / 0.0500 (female) — both clear the
+    # <0.25 gate easily. Speaker cosine 0.6621 (owner) / 0.6889 (female) — BOTH
+    # BELOW this catalog's own 0.70 gate. That is why `verified=False` here
+    # despite real, positive [LISTEN] results below: this project's rule is
+    # that a human listen can promote a model past what an unreliable
+    # automated metric implies, never that a failing metric gets rounded away
+    # in silence. See CHATTERBOX_ML_V3 for the identical precedent.
+    #
+    # [LISTEN] blind listening, one rater, n=25 (13 sentences x 2 references,
+    # one clip unscored — a page playback glitch, not a synthesis failure):
+    # pronunciation 4.0/5, naturalness 4.0/5, speaker identity 4.0/5 flat at
+    # BOTH references (the automated cosine spread did not survive to the
+    # ear — trust this over the [BENCH] number above), code-switching 5.0/5.
+    # Tied exactly with arm C (VoxCPM2 + Devanagari transliteration); this
+    # spec was preferred over building a production Urdu->Devanagari
+    # transliterator, which has no clean, maintained Python 3.12 library.
+    languages=(
+        LanguageSupport(
+            language=LanguageCode.URDU.value, script=Script.ARABIC,
+            verified=False, cer=0.0500, speaker_cosine=0.6621,
+        ),
+    ),
+    # MEASURED, bake-off: 6509 MB (owner) / 7131 MB (female) peak. Using the
+    # higher figure, rounded up — VRAM sizing must never underestimate.
+    vram_mb=7200,
+    # Base VOXCPM2's own measured cold-load (124.0s) plus a buffer for reading
+    # and applying the LoRA weights on top.
+    est_load_sec=130.0,
+    # MEASURED: 0.910 (female) / 0.943 (owner). Using the higher (worse-case).
+    est_rtf=0.943,
+    needs_reference_text=False,
+    params=VOXCPM2.params,
+    experimental_listing=True,
+    notes=(
+        "Personal LoRA fine-tune of VoxCPM2 on the owner's own Urdu recordings "
+        "(eval/training/, never committed). Listed as an explicit experimental "
+        "choice, exactly like Chatterbox: real positive blind-listening "
+        "results, but the automated speaker-cosine gate does not clear this "
+        "catalog's own 0.70 threshold at either reference. Full numbers and "
+        "methodology: docs/URDU_BAKEOFF_RESULTS.md. Requires "
+        "VCS_VOXCPM_URDU_LORA_DIR (or the pod-local default) to point at a "
+        "directory holding lora_config.json + lora_weights.safetensors; a "
+        "missing checkpoint is a clear load-time RuntimeError, never a silent "
+        "fallback to the base (non-Urdu-tuned) weights."
+    ),
+)
+
+
+#: 3 runtimes, 5 specs. Was 5, dropped to 4 when f5_openf5_en was removed for
+#: licensing (see the note where it used to be defined), back to 5 with the
+#: Urdu LoRA fine-tune above.
 ALL_SPECS: tuple[ModelSpec, ...] = (
     F5_OPENBIBLE_URDU,
     F5_INDIC,
     CHATTERBOX_ML_V3,
     VOXCPM2,
+    VOXCPM2_URDU_LORA,
 )
 
 

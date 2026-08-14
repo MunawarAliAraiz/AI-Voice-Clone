@@ -76,8 +76,15 @@ def main(runtime: str) -> int:
             if op == WireOp.PING:
                 result = {"runtime": runtime, "loaded_model_id": backend.loaded_model_id}
             elif op == WireOp.LOAD:
+                # lora_local_path is only ever present for specs that declared
+                # one (see scheduler._load_into); other backends' load() never
+                # sees the kwarg, so this line is a no-op for them.
+                extra = {}
+                if "lora_local_path" in payload:
+                    extra["lora_local_path"] = payload["lora_local_path"]
                 load_sec = backend.load(
-                    payload["model_id"], payload["hf_repo"], payload["hf_revision"]
+                    payload["model_id"], payload["hf_repo"], payload["hf_revision"],
+                    **extra,
                 )
                 result = {"load_time_sec": load_sec}
             elif op == WireOp.SYNTH:
