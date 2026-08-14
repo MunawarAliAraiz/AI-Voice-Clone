@@ -6,12 +6,29 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ In flight right now — the Urdu bake-off (2026-08-14)
+## ⚡ In flight right now — Urdu bake-off, decision made, arm D shipped (2026-08-15)
 
 Branch **`feature/urdu-bakeoff`**, pod **`194.68.245.161:22175`** (RTX A5000 24 GB — the roomiest
 card this project has had). Driven by the plan the owner approved with 13 corrections; the binding
-rule is **research → controlled experiments → blind listening → decision → implementation**, and it
-must not be reversed. **No winner has been named and none may be until the blind listen.**
+rule was **research → controlled experiments → blind listening → decision → implementation**, and
+that order was followed exactly — implementation only started after 130/130 clips were blind-scored.
+
+**Where this actually landed:** the owner asked for a recommendation after the full listen. Arm D
+(VoxCPM2 + a personal LoRA fine-tune, native Perso-Arabic input, no transliteration) was recommended
+over arm C (VoxCPM2 + Devanagari transliteration) specifically because they tied on the blind-listen
+score and D needed zero new engineering — there is no clean, maintained Python 3.12 Urdu→Devanagari
+library, so shipping C would have meant building one first. **Integrated as `voxcpm2_urdu_lora`**,
+`experimental_listing=True` (NOT `verified=True` — mirrors the Chatterbox precedent exactly: real
+positive blind-listening scores, but the automated speaker-cosine gate this catalog already enforces
+(>0.70) does not clear at either reference, 0.6621/0.6889 measured). Real pod smoke test passed
+end-to-end through the actual production `VoxCPMBackend` class (not the eval harness): load 86.5s
+with the LoRA applying cleanly (zero skipped weights), synth 21.0s producing 4.16s of non-silent
+audio (peak 0.92), clean unload. Full detail in `docs/ROADMAP.md`'s "Urdu bake-off + LoRA
+integration" row and the commit history on this branch (`feat(urdu): integrate the LoRA arm...`).
+
+**Still open:** IndicF5 (arms H/I/J) — the question of whether Devanagari transliteration
+generalizes to a *different* model, not just VoxCPM2 — remains blocked on an `HF_TOKEN`. This does
+not block what shipped; it is a separate question about whether something even better exists.
 
 **Root-cause finding that reframed the work:** VoxCPM2's published list is 30 languages including
 Hindi and Arabic but **not Urdu**, and its card says it infers language from the text. So Roman Urdu
