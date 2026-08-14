@@ -4,6 +4,63 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
+---
+
+## ⚡ In flight right now — the Urdu bake-off (2026-08-14)
+
+Branch **`feature/urdu-bakeoff`**, pod **`194.68.245.161:22175`** (RTX A5000 24 GB — the roomiest
+card this project has had). Driven by the plan the owner approved with 13 corrections; the binding
+rule is **research → controlled experiments → blind listening → decision → implementation**, and it
+must not be reversed. **No winner has been named and none may be until the blind listen.**
+
+**Root-cause finding that reframed the work:** VoxCPM2's published list is 30 languages including
+Hindi and Arabic but **not Urdu**, and its card says it infers language from the text. So Roman Urdu
+likely gets Hindi phonotactics and Perso-Arabic may get *Arabic* phonology — possibly worse. That is
+`[INFER]`, not measured; arms A/B/C exist to settle it.
+
+**Also corrected:** a prior pass dismissed IndicF5 for not listing Urdu. Wrong — Hindi and Urdu are
+one spoken language differing mainly in script, so a missing language label constrains the *input
+representation*, not necessarily the phonetic capability. `docs/URDU_CLONING_REPORT.md` §2 ruled
+transliteration out as a fix for **speaker identity**; it never tested it for **pronunciation**.
+Those axes are now scored separately.
+
+| Piece | State |
+|---|---|
+| `tts.py` transform-path bug | ✅ Fixed + regression test. Called `GenerationError(detail)` against a 2-arg `__init__`, so the "fail loudly" branch raised `TypeError`. Now a clean 422 `NoRouteError`. Reachable via `urdu_strategy="translit"`. 244 tests pass. |
+| `eval/fixtures/urdu_corpus.json` | ✅ 13 items — owner's 5 sentences + numbers (ASCII/Eastern as a controlled pair), dates, names, acronyms, technical terms, colloquial Pakistani, long multi-clause. |
+| `eval/urdu_represent.py` | ✅ `strip_nuqta` (derives arm I from arm J), `normalize_urdu`, `to_ascii_digits`. |
+| `eval/run_urdu_bakeoff.py` | ✅ Synthesis, one arm per invocation. |
+| `eval/score_urdu_bakeoff.py` | ✅ Scoring, runs in `.venv-eval`. |
+| `eval/build_listen_page.py` | ✅ Blind listening page, verified in-browser. |
+| `docs/URDU_MODEL_LICENSING.md` | ✅ Full report, code-vs-weights checked separately. |
+| Arms A/B/C (VoxCPM2) | 🚧 Running on the pod. |
+| Arms D–J | ⬜ Not started. |
+| Blind listen | ⬜ Not started — **this is the decision**. |
+
+**Devanagari is hand-authored gold, deliberately.** Arms C/I/J are therefore a **ceiling test**: if a
+model fails on perfect Devanagari, no converter rescues the route; if it succeeds, a converter is
+then worth building. Do not read those arms as "our transliterator works".
+
+**Findings to carry forward:**
+- **No commercially-safe open-source Urdu voice-cloning model exists** (as of 2026-08). The two that
+  genuinely list Urdu *and* clone — Higgs Audio v3, OmniVoice — are both non-commercial. Every
+  permissive cloner omits Urdu, or (Indic Parler-TTS) omits cloning; its maintainer says it always
+  will. Full detail + licence classifications: `docs/URDU_MODEL_LICENSING.md`.
+- **Weights licences ≠ code licences.** OmniVoice ships Apache-2.0 code with **CC-BY-NC weights**;
+  the blogs calling it commercially free read the wrong file. Golden rule 6 was relaxed this session
+  to permit NC weights **for personal use behind the API-key gate** — that is not a commercial licence.
+- **⚠️ LoRA run 1's `lora_weights.safetensors` is GONE.** Only `lora_config.json` and
+  `training_state.json` survive at `eval/results/voxcpm_lora/checkpoint_backup/`. Only run 2
+  (`voxcpm_lora_proj`, `enable_proj:true`, 74 MB) still has weights, so **arm D uses run 2**.
+  Retraining run 1 is ~15 min if it is ever wanted back.
+- **Reference-speaker gap:** only `eval/fixtures/voice_urdu.wav` exists, run as `--reference-id owner`.
+  The plan requires a **second reference of a different gender**; it has not been sourced, and every
+  candidate model's terms require consent for a cloned voice. Until then, generalisation across
+  speakers is untested and must be reported as a coverage gap.
+- **Ladder rung B is untestable on this corpus:** `normalize_urdu` is a measured no-op on 13/13
+  items because they were authored with clean Urdu codepoints. A null there means "input was already
+  clean", not "normalization does not help".
+
 Last updated: **2026-08-13**. Qwen analyzer backend + frontend wiring are both merged to `main` and
 done. The VoxCPM2 LoRA POC's training checkpoint merged earlier (PR #11); the baseline-vs-LoRA eval
 comparison that was missing at that point has since run for real and **also merged to `main`**
