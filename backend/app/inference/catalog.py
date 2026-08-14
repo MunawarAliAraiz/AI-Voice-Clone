@@ -313,10 +313,7 @@ VOXCPM2_URDU_ARABIC = ModelSpec(
         "2026-08-15 on the owner's real-use verdict that base sounded better "
         "than the fine-tune; see catalog history for that spec's numbers."
     ),
-    caveat=(
-        "Pronunciation and naturalness are mediocre (3/5) — this is the base "
-        "model rendering Urdu script directly, with no Urdu-specific tuning."
-    ),
+    caveat="Pronunciation and naturalness are mediocre (3/5).",
 )
 
 
@@ -380,10 +377,7 @@ OMNIVOICE_URDU = ModelSpec(
         "runtime (not the eval harness) is smoke-tested and re-gated. "
         "Weakest on code-switching (3.0/5) — see docs/URDU_BAKEOFF_RESULTS.md."
     ),
-    caveat=(
-        "Best-sounding Urdu option so far, but non-commercial (personal use "
-        "only) and not yet re-verified on the production runtime."
-    ),
+    caveat="Best pronunciation so far, but non-commercial (personal use only).",
 )
 
 

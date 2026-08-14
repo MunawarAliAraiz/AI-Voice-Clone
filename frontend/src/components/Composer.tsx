@@ -436,17 +436,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
               ))}
             </select>
           </div>
-          {selectedModel?.experimental && (
-            <p className="hint muted">
-              Experimental — Auto never picks it, you chose it explicitly.
-              {selectedModel.caveat ? ` ${selectedModel.caveat}` : ''}
-            </p>
-          )}
-          {selectedModel && !selectedModel.commercial_use && (
-            <p className="hint muted">
-              Non-commercial license — fine for your own personal use, not for a shipped product.
-            </p>
-          )}
+          {selectedModel?.caveat && <p className="hint muted">{selectedModel.caveat}</p>}
         </label>
 
         <label className="field">
