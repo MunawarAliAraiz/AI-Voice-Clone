@@ -1,0 +1,119 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Urdu bake-off &mdash; blind listening</title>
+<style>
+ :root { color-scheme: dark; --bg:#0f1115; --fg:#e8eaf0; --mut:#9aa3b2;
+          --card:#181b22; --line:#272b35; --acc:#7aa2f7; }
+ body { background:var(--bg); color:var(--fg); margin:0; padding:24px;
+         font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; }
+ h1 { font-size:20px; margin:0 0 4px; }
+ .sub { color:var(--mut); font-size:13px; margin-bottom:20px; }
+ .warn { background:#2a1f14; border:1px solid #5c4423; border-radius:8px;
+          padding:12px 14px; margin:16px 0; font-size:13px; }
+ .item { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:22px; }
+ .urdu { font-size:19px; direction:rtl; text-align:right; margin:2px 0 10px;
+          font-family:"Noto Nastaliq Urdu","Jameel Noori Nastaleeq",serif; line-height:2.1; }
+ .tag { display:inline-block; background:#20242e; color:var(--mut); border-radius:4px;
+         padding:1px 7px; font-size:11px; margin-right:5px; }
+ .ref { border-left:3px solid var(--acc); padding-left:12px; margin:12px 0 16px; }
+ .cand { border-top:1px solid var(--line); padding:12px 0 4px; }
+ .lbl { font-weight:600; color:var(--acc); margin-right:10px; }
+ audio { vertical-align:middle; height:34px; }
+ .crit { display:flex; flex-wrap:wrap; gap:14px; margin:8px 0 0; }
+ .crit label { font-size:12px; color:var(--mut); }
+ select, textarea { background:#11141a; color:var(--fg); border:1px solid var(--line);
+                     border-radius:5px; padding:3px 6px; font:inherit; font-size:13px; }
+ textarea { width:100%; margin-top:8px; min-height:34px; }
+ .bar { position:sticky; top:0; background:var(--bg); padding:10px 0 14px;
+         border-bottom:1px solid var(--line); margin-bottom:18px; z-index:9; }
+ button { background:var(--acc); color:#0b0d12; border:0; border-radius:6px;
+           padding:8px 15px; font:inherit; font-weight:600; cursor:pointer; }
+ #prog { color:var(--mut); font-size:13px; margin-left:12px; }
+</style>
+
+<h1>Urdu bake-off &mdash; blind listening</h1>
+<div class="sub">52 clips &middot; 13 sentences &middot; 1 reference speaker(s)</div>
+
+<div class="warn">
+  <b>This is the decision.</b> CER and speaker cosine are only a screen &mdash; ECAPA is
+  English-trained and out-of-distribution for this voice, and VoxCPM2 once passed CER and
+  nearly passed cosine while still sounding like a stranger. Score what you hear.
+  Clip labels are randomized; the mapping lives in <code>key.json</code>, which you should
+  not open until you are done.
+  <br><br>
+  Score each clip 1&ndash;5 (1 = bad, 5 = indistinguishable from a native speaker /
+  from the reference). Leave a clip blank if you cannot judge it. <b>Export</b> when finished.
+</div>
+
+<div class="bar">
+  <button onclick="exportScores()">Export scores JSON</button>
+  <span id="prog"></span>
+</div>
+
+<div id="items"></div>
+
+<script>
+const DATA = [{"item_id": "abbreviations", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔", "stresses": ["acronyms", "latin_island", "letter_by_letter_reading"], "clips": [{"label": "Sample 1", "token": "5d619693f2587b9e", "src": "blind/5d619693f2587b9e.wav"}, {"label": "Sample 2", "token": "d479f7ca5eecce51", "src": "blind/d479f7ca5eecce51.wav"}, {"label": "Sample 3", "token": "300bd375dbe826b8", "src": "blind/300bd375dbe826b8.wav"}, {"label": "Sample 4", "token": "900d72dd87962cbf", "src": "blind/900d72dd87962cbf.wav"}]}, {"item_id": "colloquial", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔", "stresses": ["pakistani_register", "discourse_particles", "informal"], "clips": [{"label": "Sample 1", "token": "4e767ddc78b026f5", "src": "blind/4e767ddc78b026f5.wav"}, {"label": "Sample 2", "token": "f649947557dbbbb5", "src": "blind/f649947557dbbbb5.wav"}, {"label": "Sample 3", "token": "a132fb74a33f3e12", "src": "blind/a132fb74a33f3e12.wav"}, {"label": "Sample 4", "token": "d7b223c9a0e16de5", "src": "blind/d7b223c9a0e16de5.wav"}]}, {"item_id": "date", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔", "stresses": ["dates", "year_reading", "numbers_ascii"], "clips": [{"label": "Sample 1", "token": "5926cd70fd5deac9", "src": "blind/5926cd70fd5deac9.wav"}, {"label": "Sample 2", "token": "816dbe4d2a233cfb", "src": "blind/816dbe4d2a233cfb.wav"}, {"label": "Sample 3", "token": "1812ee931b78b642", "src": "blind/1812ee931b78b642.wav"}, {"label": "Sample 4", "token": "e1526d9ee9a4c21e", "src": "blind/e1526d9ee9a4c21e.wav"}]}, {"item_id": "long_multiclause", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔", "stresses": ["length", "multi_clause", "prosody", "breath_groups"], "clips": [{"label": "Sample 1", "token": "187df09bbd2641ec", "src": "blind/187df09bbd2641ec.wav"}, {"label": "Sample 2", "token": "150d602ba603a91e", "src": "blind/150d602ba603a91e.wav"}, {"label": "Sample 3", "token": "041b6e3658df5f94", "src": "blind/041b6e3658df5f94.wav"}, {"label": "Sample 4", "token": "694a472a7989ddcd", "src": "blind/694a472a7989ddcd.wav"}]}, {"item_id": "names", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔", "stresses": ["person_names", "place_names"], "clips": [{"label": "Sample 1", "token": "1b569a1d87cba184", "src": "blind/1b569a1d87cba184.wav"}, {"label": "Sample 2", "token": "e3425117ee239eac", "src": "blind/e3425117ee239eac.wav"}, {"label": "Sample 3", "token": "e76c232d2bbca0cf", "src": "blind/e76c232d2bbca0cf.wav"}, {"label": "Sample 4", "token": "326992536a91cee9", "src": "blind/326992536a91cee9.wav"}]}, {"item_id": "num_ascii", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔", "stresses": ["numbers_ascii"], "clips": [{"label": "Sample 1", "token": "9990b70b1107f737", "src": "blind/9990b70b1107f737.wav"}, {"label": "Sample 2", "token": "b669cd5a04e31c7c", "src": "blind/b669cd5a04e31c7c.wav"}, {"label": "Sample 3", "token": "8fbecaf59384430c", "src": "blind/8fbecaf59384430c.wav"}, {"label": "Sample 4", "token": "71328960592903d9", "src": "blind/71328960592903d9.wav"}]}, {"item_id": "num_eastern", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔", "stresses": ["numbers_non_ascii"], "clips": [{"label": "Sample 1", "token": "30b36d39cbacdad3", "src": "blind/30b36d39cbacdad3.wav"}, {"label": "Sample 2", "token": "f1ad31d1ba2b6fe8", "src": "blind/f1ad31d1ba2b6fe8.wav"}, {"label": "Sample 3", "token": "9c4a7d0ff286dc0d", "src": "blind/9c4a7d0ff286dc0d.wav"}, {"label": "Sample 4", "token": "0bf85012c1822581", "src": "blind/0bf85012c1822581.wav"}]}, {"item_id": "owner_01_sick", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔", "stresses": ["conversational", "code_switch_light"], "clips": [{"label": "Sample 1", "token": "0159cd8a40fad5e7", "src": "blind/0159cd8a40fad5e7.wav"}, {"label": "Sample 2", "token": "5baca933eea960d3", "src": "blind/5baca933eea960d3.wav"}, {"label": "Sample 3", "token": "9cabceee33ef9751", "src": "blind/9cabceee33ef9751.wav"}, {"label": "Sample 4", "token": "ea90f5020e3be9a1", "src": "blind/ea90f5020e3be9a1.wav"}]}, {"item_id": "owner_02_file", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔", "stresses": ["conversational", "loanword_file"], "clips": [{"label": "Sample 1", "token": "f95427d321931490", "src": "blind/f95427d321931490.wav"}, {"label": "Sample 2", "token": "00a83170a7af2816", "src": "blind/00a83170a7af2816.wav"}, {"label": "Sample 3", "token": "8105a0990278459f", "src": "blind/8105a0990278459f.wav"}, {"label": "Sample 4", "token": "07552d78329dfc85", "src": "blind/07552d78329dfc85.wav"}]}, {"item_id": "owner_03_deadline", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔", "stresses": ["conversational", "pure_urdu_vocab"], "clips": [{"label": "Sample 1", "token": "edec1604614f920c", "src": "blind/edec1604614f920c.wav"}, {"label": "Sample 2", "token": "eeb5d6856ba2415c", "src": "blind/eeb5d6856ba2415c.wav"}, {"label": "Sample 3", "token": "cab3293367f3813d", "src": "blind/cab3293367f3813d.wav"}, {"label": "Sample 4", "token": "b2531f1fee4d0988", "src": "blind/b2531f1fee4d0988.wav"}]}, {"item_id": "owner_04_late", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔", "stresses": ["code_switch", "latin_island"], "clips": [{"label": "Sample 1", "token": "f34a54a18b1b173f", "src": "blind/f34a54a18b1b173f.wav"}, {"label": "Sample 2", "token": "f3fe1e3be92b4bbc", "src": "blind/f3fe1e3be92b4bbc.wav"}, {"label": "Sample 3", "token": "b3fd921745f75b51", "src": "blind/b3fd921745f75b51.wav"}, {"label": "Sample 4", "token": "f7242be91f95f1a5", "src": "blind/f7242be91f95f1a5.wav"}]}, {"item_id": "owner_05_github", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔", "stresses": ["code_switch", "latin_island", "technical_terms", "proper_noun_latin"], "clips": [{"label": "Sample 1", "token": "c61e3ae532e5ca4b", "src": "blind/c61e3ae532e5ca4b.wav"}, {"label": "Sample 2", "token": "0487426c6cd87c93", "src": "blind/0487426c6cd87c93.wav"}, {"label": "Sample 3", "token": "a3b4a27391cd22ac", "src": "blind/a3b4a27391cd22ac.wav"}, {"label": "Sample 4", "token": "77e1063d28d445e5", "src": "blind/77e1063d28d445e5.wav"}]}, {"item_id": "technical", "reference_id": "owner", "reference": "blind/reference_owner.wav", "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔", "stresses": ["technical_terms", "latin_island", "code_switch"], "clips": [{"label": "Sample 1", "token": "191c1f057cc5072d", "src": "blind/191c1f057cc5072d.wav"}, {"label": "Sample 2", "token": "34b431a12835b74a", "src": "blind/34b431a12835b74a.wav"}, {"label": "Sample 3", "token": "bcdcb3af0d47198c", "src": "blind/bcdcb3af0d47198c.wav"}, {"label": "Sample 4", "token": "18e8066cf71a6956", "src": "blind/18e8066cf71a6956.wav"}]}];
+const CRITERIA = [["pron", "Pakistani Urdu pronunciation"], ["natural", "Naturalness"], ["identity", "Speaker identity"], ["prosody", "Prosody"], ["codeswitch", "Urdu-English code switching"]];
+
+function render() {
+  const root = document.getElementById('items');
+  for (const item of DATA) {
+    const d = document.createElement('div');
+    d.className = 'item';
+    let h = `<div>${item.stresses.map(s => `<span class="tag">${s}</span>`).join('')}
+             <span class="tag">${item.reference_id} reference</span></div>
+             <div class="urdu">${item.text}</div>
+             <div class="ref"><b>Reference speaker</b> (the voice being cloned)<br>
+             <audio controls preload="none" src="${item.reference}"></audio></div>`;
+    for (const c of item.clips) {
+      h += `<div class="cand"><span class="lbl">${c.label}</span>
+            <audio controls preload="none" src="${c.src}"></audio>
+            <div class="crit">` +
+        CRITERIA.map(([k, name]) =>
+          `<label>${name}
+             <select data-t="${c.token}" data-k="${k}">
+               <option value="">&ndash;</option>${[1,2,3,4,5].map(v =>
+                 `<option value="${v}">${v}</option>`).join('')}
+             </select></label>`).join('') +
+        `</div><textarea placeholder="Comments on ${c.label} (optional)"
+                 data-t="${c.token}" data-k="comment"></textarea></div>`;
+    }
+    d.innerHTML = h;
+    root.appendChild(d);
+  }
+  document.addEventListener('change', progress);
+  document.addEventListener('input', progress);
+  progress();
+}
+
+function collect() {
+  const out = {};
+  for (const el of document.querySelectorAll('[data-t]')) {
+    if (!el.value) continue;
+    (out[el.dataset.t] ||= {})[el.dataset.k] =
+      el.dataset.k === 'comment' ? el.value : Number(el.value);
+  }
+  return out;
+}
+
+function progress() {
+  const scored = Object.values(collect())
+    .filter(v => CRITERIA.some(([k]) => v[k] != null)).length;
+  const total = DATA.reduce((n, i) => n + i.clips.length, 0);
+  document.getElementById('prog').textContent = `${scored} / ${total} clips scored`;
+}
+
+function exportScores() {
+  const blob = new Blob([JSON.stringify(
+    { scored_at: new Date().toISOString(), scores: collect() }, null, 2)],
+    { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'listen_scores.json';
+  a.click();
+}
+
+render();
+</script>

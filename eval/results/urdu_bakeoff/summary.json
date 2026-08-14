@@ -1,0 +1,86 @@
+[
+  {
+    "arm": "A",
+    "model": "voxcpm2",
+    "representation": "roman",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.0625,
+    "speaker_sim_median": 0.6997467279434204,
+    "rtf_median": 0.7639937102794647,
+    "peak_vram_used_mb": 6422.9375,
+    "load_time_sec": 80.90740299224854,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.38666666666666666,
+      "speaker_sim_median": 0.6572680473327637
+    }
+  },
+  {
+    "arm": "B",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.18867924528301888,
+    "speaker_sim_median": 0.6664021015167236,
+    "rtf_median": 0.7630263765652975,
+    "peak_vram_used_mb": 6432.9375,
+    "load_time_sec": 76.68602395057678,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.6517854928970337
+    }
+  },
+  {
+    "arm": "C",
+    "model": "voxcpm2",
+    "representation": "devanagari",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.01875,
+    "speaker_sim_median": 0.6881273984909058,
+    "rtf_median": 0.8486955293587275,
+    "peak_vram_used_mb": 6438.9375,
+    "load_time_sec": 69.381844997406,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.622322678565979
+    }
+  },
+  {
+    "arm": "D",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": true,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.038461538461538464,
+    "speaker_sim_median": 0.6620727181434631,
+    "rtf_median": 0.9430278837680817,
+    "peak_vram_used_mb": 6508.9375,
+    "load_time_sec": 122.95655393600464,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.36,
+      "speaker_sim_median": 0.6462454199790955
+    }
+  }
+]
