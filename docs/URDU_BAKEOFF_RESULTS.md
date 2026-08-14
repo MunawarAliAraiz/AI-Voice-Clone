@@ -1,9 +1,11 @@
 # Urdu bake-off — results
 
-**Status: INCOMPLETE. No model has been chosen.** Synthesis and automated screening are done for
-every arm that can run; the **blind listening pass has not happened yet**, and it is the decision.
-Arms H/I/J are blocked on a token. Nothing in this file names a winner, and nothing here may set
-`LanguageSupport.verified`.
+**Status: blind listening complete for arms A–E (130/130 clips, one rater — the owner). No model
+has been chosen.** Arms H/I/J (IndicF5) remain blocked on an `HF_TOKEN`, and arm I is the plan's
+central question — a real decision on the transliteration route cannot be made without it. §5 is
+filled for A–E with the actual listening data; the licence-clean route (VoxCPM2, arms A–D) can be
+compared now, but the full decision waits on IndicF5. Nothing here may set `LanguageSupport.verified`
+— that still requires the owner's sign-off on an integration, not just a listening score.
 
 **Date:** 2026-08-14 · **Pod:** RTX A5000 24 GB (sm_86), torch 2.8.0+cu128 · **Branch:** `feature/urdu-bakeoff`
 
@@ -137,20 +139,94 @@ on local disk only.
 
 ---
 
-## 3. The two axes stay separate
+## 3. Blind listening `[LISTEN]` — arms A–E, 130/130 clips, one rater
 
-Per the plan, these are **never collapsed into one verdict**, and both are `[LISTEN]`-pending:
+**Caveats first, because n is small and this is a single listener.** 13 sentences × 2 references per
+arm (25–26 scored cells per arm; two cells are missing a full score — see §3c). Medians, 1–5. This is
+one person's judgement, not inter-rater-reliability-tested. Read differences of ~0.5–1.0 as signal;
+read anything closer as noise.
+
+### 3a. By arm, both references combined
+
+| Arm | Model | Pron. | Natural | Identity | Prosody | Code-switch | n |
+|---|---|---|---|---|---|---|---|
+| A | VoxCPM2 (roman) | 3.0 | 3.0 | 4.0 | 4.0 | 4.0 | 26 |
+| B | VoxCPM2 (perso-arabic) | 3.0 | 3.0 | 4.0 | 4.0 | 5.0 | 26 |
+| C | VoxCPM2 (devanagari) | **4.0** | **4.0** | 4.0 | 4.0 | 5.0 | 25 |
+| D | VoxCPM2 + LoRA | **4.0** | **4.0** | 4.0 | 4.0 | 5.0 | 25 |
+| E | OmniVoice | **5.0** | 4.0 | 4.0 | 4.0 | **3.0** | 26 |
+
+Three things this actually shows:
+
+1. **Devanagari (C) and the LoRA (D) both beat Roman/Perso-Arabic VoxCPM2 on pronunciation and
+   naturalness** (4.0 vs 3.0), while matching them on code-switch (5.0) and identity (4.0). Between
+   arms C and D specifically, `[BENCH]`'s cosine numbers (§2) had flagged D as the *weakest* VoxCPM2
+   arm on speaker identity — that did **not** show up in the blind identity score, which ties C and D
+   at 4.0. This is exactly the case the two-axis separation exists to catch: an automated metric
+   pointing one way and a human ear finding no difference.
+2. **OmniVoice (E) is the best-rated pronunciation in the set (5.0) and the worst code-switch (3.0).**
+   It is also the only NC-licensed model among the five that ran. If E were commercially clean this
+   would be the strongest single result in the table; because it isn't, it is evidence about the
+   *ceiling*, not a deployable answer.
+3. **Roman Urdu (A) is not the pronunciation floor** — it ties B, both at 3.0, both below C/D/E. The
+   `[INFER]` hypothesis from §1 (Roman→Hindi phonotactics, Perso-Arabic→possible Arabic phonology) is
+   not confirmed by this: if that hypothesis were the whole story, A and B should differ more than
+   they do, and neither should trail Devanagari (C) by a full point.
+
+### 3b. By arm and reference speaker — does it generalize across voices?
+
+| Arm | Owner (male) pron/nat/id/pros/cs | Female pron/nat/id/pros/cs |
+|---|---|---|
+| A | 3.0 / 3.0 / 4.0 / 3.0 / 3.0 | 3.0 / 4.0 / 4.0 / 4.0 / 5.0 |
+| B | 4.0 / 3.0 / 4.0 / 3.0 / 5.0 | 3.0 / 3.0 / 4.0 / 4.0 / 5.0 |
+| C | 4.0 / 4.0 / 4.0 / 4.0 / 5.0 | 4.0 / 3.5 / 4.0 / 4.0 / 5.0 |
+| D | 3.5 / 4.0 / 4.0 / 4.0 / 4.5 | 4.0 / 4.0 / 4.0 / 4.0 / 5.0 |
+| E | 5.0 / 4.0 / 4.0 / 4.0 / 3.0 | 5.0 / 4.0 / 4.0 / 4.0 / 3.0 |
+
+**No arm collapses on either reference** — nothing here shows a model that works on one speaker and
+fails on the other, which was the specific failure mode this two-reference design was built to catch
+(plan correction #7). E is identical across both. C, D are close. A and B show the largest owner/
+female split, concentrated in naturalness and code-switch — plausibly the same source-recording
+factors noted in §2 (the reference clips' own quality), not a model asymmetry, but that is
+`[INFER]`, unconfirmed.
+
+### 3c. Free-text comments — one real finding, one page bug
+
+**The corpus reads digits as digits, not as spoken Urdu number-words, and the owner flagged it
+independently on four different clips across three arms** (A, C, D) and all three number/date items
+(`date`, `num_ascii`, `num_eastern`):
+> *"counting should also be in urdu like in urdu we say 'chouda' instead of fourteen"*
+> *"45 is called 'pentalees' in urdu and 3 should be 'teen'"*
+
+This is a **corpus authoring gap, not a model quality signal** — `eval/fixtures/urdu_corpus.json`'s
+number items use numeral characters (`۳`, `3`) rather than spelled-out Urdu number words, so every
+model is reading digits in whatever convention it defaults to, and none of them is being asked to
+produce the actually-idiomatic form. This recurred across unrelated arms (A/C/D), which is exactly
+the signature of a shared input problem rather than a per-model one. **Not fixed here** — flagged for
+whoever next revises the corpus; fixing it would change the `date`/`num_ascii`/`num_eastern` items
+for every arm, which is a change big enough to warrant its own re-run rather than a mid-analysis edit.
+
+**Two clips (of 130) could not be scored: `[C/female/num_eastern]` and `[D/owner/owner_02_file]`,
+both reported as "audio is muted, I am unable to unmute it."** Checked directly: both source WAVs
+have normal peak amplitude (0.99 and 0.92) and are not silent, so this reads as a page/browser
+playback glitch on those two specific embedded clips, not a synthesis defect. **1.5% of the corpus
+has an unresolved listening gap** — the underlying audio exists and can be re-served if a clean
+re-listen on just these two is wanted; recorded rather than guessed at.
+
+### 3d. The two axes, filled
 
 | A. Urdu quality | B. Voice cloning |
 |---|---|
-| Pakistani pronunciation — *pending* | speaker identity vs reference — *pending* |
-| Urdu vocabulary — *pending* | consistency across sentences — *pending* |
-| phonology — *pending* | male-reference performance — *pending* |
-| naturalness, prosody — *pending* | female-reference performance — *pending* |
-| Urdu-English code-switching — §4 | |
+| Pakistani pronunciation — §3a: C/D/E > A/B | speaker identity — flat at 4.0 across every arm; `[BENCH]` cosine differences did not survive to the ear |
+| Urdu vocabulary — not separately scored; folded into pronunciation | consistency across sentences — no per-sentence collapse observed |
+| phonology — same | male-reference performance — §3b, no arm collapses |
+| naturalness, prosody — C/D lead naturalness; prosody is flat (4.0) everywhere | female-reference performance — §3b, no arm collapses |
+| code-switching — E is the outlier (3.0 vs 4.5–5.0 elsewhere); see §4 for why the automated metric could not have predicted this | |
 
-Explicitly: transliteration will **not** be dismissed for failing to improve speaker identity, and
-**not** accepted because pronunciation improves while the voice becomes a different person.
+Identity sits at a flat 4.0 for every arm at both references — the blind listen did **not** find a
+speaker-identity problem in the five arms that ran. That is a materially different picture from the
+automated cosine numbers in §2, which spread from 0.66 to 0.79. **Trust the 4.0, not the spread** —
+this is precisely why the plan required listening in the first place.
 
 ---
 
@@ -183,51 +259,52 @@ across four different models) is itself the tell: this is measuring the metric, 
 
 ---
 
-## 5. Decision table — **empty on purpose**
+## 5. Decision table — filled for A–E, still open for H/I/J
 
-Filled only after the blind listening pass. Leaving it blank is the point: a table filled from §2
-would be exactly the mistake this plan was restructured to avoid.
+**Not a final decision.** Arm I is the plan's central question and has not run. What follows is
+accurate for the five arms that could be compared; it is not the whole bake-off.
 
-| Candidate | Urdu | Pakistani Urdu | Voice cloning | Naturalness | Code-switch | Speed | VRAM | Commercial | Decision |
-|---|---|---|---|---|---|---|---|---|---|
-| VoxCPM2 (roman / A) | | | | | | 0.76 RTF | 6.4 GB | 🟢 | |
-| VoxCPM2 (perso-arabic / B) | | | | | | 0.76 RTF | 6.4 GB | 🟢 | |
-| VoxCPM2 (devanagari / C) | | | | | | 0.85 RTF | 6.4 GB | 🟢 | |
-| VoxCPM2 + LoRA (D) | | | | | | 0.94 RTF | 6.5 GB | 🟢 | |
-| OmniVoice (E) | | | | | | 0.44 RTF | 4.5 GB | 🔴 NC | |
-| Higgs v3 (F) | — | — | — | — | — | — | — | 🔴 NC | **could not run** |
-| IndicF5 (H/I/J) | | | | | | | | 🟡 gated | **blocked on token** |
+| Candidate | Pron. | Natural | Identity | Code-switch | Speed | VRAM | Commercial | Verdict |
+|---|---|---|---|---|---|---|---|---|
+| VoxCPM2 (roman / A) | 3.0 | 3.0 | 4.0 | 4.0 | 0.76 RTF | 6.4 GB | 🟢 | today's baseline; beaten by C/D on the two axes that moved |
+| VoxCPM2 (perso-arabic / B) | 3.0 | 3.0 | 4.0 | 5.0 | 0.76 RTF | 6.4 GB | 🟢 | ties A on pron/natural; no advantage found for native script over Roman |
+| VoxCPM2 (devanagari / C) | 4.0 | 4.0 | 4.0 | 5.0 | 0.85 RTF | 6.4 GB | 🟢 | **best commercially-clean arm on pronunciation + naturalness** |
+| VoxCPM2 + LoRA (D) | 4.0 | 4.0 | 4.0 | 5.0 | 0.94 RTF | 6.5 GB | 🟢 | ties C exactly; LoRA's `[BENCH]` cosine regression did not survive to the ear |
+| OmniVoice (E) | 5.0 | 4.0 | 4.0 | 3.0 | 0.44 RTF | 4.5 GB | 🔴 NC | **highest ceiling observed, but not commercially usable**; weak code-switch |
+| Higgs v3 (F) | — | — | — | — | — | — | 🔴 NC | **could not run** — see §1 |
+| IndicF5 (H/I/J) | — | — | — | — | — | — | 🟡 gated | **blocked on token** — arm I unanswered |
 
 ### The 9 questions
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Best model for Pakistani Urdu, by listening? | ⏸ **no listening yet** |
-| 2 | Best commercially safe option? | ⏸ candidates are VoxCPM2 A/B/C/D only (E and F are NC, IndicF5 has an unresolved provenance question) — but *which* is unanswerable without listening |
-| 3 | Can IndicF5 produce Pakistani Urdu via Devanagari/phonetic conversion? | ⏸ **blocked** — arms I/J never ran |
-| 4 | Native Urdu vs transliteration? | ⏸ arms B vs A/C are synthesized and unheard. §2a shows the screening numbers do **not** settle it |
-| 5 | Does VoxCPM2 + LoRA meaningfully improve Urdu? | ⏸ arm D vs B synthesized, unheard. `[BENCH]` shows D's cosine is the *lowest* of every VoxCPM2 arm at both references (0.662 / 0.689), consistent with the identity regression already recorded in `docs/VOXCPM_LORA_POC.md` — but cosine is the untrustworthy metric here |
-| 6 | Which model should we integrate? | ⏸ **nothing is being integrated yet** |
-| 7 | Should we add an Urdu transformation layer? | ⏸ depends on whether arm C or I beats arm B by ear. Note `normalize_urdu` is a **no-op on 13/13 corpus items**, so ladder rung B is untestable with this corpus regardless |
-| 8 | What stays the English backend? | **VoxCPM2** — unchanged and not under test here. The owner's assessment is that English is already good, and nothing in this bake-off touches it |
-| 9 | Best future fine-tuning strategy? | ⏸ the identified *commercially permissive* route to investigate is VoxCPM2 (Apache-2.0) on UrduSpeech (CC-BY-4.0, Pakistani, 57% code-switched). **A route to investigate, not a validated solution** — nothing has been trained on it or heard |
+| 1 | Best model for Pakistani Urdu, by listening? | **OmniVoice (E), 5.0 pronunciation** — but non-commercial. Among arms that ran, no single model is unambiguously best across all five criteria (E trades pronunciation for code-switch). Incomplete: IndicF5 never ran |
+| 2 | Best commercially safe option? | **VoxCPM2 with Devanagari input (arm C), or the LoRA (arm D) — statistically tied.** Both beat Roman/Perso-Arabic VoxCPM2 (A/B) by a full point on pronunciation and naturalness while matching them on identity and code-switch |
+| 3 | Can IndicF5 produce Pakistani Urdu via Devanagari/phonetic conversion? | **still blocked** — arms I/J never ran. What §3 *does* show is that Devanagari input measurably helped VoxCPM2 (arm C beats A/B) — one data point in favor of the transliteration route being worth testing on IndicF5 too, not proof it will transfer |
+| 4 | Does native Urdu work better or worse than transliteration? | **Neither — arms A (Roman) and B (Perso-Arabic) tied each other**, and both trailed Devanagari (C). Native Perso-Arabic input showed no advantage over Roman in this data |
+| 5 | Does VoxCPM2 + LoRA meaningfully improve Urdu? | **Improves over the raw Perso-Arabic baseline (B) to match Devanagari (C)** on pronunciation/naturalness (3.0→4.0), and does **not** show the identity regression `[BENCH]`'s cosine numbers suggested — identity stayed flat at 4.0. The LoRA is not obviously better than *just switching B's input to Devanagari*, though, so the gain may be from matching C's representation rather than the fine-tune itself; not disentangled here |
+| 6 | Which model should we integrate? | **Owner's call, not made here.** The commercially-clean leaders are C and D. IndicF5 could still beat both if arm I ever runs. No integration should start before that's resolved or explicitly deferred |
+| 7 | Should we add an Urdu transformation layer? | **Weak yes, so far.** Devanagari transliteration (arm C) is the only text transform that moved the needle on VoxCPM2 in this data. `normalize_urdu` (character-only normalization) remains untested — it's a no-op on all 13 corpus items, so ladder rung B is unverified regardless of arm C's result |
+| 8 | What stays the English backend? | **VoxCPM2** — unchanged and not under test here |
+| 9 | Best future fine-tuning strategy? | Unchanged from §1: VoxCPM2 (Apache-2.0) on UrduSpeech (CC-BY-4.0) remains a route to investigate, not validated. The LoRA result in Q5 is a small positive data point for that direction generally, but this LoRA was trained on different data than UrduSpeech, so it does not directly answer this question |
 
-Question 8 is the only one answerable today, and only because it is answered by *not* changing
-anything.
+Question 8 is unconditionally answered. Questions 2, 4, 5, 7 have real answers now, all scoped to
+"among the arms that ran." Questions 1, 3, 6 stay open until arm I either runs or is explicitly
+deferred by the owner.
 
 ---
 
 ## 6. What happens next
 
-1. **Blind listening** — `eval/results/urdu_bakeoff/listen.html`. 130 clips, opaque tokens, mapping
-   in `key.json` (do not open until finished). 5 criteria × 1–5 + free-text per clip. Export to
-   `listen_scores.json`.
-   *Verified working*: 156 embedded MP3 data URIs (130 clips + 26 reference copies), zero relative
-   audio paths, and an in-browser check confirming `play()` advances `currentTime` with
-   `error === null`. The previous build failed with `MediaError` code 4.
-2. **HF token + female transcript** → unblocks arms H/I/J. The `.venv` for it is pre-provisioned at
-   `/workspace/engines-lab/r1-f5/`.
-3. **Then, and only then**, fill §5 and decide.
+1. ~~Blind listening~~ **Done, arms A–E.** 130/130 clips scored across two passes
+   (`eval/results/urdu_bakeoff/listen_scores_pass1.json`, 52 clips; `listen_scores_pass2.json`, 78
+   clips), aggregated in §3. Two clips have an unresolved playback glitch (§3c) — low priority, the
+   underlying audio is fine.
+2. **HF token + female transcript** → unblocks arms H/I/J, still open. The `.venv` for it is
+   pre-provisioned at `/workspace/engines-lab/r1-f5/` on the pod. **Arm I is the highest-value item
+   left** — it is the only thing that can answer questions 1, 3, and 6 fully.
+3. **Owner decides**: proceed to integrate a VoxCPM2 arm (C or D, §5) now, or wait for IndicF5 first.
+   Nothing is integrated in this repo yet either way.
 
 ---
 

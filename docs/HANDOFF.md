@@ -39,7 +39,7 @@ Those axes are now scored separately.
 | Arm F (Higgs v3) | ⛔ **could_not_run, recorded with the reason** — see below. |
 | Arm G (code-switch) | ✅ Reporting slice over A–E. Numbers are a **metric artifact**, see results §4. |
 | Arms H/I/J (IndicF5) | ⏸ **Blocked on an `HF_TOKEN`** + the female transcript. venv pre-built at `/workspace/engines-lab/r1-f5/`. |
-| Blind listen | ⬜ **Not started — this is the decision.** 130 clips ready, page verified playing. |
+| Blind listen | ✅ **130/130 clips scored (arms A–E), one rater.** See `docs/URDU_BAKEOFF_RESULTS.md` §3. |
 
 **Arm F is genuinely impossible on this pod, not skipped.** transformers 5.15.0 has no
 `higgs_multimodal_qwen3`; `config.json` has `auto_map: null` so `trust_remote_code` can't rescue it;
@@ -53,7 +53,32 @@ whole diagnosis, which the harness records as `could_not_run`.
 fine anonymously, but `model.safetensors` (1.4 GB) returns `GatedRepoError: 401`. Because the whole
 repo is gated, `trust_remote_code` can't fetch the shipped `f5_tts/` modules either. `gated=auto`
 means approval is **automatic on accepting the terms**, so this is a token, not an application.
-Arm I is the plan's central question, so this is the highest-value unblock available.
+Arm I is the plan's central question, so this is the highest-value unblock available. The `.venv` at
+`/workspace/engines-lab/r1-f5/` is already built (f5-tts, vocos, torchdiffeq, transformers 5.15.0,
+torch 2.13.0+cu130) — running arm I is one command once the token lands.
+
+**Blind listening is done for arms A–E — 130/130 clips, one rater (the owner).** Full breakdown in
+`docs/URDU_BAKEOFF_RESULTS.md` §3–5; headline findings:
+- **Devanagari input (arm C) and the LoRA (arm D) both beat Roman/Perso-Arabic VoxCPM2 (A/B) by a
+  full point on pronunciation and naturalness** (4.0 vs 3.0), tied on identity and code-switch. This
+  is the strongest *commercially clean* result.
+- **OmniVoice (arm E) rated highest on pronunciation (5.0)** but worst on code-switch (3.0) — and is
+  NC-licensed, so it's evidence about the ceiling, not a deployable answer.
+- **The LoRA's `docs/VOXCPM_LORA_POC.md` cosine regression did not survive to the ear** — blind
+  identity scores were flat at 4.0 for every arm including D. Trust the listening score over the
+  automated cosine here; this is exactly the divergence the two-axis design exists to catch.
+- **The corpus's number items read digits as digits, not spoken Urdu number-words** — the owner
+  flagged this independently on 4 clips across 3 unrelated arms (A/C/D), which is the signature of a
+  shared input problem, not a per-model one. Not fixed; `eval/fixtures/urdu_corpus.json`'s
+  `date`/`num_ascii`/`num_eastern` items need spelled-out Urdu numerals before their next use.
+- Two clips (`C/female/num_eastern`, `D/owner/owner_02_file`) reported as unplayable in the browser;
+  both underlying WAVs checked directly and are **not silent** (peak 0.99 / 0.92) — a page playback
+  glitch on those two specific clips, not a synthesis defect. 1.5% of the corpus, unresolved, low
+  priority.
+
+**No model has been chosen for integration.** The commercially-clean leaders are arms C and D
+(tied). Questions 1, 3, and 6 in the results doc stay open until arm I runs or the owner explicitly
+defers it — do not integrate anything off the back of this listening pass alone.
 
 **Devanagari is hand-authored gold, deliberately.** Arms C/I/J are therefore a **ceiling test**: if a
 model fails on perfect Devanagari, no converter rescues the route; if it succeeds, a converter is

@@ -1,0 +1,1295 @@
+{
+ "pass": 2,
+ "scope": "the 78 clips excluded from pass 1: arms A-D on the female reference, all of arm E (both references)",
+ "scored_at_source": "2026-08-14T19:06:04.570Z",
+ "recovered_at": "2026-08-14T19:07:41.426057+00:00",
+ "note": "Keyed by (arm, reference_id, item_id), not the blind token (tokens are re-randomized per page build).",
+ "n_scored": 78,
+ "entries": [
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "representation": "devanagari",
+   "input_text": "बराए मेहरबानी PDF फ़ाइल ईमेल कर दें और URL भी साथ भेज दें।",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.5614035087719298,
+   "bench_speaker_sim": 0.7723801136016846
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "representation": "roman",
+   "input_text": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
+   "scores": {
+    "pron": 2,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.38596491228070173,
+   "bench_speaker_sim": 0.8212494850158691
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "representation": "perso_arabic",
+   "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+   "scores": {
+    "pron": 1,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 2,
+    "codeswitch": 1
+   },
+   "comment": null,
+   "bench_cer": 0.24561403508771928,
+   "bench_speaker_sim": 0.7933496236801147
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "representation": "perso_arabic",
+   "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+   "scores": {
+    "pron": 2,
+    "natural": 2,
+    "identity": 3,
+    "prosody": 1,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.3684210526315789,
+   "bench_speaker_sim": 0.7115525007247925
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "representation": "perso_arabic",
+   "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 2,
+    "codeswitch": 2
+   },
+   "comment": null,
+   "bench_cer": 0.38596491228070173,
+   "bench_speaker_sim": 0.6045455932617188
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "abbreviations",
+   "representation": "perso_arabic",
+   "input_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 2
+   },
+   "comment": null,
+   "bench_cer": 0.3157894736842105,
+   "bench_speaker_sim": 0.7789504528045654
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "representation": "perso_arabic",
+   "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 5,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.038461538461538464,
+   "bench_speaker_sim": 0.8255119919776917
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "representation": "perso_arabic",
+   "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.019230769230769232,
+   "bench_speaker_sim": 0.7777996063232422
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "representation": "devanagari",
+   "input_text": "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.019230769230769232,
+   "bench_speaker_sim": 0.7569519877433777
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "representation": "roman",
+   "input_text": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.1346153846153846,
+   "bench_speaker_sim": 0.8020963668823242
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "representation": "perso_arabic",
+   "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 5,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.019230769230769232,
+   "bench_speaker_sim": 0.6844512224197388
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "colloquial",
+   "representation": "perso_arabic",
+   "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.019230769230769232,
+   "bench_speaker_sim": 0.7304395437240601
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "date",
+   "representation": "roman",
+   "input_text": "Yeh report 14 August 2026 tak jama karani hai.",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 3,
+    "codeswitch": 3
+   },
+   "comment": "counting should also be in urdu like in urdu we say \"chouda \" instead of fourteen",
+   "bench_cer": 0.02702702702702703,
+   "bench_speaker_sim": 0.7711914777755737
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "date",
+   "representation": "perso_arabic",
+   "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 2,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.717129111289978
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "date",
+   "representation": "devanagari",
+   "input_text": "यह रिपोर्ट 14 अगस्त 2026 तक जमा करानी है।",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "codeswitch": 3
+   },
+   "comment": "counting should also be in urdu like in urdu we say \"chouda \" instead of fourteen",
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7902418375015259
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "date",
+   "representation": "perso_arabic",
+   "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.741296648979187
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "date",
+   "representation": "perso_arabic",
+   "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+   "scores": {
+    "pron": 2,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 4,
+    "codeswitch": 3
+   },
+   "comment": null,
+   "bench_cer": 0.2972972972972973,
+   "bench_speaker_sim": 0.776613175868988
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "date",
+   "representation": "perso_arabic",
+   "input_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 3,
+    "codeswitch": 3
+   },
+   "comment": "counting should also be in urdu like in urdu we say \"chouda \" instead of fourteen",
+   "bench_cer": 0.5405405405405406,
+   "bench_speaker_sim": 0.7305017113685608
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "representation": "perso_arabic",
+   "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+   "scores": {
+    "pron": 1,
+    "natural": 2,
+    "identity": 2,
+    "prosody": 3
+   },
+   "comment": null,
+   "bench_cer": 0.0625,
+   "bench_speaker_sim": 0.7482963800430298
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "representation": "roman",
+   "input_text": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.05625,
+   "bench_speaker_sim": 0.7975186109542847
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "representation": "devanagari",
+   "input_text": "कल जब मैं दफ़्तर पहुँचा तो पता चला के मीटिंग मुल्तवी हो गई है, इस लिए मैं ने सोचा के पहले बाक़ी काम मुकम्मल कर लूँ, और फिर दोपहर के खाने के बाद रिपोर्ट पर काम शुरू करूँगा।",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.03125,
+   "bench_speaker_sim": 0.8229156136512756
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "representation": "perso_arabic",
+   "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0125,
+   "bench_speaker_sim": 0.8574010133743286
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "representation": "perso_arabic",
+   "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.05,
+   "bench_speaker_sim": 0.7826146483421326
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "long_multiclause",
+   "representation": "perso_arabic",
+   "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 5
+   },
+   "comment": null,
+   "bench_cer": 0.00625,
+   "bench_speaker_sim": 0.7365697622299194
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "names",
+   "representation": "perso_arabic",
+   "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7167059779167175
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "names",
+   "representation": "roman",
+   "input_text": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.04,
+   "bench_speaker_sim": 0.7902349233627319
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "names",
+   "representation": "perso_arabic",
+   "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8510849475860596
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "names",
+   "representation": "perso_arabic",
+   "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.08,
+   "bench_speaker_sim": 0.7597604393959045
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "names",
+   "representation": "devanagari",
+   "input_text": "अली अहमद और फ़ातिमा ने कराची से लाहौर तक का सफ़र किया।",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8203305006027222
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "names",
+   "representation": "perso_arabic",
+   "input_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7495062947273254
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 3
+   },
+   "comment": null,
+   "bench_cer": 0.0851063829787234,
+   "bench_speaker_sim": 0.7937662601470947
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "representation": "devanagari",
+   "input_text": "मीटिंग 3 बजे शुरू होगी और तक़रीबन 45 मिनट चलेगी।",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 2
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.02127659574468085,
+   "bench_speaker_sim": 0.7670780420303345
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 2
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.02127659574468085,
+   "bench_speaker_sim": 0.7962021827697754
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 2
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.6888983249664307
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "representation": "roman",
+   "input_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3,
+    "codeswitch": 2
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.0425531914893617,
+   "bench_speaker_sim": 0.8123685121536255
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "num_ascii",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+   "scores": {
+    "pron": 2,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3,
+    "codeswitch": 2
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.14893617021276595,
+   "bench_speaker_sim": 0.7305371761322021
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "representation": "roman",
+   "input_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 3
+   },
+   "comment": null,
+   "bench_cer": 0.1276595744680851,
+   "bench_speaker_sim": 0.7853611707687378
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+   "scores": {
+    "pron": 2,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 2
+   },
+   "comment": null,
+   "bench_cer": 0.1276595744680851,
+   "bench_speaker_sim": 0.7231981158256531
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+   "scores": {
+    "pron": 1,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 1
+   },
+   "comment": null,
+   "bench_cer": 0.3191489361702128,
+   "bench_speaker_sim": 0.6603686809539795
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "representation": "devanagari",
+   "input_text": "मीटिंग ३ बजे शुरू होगी और तक़रीबन ४५ मिनट चलेगी।",
+   "scores": {
+    "codeswitch": 1
+   },
+   "comment": "audio is muted I am unable to unmute it",
+   "bench_cer": 0.2127659574468085,
+   "bench_speaker_sim": 0.7693278789520264
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+   "scores": {
+    "pron": 1,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 4
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.3404255319148936,
+   "bench_speaker_sim": 0.7520797848701477
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "num_eastern",
+   "representation": "perso_arabic",
+   "input_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+   "scores": {
+    "pron": 2,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 1
+   },
+   "comment": "45 is called \"pentalees\" in urdu and  3 should  be\"teen\"",
+   "bench_cer": 0.14893617021276595,
+   "bench_speaker_sim": 0.7271188497543335
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "representation": "devanagari",
+   "input_text": "यार, आज मैं ऑफ़िस नहीं आ सकूँ गा क्योंकि मेरी तबीयत कुछ ठीक नहीं है।",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.03125,
+   "bench_speaker_sim": 0.8066359758377075
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 5
+   },
+   "comment": null,
+   "bench_cer": 0.015625,
+   "bench_speaker_sim": 0.8263173699378967
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "representation": "roman",
+   "input_text": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3
+   },
+   "comment": null,
+   "bench_cer": 0.015625,
+   "bench_speaker_sim": 0.8309339284896851
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 3
+   },
+   "comment": null,
+   "bench_cer": 0.03125,
+   "bench_speaker_sim": 0.7561434507369995
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.015625,
+   "bench_speaker_sim": 0.762025773525238
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "owner_01_sick",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.015625,
+   "bench_speaker_sim": 0.7786968946456909
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "representation": "devanagari",
+   "input_text": "आप ने जो फ़ाइल भेजी थी, मैं ने उसे चेक कर लिया है।",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 5
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8390775918960571
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "representation": "perso_arabic",
+   "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.6684834957122803
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "representation": "roman",
+   "input_text": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0625,
+   "bench_speaker_sim": 0.8078870177268982
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "representation": "perso_arabic",
+   "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8038428425788879
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "representation": "perso_arabic",
+   "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+   "scores": {
+    "pron": 2,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3
+   },
+   "comment": null,
+   "bench_cer": 0.020833333333333332,
+   "bench_speaker_sim": 0.7298167943954468
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "owner_02_file",
+   "representation": "perso_arabic",
+   "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7601602077484131
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "representation": "perso_arabic",
+   "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+   "scores": {
+    "pron": 4,
+    "natural": 2,
+    "identity": 3,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.5556969046592712
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "representation": "perso_arabic",
+   "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+   "scores": {
+    "pron": 3,
+    "natural": 4,
+    "identity": 3,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.038461538461538464,
+   "bench_speaker_sim": 0.8089869022369385
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "representation": "devanagari",
+   "input_text": "मुझे लगता है के हमें यह काम कल तक मुकम्मल कर लेना चाहिए।",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8126050233840942
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "representation": "perso_arabic",
+   "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.8105993270874023
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "representation": "roman",
+   "input_text": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 5,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7743430137634277
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "owner_03_deadline",
+   "representation": "perso_arabic",
+   "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 3,
+    "prosody": 4
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7279047966003418
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.20754716981132076,
+   "bench_speaker_sim": 0.8400475978851318
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "representation": "roman",
+   "input_text": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.18867924528301888,
+   "bench_speaker_sim": 0.6823961734771729
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "representation": "devanagari",
+   "input_text": "यार, आज office में काफ़ी काम था, इस लिए मैं late हो गया।",
+   "scores": {
+    "pron": 5,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 12.283018867924529,
+   "bench_speaker_sim": 0.7828434705734253
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.18867924528301888,
+   "bench_speaker_sim": 0.6069825887680054
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.18867924528301888,
+   "bench_speaker_sim": 0.7502425312995911
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "owner_04_late",
+   "representation": "perso_arabic",
+   "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 4
+   },
+   "comment": null,
+   "bench_cer": 0.18867924528301888,
+   "bench_speaker_sim": 0.7367532253265381
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "representation": "perso_arabic",
+   "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.44776119402985076,
+   "bench_speaker_sim": 0.6664556860923767
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "representation": "perso_arabic",
+   "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+   "scores": {
+    "pron": 4,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.4626865671641791,
+   "bench_speaker_sim": 0.6821056604385376
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "representation": "roman",
+   "input_text": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.44776119402985076,
+   "bench_speaker_sim": 0.8085538148880005
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "representation": "devanagari",
+   "input_text": "मैं ने GitHub पर pull request create कर दी है, आप उसे review कर लेना।",
+   "scores": {
+    "pron": 5,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.44776119402985076,
+   "bench_speaker_sim": 0.7587952017784119
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "representation": "perso_arabic",
+   "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 4
+   },
+   "comment": null,
+   "bench_cer": 0.44776119402985076,
+   "bench_speaker_sim": 0.7774651050567627
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "owner_05_github",
+   "representation": "perso_arabic",
+   "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 5,
+    "identity": 5,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.44776119402985076,
+   "bench_speaker_sim": 0.7228686213493347
+  },
+  {
+   "arm": "D",
+   "reference_id": "female",
+   "item_id": "technical",
+   "representation": "perso_arabic",
+   "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+   "scores": {
+    "pron": 5,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.37333333333333335,
+   "bench_speaker_sim": 0.68711256980896
+  },
+  {
+   "arm": "A",
+   "reference_id": "female",
+   "item_id": "technical",
+   "representation": "roman",
+   "input_text": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
+   "scores": {
+    "pron": 4,
+    "natural": 4,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.37333333333333335,
+   "bench_speaker_sim": 0.7949707508087158
+  },
+  {
+   "arm": "E",
+   "reference_id": "female",
+   "item_id": "technical",
+   "representation": "perso_arabic",
+   "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+   "scores": {
+    "pron": 2,
+    "natural": 3,
+    "identity": 3,
+    "prosody": 3,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.36,
+   "bench_speaker_sim": 0.839516282081604
+  },
+  {
+   "arm": "C",
+   "reference_id": "female",
+   "item_id": "technical",
+   "representation": "devanagari",
+   "input_text": "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
+   "scores": {
+    "pron": 3,
+    "natural": 2,
+    "identity": 3,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7463503479957581
+  },
+  {
+   "arm": "B",
+   "reference_id": "female",
+   "item_id": "technical",
+   "representation": "perso_arabic",
+   "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+   "scores": {
+    "pron": 4,
+    "natural": 2,
+    "identity": 3,
+    "prosody": 4,
+    "codeswitch": 5
+   },
+   "comment": null,
+   "bench_cer": 0.0,
+   "bench_speaker_sim": 0.7489423751831055
+  },
+  {
+   "arm": "E",
+   "reference_id": "owner",
+   "item_id": "technical",
+   "representation": "perso_arabic",
+   "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+   "scores": {
+    "pron": 3,
+    "natural": 3,
+    "identity": 4,
+    "prosody": 4,
+    "codeswitch": 4
+   },
+   "comment": null,
+   "bench_cer": 0.37333333333333335,
+   "bench_speaker_sim": 0.778469979763031
+  }
+ ]
+}
