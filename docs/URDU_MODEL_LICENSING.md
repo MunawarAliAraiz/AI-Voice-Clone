@@ -50,7 +50,7 @@ fine-tune inherits Coqui CPML (non-commercial) even when the uploader tags it MI
 | **Indic Parler-TTS** | Apache-2.0 | **Apache-2.0** | IndicVoices-R etc. | no | permitted | ✅ yes | 🟢 |
 | **IndicF5** | MIT | **MIT** (gated) | Rasa, IndicTTS, LIMMITS, IndicVoices-R | no | gate applies to derivatives | ⚠️ probably | 🟡 |
 | **OmniVoice** | Apache-2.0 | **CC-BY-NC** | 581k h, open-source speech | yes (BY) | NC only | ❌ no | 🔴 |
-| **Higgs Audio v3 TTS** | not stated | **Boson Research & Non-Commercial** | not stated | Creator Use Grant | restricted | ❌ separate licence required | 🔴 |
+| **Higgs Audio v3 TTS** | not stated | **Boson Research & Non-Commercial** | not stated | credit required (Creator Use Grant) | restricted | ⚠️ monetized *content* ok; productising the model needs a separate licence | 🔴 |
 | `zohann/urdu-tts` | — | MIT tag, **empty README** | not stated | unknown | unknown | ❓ | ❓ |
 | `XTTS-v2-Urdu-FT` | — | inherits **Coqui CPML** | not stated | — | restricted | ❌ no | 🔴 |
 | **MegaTTS3** | — | — | — | — | **encoder not released** | ❌ | 🔴 |
@@ -117,12 +117,24 @@ fine-tune inherits Coqui CPML (non-commercial) even when the uploader tags it MI
 - **Weights:** "Boson Higgs TTS 3 Research and Non-Commercial License". The card is blunt:
   *"Production, hosted APIs, embedding in a product/service, or reselling the model requires a
   separate commercial license."*
-- **Creator Use Grant:** a narrow carve-out requiring visible acknowledgement of Boson AI's Higgs
-  Audio in the audio or accompanying text — "not hidden at the bottom of credits". It does **not**
-  lift the use restrictions.
+- **Creator Use Grant — broader than first recorded here.** Re-read at the source 2026-08-14: it is
+  **free for digital creators, explicitly including monetized content** (podcasts, videos, social
+  posts). The one condition is visible credit to Boson AI's Higgs Audio in the audio or accompanying
+  text — "not hidden at the bottom of credits". So a creator publishing monetized *content* is
+  covered; what still needs a separate commercial licence is productising the **model** — hosted
+  APIs, embedding it in a product/service, or reselling it. An earlier revision of this file
+  described the grant as narrow and non-lifting; that understated it.
+- **Practical consequence for this project:** the Creator Use Grant does not help us, because a
+  voice-cloning studio *is* "embedding the model in a service". It would matter if the owner only
+  ever published generated clips.
 - Prohibits non-consensual cloning, impersonation, fraud, election deception, biometric surveillance.
 - **Why it is in the bake-off:** Urdu appears in the **WER/CER < 5 production-quality tier**, flagged
   🇵🇰🇮🇳 — the only candidate whose own documentation acknowledges Pakistani Urdu.
+- **⚠️ Arm F could not be run** (2026-08-14). transformers 5.15.0 does not implement
+  `higgs_multimodal_qwen3`, `config.json` has `auto_map: null` so `trust_remote_code` cannot supply
+  it, the only documented self-hosting path is the `lmsysorg/sglang-omni:dev` Docker image (Docker
+  is not installed on the pod and cannot nest in a RunPod container), and mainline pip `sglang` has
+  no Higgs model. **No claim is made about its Urdu quality — we never heard it.**
 - Sources: <https://huggingface.co/bosonai/higgs-audio-v3-tts-4b> · <https://www.boson.ai/blog/higgs-audio-v3-tts>
 
 ### `zohann/urdu-tts` — ❓ treat as 🔴

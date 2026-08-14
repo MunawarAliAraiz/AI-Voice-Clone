@@ -255,20 +255,55 @@ def _load_omnivoice(reference: Path, reference_text: str):
     return synth, _resolve_revision(OMNIVOICE_REPO)
 
 
+#: Why arm F is unrunnable here. Recorded verbatim into the manifest so the
+#: results table shows a reason rather than a blank that reads as "tested, fine".
+_HIGGS_BLOCKED = (
+    "Higgs Audio v3 cannot be served by this pod. Four checks, 2026-08-14:\n"
+    "  1. transformers 5.15.0 registers only 'higgs_audio_v2' and "
+    "'higgs_audio_v2_tokenizer' in CONFIG_MAPPING_NAMES. The v3 config declares "
+    "model_type='higgs_multimodal_qwen3' / "
+    "architectures=['HiggsMultimodalQwen3ForConditionalGeneration'], which is "
+    "not importable from transformers.\n"
+    "  2. The repo's config.json has auto_map=null, so trust_remote_code=True "
+    "cannot supply the missing class either — there is no remote code to trust.\n"
+    "  3. Boson's own AGENTS.md/README document exactly one self-hosting path: "
+    "SGLang-Omni via the 'lmsysorg/sglang-omni:dev' Docker image "
+    "(`sgl-omni serve --model-path bosonai/higgs-audio-v3-tts-4b`). Docker is "
+    "NOT INSTALLED on this pod and a RunPod container cannot nest one.\n"
+    "  4. Mainline pip 'sglang' has no Higgs support at all: no higgs*.py in "
+    "python/sglang/srt/models/, and a GitHub code search for "
+    "'HiggsMultimodalQwen3' across sgl-project/sglang returns 0 hits. The "
+    "'-omni:dev' image is a separate development fork, not a released package.\n"
+    "Additionally, Boson lists >=40 GB VRAM as known-good and 24 GB as "
+    "'reported to work, not officially verified'; this pod is a 24 GB A5000, so "
+    "even a successful source build would be running outside verified territory."
+)
+
+
 def _load_higgs(reference: Path, reference_text: str):
     """
-    Higgs Audio v3 TTS.
+    Higgs Audio v3 TTS — arm F. **Blocked**; see `_HIGGS_BLOCKED`.
 
-    NOTE: this adapter is written from the model card and is the one API here
-    NOT yet exercised against real weights. If it is wrong it must FAIL, not
-    quietly produce something — so nothing is wrapped in a fallback. Verify on
-    the pod and correct this function; do not "fix" it by catching the error.
+    This raises rather than half-working. The preflight is a real capability
+    check, not a hardcoded refusal: if a future transformers ships the v3
+    architecture, the check passes and the load below runs. That load path is
+    written from the model card and has never been exercised against real
+    weights — if it is wrong it must FAIL, not quietly produce something, so
+    nothing here is wrapped in a fallback. Do not "fix" it by catching.
 
     Licence: Boson Research & Non-Commercial. Permitted here for the owner's
     personal, API-key-gated use; NOT commercially deployable. See
     docs/URDU_MODEL_LICENSING.md.
     """
     import torch
+    import transformers
+
+    if not hasattr(transformers, "HiggsMultimodalQwen3ForConditionalGeneration"):
+        raise RuntimeError(
+            f"{_HIGGS_BLOCKED}\n"
+            f"(installed transformers: {transformers.__version__})"
+        )
+
     from transformers import AutoModel, AutoProcessor
 
     processor = AutoProcessor.from_pretrained(HIGGS_REPO, trust_remote_code=True)
