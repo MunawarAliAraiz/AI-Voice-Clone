@@ -257,6 +257,12 @@ def main() -> int:
                    help="Reference blind/*.wav by path instead of embedding the "
                         "audio. Smaller file, but only plays when opened next to "
                         "its blind/ folder.")
+    p.add_argument("--exclude-scored", action="append", default=[],
+                   help="Path to a listen_scores_passN.json (this script's own "
+                        "output shape: {'entries': [{'arm','reference_id',"
+                        "'item_id',...}, ...]}). Clips already scored there are "
+                        "left out of this page, so a second pass only shows what "
+                        "is actually left. Repeatable.")
     p.set_defaults(embed=True)
     args = p.parse_args()
 
@@ -266,6 +272,19 @@ def main() -> int:
         raise SystemExit(
             f"no playable clips under {root} — run eval/run_urdu_bakeoff.py first"
         )
+
+    if args.exclude_scored:
+        done: set[tuple[str, str, str]] = set()
+        for f in args.exclude_scored:
+            entries = json.loads(Path(f).read_text(encoding="utf-8"))["entries"]
+            done |= {(e["arm"], e["reference_id"], e["item_id"]) for e in entries}
+        before = len(samples)
+        samples = [s for s in samples
+                   if (s["arm"], s["reference_id"], s["item_id"]) not in done]
+        print(f"--exclude-scored: {before - len(samples)} already-scored clips "
+              f"dropped, {len(samples)} remain", file=sys.stderr)
+        if not samples:
+            raise SystemExit("nothing left to score — every clip is in the excluded set(s)")
 
     blind_dir = root / "blind"
     if blind_dir.exists():
