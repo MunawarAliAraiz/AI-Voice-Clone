@@ -360,10 +360,16 @@ OMNIVOICE_URDU = ModelSpec(
     # MEASURED, bake-off: 4699 MB (female) peak, the LOWEST of any arm —
     # using the higher of the two references, rounded up.
     vram_mb=4700,
-    # No cold-load measurement exists yet for the PRODUCTION runtime path
-    # (this spec's `OmniVoiceBackend.load()`, not the eval driver's loader) —
-    # provisional until the pod smoke test measures it.
-    est_load_sec=90.0,
+    # MEASURED on the pod (2026-08-15), production runtime path
+    # (`OmniVoiceBackend.load()`, not the eval driver's loader): 159.3s wall,
+    # weights already warm in /workspace/hf-cache so this is pure model
+    # construction (deserializing ~840 weight tensors onto the GPU across two
+    # components), not network time. Note a first-`synth()` call pays an
+    # ADDITIONAL ~17s beyond steady state: OmniVoice lazily loads an embedded
+    # Whisper sub-model (587 more shards) the first time `ref_text` isn't
+    # supplied, to auto-transcribe the reference audio. Passing `ref_text`
+    # up front should avoid that cost — not yet verified.
+    est_load_sec=159.3,
     # MEASURED, bake-off: 0.736 (female) RTF — using the higher (worse-case)
     # of the two references; the owner reference measured 0.442.
     est_rtf=0.736,
@@ -373,8 +379,12 @@ OMNIVOICE_URDU = ModelSpec(
         "CC-BY-NC weights (Apache-2.0 code) — personal use only, see "
         "docs/URDU_MODEL_LICENSING.md. Bake-off arm E: best pronunciation of "
         "any arm (5.0/5) and the only Urdu cell whose automated gate passes "
-        "on both references, but verified=False until the production "
-        "runtime (not the eval harness) is smoke-tested and re-gated. "
+        "on both references. 2026-08-15: production `OmniVoiceBackend` "
+        "smoke-tested on the pod against the pinned revision — real "
+        "load/synth/unload, non-silent output (peak 0.7573), 24kHz — but "
+        "verified=False stays until a real CER/cosine gate re-run scores "
+        "this backend's own output (the smoke test only confirmed the audio "
+        "is real, not that it clears the gate). "
         "Weakest on code-switching (3.0/5) — see docs/URDU_BAKEOFF_RESULTS.md."
     ),
     caveat="Best pronunciation so far, but non-commercial (personal use only).",
