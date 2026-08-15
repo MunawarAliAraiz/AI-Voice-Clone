@@ -118,30 +118,43 @@ sine wave with HTTP 200 — logged as success.
 | language | script | plan |
 |---|---|---|
 | `ur` | Perso-Arabic | `f5_openbible_urdu`, transform `none` |
-| `ur` | Perso-Arabic + `strategy=translit` | `arab→deva` (**lossy**) → best Hindi model |
-| `ur` | Latin (Roman Urdu) | `roman→deva` → best Hindi model |
-| `hi` | Devanagari | best Hindi model, transform `none` |
+| `ur` | Perso-Arabic + `strategy=translit` | `NoRouteError` — see below |
+| `ur` | Latin (Roman Urdu) | `voxcpm2`, transform `none` |
 | `en` | Latin | best English model, transform `none` |
 | anything else | — | `NoRouteError` → **422** |
+
+Hindi was fully removed as a target language — its catalog cells are gone, so
+`hi`/Devanagari is not a routable destination for anything anymore.
+`strategy=translit` and the old Roman-Urdu Devanagari fallback both used to
+target a Hindi spec; both are left in place structurally (not deleted from
+`routing.py`) but are now permanently unroutable — they correctly fall
+through to `NoRouteError` rather than being surgically removed from that
+contract module. `translit` was already unimplemented before Hindi's removal,
+and the Roman fallback never actually fired in production since `voxcpm2`
+already serves `(ur, Latin)` natively.
 
 **The user declares the language; the code detects the script.** Script detection
 cannot distinguish Roman Urdu from English — "Aap kaise hain" and "How are you"
 are both Latin — so there is no classifier, and there must not be one.
 `(language="ur", script=LATIN)` *is* Roman Urdu, because the user said so.
-`(ur, DEVANAGARI)` is rejected with a 422 suggesting `language=hi`.
+`(ur, DEVANAGARI)` is rejected with a 422 — no spec renders Urdu from Devanagari.
 
 **No silent fallback, ever.** Every response carries `route: {model_id,
 transform, lossy, rationale}`, rendered in the UI as a visible chip.
 
 ---
 
-## Models: 3 runtimes, 5 specs
+## Models: 4 runtimes, 5 specs
 
 | Runtime | Specs | License | Role |
 |---|---|---|---|
-| `f5` | `f5_openbible_urdu`, `f5_indic`, `f5_openf5_en` | CC-BY-SA / MIT / Apache-2.0 | Urdu, Hindi, English |
-| `chatterbox` | `chatterbox_ml_v3` | MIT | Hindi, English |
-| `voxcpm` | `voxcpm2` | Apache-2.0 | Hindi, English |
+| `f5` | `f5_openbible_urdu` | CC-BY-SA | Urdu |
+| `chatterbox` | `chatterbox_ml_v3` | MIT | English |
+| `voxcpm` | `voxcpm2`, `voxcpm2_urdu_arabic` | Apache-2.0 | English, Urdu |
+| `omnivoice` | `omnivoice_urdu` | CC-BY-NC (personal use) | Urdu |
+
+This table lists the current live spec set — see `backend/app/inference/catalog.py` (`ALL_SPECS`) as
+the actual source of truth if this drifts.
 
 F5 is **one runtime class with three registered specs** — not three classes (the
 hard parts — reference trimming to the 8192-frame limit, `۔` chunking, concat —

@@ -36,7 +36,7 @@ def test_models_list_reports_verified_latin_cells(tmp_path: Path) -> None:
         body = r.json()
         vox = next(m for m in body["models"] if m["id"] == "voxcpm2")
         pairs = {(x["language"], x["script"]) for x in vox["languages"]}
-        assert ("ur", "latin") in pairs and ("hi", "latin") in pairs
+        assert ("ur", "latin") in pairs
         assert all(x["verified"] for x in vox["languages"])  # only verified returned
         assert body["vram_budget_mb"] > 0
 
@@ -74,12 +74,13 @@ def test_models_list_badges_non_commercial_weights(tmp_path: Path) -> None:
         assert all(m["commercial_use"] is True for m in others)
 
 
-def test_languages_lists_en_hi_ur(tmp_path: Path) -> None:
+def test_languages_lists_en_ur(tmp_path: Path) -> None:
     with _client(tmp_path) as c:
         r = c.get("/api/languages")
         assert r.status_code == 200
         codes = {x["code"] for x in r.json()["languages"]}
-        assert {"en", "hi", "ur"} <= codes
+        assert {"en", "ur"} <= codes
+        assert "hi" not in codes  # Hindi fully removed as a target language
 
 
 def test_system_status(tmp_path: Path) -> None:

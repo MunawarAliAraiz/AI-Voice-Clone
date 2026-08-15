@@ -36,7 +36,6 @@ router = APIRouter(prefix="/models", tags=["models"])
 #: Display + native names for the languages the product can serve.
 _LANG_NAMES: dict[str, tuple[str, str]] = {
     "ur": ("Urdu (اردو)", "اردو"),
-    "hi": ("Hindi (हिन्दी)", "हिन्दी"),
     "en": ("English", "English"),
 }
 
@@ -115,7 +114,7 @@ async def list_languages(
     for code, entry in by_lang.items():
         display, native = _LANG_NAMES.get(code, (code, code))
         # Every verified cell here is rendered with transform NONE (VoxCPM2 reads
-        # romanized hi/ur directly), so nothing is served only-via-lossy-transform.
+        # romanized Urdu directly), so nothing is served only-via-lossy-transform.
         langs.append(
             LanguageInfo(
                 code=code, display_name=display, native_name=native,

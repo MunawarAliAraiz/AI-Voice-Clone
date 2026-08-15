@@ -46,7 +46,12 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
   // honored or refused server-side — never silently swapped for something
   // else (same rule routing itself follows, see domain/routing.py::resolve).
-  const [modelId, setModelId] = useState<string | null>(null);
+  // Pre-filled per language (see DEFAULT_MODEL_BY_LANGUAGE/handleLanguageChange
+  // below) rather than left on Auto — still just an explicit pick, not a
+  // change to auto-routing semantics.
+  const [modelId, setModelId] = useState<string | null>(
+    DEFAULT_MODEL_BY_LANGUAGE['ur'] ?? null
+  );
   const [speed, setSpeed] = useState<number>(1.0);
   const [stability, setStability] = useState<number>(() => {
     try {
@@ -134,6 +139,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   // depending on it would re-run this effect every render instead of only
   // when the inputs it's derived from actually change.
   useEffect(() => {
+    // Wait for the real list before judging compatibility — otherwise this
+    // fires on mount against an empty compatibleModels (modelsData still
+    // loading) and wipes the language-default pre-selection before the
+    // fetch even resolves.
+    if (!modelsData) return;
     if (modelId !== null && !compatibleModels.some((m) => m.id === modelId)) {
       setModelId(null);
     }
@@ -156,6 +166,12 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     } else if (speed === 0.9) {
       setSpeed(1.0);
     }
+    // Pre-fill the Model dropdown with the best option for the language
+    // instead of leaving it on Auto — still just an explicit `model_id` pick
+    // like a manual click (allow_experimental flows through the existing
+    // selectedModel?.experimental derivation in generate(), unchanged), so
+    // this is a UI convenience only and never widens auto-routing itself.
+    setModelId(DEFAULT_MODEL_BY_LANGUAGE[newLang] ?? null);
   }
 
   function handleStabilityChange(val: number) {
@@ -228,7 +244,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     setDirectionLoading(true);
     const h = window.setTimeout(() => {
       api
-        .analyzeDirection(t, language)
+        .analyzeDirection(t, language, modelId, selectedModel?.experimental ?? false)
         .then((res) => {
           setDirection(res);
           setDirectionErr(null);
@@ -240,7 +256,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         .finally(() => setDirectionLoading(false));
     }, 400);
     return () => window.clearTimeout(h);
-  }, [text, language, showDirection]);
+  }, [text, language, showDirection, modelId, selectedModel]);
 
   // Drop stale Advanced edits when the underlying segmentation actually
   // changed (different segment count/text) — not on every re-fetch, so
@@ -680,6 +696,14 @@ function nearestStabilityOption(v: number): number {
 
 const PLACEHOLDER: Record<string, string> = {
   en: 'Hello, how are you today?',
-  hi: 'Aap kaise ho? Aaj mausam accha hai.',
   ur: 'Aap kaise hain? Aaj mausam bohat acha hai.',
+};
+
+// Pre-fills the Model dropdown per language instead of leaving it on Auto —
+// ur -> OmniVoice (best pronunciation, still explicitly experimental), en ->
+// VoxCPM 2 (the verified default). Still just an explicit model_id pick, same
+// as a manual click; see handleLanguageChange and modelId's initial state.
+const DEFAULT_MODEL_BY_LANGUAGE: Record<string, string> = {
+  ur: 'omnivoice_urdu',
+  en: 'voxcpm2',
 };

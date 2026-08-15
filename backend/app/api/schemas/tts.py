@@ -144,9 +144,9 @@ class TTSGenerateRequest(BaseModel):
     never silently swapped.
 
     Also absent: `emotion` and `style`. Nine presets that resolved to an atempo
-    multiplier, with text preprocessing that was a no-op on Urdu and Hindi — the
-    target languages — is a feature surface with no feature behind it. Real
-    per-model knobs go in `params`, validated against the spec's declared schema.
+    multiplier, with text preprocessing that was a no-op on the target
+    languages, is a feature surface with no feature behind it. Real per-model
+    knobs go in `params`, validated against the spec's declared schema.
     """
 
     model_config = ConfigDict(protected_namespaces=())
@@ -155,7 +155,7 @@ class TTSGenerateRequest(BaseModel):
     profile_id: int = Field(..., examples=[1])
     language: str = Field(
         ...,
-        examples=["ur", "hi", "en"],
+        examples=["ur", "en"],
         description="Declared by the user. Never inferred — (ur, latin) IS Roman Urdu.",
     )
     model_id: str | None = Field(
@@ -177,8 +177,9 @@ class TTSGenerateRequest(BaseModel):
         examples=["native", "translit"],
         description=(
             "Perso-Arabic Urdu only. 'native' uses the Urdu checkpoint; "
-            "'translit' routes via Devanagari to a Hindi model (lossy, often "
-            "better prosody on conversational text)."
+            "'translit' is currently unroutable (always 422) — it targeted a "
+            "Hindi model via Devanagari transliteration, and Hindi has been "
+            "removed as a target language."
         ),
     )
     output_format: str = Field("wav", examples=["wav", "mp3"])
@@ -250,7 +251,7 @@ class ScriptDetectRequest(BaseModel):
     """Live script detection for the editor, so the warning precedes generation."""
 
     text: str = Field(..., max_length=5000)
-    language: str = Field(..., examples=["ur", "hi", "en"])
+    language: str = Field(..., examples=["ur", "en"])
 
 
 class ScriptDetectResponse(BaseModel):

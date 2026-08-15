@@ -146,19 +146,21 @@ def test_generate_unknown_profile_and_bad_params(tmp_path: Path) -> None:
 
 def test_unimplemented_transform_is_a_422_not_a_crash(tmp_path: Path) -> None:
     """
-    `urdu_strategy="translit"` on Perso-Arabic Urdu is the one input that still
-    makes `resolve()` return a plan with a non-identity transform: it targets
-    Hindi via ARAB_TO_DEVA, and the Hindi/Devanagari cell IS routable, so the
-    plan builds successfully and reaches the service layer.
+    `urdu_strategy="translit"` targets Hindi via ARAB_TO_DEVA
+    (`_plan_transform` in `domain/routing.py`) — a target that has had zero
+    catalog candidates since Hindi was fully removed as a product language.
+    So `resolve()` itself now raises `NoRouteError` directly (candidates
+    empty), never reaching the service layer's own separate "unimplemented
+    transform" 422 in `tts.py` — that branch is presently unreachable dead
+    code, kept rather than deleted (see `routing.py`'s routing-table
+    docstring for the reasoning). Either way the client sees the same shape:
+    a clean 422 NO_ROUTE, never a crash.
 
-    Nothing implements that transform (the ai4bharat hop was deleted when
-    VoxCPM2 turned out to read romanized text directly). This asserts the
-    refusal is a clean 422 NO_ROUTE listing what would work.
-
-    Regression: this branch previously called `GenerationError(detail)` with a
-    single argument against a two-argument `__init__(model_id, detail)`, so the
-    "fail loudly" path raised `TypeError` instead of the error it meant to —
-    a 500 with no explanation, on an input a user can actually send.
+    This test previously exercised the OTHER branch (the one with a real
+    regression history: it used to call `GenerationError(detail)` with a
+    single argument against a two-argument `__init__`, a `TypeError` masked
+    as a 500). That branch has no live path to it anymore post-Hindi-removal;
+    this test now covers the `resolve()`-level refusal instead.
     """
     client, _ = _client(tmp_path)
     with client as c:
@@ -174,8 +176,10 @@ def test_unimplemented_transform_is_a_422_not_a_crash(tmp_path: Path) -> None:
         assert body["code"] == "NO_ROUTE"
         # The body must enumerate what WOULD work — a bare "unsupported" is
         # barely better than the sine wave this rewrite exists to kill.
+        # f5_openbible_urdu's (ur, arabic) cell is itself unverified (a
+        # separate, pre-existing fact, not something this test is about), so
+        # only the verified Roman-Urdu route shows up here.
         assert {"language": "ur", "script": "latin"} in body["supported"]
-        assert "arab_to_deva" in body["suggestion"]
 
         # Refused before any job row exists, like every other routing failure.
         assert c.get("/api/jobs").json()["total"] == 0

@@ -244,7 +244,7 @@ def test_experimental_specs_have_a_caveat() -> None:
             )
 
 
-def test_four_runtimes_six_specs() -> None:
+def test_four_runtimes_five_specs() -> None:
     """
     The lineup is a decision, not an accident. Changing it is a plan change.
 
@@ -264,29 +264,25 @@ def test_four_runtimes_six_specs() -> None:
     arm E, the best pronunciation result of the whole bake-off) is a genuinely
     new runtime — the first CC-BY-NC spec in the catalog, legal only under
     golden rule 6's personal-use amendment.
+
+    Back down to five specs (still four runtimes) when Hindi was fully removed
+    as a target language: `f5_indic` existed solely to serve Hindi
+    (`(hi, Script.DEVANAGARI)`), so it was deleted outright rather than left
+    with an empty `languages` tuple.
     """
-    assert len(CATALOG.specs) == 6
+    assert len(CATALOG.specs) == 5
     assert {s.runtime for s in CATALOG.specs} == {
         RuntimeKind.F5,
         RuntimeKind.CHATTERBOX,
         RuntimeKind.VOXCPM,
         RuntimeKind.OMNIVOICE,
     }
-    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
+    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 1
     assert len(CATALOG.by_runtime(RuntimeKind.VOXCPM)) == 2
     assert len(CATALOG.by_runtime(RuntimeKind.OMNIVOICE)) == 1
     assert CATALOG.get("f5_openf5_en") is None
     assert CATALOG.get("voxcpm2_urdu_lora") is None, "withdrawn 2026-08-15"
-
-
-def test_gated_specs_are_flagged() -> None:
-    """
-    A gated repo cannot be downloaded without human action (accepting a license
-    and supplying an HF_TOKEN). It must be declared so the scheduler can fail
-    with an actionable message instead of a bare 401 from inside a loader.
-    """
-    indic = CATALOG.require("f5_indic")
-    assert indic.gated, "ai4bharat/IndicF5 is gated ('gated': 'auto' on the HF API)"
+    assert CATALOG.get("f5_indic") is None, "Hindi fully removed 2026-08-15"
 
 
 def test_voxcpm2_urdu_arabic_shares_base_checkpoint() -> None:
@@ -519,15 +515,15 @@ def test_no_route_error_enumerates_what_would_work() -> None:
     err = NoRouteError(
         language="ur",
         script="devanagari",
-        supported=(("ur", "arabic"), ("hi", "devanagari")),
-        suggestion="Did you mean language='hi'?",
+        supported=(("ur", "arabic"), ("en", "latin")),
+        suggestion="Use Perso-Arabic (اردو) or Roman script for Urdu.",
     )
     problem = err.to_problem(instance="/api/tts/generate")
     assert problem["status"] == 422
     assert problem["code"] == "NO_ROUTE"
     assert problem["instance"] == "/api/tts/generate"
-    assert {"language": "hi", "script": "devanagari"} in problem["supported"]
-    assert "hi" in problem["detail"] or "hi" in problem["suggestion"]
+    assert {"language": "en", "script": "latin"} in problem["supported"]
+    assert "Perso-Arabic" in problem["suggestion"]
 
 
 def test_problem_document_shape() -> None:
@@ -610,4 +606,4 @@ def test_model_spec_supports_requires_exact_script() -> None:
     )
     assert spec.supports("ur", Script.ARABIC)
     assert not spec.supports("ur", Script.LATIN)
-    assert not spec.supports("hi", Script.ARABIC)
+    assert not spec.supports("en", Script.ARABIC)

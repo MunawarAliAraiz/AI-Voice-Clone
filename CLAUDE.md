@@ -1,6 +1,9 @@
 # AI Voice Clone Studio
 
-FastAPI + React voice-cloning studio. Target languages: **Urdu (Perso-Arabic + Roman), Hindi, English**.
+FastAPI + React voice-cloning studio. Target languages: **Urdu (Perso-Arabic + Roman), English**.
+Hindi was fully removed as a target language (catalog, routing, frontend, docs) — see git history
+around the removal commit if VoxCPM2's dropped Hindi cells (CER 0.086, speaker cosine 0.887) are ever
+needed again as a reference point.
 
 The rewrite is complete and validated end-to-end on GPU with real cloned audio. The design rationale is
 **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before changing anything in
