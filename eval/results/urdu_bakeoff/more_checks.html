@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>More checks — numbers + URL variants</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; } h2 { margin-top: 2rem; border-bottom: 1px solid #333; padding-bottom: .3rem; }
+.item { margin: 1rem 0; padding: .75rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .85rem; color: #9aa4b2; margin-bottom: .3rem; }
+.text { font-size: 1.15rem; margin: .3rem 0; }
+.orig { font-size: .85rem; color: #6c7280; margin-bottom: .3rem; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>Broader validation — new number sentences + URL respelling</h1>
+<h2>1. Numbers the corpus doesn't cover (age, price, percent, big number, small count)</h2>
+
+  <div class="item">
+    <div class="meta">num_age</div>
+    <div class="text" dir="rtl">میری عمر پچیس سال ہے۔</div>
+    <div class="orig" dir="rtl">(original: میری عمر 25 سال ہے۔)</div>
+    <audio controls src="more_checks/num_age.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">num_price</div>
+    <div class="text" dir="rtl">اس کی قیمت ایک ہزار پانچ سو روپے ہے۔</div>
+    <div class="orig" dir="rtl">(original: اس کی قیمت 1500 روپے ہے۔)</div>
+    <audio controls src="more_checks/num_price.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">num_percent</div>
+    <div class="text" dir="rtl">تقریباً پچاس فیصد لوگوں نے یہ بات مانی۔</div>
+    <div class="orig" dir="rtl">(original: تقریباً 50 فیصد لوگوں نے یہ بات مانی۔)</div>
+    <audio controls src="more_checks/num_percent.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">num_big_number</div>
+    <div class="text" dir="rtl">شہر کی آبادی نوے ہزار سے زیادہ ہے۔</div>
+    <div class="orig" dir="rtl">(original: شہر کی آبادی 90000 سے زیادہ ہے۔)</div>
+    <audio controls src="more_checks/num_big_number.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">num_small_count</div>
+    <div class="text" dir="rtl">میرے پاس صرف سات کتابیں ہیں۔</div>
+    <div class="orig" dir="rtl">(original: میرے پاس صرف 7 کتابیں ہیں۔)</div>
+    <audio controls src="more_checks/num_small_count.wav"></audio>
+  </div>
+<h2>2. URL — same sentence, 4 spellings (all owner reference)</h2>
+<p>Original complaint: URL pronounced 'oo are el' (Urdu vowel on the U) instead of English 'you are el'.</p>
+
+  <div class="item">
+    <div class="meta">URL (unchanged, the original mispronunciation)</div>
+    <audio controls src="more_checks/url_baseline.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">U.R.L</div>
+    <audio controls src="more_checks/url_dotted.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">یو آر ایل (Urdu-script letter names)</div>
+    <audio controls src="more_checks/url_urdu_letters.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">url (lowercase)</div>
+    <audio controls src="more_checks/url_lowercase.wav"></audio>
+  </div>
+</body></html>

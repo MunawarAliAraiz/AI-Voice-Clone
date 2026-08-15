@@ -406,6 +406,51 @@ real generation path is a deliberate decision, not an eval-script side effect. T
 lossy, rationale}` chip per golden rule 5, whether it applies automatically to all Urdu Perso-Arabic
 generation or is opt-in) is a real design decision, not made here.
 
+### 5d. Consolidated pronunciation verification model `[LISTEN]` (2026-08-15)
+
+Continuing past §5b/§5c with per-word isolation testing (bare word vs minimal sentence vs full
+corpus/synthetic sentence, owner reference, real production `OmniVoiceBackend`, no normalization
+applied unless stated) —
+`eval/run_isolated_word_checks.py`, `eval/run_database_respell_check.py`,
+`eval/run_database_respell_v2.py`, `eval/run_more_checks.py`, clips and listen pages under
+`eval/results/urdu_bakeoff/{isolated_word_checks,database_respell_check,database_respell_v2,
+more_checks}*`.
+
+**The important conclusion is not "OmniVoice cannot pronounce X."** Across every case tested, the
+pattern is the same: **OmniVoice performs well on realistic conversational Urdu, but certain written
+representations are poor inputs for synthesis. The frontend can normalize some of these
+representations into forms the model handles more reliably.** That is a distinction between model
+capability and frontend normalization requirements, not a verdict on the model.
+
+| Category | Status | Basis |
+|---|---|---|
+| Native Urdu | **PASS** | Ordinary conversational Urdu, including long/multiclause sentences, names, and colloquial text, is generally working well in the tested corpus |
+| Numbers/dates — raw digits | **FAIL** | Both ASCII and Eastern Arabic-Indic digits fail identically — the issue is being a digit, not the script |
+| Numbers/dates — Urdu word expansion | **PASS / verified on tested cases** | Verified across the original 3 failing corpus items, 5 additional synthetic sentences, both references, with regression checks showing no damage to already-correct ordinary-Urdu cases. Not claimed to be exhaustive over every possible numeric context — verified on the tested corpus and representative synthetic cases only |
+| English code-switch in realistic sentences | **PASS** | `office`, `check`, `GitHub`/`pull request`/`review` confirmed working in realistic sentence contexts, both in isolation and in the original corpus |
+| Sparse/bare inputs | **UNRELIABLE / evaluation limitation** | Bare single words or 2–3 word fragments are substantially less reliable than realistic full sentences, independent of what they contain (میٹنگ, URL, and database all failed bare; office and check did not). This is recorded as a limitation of testing sparse inputs, not as proof that sparse input explains every individual failure — some failures (numbers, `database`) reproduce in full-sentence context too |
+| `URL` | **Targeted respelling verified in the demonstrated realistic failure** | Bare: unreliable/silent. Short sentence: correct. Busy realistic sentence (the original "abbreviations" corpus item): incorrect ("oo r l"). `یو آر ایل` respelling fixes the busy realistic sentence specifically — not claimed to fix every possible `URL` context |
+| `database` | **Context-dependent; targeted fix verified only in the realistic sentence** | Bare and short-context forms are unreliable in every direct form tested. The all-Urdu respelling `ڈیٹا بیس` collides with the existing Urdu word for "twenty" (بیس) and is inconsistent. The mixed respelling `ڈیٹا` (Urdu) + `base` (Latin, left unchanged) produces the correct pronunciation in the realistic full-sentence case (the original "technical" corpus item) but not in the bare/short forms. **Not fixed everywhere** — verified only in the demonstrated realistic case |
+
+**No broad English-transliteration system is being introduced.** office/check/GitHub already work as
+plain Latin text; URL and database needed a small, specific respelling each, found and verified
+individually — the same one-word-at-a-time, verify-by-ear discipline as every other finding in this
+bake-off, not a general rule.
+
+**Still eval-only, nothing wired to production.** Three rules now have eval-verified evidence behind
+them:
+
+1. Digit/date expansion (`eval/urdu_numerals.py`)
+2. `URL` → `یو آر ایل`, where the demonstrated busy-sentence context requires it
+3. `database` → `ڈیٹا` + Latin `base` (mixed script), where the demonstrated realistic-sentence context
+   requires it
+
+Before any production integration, an open design question remains: do these belong in one general
+normalization layer, or a small targeted pronunciation lexicon (closer to what the evidence actually
+supports, given how narrowly each fix has been shown to apply)? Not decided here. No further isolated
+word testing is planned unless a specific, unresolved, production-relevant failure surfaces — the
+current evidence is sufficient to move from exploration to designing the normalization layer itself.
+
 ---
 
 ## 6. What happens next

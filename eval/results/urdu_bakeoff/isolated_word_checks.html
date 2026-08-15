@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Isolated word checks</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; } h2 { margin-top: 2rem; border-bottom: 1px solid #333; padding-bottom: .3rem; font-size: 1rem; color:#9aa4b2;}
+.item { margin: .75rem 0; padding: .6rem .75rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .8rem; color: #6c8cff; margin-bottom: .3rem; }
+.text { font-size: 1.15rem; margin: .3rem 0; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>Isolated word checks — bare word vs minimal context, owner reference</h1>
+<p>No normalization applied anywhere here — raw text, real production OmniVoiceBackend, exactly as a
+real request would sound today. Goal: is each failure word-level, context-level, or digit-adjacency,
+before deciding what (if anything) to normalize.</p>
+<h2>براہ کرم (previously flagged wrong)</h2>
+    <div class="item">
+      <div class="meta">barae_karam_bare</div>
+      <div class="text" dir="rtl">براہ کرم</div>
+      <audio controls src="isolated_word_checks/barae_karam_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">barae_karam_context</div>
+      <div class="text" dir="rtl">براہ کرم فائل بھیج دیں۔</div>
+      <audio controls src="isolated_word_checks/barae_karam_context.wav"></audio>
+    </div><h2>URL (previously flagged wrong)</h2>
+    <div class="item">
+      <div class="meta">url_bare</div>
+      <div class="text" dir="rtl">URL</div>
+      <audio controls src="isolated_word_checks/url_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">url_context</div>
+      <div class="text" dir="rtl">یہ URL ہے۔</div>
+      <audio controls src="isolated_word_checks/url_context.wav"></audio>
+    </div><h2>database (previously flagged wrong)</h2>
+    <div class="item">
+      <div class="meta">database_bare</div>
+      <div class="text" dir="rtl">database</div>
+      <audio controls src="isolated_word_checks/database_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">database_context</div>
+      <div class="text" dir="rtl">ہمیں database چاہیے۔</div>
+      <audio controls src="isolated_word_checks/database_context.wav"></audio>
+    </div><h2>check (previously flagged slightly off)</h2>
+    <div class="item">
+      <div class="meta">check_bare</div>
+      <div class="text" dir="rtl">check</div>
+      <audio controls src="isolated_word_checks/check_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">check_context</div>
+      <div class="text" dir="rtl">میں نے check کیا۔</div>
+      <audio controls src="isolated_word_checks/check_context.wav"></audio>
+    </div><h2>meeting (inconsistent: wrong near numbers, correct elsewhere)</h2>
+    <div class="item">
+      <div class="meta">meeting_bare</div>
+      <div class="text" dir="rtl">میٹنگ</div>
+      <audio controls src="isolated_word_checks/meeting_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">meeting_no_number</div>
+      <div class="text" dir="rtl">میٹنگ ہے۔</div>
+      <audio controls src="isolated_word_checks/meeting_no_number.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">meeting_with_number</div>
+      <div class="text" dir="rtl">میٹنگ 3 بجے ہے۔</div>
+      <audio controls src="isolated_word_checks/meeting_with_number.wav"></audio>
+    </div><h2>office (control -- already known correct)</h2>
+    <div class="item">
+      <div class="meta">office_bare</div>
+      <div class="text" dir="rtl">office</div>
+      <audio controls src="isolated_word_checks/office_bare.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta">office_context</div>
+      <div class="text" dir="rtl">میں office میں ہوں۔</div>
+      <audio controls src="isolated_word_checks/office_context.wav"></audio>
+    </div>
+</body></html>
