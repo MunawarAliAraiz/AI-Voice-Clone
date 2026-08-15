@@ -5,9 +5,9 @@ Feeds the dynamic picker so the frontend keeps no hardcoded model list — the
 predecessor's static dropdown is what advertised Urdu on an engine that could
 not speak it. Only Phase-A-verified (language, script) pairs are returned,
 with one narrow, explicit exception: a model with `experimental_listing=True`
-(currently only Chatterbox) also lists its unverified cells, each still
-carrying `verified=False` and the model flagged `experimental=True`, so the
-picker can show it as a clearly labeled opt-in rather than hiding it.
+(Chatterbox, and VoxCPM2's Urdu LoRA) also lists its unverified cells, each
+still carrying `verified=False` and the model flagged `experimental=True`, so
+the picker can show it as a clearly labeled opt-in rather than hiding it.
 """
 
 from __future__ import annotations
@@ -56,12 +56,13 @@ def _summary(status: ModelStatus) -> ModelSummary:
     spec = status.spec
     return ModelSummary(
         id=spec.id, display_name=spec.display_name, runtime=spec.runtime.value,
-        license=spec.license.value, languages=_listed_langs(spec),
+        license=spec.license.value, commercial_use=spec.license.is_permissive,
+        languages=_listed_langs(spec),
         experimental=spec.experimental_listing,
         state=status.state.value, est_wait_sec=status.est_wait_sec,
         vram_mb=spec.vram_mb, est_rtf=spec.est_rtf, params=spec.params,
         needs_reference_text=spec.needs_reference_text,
-        reference_max_sec=spec.reference_max_sec, notes=spec.notes,
+        reference_max_sec=spec.reference_max_sec, caveat=spec.caveat,
     )
 
 

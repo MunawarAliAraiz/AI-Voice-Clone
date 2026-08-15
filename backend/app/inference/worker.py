@@ -76,8 +76,17 @@ def main(runtime: str) -> int:
             if op == WireOp.PING:
                 result = {"runtime": runtime, "loaded_model_id": backend.loaded_model_id}
             elif op == WireOp.LOAD:
+                # lora_* keys are only ever present for specs that declared
+                # them (see scheduler._load_into); other backends' load()
+                # never sees these kwargs, so this is a no-op for them.
+                extra = {
+                    k: payload[k] for k in
+                    ("lora_local_path", "lora_hf_repo", "lora_hf_revision")
+                    if k in payload
+                }
                 load_sec = backend.load(
-                    payload["model_id"], payload["hf_repo"], payload["hf_revision"]
+                    payload["model_id"], payload["hf_repo"], payload["hf_revision"],
+                    **extra,
                 )
                 result = {"load_time_sec": load_sec}
             elif op == WireOp.SYNTH:

@@ -45,6 +45,8 @@ export interface ModelSummary {
   display_name: string;
   runtime: string;
   license: string;
+  /** False for CC-BY-NC weights — personal use only, never for a shipped product. */
+  commercial_use: boolean;
   languages: LanguageSupportInfo[];
   experimental: boolean;
   state: string; // resident | warm | cold | not_downloaded
@@ -54,7 +56,8 @@ export interface ModelSummary {
   params: Record<string, Record<string, unknown>>;
   needs_reference_text: boolean;
   reference_max_sec: number | null;
-  notes: string;
+  /** The one user-facing sentence for an experimental model. Empty otherwise. */
+  caveat: string;
 }
 
 export interface ModelListResponse {

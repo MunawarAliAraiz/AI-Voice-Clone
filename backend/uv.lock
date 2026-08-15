@@ -2,28 +2,31 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version >= '3.15' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.15' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version >= '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
-    "python_full_version < '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.14.*' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.14.*' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.13' and sys_platform == 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.15' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version >= '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
+    "python_full_version < '3.15' and extra != 'extra-26-voice-clone-studio-backend-chatterbox' and extra != 'extra-26-voice-clone-studio-backend-f5' and extra != 'extra-26-voice-clone-studio-backend-omnivoice' and extra != 'extra-26-voice-clone-studio-backend-voxcpm'",
 ]
 conflicts = [[
     { package = "voice-clone-studio-backend", extra = "chatterbox" },
     { package = "voice-clone-studio-backend", extra = "f5" },
+    { package = "voice-clone-studio-backend", extra = "omnivoice" },
     { package = "voice-clone-studio-backend", extra = "voxcpm" },
 ]]
 
@@ -215,7 +218,7 @@ version = "4.14.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz", hash = "sha256:cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f", size = 260176, upload-time = "2026-07-12T20:29:07.082Z" }
 wheels = [
@@ -456,7 +459,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -602,7 +605,7 @@ name = "click"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
@@ -829,7 +832,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dill" },
     { name = "filelock" },
-    { name = "fsspec", extra = ["http"], marker = "extra == 'extra-26-voice-clone-studio-backend-f5' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "fsspec", extra = ["http"], marker = "extra == 'extra-26-voice-clone-studio-backend-f5' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
     { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "multiprocess" },
@@ -2016,7 +2019,7 @@ version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ast-serialize" },
-    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
     { name = "typing-extensions" },
@@ -2910,7 +2913,7 @@ name = "pytest"
 version = "9.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
@@ -2927,7 +2930,7 @@ version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
 wheels = [
@@ -3477,7 +3480,7 @@ version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/eb/e3/7c1dc7381d9f8ab7d854328ebfa884e62cb3f3d8549ddfd37c7814f42afa/starlette-1.3.1.tar.gz", hash = "sha256:05d0213193f2fbaae60e2ecb593b4add4262ad4e46536b54abe36f11a71724e0", size = 2703240, upload-time = "2026-06-12T09:23:11.602Z" }
 wheels = [
@@ -3591,7 +3594,7 @@ version = "2.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cuda-bindings", marker = "python_full_version < '3.15' and sys_platform == 'linux'" },
-    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "cuda-toolkit", extra = ["cublas", "cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(sys_platform == 'linux' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
     { name = "filelock" },
     { name = "fsspec" },
     { name = "jinja2" },
@@ -3836,7 +3839,7 @@ standard = [
     { name = "httptools" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
+    { name = "uvloop", marker = "(platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (platform_python_implementation == 'PyPy' and extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'cygwin' and extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-f5') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-chatterbox' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-omnivoice') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-f5' and extra == 'extra-26-voice-clone-studio-backend-voxcpm') or (sys_platform == 'win32' and extra == 'extra-26-voice-clone-studio-backend-omnivoice' and extra == 'extra-26-voice-clone-studio-backend-voxcpm')" },
     { name = "watchfiles" },
     { name = "websockets" },
 ]
@@ -3937,7 +3940,7 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.13" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
-provides-extras = ["f5", "chatterbox", "voxcpm"]
+provides-extras = ["f5", "chatterbox", "voxcpm", "omnivoice"]
 
 [package.metadata.requires-dev]
 dev = [

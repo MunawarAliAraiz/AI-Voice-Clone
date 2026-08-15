@@ -40,8 +40,17 @@ code, including the CPML-licensed `xtts_v2.py`, which rule 6 forbids reintroduci
    rule 1's bug. Routing decides what *should* run; the scheduler makes it so.
 5. **No silent fallback.** Unroutable request → `NoRouteError` → 422 listing what *would* work. Every response
    carries `route: {model_id, transform, lossy, rationale}` and the UI renders it as a visible chip.
-6. **Permissive licenses only.** No CC-BY-NC weights, no paid tiers. Every `ModelSpec.license` must match its
-   HF card. This is why XTTS v2 and Fish Speech were removed — don't reintroduce them.
+6. **Permissive by default; CC-BY-NC allowed for personal use, badged.** No paid tiers, ever. Every
+   `ModelSpec.license` must match its HF card **checked separately from the repo's code license** — two
+   candidates in this project's own licensing survey (`docs/URDU_MODEL_LICENSING.md`) differed between the
+   two, and both times the permissive-looking answer was wrong. **Amended 2026-08-15:** no permissively-licensed
+   model both lists Urdu and clones from reference audio (surveyed exhaustively), so `License.CC_BY_NC` may
+   appear in the catalog for the owner's own use behind `VCS_API_KEY` — never for a shipped product. Gated by
+   `License.personal_use_ok` (`backend/app/inference/spec.py`); `ModelSummary.commercial_use` surfaces it as a
+   distinct "Non-commercial" badge in the picker, independent of the `experimental` badge. `License.RESEARCH_ONLY`
+   is the one tier stricter than that and stays fully excluded — it's why Higgs Audio v3 (Boson Research &
+   Non-Commercial, stricter than CC-BY-NC) is still unintegrated despite being in the bake-off. XTTS v2 (Coqui
+   CPML) and Fish Speech (research license) stay banned independently of this amendment — don't reintroduce them.
 7. **Pin every HuggingFace `revision`.** `trust_remote_code=True` on an unpinned `main` is a supply-chain hole
    (IndicF5 needs it).
 8. **The `jobs` table is the queue.** `POST /api/generate` enqueues a row and returns 202;

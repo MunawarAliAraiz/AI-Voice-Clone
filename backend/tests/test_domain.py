@@ -131,6 +131,63 @@ def test_rtl_keys_off_script_not_language() -> None:
     assert not profile_text(ROMAN_URDU, "ur").is_rtl
 
 
+# ── Latin islands (code-switching) ───────────────────────────────────────────
+#
+# `detect_script` stays language-agnostic — `direction_analyze` relies on MIXED
+# yielding the union of terminator sets. `profile_text` knows the declared
+# language, so it is where an English island inside Urdu stops being "ambiguous".
+
+
+CODE_SWITCHED_URDU = "میں نے GitHub پر ایک نیا پل ریکویسٹ بھیجا ہے"
+HEAVY_CODE_SWITCH = "میں نے GitHub پر pull request create کر دی ہے"
+CODE_SWITCHED_HINDI = "मैंने GitHub पर pull request बनाई है"
+
+
+@pytest.mark.parametrize(
+    ("text", "language", "expected"),
+    [
+        # 82.9% Arabic — under the 0.85 dominance threshold, so raw detection
+        # says MIXED. This is ordinary Urdu and must route.
+        (CODE_SWITCHED_URDU, "ur", Script.ARABIC),
+        # 63.9% Latin. Still Urdu: the Perso-Arabic carries the sentence frame.
+        (HEAVY_CODE_SWITCH, "ur", Script.ARABIC),
+        (CODE_SWITCHED_HINDI, "hi", Script.DEVANAGARI),
+    ],
+)
+def test_english_islands_do_not_make_native_text_ambiguous(
+    text: str, language: str, expected: Script
+) -> None:
+    assert detect_script(text)[0] is Script.MIXED
+    assert profile_text(text, language).script is expected
+
+
+def test_island_rescue_keeps_the_true_measured_ratios() -> None:
+    """Resolving the script must not hide that English was present."""
+    profile = profile_text(CODE_SWITCHED_URDU, "ur")
+    assert profile.script is Script.ARABIC
+    assert profile.script_ratios[Script.LATIN] > 0.0
+    assert profile.is_rtl
+
+
+def test_two_native_scripts_stay_ambiguous() -> None:
+    """
+    Urdu + Hindi in one string is real ambiguity, not code-switching. Latin is
+    discounted as islands; another language-bearing script never is.
+    """
+    assert profile_text("یہ اردو ہے मगर यह हिन्दी है", "ur").script is Script.MIXED
+
+
+def test_a_token_of_native_script_does_not_hijack_english_text() -> None:
+    """Past LATIN_ISLAND_CEILING the native script is no longer the frame."""
+    mostly_english = "Hello everyone this is a mostly English sentence اردو"
+    assert profile_text(mostly_english, "ur").script is not Script.ARABIC
+
+
+def test_islands_never_apply_to_a_latin_native_language() -> None:
+    """English has no native non-Latin script, so nothing is rescued for it."""
+    assert profile_text("Hello नमस्ते dunya", "en").script is Script.MIXED
+
+
 # ── Sentence splitting ───────────────────────────────────────────────────────
 
 

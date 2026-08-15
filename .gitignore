@@ -57,3 +57,8 @@ frontend/src-tauri/bin/*.exe
 
 # wrangler dev local state
 .wrangler/
+
+# Blind listening audio is a regenerable COPY of the arm_*/ wavs (build_listen_page.py).
+# key.json is NOT ignored: exported listening scores are token-keyed and only that
+# file maps a token back to an arm, so regenerating would orphan the scores.
+eval/results/urdu_bakeoff/blind/

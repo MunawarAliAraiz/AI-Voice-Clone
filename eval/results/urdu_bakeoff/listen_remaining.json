@@ -1,0 +1,707 @@
+{
+ "n_remaining": 78,
+ "entries": [
+  {
+   "token": "5b7663e534c0ac10",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "3ef5aa603594523f",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "c8206246e0f550bb",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "date",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "ea6594393f1e6368",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "8a141dd303f8bbf1",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "names",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "7c44fc2a4a0761ce",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "880c90e2082bc5d5",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "a648d7bd3b5410ce",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "2d568b2c43d60bd7",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "d9f867e4bdcdffa2",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "f605c839ec780347",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "d472c34edb062ac0",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "c741478f609ba533",
+   "arm": "A",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "technical",
+   "category": null,
+   "representation": "roman"
+  },
+  {
+   "token": "21b590e3dbc1d01d",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "53f1d897db3cfda0",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "aca4bad44159a35e",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "date",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "d07b09effa395f43",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "5dd22ded17d2e695",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "names",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "6c3ad39b387eab1a",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "8b1636bdaa86961d",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "5284eb2ba63969c0",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "00a47ffcd69ba612",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "5066dd1ab45e3ae3",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "acad2500e91ffb0c",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "680954dcc30ed543",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "53343e69f7d3cd54",
+   "arm": "B",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "technical",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "69f857034512bb90",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "df4e12c557848c2d",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "9eab81dc70f355db",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "date",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "76e40a6c7c606210",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "72ff0a027f52ffa8",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "names",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "b8356f2485098edf",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "aa4e74e00b10d17b",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "118d5e1f052a0fb1",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "8c38f556818e0098",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "44e32c752b900115",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "26effb0f3bac60a5",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "23c5032e58aa75a4",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "fdf0ceeafc8f96cf",
+   "arm": "C",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "technical",
+   "category": null,
+   "representation": "devanagari"
+  },
+  {
+   "token": "01ae1c625305252e",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "4e37c84b38cd0957",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "94cd10ea241afb39",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "date",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "33adf67d17e22303",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "7b2a6d6c231547d0",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "names",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "e15fb9fbd229cc45",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "faf4492ca08aac5d",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "093720edaf339042",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "36c2cc6c2559ee47",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "1647ce649542f129",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "8ddeef30511c4a83",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "ceb732c744cd5371",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "18b96cc4819e1a8a",
+   "arm": "D",
+   "model": "voxcpm2",
+   "reference_id": "female",
+   "item_id": "technical",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "6fae298acc0006b2",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "a2c1b881fa6747d1",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "0ef54f7185e57bc2",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "date",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "5c57d84479d72a7e",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "41a8fc1702f143fd",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "names",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "1cfd7c1faa4f40c6",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "088fbbf123c7623f",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "ce7b697025b721b8",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "a3de02a528c8c1bf",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "745dab9f248ec199",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "e1d01016cc4e8281",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "2d64bc3f8984556c",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "3ff58199859e5bd1",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "female",
+   "item_id": "technical",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "63cb0a00a663da69",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "abbreviations",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "4373d7fb327a4714",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "colloquial",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "2a36dee5b69d55a2",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "date",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "9d38623d8c218b25",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "long_multiclause",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "d72f99c4c4530cad",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "names",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "00a03d10169ad35f",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "num_ascii",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "d269497d0d07ee9b",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "num_eastern",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "25bcac7fcf35997e",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "owner_01_sick",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "30148e51532059ed",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "owner_02_file",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "50814bed046e8218",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "owner_03_deadline",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "d699687da064f7cc",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "owner_04_late",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "ad7cd47c2a288631",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "owner_05_github",
+   "category": null,
+   "representation": "perso_arabic"
+  },
+  {
+   "token": "7b8e0be15147277d",
+   "arm": "E",
+   "model": "omnivoice",
+   "reference_id": "owner",
+   "item_id": "technical",
+   "category": null,
+   "representation": "perso_arabic"
+  }
+ ]
+}

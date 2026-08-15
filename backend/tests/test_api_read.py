@@ -41,6 +41,39 @@ def test_models_list_reports_verified_latin_cells(tmp_path: Path) -> None:
         assert body["vram_budget_mb"] > 0
 
 
+def test_models_list_surfaces_urdu_arabic_as_experimental(tmp_path: Path) -> None:
+    """
+    voxcpm2_urdu_arabic is `verified=False` but `experimental_listing=True` —
+    the picker must still list it (mirroring Chatterbox) rather than hiding an
+    unverified spec entirely, with its Urdu cell honestly marked unverified,
+    and a non-empty user-facing caveat rather than the raw maintainer notes.
+    """
+    with _client(tmp_path) as c:
+        body = c.get("/api/models").json()
+        spec = next(m for m in body["models"] if m["id"] == "voxcpm2_urdu_arabic")
+        assert spec["experimental"] is True
+        assert spec["caveat"], "experimental specs must carry a user-facing caveat"
+        ur = next(x for x in spec["languages"] if x["language"] == "ur")
+        assert ur["script"] == "arabic"
+        assert ur["verified"] is False, "gate-failing cell must not read as verified"
+
+
+def test_models_list_badges_non_commercial_weights(tmp_path: Path) -> None:
+    """
+    omnivoice_urdu is CC-BY-NC (golden rule 6's 2026-08-15 amendment) — the
+    picker must be able to badge it distinctly from `experimental`, which is
+    an independent axis (a model can be non-commercial and fully verified).
+    """
+    with _client(tmp_path) as c:
+        body = c.get("/api/models").json()
+        omni = next(m for m in body["models"] if m["id"] == "omnivoice_urdu")
+        assert omni["commercial_use"] is False
+        assert omni["license"] == "CC-BY-NC"
+        # Every other spec today is permissively licensed.
+        others = [m for m in body["models"] if m["id"] != "omnivoice_urdu"]
+        assert all(m["commercial_use"] is True for m in others)
+
+
 def test_languages_lists_en_hi_ur(tmp_path: Path) -> None:
     with _client(tmp_path) as c:
         r = c.get("/api/languages")

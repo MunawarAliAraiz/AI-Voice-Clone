@@ -82,6 +82,26 @@ SCRIPT_RANGES: dict[Script, tuple[tuple[int, int], ...]] = {
 #: Below this with two contenders present, the result is MIXED.
 SCRIPT_DOMINANCE_THRESHOLD = 0.85
 
+#: The script a declared language is natively written in. Latin runs inside text
+#: declared as one of these are code-switching — loanwords, technical terms,
+#: proper nouns ("GitHub", "pull request", "office") — not evidence that the
+#: input is ambiguous. Only languages with a non-Latin native script appear.
+NATIVE_SCRIPTS: dict[str, Script] = {
+    LanguageCode.URDU.value: Script.ARABIC,
+    LanguageCode.HINDI.value: Script.DEVANAGARI,
+}
+
+#: How much Latin a declared-native text may carry before it stops being
+#: "native with English islands" and becomes an English sentence with a token of
+#: the native script in it. Past this the result stays MIXED and the caller gets
+#: an explicit refusal carrying the ratios, rather than a guess.
+#:
+#: Deliberately generous, because heavy code-switching is not an edge case in
+#: Pakistani Urdu — UrduSpeech is 57% code-switched by design. "میں نے GitHub پر
+#: pull request create کر دی ہے" is 64% Latin and is still ordinary Urdu; only
+#: past ~3/4 does the native script stop being the sentence's frame.
+LATIN_ISLAND_CEILING = 0.75
+
 
 @dataclass(frozen=True, slots=True)
 class TextProfile:
@@ -155,14 +175,57 @@ def detect_script(text: str) -> tuple[Script, dict[Script, float]]:
     return Script.MIXED, ratios
 
 
+def _resolve_latin_islands(
+    script: Script, ratios: dict[Script, float], language: str
+) -> Script:
+    """
+    Rescue code-switched native text that `detect_script` called MIXED.
+
+    `detect_script` is deliberately language-agnostic — `direction_analyze`
+    calls it to choose a sentence-terminator set, where MIXED yielding the union
+    of all terminators is the right answer. But it has no way to know that a
+    single Latin word inside Urdu is normal. "میں نے GitHub پر ایک نیا پل
+    ریکویسٹ بھیجا ہے" measures 82.9% Arabic, lands under
+    SCRIPT_DOMINANCE_THRESHOLD, and so was rejected as ambiguous — despite
+    code-switching being the single most common shape of real Pakistani Urdu,
+    and despite the models handling it well (the bake-off scored it 5/5).
+
+    So here, where the declared language IS known, dominance is re-measured over
+    the language-bearing scripts alone, with Latin discounted as islands. The
+    text must still be overwhelmingly its native script among the scripts that
+    actually carry the language — a genuine Urdu/Hindi mix stays MIXED, because
+    that is real ambiguity rather than code-switching.
+    """
+    if script is not Script.MIXED:
+        return script
+    native = NATIVE_SCRIPTS.get(language)
+    if native is None:
+        return script
+
+    if ratios.get(Script.LATIN, 0.0) >= LATIN_ISLAND_CEILING:
+        return script
+
+    carrying = sum(share for s, share in ratios.items() if s is not Script.LATIN)
+    if carrying <= 0.0:
+        return script
+    if ratios.get(native, 0.0) / carrying >= SCRIPT_DOMINANCE_THRESHOLD:
+        return native
+    return script
+
+
 def profile_text(text: str, language: str) -> TextProfile:
     """
     Build a TextProfile from user-declared `language` and measured script.
 
     Does not validate that the pair is routable — that is `routing.resolve`'s
     job, and it needs the profile in order to explain the rejection.
+
+    `script_ratios` always carries the TRUE measured shares, even when
+    `_resolve_latin_islands` resolves a MIXED reading to a native script — so
+    nothing downstream loses the information that English islands were present.
     """
     script, ratios = detect_script(text)
+    script = _resolve_latin_islands(script, ratios, language)
     return TextProfile(
         text=text,
         language=language,

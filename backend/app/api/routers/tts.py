@@ -36,9 +36,9 @@ from ...domain.direction_analyze import analyze as analyze_direction
 from ...domain.language import profile_text
 from ...domain.routing import RoutePlan, UrduStrategy, resolve
 from ...exceptions import (
-    GenerationError,
     InvalidDirectionPlanError,
     InvalidParamsError,
+    NoRouteError,
     ProfileNotFoundError,
 )
 from ...inference.catalog import ModelCatalog
@@ -142,10 +142,25 @@ async def generate(
     # transliteration was dropped (VoxCPM2 reads romanized text directly, so it
     # routes with transform NONE). Fail loudly rather than send raw text a
     # Devanagari-only model cannot read.
+    #
+    # This branch IS reachable, not defensive: `urdu_strategy="translit"` on
+    # Perso-Arabic Urdu makes `_plan_transform` return ARAB_TO_DEVA, and the
+    # Hindi target resolves fine, so the plan is built and lands here.
+    #
+    # 422 via NoRouteError, not 500 via GenerationError: nothing *failed*.
+    # Routing chose a shape nothing implements, which is precisely "no model can
+    # render this input" — the same condition, and so the same code and body
+    # shape, that `resolve()` itself raises for every other unroutable request.
+    # A 500 would also be wrong for the client: retrying cannot help.
     if plan.needs_transform:
-        raise GenerationError(
-            f"Routing chose a text transform ({plan.transform.kind.value}) that is "
-            f"not available; no model can render this input directly."
+        raise NoRouteError(
+            language=text_profile.language,
+            script=text_profile.script.value,
+            supported=catalog.supported_pairs(),
+            suggestion=(
+                f"Rendering this would need a {plan.transform.kind.value!r} text "
+                f"transform, which is not implemented."
+            ),
         )
 
     _validate_params(body.params, spec.params, plan.model_id)
@@ -222,7 +237,7 @@ async def detect_script(
     body: ScriptDetectRequest,
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
 ) -> ScriptDetectResponse:
-    from ...exceptions import AmbiguousScriptError, NoRouteError
+    from ...exceptions import AmbiguousScriptError
 
     tp = profile_text(body.text, body.language)
     routable, hint, would = True, None, None

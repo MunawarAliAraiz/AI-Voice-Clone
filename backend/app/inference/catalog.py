@@ -3,7 +3,7 @@ AI Voice Clone Studio — The model catalog.
 
 CONTRACT MODULE. Wave 0.
 
-Three runtimes, five specs. This is the single place where "what models exist"
+Four runtimes, six specs. This is the single place where "what models exist"
 is written down; nothing else may invent a model id.
 
 STATUS OF THE VALUES IN THIS FILE
@@ -189,6 +189,7 @@ CHATTERBOX_ML_V3 = ModelSpec(
         "explicit, labeled experimental choice (experimental_listing=True) "
         "despite that; Auto-routing never selects it."
     ),
+    caveat="Voice identity matches roughly 60%; Urdu is not supported.",
     experimental_listing=True,
 )
 
@@ -256,13 +257,159 @@ VOXCPM2 = ModelSpec(
 )
 
 
-#: 3 runtimes, 4 specs. Was 5 until f5_openf5_en was dropped for licensing —
-#: see the note where it used to be defined.
+VOXCPM2_URDU_ARABIC = ModelSpec(
+    id="voxcpm2_urdu_arabic",
+    display_name="VoxCPM 2 (Urdu, اردو script)",
+    runtime=RuntimeKind.VOXCPM,
+    license=License.APACHE_2_0,
+    # Same checkpoint as VOXCPM2, no LoRA — this is a second catalog entry for
+    # an unverified cell on an otherwise-verified spec, not a different
+    # download. `ModelSpec` has no per-cell experimental flag (see spec.py's
+    # `experimental_listing` docstring), so a spec that is mostly VERIFIED
+    # (VOXCPM2's en/hi/ur-latin cells) cannot also carry one unverified
+    # experimental cell without mislabeling the whole listing — hence a
+    # second spec, exactly the pattern this module's own docstring names
+    # ("one runtime, many specs").
+    hf_repo=VOXCPM2.hf_repo,
+    hf_revision=VOXCPM2.hf_revision,
+    # Urdu bake-off arm B (docs/URDU_BAKEOFF_RESULTS.md), 2026-08-14. Perso-
+    # Arabic input DIRECTLY, base checkpoint, no transform and no fine-tune.
+    #
+    # A Urdu LoRA fine-tune (arm D, spec id voxcpm2_urdu_lora) was shipped
+    # from this same bake-off on 2026-08-14 and WITHDRAWN the next day: on
+    # real use through the app the owner judged base VoxCPM2 better than the
+    # LoRA, which overrides arm D's blind-listen median under this project's
+    # own "owner listening is authoritative" rule. This spec is what's left
+    # once the fine-tune comes back out — the base checkpoint, still
+    # unverified on this cell, still worth offering explicitly.
+    #
+    # [BENCH]: CER 0.1887 (owner) / 0.0385 (female) — both clear the <0.25
+    # gate. Speaker cosine 0.6664 (owner) / 0.7489 (female) — the owner
+    # reference is BELOW this catalog's 0.70 gate, so `verified=False` here.
+    #
+    # [LISTEN] blind listening, one rater, n=26 (13 sentences x 2 references):
+    # pronunciation 3.0/5, naturalness 3.0/5, speaker identity 4.0/5,
+    # code-switching 5.0/5 — mediocre pronunciation, but a real working
+    # answer for Perso-Arabic Urdu with no additional engineering, while
+    # OmniVoice (arm E, [BENCH]/[LISTEN] pronunciation 5.0/5, but CC-BY-NC —
+    # see docs/URDU_MODEL_LICENSING.md) is integrated as its own runtime.
+    languages=(
+        LanguageSupport(
+            language=LanguageCode.URDU.value, script=Script.ARABIC,
+            verified=False, cer=0.1887, speaker_cosine=0.6664,
+        ),
+    ),
+    vram_mb=VOXCPM2.vram_mb,
+    est_load_sec=VOXCPM2.est_load_sec,
+    est_rtf=VOXCPM2.est_rtf,
+    needs_reference_text=False,
+    params=VOXCPM2.params,
+    experimental_listing=True,
+    notes=(
+        "Base VoxCPM2, no LoRA, Perso-Arabic Urdu input direct (bake-off arm "
+        "B). Mediocre but working: 3.0/5 pronunciation, 3.0/5 naturalness, "
+        "4.0/5 identity, 5.0/5 code-switching — see "
+        "docs/URDU_BAKEOFF_RESULTS.md. Replaces voxcpm2_urdu_lora, withdrawn "
+        "2026-08-15 on the owner's real-use verdict that base sounded better "
+        "than the fine-tune; see catalog history for that spec's numbers."
+    ),
+    caveat="Pronunciation and naturalness are mediocre (3/5).",
+)
+
+
+#: ── OmniVoice runtime ────────────────────────────────────────────────────────
+
+OMNIVOICE_URDU = ModelSpec(
+    id="omnivoice_urdu",
+    display_name="OmniVoice (Urdu)",
+    runtime=RuntimeKind.OMNIVOICE,
+    # CC-BY-NC WEIGHTS (Apache-2.0 code — checked separately, see
+    # docs/URDU_MODEL_LICENSING.md's "trap this report exists to catch").
+    # Permitted here for the owner's personal use behind VCS_API_KEY, per
+    # golden rule 6 as amended 2026-08-15 — never for a shipped product.
+    license=License.CC_BY_NC,
+    hf_repo="k2-fsa/OmniVoice",
+    # Resolved on the pod at first fetch during the bake-off (2026-08-14) —
+    # recorded from both arm-E manifests (owner and female reference), not
+    # guessed. `test_all_revisions_pinned` requires this be a real 40-char sha.
+    hf_revision="c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+    # Urdu bake-off arm E (docs/URDU_BAKEOFF_RESULTS.md), 2026-08-14. 211.27 h
+    # of native Urdu training data (more than its Hindi, 117.17 h), 0.6B params.
+    #
+    # [BENCH]: CER 0.1489 (owner) / 0.0851 (female) — clears the <0.25 gate.
+    # Speaker cosine 0.7366 (owner) / 0.7938 (female) — BOTH clear this
+    # catalog's 0.70 gate, unlike every VoxCPM2 Urdu arm. This is the only
+    # Urdu-script cell in the catalog with a passing automated gate on both
+    # references — still `verified=False` until a real pod smoke test +
+    # gate re-run confirms the same numbers against the ACTUAL runtime
+    # backend below, not just the eval harness's isolated driver.
+    #
+    # [LISTEN] blind listening, one rater, n=26 (13 sentences x 2 references):
+    # pronunciation 5.0/5 — the single best result of the whole bake-off,
+    # at both references. Naturalness 4.0/5, identity 4.0/5. Weakest axis:
+    # code-switching 3.0/5, the worst of any arm — worth specific attention
+    # once docs/URDU_BAKEOFF_RESULTS.md's Phase 0 code-switch routing fix
+    # (profile_text's Latin-island rescue) makes code-switched Urdu reach
+    # this spec at all.
+    languages=(
+        LanguageSupport(
+            language=LanguageCode.URDU.value, script=Script.ARABIC,
+            verified=False, cer=0.1489, speaker_cosine=0.7366,
+        ),
+    ),
+    # MEASURED, bake-off: 4699 MB (female) peak, the LOWEST of any arm —
+    # using the higher of the two references, rounded up.
+    vram_mb=4700,
+    # MEASURED on the pod (2026-08-15), production runtime path
+    # (`OmniVoiceBackend.load()`, not the eval driver's loader): 159.3s wall,
+    # weights already warm in /workspace/hf-cache so this is pure model
+    # construction (deserializing ~840 weight tensors onto the GPU across two
+    # components), not network time. Note a first-`synth()` call pays an
+    # ADDITIONAL ~17s beyond steady state: OmniVoice lazily loads an embedded
+    # Whisper sub-model (587 more shards) the first time `ref_text` isn't
+    # supplied, to auto-transcribe the reference audio. Passing `ref_text`
+    # up front should avoid that cost — not yet verified.
+    est_load_sec=159.3,
+    # MEASURED, bake-off: 0.736 (female) RTF — using the higher (worse-case)
+    # of the two references; the owner reference measured 0.442.
+    est_rtf=0.736,
+    needs_reference_text=False,
+    experimental_listing=True,
+    notes=(
+        "CC-BY-NC weights (Apache-2.0 code) — personal use only, see "
+        "docs/URDU_MODEL_LICENSING.md. Bake-off arm E: best pronunciation of "
+        "any arm (5.0/5) and the only Urdu cell whose automated gate passes "
+        "on both references. 2026-08-15: production `OmniVoiceBackend` "
+        "smoke-tested on the pod against the pinned revision — real "
+        "load/synth/unload, non-silent output (peak 0.7573), 24kHz — but "
+        "verified=False stays until a real CER/cosine gate re-run scores "
+        "this backend's own output (the smoke test only confirmed the audio "
+        "is real, not that it clears the gate). "
+        "Weakest on code-switching (3.0/5) — see docs/URDU_BAKEOFF_RESULTS.md."
+    ),
+    caveat="Best pronunciation so far, but non-commercial (personal use only).",
+)
+
+
+#: 3 runtimes, 5 specs. Was 5, dropped to 4 when f5_openf5_en was removed for
+#: licensing (see the note where it used to be defined). The personal LoRA
+#: fine-tune (voxcpm2_urdu_lora) held the 5th slot 2026-08-14 to 2026-08-15,
+#: then was withdrawn on the owner's real-use verdict — base VoxCPM2 sounded
+#: better than the fine-tune, overriding the blind-listen median under this
+#: project's own "owner listening is authoritative" rule (see git history and
+#: docs/URDU_BAKEOFF_RESULTS.md §5 for the full account). VOXCPM2_URDU_ARABIC
+#: above holds the 5th slot now: the same base checkpoint, still explicitly
+#: experimental, so Perso-Arabic Urdu keeps a working answer. OMNIVOICE_URDU
+#: is a 6th spec and a 4th runtime, added 2026-08-15 (bake-off arm E, the
+#: single best pronunciation result of the whole bake-off) — CC-BY-NC, so it
+#: is legal here only under golden rule 6's personal-use amendment.
 ALL_SPECS: tuple[ModelSpec, ...] = (
     F5_OPENBIBLE_URDU,
     F5_INDIC,
     CHATTERBOX_ML_V3,
     VOXCPM2,
+    VOXCPM2_URDU_ARABIC,
+    OMNIVOICE_URDU,
 )
 
 

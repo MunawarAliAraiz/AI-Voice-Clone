@@ -4,7 +4,190 @@ Written so a fresh session (or a fresh pod, or a different person) can resume wi
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.
 
-Last updated: **2026-08-13**. Qwen analyzer backend + frontend wiring are both merged to `main` and
+---
+
+## ⚡ In flight right now — LoRA withdrawn, OmniVoice shipped, code-switch bug fixed (2026-08-15)
+
+Branch **`feature/urdu-bakeoff`**. The bake-off itself (130/130 blind-scored, arms A–E) was already
+complete as of the previous checkpoint below, and arm D (VoxCPM2 + LoRA) had been integrated as
+`voxcpm2_urdu_lora`. **This checkpoint reverses that** based on real usage, then ships the bake-off's
+actual best-scoring arm properly.
+
+**1. The LoRA was withdrawn.** Using the real running app (not the eval harness), the owner's verdict
+was that **base VoxCPM2 sounds better than the LoRA** — contradicting the blind-listen median (4.0 vs
+3.0). Per this project's own "owner listening is authoritative" rule, that overrides the earlier
+score. `voxcpm2_urdu_lora` is deleted from the catalog (LoRA runtime plumbing — `lora_local_path` etc.
+on `VoxCPMBackend`/`ModelSpec` — is kept; it's generic and free when unused). Replaced by
+`voxcpm2_urdu_arabic`: the same base checkpoint, no fine-tune, `experimental_listing=True`,
+`verified=False`, so Perso-Arabic Urdu isn't left with zero routes. `docs/URDU_BAKEOFF_RESULTS.md` §5a
+records the withdrawal honestly, including that this is consistent with Q5's original finding that the
+LoRA's gain may have come from matching arm C's representation rather than the fine-tune itself.
+
+**2. Two real bugs found and fixed while testing in the app:**
+   - The model picker rendered `ModelSpec.notes` (a maintainer field — env var names, doc paths) raw
+     as a user-facing sentence. Added `ModelSpec.caveat: str` (≤140 chars, tested), the only
+     user-facing prose field; `Composer.tsx` now renders one line, not a wall of text. Trimmed further
+     after the owner flagged even the first version as "too much text."
+   - **Code-switched Urdu was unroutable.** `میں نے GitHub پر ایک نیا pull request بھیجا ہے` (Latin
+     loanwords inside Perso-Arabic Urdu — UrduSpeech's own corpus is 57% code-switched) measured under
+     the 0.85 script-dominance threshold and was rejected as `AmbiguousScriptError` before routing ever
+     ran, despite every model handling code-switching fine once it got there. Fixed in
+     `domain/language.py`'s `profile_text()`: for a language with a native non-Latin script, Latin runs
+     under `LATIN_ISLAND_CEILING = 0.75` are now treated as loanword islands, not ambiguity.
+     `detect_script()` itself is untouched (needed pure elsewhere). **Confirmed live** — see below.
+
+**3. OmniVoice integrated as a new runtime** (`RuntimeKind.OMNIVOICE`,
+`backend/app/inference/runtimes/omnivoice.py`) — the bake-off's actual best-scoring arm (5.0/5
+pronunciation, the only Urdu cell whose CER+cosine gate passes on both references), CC-BY-NC
+licensed. Golden rule 6 in `CLAUDE.md` was amended: NC weights are now allowed in the catalog **for
+personal use behind `VCS_API_KEY`**, badged (`ModelSummary.commercial_use`), never for a shipped
+product. `RESEARCH_ONLY` (Higgs Audio v3's tier) stays fully banned. Real pod smoke test against the
+production `OmniVoiceBackend` (not the eval harness): load 159.3s, synth 17.1s (5.48s audio, peak
+0.7573 — non-silent), clean unload. Found a real architectural detail along the way: OmniVoice
+lazily loads an embedded Whisper sub-model on the *first* `synth()` call (not during `load()`) when
+no `ref_text` is supplied, adding latency beyond the reported load time.
+
+**4. Live end-to-end verification, real pod backend + local frontend (2026-08-15), just completed
+before this pod is terminated.** Backend run via `serve.sh` on the pod (port 8000), tunneled to the
+local machine over SSH (`ssh -L 8000:127.0.0.1:8000`), local Vite dev server (port 1420) proxying
+`/api` through the tunnel — no ngrok needed since the API key requirement was dropped for this
+private-tunnel test only (never touched `vcs-secrets.env`). Confirmed in the real running app:
+   - The picker shows the new catalog cleanly: `VoxCPM 2`, `VoxCPM 2 (Urdu, اردو script)
+     (Experimental)`, `OmniVoice (Urdu) (Experimental, Non-commercial)` — `voxcpm2_urdu_lora` only
+     survives in old history rows, not as a selectable model.
+   - Manually selecting OmniVoice and generating real Perso-Arabic Urdu against a real enrolled voice
+     **worked end-to-end through the actual job queue** — `route.rationale` correctly read "ur in
+     arabic script rendered by OmniVoice (Urdu) — EXPERIMENTAL: you explicitly picked this model..."
+   - **The code-switch fix is confirmed live, not just in tests**: a fresh sentence with English
+     loanwords (`میں نے GitHub پر ایک نیا pull request بھیجا ہے، امید ہے آج ہی review ہو جائے گا۔`)
+     resolved to `source_script: arabic` and routed to OmniVoice successfully — previously this would
+     have 422'd as `AMBIGUOUS_SCRIPT` before reaching routing at all.
+   - **Roman Urdu → OmniVoice does NOT work, by design, not yet by gap.** `omnivoice_urdu`'s catalog
+     entry only declares an `(ur, ARABIC)` `LanguageSupport` cell — no `(ur, LATIN)` cell. Per
+     `routing.py`'s `resolve()`, an explicit model request is honored or refused, never silently
+     swapped, so Roman Urdu text with OmniVoice explicitly selected raises `NoRouteError` (422). This
+     is exactly what Phase 2 (the transliteration viability probe, not yet started — see below) exists
+     to potentially unlock; it is not a bug in what shipped.
+
+**5. Pod is being terminated by the owner right after this checkpoint.** A fresh pod will be needed
+next session — run `pod-bootstrap.sh` against this branch (it now provisions `.venv-omnivoice` too,
+steps 10-11). Everything from this checkpoint is committed and pushed to `fork/feature/urdu-bakeoff`
+(`2634372` at time of writing) — nothing was left pod-only.
+
+**Still open, unchanged from before:** IndicF5 (arms H/I/J) blocked on `HF_TOKEN`. Also still open:
+Phase 2 (transliteration viability probe via Qwen2.5-3B — gated on clearing the bake-off's hand-authored
+gold Devanagari, not started), Phase 3 (IndicF5 arms H/I/J), Phase 4 (fine-tune VoxCPM2 on UrduSpeech,
+largest, not started). `OMNIVOICE_URDU`'s `(ur, ARABIC)` cell stays `verified=False` until a real
+CER/cosine gate re-run scores the production backend's own output (the smoke test proved the audio is
+real, not that it clears the gate) plus a fresh owner listen.
+
+**Root-cause finding that reframed the work:** VoxCPM2's published list is 30 languages including
+Hindi and Arabic but **not Urdu**, and its card says it infers language from the text. So Roman Urdu
+likely gets Hindi phonotactics and Perso-Arabic may get *Arabic* phonology — possibly worse. That is
+`[INFER]`, not measured; arms A/B/C exist to settle it.
+
+**Also corrected:** a prior pass dismissed IndicF5 for not listing Urdu. Wrong — Hindi and Urdu are
+one spoken language differing mainly in script, so a missing language label constrains the *input
+representation*, not necessarily the phonetic capability. `docs/URDU_CLONING_REPORT.md` §2 ruled
+transliteration out as a fix for **speaker identity**; it never tested it for **pronunciation**.
+Those axes are now scored separately.
+
+| Piece | State |
+|---|---|
+| `tts.py` transform-path bug | ✅ Fixed + regression test. Called `GenerationError(detail)` against a 2-arg `__init__`, so the "fail loudly" branch raised `TypeError`. Now a clean 422 `NoRouteError`. Reachable via `urdu_strategy="translit"`. 244 tests pass. |
+| `eval/fixtures/urdu_corpus.json` | ✅ 13 items — owner's 5 sentences + numbers (ASCII/Eastern as a controlled pair), dates, names, acronyms, technical terms, colloquial Pakistani, long multi-clause. |
+| `eval/urdu_represent.py` | ✅ `strip_nuqta` (derives arm I from arm J), `normalize_urdu`, `to_ascii_digits`. |
+| `eval/run_urdu_bakeoff.py` | ✅ Synthesis, one arm per invocation. |
+| `eval/score_urdu_bakeoff.py` | ✅ Scoring, runs in `.venv-eval`. |
+| `eval/build_listen_page.py` | ✅ Blind listening page, verified in-browser. |
+| `docs/URDU_MODEL_LICENSING.md` | ✅ Full report, code-vs-weights checked separately. |
+| `docs/URDU_BAKEOFF_RESULTS.md` | ✅ Written, **§5 decision table deliberately empty** until the listen. |
+| Arms A/B/C/D (VoxCPM2 ×3 repr + LoRA) | ✅ 13 items × 2 references each. Scored. |
+| Arm E (OmniVoice) | ✅ 13 items × 2 references. Scored. Lightest arm: 4.5 GB, 0.44 RTF. |
+| Arm F (Higgs v3) | ⛔ **could_not_run, recorded with the reason** — see below. |
+| Arm G (code-switch) | ✅ Reporting slice over A–E. Numbers are a **metric artifact**, see results §4. |
+| Arms H/I/J (IndicF5) | ⏸ **Blocked on an `HF_TOKEN`** + the female transcript. venv pre-built at `/workspace/engines-lab/r1-f5/`. |
+| Blind listen | ✅ **130/130 clips scored (arms A–E), one rater.** See `docs/URDU_BAKEOFF_RESULTS.md` §3. |
+
+**Arm F is genuinely impossible on this pod, not skipped.** transformers 5.15.0 has no
+`higgs_multimodal_qwen3`; `config.json` has `auto_map: null` so `trust_remote_code` can't rescue it;
+the only documented self-hosting path is the `lmsysorg/sglang-omni:dev` Docker image and Docker is
+not installed (a RunPod container can't nest one); and mainline pip `sglang` has zero Higgs models
+(0 GitHub code-search hits). Boson lists ≥40 GB as known-good, 24 GB as unverified. **Don't retry
+this without either Docker or a ≥40 GB card.** `_load_higgs` now preflights and raises with that
+whole diagnosis, which the harness records as `could_not_run`.
+
+**Arms H/I/J need one click from the owner.** `ai4bharat/IndicF5` is `gated=auto` — metadata reads
+fine anonymously, but `model.safetensors` (1.4 GB) returns `GatedRepoError: 401`. Because the whole
+repo is gated, `trust_remote_code` can't fetch the shipped `f5_tts/` modules either. `gated=auto`
+means approval is **automatic on accepting the terms**, so this is a token, not an application.
+Arm I is the plan's central question, so this is the highest-value unblock available. The `.venv` at
+`/workspace/engines-lab/r1-f5/` is already built (f5-tts, vocos, torchdiffeq, transformers 5.15.0,
+torch 2.13.0+cu130) — running arm I is one command once the token lands.
+
+**Blind listening is done for arms A–E — 130/130 clips, one rater (the owner).** Full breakdown in
+`docs/URDU_BAKEOFF_RESULTS.md` §3–5; headline findings:
+- **Devanagari input (arm C) and the LoRA (arm D) both beat Roman/Perso-Arabic VoxCPM2 (A/B) by a
+  full point on pronunciation and naturalness** (4.0 vs 3.0), tied on identity and code-switch. This
+  is the strongest *commercially clean* result.
+- **OmniVoice (arm E) rated highest on pronunciation (5.0)** but worst on code-switch (3.0) — and is
+  NC-licensed, so it's evidence about the ceiling, not a deployable answer.
+- **The LoRA's `docs/VOXCPM_LORA_POC.md` cosine regression did not survive to the ear** — blind
+  identity scores were flat at 4.0 for every arm including D. Trust the listening score over the
+  automated cosine here; this is exactly the divergence the two-axis design exists to catch.
+- **The corpus's number items read digits as digits, not spoken Urdu number-words** — the owner
+  flagged this independently on 4 clips across 3 unrelated arms (A/C/D), which is the signature of a
+  shared input problem, not a per-model one. Not fixed; `eval/fixtures/urdu_corpus.json`'s
+  `date`/`num_ascii`/`num_eastern` items need spelled-out Urdu numerals before their next use.
+- Two clips (`C/female/num_eastern`, `D/owner/owner_02_file`) reported as unplayable in the browser;
+  both underlying WAVs checked directly and are **not silent** (peak 0.99 / 0.92) — a page playback
+  glitch on those two specific clips, not a synthesis defect. 1.5% of the corpus, unresolved, low
+  priority.
+
+**No model has been chosen for integration.** The commercially-clean leaders are arms C and D
+(tied). Questions 1, 3, and 6 in the results doc stay open until arm I runs or the owner explicitly
+defers it — do not integrate anything off the back of this listening pass alone.
+
+**Devanagari is hand-authored gold, deliberately.** Arms C/I/J are therefore a **ceiling test**: if a
+model fails on perfect Devanagari, no converter rescues the route; if it succeeds, a converter is
+then worth building. Do not read those arms as "our transliterator works".
+
+**Findings to carry forward:**
+- **No commercially-safe open-source Urdu voice-cloning model exists** (as of 2026-08). The two that
+  genuinely list Urdu *and* clone — Higgs Audio v3, OmniVoice — are both non-commercial. Every
+  permissive cloner omits Urdu, or (Indic Parler-TTS) omits cloning; its maintainer says it always
+  will. Full detail + licence classifications: `docs/URDU_MODEL_LICENSING.md`.
+- **Weights licences ≠ code licences.** OmniVoice ships Apache-2.0 code with **CC-BY-NC weights**;
+  the blogs calling it commercially free read the wrong file. Golden rule 6 was relaxed this session
+  to permit NC weights **for personal use behind the API-key gate** — that is not a commercial licence.
+- **⚠️ LoRA run 1's `lora_weights.safetensors` is GONE.** Only `lora_config.json` and
+  `training_state.json` survive at `eval/results/voxcpm_lora/checkpoint_backup/`. Only run 2
+  (`voxcpm_lora_proj`, `enable_proj:true`, 74 MB) still has weights, so **arm D uses run 2**.
+  Retraining run 1 is ~15 min if it is ever wanted back.
+- **Reference-speaker gap: CLOSED.** The owner supplied a consented female recording; it is
+  `eval/fixtures/voice_urdu_female.wav` (`--reference-id female`) and every runnable arm ran against
+  both speakers. **It is deliberately not committed** — a real person's voice, and the standing rule
+  is no voice data in git without explicit sign-off. It exists on the pod and on local disk only, so
+  a pod loss *and* a local loss would require re-recording. **Its transcript is still missing**, and
+  IndicF5 needs one (`ref_text`); `_load_indicf5` raises rather than silently Whisper-ing the
+  reference, because that would change what is being measured without saying so.
+- **Every female cell scores a higher speaker cosine than its owner counterpart, in all five arms**
+  (0.689–0.798 vs 0.662–0.737). A uniform offset across unrelated models points at ECAPA or the
+  recordings, **not** at model quality. Do not read it as "these models clone women better."
+- **The Perso-Arabic→Arabic-phonology hypothesis is NOT confirmed.** Arm B's owner cell has the
+  worst CER in the table (0.189), which fits — but arm B's *female* cell is 0.0385, among the best.
+  A model applying Arabic phonology to Arabic script would do it regardless of the target voice.
+  Still `[INFER]`; only listening settles it.
+- **Arm C (Devanagari) has the lowest CER at both references — treat that as a warning, not a win.**
+  It is equally consistent with Devanagari producing Hindi-accented speech that Whisper transcribes
+  *more* confidently, which is exactly the outcome the owner already rejected by ear.
+- **Ladder rung B is untestable on this corpus:** `normalize_urdu` is a measured no-op on 13/13
+  items because they were authored with clean Urdu codepoints. A null there means "input was already
+  clean", not "normalization does not help".
+
+Last updated: **2026-08-15** (see the checkpoint above — LoRA withdrawn, OmniVoice shipped, code-switch
+bug fixed, live-verified end-to-end on a real pod that's now being terminated). Prior to that: Qwen
+analyzer backend + frontend wiring are both merged to `main` and
 done. The VoxCPM2 LoRA POC's training checkpoint merged earlier (PR #11); the baseline-vs-LoRA eval
 comparison that was missing at that point has since run for real and **also merged to `main`**
 (PR #12), with a **mixed result** — CER improved sharply, speaker-identity cosine regressed on Urdu

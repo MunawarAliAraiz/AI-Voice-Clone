@@ -271,3 +271,48 @@ async def test_worker_error_surfaces_as_app_error(tmp_path: Path) -> None:
 
     with pytest.raises(AppError):
         await sched.synthesize(_req("a", tmp_path))
+
+
+async def test_lora_local_path_only_sent_when_the_spec_declares_one(
+    tmp_path: Path,
+) -> None:
+    """
+    `_load_into` must add `lora_local_path` to the LOAD payload for a spec
+    that carries one and omit the key entirely for one that doesn't (every
+    catalog spec today, since voxcpm2_urdu_lora was withdrawn 2026-08-15) —
+    not send it as null/empty. A separate,
+    local catalog is used here rather than the module-level CATALOG/A/B/C so
+    this doesn't perturb the VRAM-budget and eviction-order assumptions the
+    rest of this file's tests make about that shared fixture.
+    """
+    plain = _spec("plain", RuntimeKind.VOXCPM, 6000)
+    lora = ModelSpec(
+        id="lora", display_name="lora", runtime=RuntimeKind.VOXCPM,
+        license=License.MIT, hf_repo="x/y", hf_revision="a" * 40, languages=(),
+        vram_mb=6000, est_load_sec=10.0, lora_local_path="/fake/lora-dir",
+        lora_hf_repo="someone/lora-repo", lora_hf_revision="b" * 40,
+    )
+    catalog = build_catalog((plain, lora))
+
+    made: dict[RuntimeKind, FakeWorker] = {}
+
+    async def factory(runtime: RuntimeKind) -> FakeWorker:
+        worker = FakeWorker(runtime.value, load_delay_sec=0.01)
+        await worker.start()
+        made[runtime] = worker
+        return worker
+
+    sched = InferenceScheduler(catalog, factory, CONFIG)
+
+    await sched.synthesize(_req("plain", tmp_path))
+    await sched.synthesize(_req("lora", tmp_path))
+
+    load_payloads = [
+        payload for op, payload in made[RuntimeKind.VOXCPM].calls if op is WireOp.LOAD
+    ]
+    assert len(load_payloads) == 2, "same runtime -> WARM swap, not a new worker"
+    for key in ("lora_local_path", "lora_hf_repo", "lora_hf_revision"):
+        assert key not in load_payloads[0]
+    assert load_payloads[1]["lora_local_path"] == "/fake/lora-dir"
+    assert load_payloads[1]["lora_hf_repo"] == "someone/lora-repo"
+    assert load_payloads[1]["lora_hf_revision"] == "b" * 40

@@ -41,6 +41,7 @@ class RuntimeKind(StrEnum):
     F5 = "f5"
     CHATTERBOX = "chatterbox"
     VOXCPM = "voxcpm"
+    OMNIVOICE = "omnivoice"
 
     #: Test-only. Produces deterministic silence, never audio that could be
     #: mistaken for a clone. Gated behind VCS_ALLOW_FAKE_RUNTIME.
@@ -51,28 +52,53 @@ class License(StrEnum):
     """
     Weight licenses.
 
-    Only permissive entries may appear in the shipped catalog. `CC_BY_NC` and
-    `RESEARCH_ONLY` exist solely so the license audit in Wave 4 can *name* what
-    it rejected — no shipped spec may carry them.
+    `is_permissive` entries may ship in a commercial product. `CC_BY_NC` may
+    appear in the catalog ONLY for the owner's personal use behind the
+    `VCS_API_KEY` gate — golden rule 6, amended 2026-08-15 after
+    docs/URDU_MODEL_LICENSING.md established that no permissively-licensed
+    model both lists Urdu and clones from reference audio. `personal_use_ok`
+    is what the catalog test enforces; `is_permissive` is stricter, for
+    anything that claims to be shippable. `RESEARCH_ONLY` exists solely so
+    the license audit can *name* what it rejected — no shipped spec, personal
+    or otherwise, may carry it (Higgs Audio v3's terms are stricter than
+    CC-BY-NC and it is not integrated for exactly that reason).
     """
 
     MIT = "MIT"
     APACHE_2_0 = "Apache-2.0"
     CC_BY_SA_4_0 = "CC-BY-SA-4.0"
 
-    # Non-shippable. Present for the audit's vocabulary only.
+    # Personal-use-only: permitted in the catalog, gated by
+    # `ModelSummary.commercial_use` = False so the UI badges it "Non-commercial".
     CC_BY_NC = "CC-BY-NC"
+
+    # Non-shippable, period. Present for the audit's vocabulary only.
     RESEARCH_ONLY = "research-only"
 
     @property
     def is_permissive(self) -> bool:
-        """True if weights under this license may ship in this product."""
+        """True if weights under this license may ship in a commercial product."""
         return self in _PERMISSIVE
 
     @property
+    def personal_use_ok(self) -> bool:
+        """
+        True if this license may appear in the catalog AT ALL — permissive
+        licenses, plus CC-BY-NC for personal use behind the API-key gate.
+        `RESEARCH_ONLY` is the one tier stricter than that and stays excluded.
+        """
+        return self.is_permissive or self is License.CC_BY_NC
+
+    @property
     def requires_attribution(self) -> bool:
-        """True if NOTICE must carry an attribution entry for these weights."""
-        return self is License.CC_BY_SA_4_0
+        """
+        True if NOTICE must carry an attribution entry for these weights.
+
+        Both CC-BY-SA and CC-BY-NC carry the "BY" (attribution-required)
+        clause — they differ in ShareAlike vs NonCommercial, not in whether
+        attribution is owed.
+        """
+        return self in {License.CC_BY_SA_4_0, License.CC_BY_NC}
 
 
 _PERMISSIVE: frozenset[License] = frozenset(
@@ -180,9 +206,39 @@ class ModelSpec:
     #: actionable error rather than a bare 401 from deep inside a loader.
     gated: bool = False
 
+    #: Local filesystem path to a directory holding `lora_config.json` +
+    #: `lora_weights.safetensors`, applied on top of `hf_repo`/`hf_revision`
+    #: after the base checkpoint loads. Optional fast path: if this directory
+    #: already has the files (e.g. a pod that trained the adapter itself, or
+    #: has downloaded it before), the runtime uses it directly with no
+    #: network call. Expected to come from an environment variable at the call
+    #: site (mirrors `Settings.{voxcpm,chatterbox,f5}_python`). None means
+    #: "no local cache — fall through to `lora_hf_repo` if set, else no
+    #: adapter, load the base checkpoint as-is."
+    lora_local_path: str | None = None
+
+    #: Pinned HF repo + revision for a LoRA adapter, downloaded via the same
+    #: `snapshot_download` path as `hf_repo`/`hf_revision` when
+    #: `lora_local_path` has no local cache. Unlike the base checkpoint this
+    #: MAY be a private repo (a personal fine-tune, never meant for public
+    #: redistribution) — see `gated`. Requires an `HF_TOKEN` with read access
+    #: at download time; a fresh pod with no local cache and no token gets a
+    #: clear download-time error, never a silent fallback to un-tuned weights.
+    lora_hf_repo: str | None = None
+    lora_hf_revision: str | None = None
+
     #: True once Phase A has produced audible proof on the target GPU.
     phase_a_verified: bool = False
+    #: Maintainer prose — env var names, RuntimeError semantics, doc paths.
+    #: Written for whoever reads this file next, not for the UI. See `caveat`
+    #: for the one field that IS meant to reach a user.
     notes: str = ""
+    #: The ONE user-facing sentence for an experimental spec, shown next to it
+    #: in the model picker. Short on purpose — it answers "why is this
+    #: labeled experimental?", not "how does this spec's loader work?". Every
+    #: spec with `experimental_listing=True` must set this; a contract test
+    #: enforces it (`test_contracts.py::test_experimental_specs_have_a_caveat`).
+    caveat: str = ""
 
     #: Deliberate, per-model, human-approved opt-in to advertise this spec's
     #: unverified cells as an EXPLICITLY LABELED experimental choice — set by

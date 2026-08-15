@@ -1,0 +1,212 @@
+[
+  {
+    "arm": "A",
+    "model": "voxcpm2",
+    "representation": "roman",
+    "lora": false,
+    "reference_id": "female",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.0625,
+    "speaker_sim_median": 0.7975186109542847,
+    "rtf_median": 0.8744190846170697,
+    "peak_vram_used_mb": 7050.9375,
+    "load_time_sec": 131.44738054275513,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.7949707508087158
+    }
+  },
+  {
+    "arm": "A",
+    "model": "voxcpm2",
+    "representation": "roman",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.0625,
+    "speaker_sim_median": 0.6997467279434204,
+    "rtf_median": 0.7639937102794647,
+    "peak_vram_used_mb": 6422.9375,
+    "load_time_sec": 80.90740299224854,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.38666666666666666,
+      "speaker_sim_median": 0.6572680473327637
+    }
+  },
+  {
+    "arm": "B",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": false,
+    "reference_id": "female",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.038461538461538464,
+    "speaker_sim_median": 0.7489423751831055,
+    "rtf_median": 0.7512084245681763,
+    "peak_vram_used_mb": 7060.9375,
+    "load_time_sec": 72.49295020103455,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.20754716981132076,
+      "speaker_sim_median": 0.7489423751831055
+    }
+  },
+  {
+    "arm": "B",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.18867924528301888,
+    "speaker_sim_median": 0.6664021015167236,
+    "rtf_median": 0.7630263765652975,
+    "peak_vram_used_mb": 6432.9375,
+    "load_time_sec": 76.68602395057678,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.6517854928970337
+    }
+  },
+  {
+    "arm": "C",
+    "model": "voxcpm2",
+    "representation": "devanagari",
+    "lora": false,
+    "reference_id": "female",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.02127659574468085,
+    "speaker_sim_median": 0.7828434705734253,
+    "rtf_median": 0.8473734259605408,
+    "peak_vram_used_mb": 7060.9375,
+    "load_time_sec": 68.10621118545532,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.44776119402985076,
+      "speaker_sim_median": 0.7587952017784119
+    }
+  },
+  {
+    "arm": "C",
+    "model": "voxcpm2",
+    "representation": "devanagari",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.01875,
+    "speaker_sim_median": 0.6881273984909058,
+    "rtf_median": 0.8486955293587275,
+    "peak_vram_used_mb": 6438.9375,
+    "load_time_sec": 69.381844997406,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.622322678565979
+    }
+  },
+  {
+    "arm": "D",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": true,
+    "reference_id": "female",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.05,
+    "speaker_sim_median": 0.6888983249664307,
+    "rtf_median": 0.9098475863193645,
+    "peak_vram_used_mb": 7130.9375,
+    "load_time_sec": 67.18902635574341,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.6664556860923767
+    }
+  },
+  {
+    "arm": "D",
+    "model": "voxcpm2",
+    "representation": "perso_arabic",
+    "lora": true,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.038461538461538464,
+    "speaker_sim_median": 0.6620727181434631,
+    "rtf_median": 0.9430278837680817,
+    "peak_vram_used_mb": 6508.9375,
+    "load_time_sec": 122.95655393600464,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.36,
+      "speaker_sim_median": 0.6462454199790955
+    }
+  },
+  {
+    "arm": "E",
+    "model": "omnivoice",
+    "representation": "perso_arabic",
+    "lora": false,
+    "reference_id": "female",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.0851063829787234,
+    "speaker_sim_median": 0.7937662601470947,
+    "rtf_median": 0.7357336500639556,
+    "peak_vram_used_mb": 4698.9375,
+    "load_time_sec": 84.81737232208252,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.36,
+      "speaker_sim_median": 0.7774651050567627
+    }
+  },
+  {
+    "arm": "E",
+    "model": "omnivoice",
+    "representation": "perso_arabic",
+    "lora": false,
+    "reference_id": "owner",
+    "status": "ok",
+    "error": "",
+    "n_scored": 13,
+    "n_rows": 13,
+    "cer_median": 0.14893617021276595,
+    "speaker_sim_median": 0.7365697622299194,
+    "rtf_median": 0.4422908812238459,
+    "peak_vram_used_mb": 4494.9375,
+    "load_time_sec": 81.3684413433075,
+    "code_switch": {
+      "n": 3,
+      "cer_median": 0.37333333333333335,
+      "speaker_sim_median": 0.7367532253265381
+    }
+  }
+]

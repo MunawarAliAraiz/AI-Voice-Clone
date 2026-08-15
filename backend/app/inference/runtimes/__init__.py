@@ -35,8 +35,20 @@ class RuntimeBackend(Protocol):
     #: Currently loaded spec id, or None. Read by PING; never touches the GPU.
     loaded_model_id: str | None
 
-    def load(self, model_id: str, hf_repo: str, hf_revision: str) -> float:
-        """Load a checkpoint at a PINNED revision. Returns load seconds."""
+    def load(
+        self, model_id: str, hf_repo: str, hf_revision: str,
+        *, lora_local_path: str | None = None,
+        lora_hf_repo: str | None = None, lora_hf_revision: str | None = None,
+    ) -> float:
+        """
+        Load a checkpoint at a PINNED revision. Returns load seconds.
+
+        The `lora_*` kwargs are only ever passed to a backend whose spec
+        declared them (`ModelSpec.lora_local_path`/`lora_hf_repo` —
+        currently just VoxCPM's Urdu LoRA) — see `worker.py`. A backend with
+        no notion of a LoRA adapter simply never receives them; it does not
+        need to accept or ignore them.
+        """
         ...
 
     def synth(
@@ -73,6 +85,10 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .chatterbox import ChatterboxBackend
 
         return ChatterboxBackend()
+    if runtime == "omnivoice":
+        from .omnivoice import OmniVoiceBackend
+
+        return OmniVoiceBackend()
     if runtime == "qwen_analyzer":
         from .qwen_analyzer import QwenAnalyzerBackend
 
