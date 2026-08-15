@@ -10,6 +10,8 @@ export interface RouteInfo {
   source_script: string; // "latin" | "arabic" | "devanagari" | ...
   alternatives: string[];
   experimental: boolean;
+  /** Pronunciation fixes actually applied before synthesis, e.g. ["numbers"]. */
+  text_normalizations: string[];
 }
 
 export interface VoiceProfile {

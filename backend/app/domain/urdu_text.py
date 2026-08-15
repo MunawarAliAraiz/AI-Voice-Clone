@@ -1,0 +1,170 @@
+"""
+AI Voice Clone Studio — Urdu pronunciation normalization.
+
+CONTRACT MODULE. Pure text transforms, no I/O, no torch — same constraint as
+the rest of `domain/`.
+
+WHY THIS EXISTS
+----------------
+The bake-off's arm-Eprod owner listen (docs/URDU_BAKEOFF_RESULTS.md SS5b-SS5d)
+found and eval-verified (`eval/urdu_numerals.py`, `eval/run_number_fix_check.py`,
+`eval/run_database_respell_v2.py`) that OmniVoice mispronounces raw digits and
+two specific English loanwords, and that both are fixable by rewriting the
+text BEFORE synthesis. Unlike `routing.TransformKind` (Perso-Arabic ->
+Devanagari and friends), these rewrites need no model — a table lookup and a
+couple of regex substitutions — so they run synchronously inside the pure
+`routing.resolve()`, never through the impure `with_resolved_text()` seam.
+
+WHAT IS NOT HERE
+------------------
+No general English-transliteration system. `office`/`check`/`GitHub`/`pull
+request` already render correctly as plain Latin text and must stay
+untouched — `_LOANWORD_LEXICON` holds exactly the words individually tested
+and verified by ear, not a starting point for "respell every English word".
+Extending it requires the same per-word verify-by-ear discipline as URL and
+database got, not a heuristic.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable
+from enum import StrEnum
+
+__all__ = ["TextNormalization", "apply_text_normalizations"]
+
+
+class TextNormalization(StrEnum):
+    """One declared, per-spec pronunciation fix. See `ModelSpec.text_normalizations`."""
+
+    #: Digit runs (ASCII or Eastern Arabic-Indic) -> Urdu cardinal words.
+    NUMBERS = "numbers"
+    #: The small, individually-verified English-loanword lexicon below.
+    LOANWORD_LEXICON = "loanword_lexicon"
+
+
+# ── Numbers: eval/urdu_numerals.py, ported verbatim ─────────────────────────
+#
+# 0-99, South Asian irregular cardinals. Not compositional (45 is not
+# "four-ten five"; it is its own irregular word, "paintalees") -- same
+# structure as Hindi, French 70-99, etc. Authored from general
+# Urdu-language knowledge, not copied from a verified reference; a wrong
+# word here is audibly wrong to any Urdu speaker, which is exactly the
+# check this project already ran (docs/URDU_BAKEOFF_RESULTS.md SS5c/SS5d) —
+# spot-check anything new the same way.
+_ONES_TO_NINETY_NINE: dict[int, str] = {
+    0: "صفر", 1: "ایک", 2: "دو", 3: "تین", 4: "چار", 5: "پانچ", 6: "چھ",
+    7: "سات", 8: "آٹھ", 9: "نو", 10: "دس",
+    11: "گیارہ", 12: "بارہ", 13: "تیرہ", 14: "چودہ", 15: "پندرہ",
+    16: "سولہ", 17: "سترہ", 18: "اٹھارہ", 19: "انیس", 20: "بیس",
+    21: "اکیس", 22: "بائیس", 23: "تیئس", 24: "چوبیس", 25: "پچیس",
+    26: "چھبیس", 27: "ستائیس", 28: "اٹھائیس", 29: "انتیس", 30: "تیس",
+    31: "اکتیس", 32: "بتیس", 33: "تینتیس", 34: "چونتیس", 35: "پینتیس",
+    36: "چھتیس", 37: "سینتیس", 38: "اڑتیس", 39: "انتالیس", 40: "چالیس",
+    41: "اکتالیس", 42: "بیالیس", 43: "تینتالیس", 44: "چوالیس", 45: "پینتالیس",
+    46: "چھیالیس", 47: "سینتالیس", 48: "اڑتالیس", 49: "انچاس", 50: "پچاس",
+    51: "اکاون", 52: "باون", 53: "ترپن", 54: "چون", 55: "پچپن",
+    56: "چھپن", 57: "ستاون", 58: "اٹھاون", 59: "انسٹھ", 60: "ساٹھ",
+    61: "اکسٹھ", 62: "باسٹھ", 63: "تریسٹھ", 64: "چونسٹھ", 65: "پینسٹھ",
+    66: "چھیاسٹھ", 67: "سڑسٹھ", 68: "اڑسٹھ", 69: "انہتر", 70: "ستر",
+    71: "اکہتر", 72: "بہتر", 73: "تہتر", 74: "چوہتر", 75: "پچہتر",
+    76: "چھہتر", 77: "ستتر", 78: "اٹھہتر", 79: "اناسی", 80: "اسی",
+    81: "اکاسی", 82: "بیاسی", 83: "تراسی", 84: "چوراسی", 85: "پچاسی",
+    86: "چھیاسی", 87: "ستاسی", 88: "اٹھاسی", 89: "نواسی", 90: "نوے",
+    91: "اکانوے", 92: "بانوے", 93: "ترانوے", 94: "چورانوے", 95: "پچانوے",
+    96: "چھیانوے", 97: "ستانوے", 98: "اٹھانوے", 99: "ننانوے",
+}
+
+#: South Asian numbering (lakh/crore), not Western (million/billion).
+_SCALES: tuple[tuple[int, str], ...] = (
+    (10_000_000, "کروڑ"),
+    (100_000, "لاکھ"),
+    (1_000, "ہزار"),
+    (100, "سو"),
+)
+
+#: Eastern Arabic-Indic digits -> ASCII.
+_EASTERN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+
+#: A run of ASCII or Eastern Arabic-Indic digits.
+_DIGIT_RUN = re.compile(r"[0-9۰-۹]+")
+
+
+def _number_to_urdu_words(n: int) -> str:
+    """
+    Cardinal Urdu words for a non-negative integer, South Asian scale.
+
+    2026 -> "دو ہزار چھبیس" (two thousand twenty-six) -- also the correct
+    *year* reading with no special-casing: South Asian thousand-grouping
+    already matches how years are read aloud (see the 14-vs-2026 asymmetry
+    in docs/URDU_BAKEOFF_RESULTS.md SS3c).
+    """
+    if n < 0:
+        raise ValueError(f"_number_to_urdu_words: negative input {n!r} not supported")
+    if n < 100:
+        return _ONES_TO_NINETY_NINE[n]
+
+    for scale_value, scale_word in _SCALES:
+        if n >= scale_value:
+            count, remainder = divmod(n, scale_value)
+            head = f"{_number_to_urdu_words(count)} {scale_word}"
+            return head if remainder == 0 else f"{head} {_number_to_urdu_words(remainder)}"
+
+    raise AssertionError(f"unreachable: {n} not < 100 but no scale matched")
+
+
+def _expand_numbers(text: str) -> str:
+    """Replace every digit run (ASCII or Eastern Arabic-Indic) with Urdu words."""
+
+    def _replace(match: re.Match[str]) -> str:
+        ascii_digits = match.group(0).translate(_EASTERN_DIGITS)
+        return _number_to_urdu_words(int(ascii_digits))
+
+    return _DIGIT_RUN.sub(_replace, text)
+
+
+# ── Loanwords: exactly 2 verified entries, see module docstring ─────────────
+#
+# docs/URDU_BAKEOFF_RESULTS.md SS5d: `ڈیٹا بیس` (all-Urdu) was REJECTED for
+# "database" -- بیس collides with the Urdu word for "twenty" and the model
+# read it that way in 2 of 3 tested contexts. The mixed form keeps "base" in
+# Latin, matching how office/check/GitHub already render correctly untouched.
+_LOANWORD_LEXICON: dict[str, str] = {
+    "URL": "یو آر ایل",
+    "database": "ڈیٹا base",
+}
+
+_LOANWORD_PATTERN = re.compile(
+    "|".join(rf"\b{re.escape(word)}\b" for word in _LOANWORD_LEXICON)
+)
+
+
+def _respell_loanwords(text: str) -> str:
+    """Word-boundary substitution for the verified loanword lexicon only."""
+    return _LOANWORD_PATTERN.sub(lambda m: _LOANWORD_LEXICON[m.group(0)], text)
+
+
+_APPLIERS: dict[TextNormalization, Callable[[str], str]] = {
+    TextNormalization.NUMBERS: _expand_numbers,
+    TextNormalization.LOANWORD_LEXICON: _respell_loanwords,
+}
+
+
+def apply_text_normalizations(
+    text: str, kinds: tuple[TextNormalization, ...]
+) -> tuple[str, tuple[TextNormalization, ...]]:
+    """
+    Apply each declared normalization, in the order given.
+
+    Returns the resulting text plus exactly the kinds that changed something —
+    a spec can declare `LOANWORD_LEXICON` and still see `()` returned for it on
+    a particular input with no matching word, so callers reflect reality
+    (`RoutePlan.text_normalizations`), not mere capability.
+    """
+    applied: list[TextNormalization] = []
+    for kind in kinds:
+        new_text = _APPLIERS[kind](text)
+        if new_text != text:
+            applied.append(kind)
+        text = new_text
+    return text, tuple(applied)

@@ -67,6 +67,16 @@ class RouteInfo(BaseModel):
             "The UI must render this distinctly from a normal route."
         ),
     )
+    text_normalizations: list[str] = Field(
+        default_factory=list,
+        examples=[["numbers"], ["numbers", "loanword_lexicon"]],
+        description=(
+            "Pronunciation fixes actually applied to the text before synthesis "
+            "(e.g. digits expanded to spoken words), per the chosen model's own "
+            "declared, evidence-backed normalizations. Empty for models with "
+            "none declared, or when nothing in this text matched."
+        ),
+    )
 
 
 class DirectedSegmentIn(BaseModel):
