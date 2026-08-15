@@ -373,3 +373,59 @@ backend/.venv-eval/bin/python eval/build_listen_page.py
 - Do **not** `git merge` on the pod inside `eval/results/` — the newest clips are untracked there and
   the merge aborts (correctly). Check out individual files instead.
 - `run_urdu_bakeoff.py` requires **both** `--reference` (path) and `--reference-id` (label).
+
+---
+
+## 8. Phase 2 — transliteration viability probe `[BENCH]`
+
+**Run for real, 2026-08-15, on the pod.** `eval/run_translit_probe.py` (`.venv-qwen`,
+`Qwen/Qwen2.5-3B-Instruct`, unpinned — probe-only, golden rule 7 doesn't apply here since nothing
+ships from this venv) converts each corpus item's `perso_arabic` and `roman` field to Devanagari and
+scores against the **hand-authored gold** `devanagari` field in `eval/fixtures/urdu_corpus.json` —
+not a converter's own output, so the score measures the LLM, not a second transliterator's opinion of
+itself. Full manifest: `eval/results/translit_probe/manifest.json` (26 cases, 13 items × 2
+directions, 0 unparseable).
+
+| Direction | Mean CER | Items | Unparseable |
+|---|---|---|---|
+| Perso-Arabic → Devanagari | **0.2771** | 13 | 0 |
+| Roman → Devanagari | **0.3075** | 13 | 0 |
+
+**owner_core items** (the owner's own 5 sentences — the highest-priority slice):
+
+| Item | Perso-Arabic CER | Roman CER |
+|---|---|---|
+| owner_01_sick | 0.3485 | 0.2576 |
+| owner_02_file | 0.2083 | 0.1458 |
+| owner_03_deadline | 0.1636 | 0.2000 |
+| owner_04_late | 0.2642 | 0.2642 |
+| owner_05_github | 0.4776 | 0.4179 |
+
+**This misses the gate.** The plan's own stated criterion: *"if no candidate gets close to gold on
+the `owner_*` items, the transform layer is not built."* A CER of 0.15–0.48 is not close to gold —
+for comparison, every VoxCPM2 bake-off arm in §2 scored CER ≤ 0.19 against real audio-to-text ASR
+noise, and this probe is text-to-text against a single deterministic model with no audio in the loop
+at all. **The predicted direction did not hold either**: Roman was expected to score meaningfully
+better than Perso-Arabic (it already writes short vowels, so no abjad→abugida vowel-restoration is
+needed) — instead it scored *worse* on 3 of 5 owner items and roughly tied overall (0.3075 vs 0.2771
+mean). Spot-checking raw model output against gold (first 6 cases) found errors well beyond simple
+vowel restoration: dropped words, semantic substitutions (gold "तक मुकम्मल" → model "से मुक्तिमान"),
+and incomplete script-switching within a single token ("फ़ाils", a Devanagari-Latin hybrid). One case
+did match the specific failure mode predicted in `routing.py`'s docstring — gold "मुझे" rendered as
+"मग्हे", a genuine vowel-restoration miss — but it was one failure mode among several, not the
+dominant one.
+
+**What this means for the roadmap, per the gate's own rule:** the transform layer described in the
+plan's Phase 2 (`domain/urdu_text.py`, wiring into `tts.py`'s `NoRouteError` seam,
+`transliteration_cache`) **should not be built on Qwen2.5-3B-Instruct's single-shot output.** This is
+recorded as a finding, the same way arm F (Higgs v3, §1) was recorded as could-not-run rather than
+silently dropped. It does **not** close the transliteration route outright — a larger model, few-shot
+prompting, or a dedicated (non-LLM) transliterator could still clear the bar; none of those were
+tried here. `[INFER]`.
+
+**Reproducing:**
+
+```bash
+# on the pod, in .venv-qwen (provisioned by the same flow as pod-bootstrap.sh's other venvs)
+.venv-qwen/bin/python eval/run_translit_probe.py
+```
