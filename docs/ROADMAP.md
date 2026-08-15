@@ -19,7 +19,7 @@ Not yet merged to `main`, no PR opened yet as of 2026-08-10.
 | Phase | Status | Summary |
 |---|---|---|
 | **1 — Async jobs, Recent tab, mobile, perf** | ✅ Done | See below. `pytest -m "not gpu"` and `npm run build` both pass; end-to-end verified in-browser. |
-| **2 — Speech Direction layer** | 🚧 Audibly wired, pod-unverified | IR + heuristic analyzer + capability report + `POST /api/direction/analyze` + UI chip + **multi-segment generation** are all in — direction now changes the actual audio, not just the preview. Not yet heard on real VoxCPM2 (needs the pod). LLM analyzer and Advanced editing still pending — see below. |
+| **2 — Speech Direction layer** | 🚧 Built end-to-end (heuristic + LLM analyzer + Advanced editor), one human-listen item open | IR + heuristic analyzer + LLM analyzer (frontend included, 2026-08-13) + capability report + `POST /api/direction/analyze` + UI chip + Advanced per-segment editor (2026-08-12) + **multi-segment generation** are all in and on `main`. Only remaining item: the multi-segment audio clip passed every objective check on the pod but was never perceptually confirmed — see below. |
 | **3 — Client-side audio extraction** | ✅ Built | Move video→audio extraction into the browser; server-side ffmpeg is now the fallback, not the only path. Covers both `EnrollCard` and the Audio Editor tab. |
 | **4 — Chatterbox runtime + beyond** | 🔴 4a/4b/4c all done — **not verified, does not clone identity well enough to ship** | Real `ChatterboxBackend`, real Phase-A gate run, real human listen. Owner verdict: "not that good... identity is matched around 60%". Same conclusion shape as the Urdu investigation — a speaker-encoder ceiling, not a tunable parameter. Still unroutable in production, and not currently planned to be revisited without a LoRA fine-tune. See [PHASE4_CHATTERBOX_DESIGN.md](PHASE4_CHATTERBOX_DESIGN.md) and [PHASE_A_RESULTS.md](PHASE_A_RESULTS.md). |
 | **Composer model picker** | ✅ Built | Backend already returned the full catalog (`GET /api/models`) and honored an explicit `model_id` override (`resolve()`'s `requested` param — honored or refused, never silently swapped); nothing in the frontend called either. Added `useModels()` + a "Model" select in `Composer.tsx`, filtered to specs that verifiably support the selected language, defaulting to Auto with the live-routed model shown as "(Recommended)" (reusing the existing `/api/detect-script` hint, no new endpoint). See below. |
@@ -228,6 +228,10 @@ The **read-only preview** is built, tested, and wired end-to-end:
 
 ### Remaining
 
+**This section was stale** — items 2 and 3 below read as open work but both shipped on `main` days
+before this note (`08046b7`, 2026-08-12, and `f4f061a`, 2026-08-13). Caught 2026-08-15 when about to
+duplicate them; corrected here rather than left for the next session to rediscover the hard way.
+
 1. **Real-audio pod validation — objective checks passed (2026-08-12), human listen still open.**
    Hit the real `POST /api/generate` with `apply_direction: true` on the pod against a live VoxCPM2
    worker (3-sentence Hindi text mixing neutral/exclamatory/question segments, enrolled profile from
@@ -237,39 +241,50 @@ The **read-only preview** is built, tested, and wired end-to-end:
    real RMS energy throughout, **zero sample-to-sample discontinuities above a 0.5 abs-diff click
    threshold anywhere in the file**, and exactly 2 silence runs (~0.25s each) at the 2 expected
    inter-segment boundaries for a 3-segment clip — `concat_wavs_with_pauses` is splicing where the
-   directed plan says it should, with no audible-discontinuity signature. **Not yet confirmed
-   perceptually** (does the emphasis/cfg_value difference actually sound like a delivery change,
-   independent of what's measurable in the raw samples) — the clip is saved at
-   `eval/results/direction/pod_directed_hi.wav`, awaiting a human listen before this line says
-   "verified" rather than "objectively sound."
-2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0)** — the flagged second implementation behind the frozen
-   `analyze()` signature. **Pod-only** (GPU, model download, runs in a worker to keep torch out of the
-   API; validate on the pod, not the GPU-less Windows box). Cached per `(text, language)`, run as its own
-   job `kind`. This is the "analyzer" half of the owner's "both, analyzer first" decision.
+   directed plan says it should, with no audible-discontinuity signature. **Still the one genuinely
+   open item**: not yet confirmed perceptually (does the emphasis/cfg_value difference actually sound
+   like a delivery change, independent of what's measurable in the raw samples) — the clip is saved
+   locally at `eval/results/direction/pod_directed_hi.wav` (untracked — never committed), awaiting a
+   human listen before this line says "verified" rather than "objectively sound."
+2. **LLM analyzer (Qwen2.5-Instruct, Apache-2.0) — shipped, frontend included.** Backend landed
+   2026-08-12 as described below; frontend wiring landed 2026-08-13 (`f4f061a`): a "Let AI suggest
+   emotion/tone" button inside the Advanced editor (item 3) enqueues
+   `POST /api/direction/analyze-llm`, polls it with the same `useJob` pattern the main generate job
+   uses, and on success merges each classified row into `directionEdits` at the matching segment
+   index — text and `pause_after_ms` always stay the heuristic's, the LLM only supplies
+   emotion/intensity/energy/rate. Suggest-then-edit, not silent auto-apply: the result lands in the
+   same edit state a manual change would, immediately visible/editable/resettable through the
+   existing Advanced editor controls. `frontend/src/components/DirectionPanel.tsx`'s
+   `onSuggestAi`/`aiSuggestLoading`/`aiSuggestError` props and `Composer.tsx`'s
+   `useAnalyzeLlmMutation()` are the wiring; no further frontend work needed here.
    **Capability probe passed (2026-08-12):** `eval/run_qwen_analyzer_probe.py` against
    `Qwen/Qwen2.5-3B-Instruct` (unpinned, probe-only) on the pod — 0 validation problems across 6 cases
    spanning English/Roman-Urdu/Hindi and neutral/happy/sad/anxious/excited/angry, structured-JSON output,
    2.1-3.7s generation per case, 19-27s cold load. Segmentation/emphasis/pause_after_ms stay on the
    existing heuristic; the LLM classifies only emotion/intensity/energy/rate for already-segmented
-   sentences. Production build (`QwenAnalyzerBackend`, dedicated worker/protocol, `JobKind.ANALYZE_LLM`,
-   `POST /api/direction/analyze-llm`) **landed on `main` (2026-08-12)**, backend only. Real pod
-   verification (fresh RunPod instance): direct backend load→classify→unload (0 problems, en/ur/hi),
-   the full worker-subprocess + `AnalyzerScheduler` path, and the real HTTP path
+   sentences. Real pod verification (fresh RunPod instance): direct backend load→classify→unload (0
+   problems, en/ur/hi), the full worker-subprocess + `AnalyzerScheduler` path, and the real HTTP path
    (`POST /api/direction/analyze-llm` → 202 → polled `succeeded`, correct rows, one worker reused
    across requests — `load_time_sec` nonzero only on the cold call). A real bug was found and fixed
    during verification: `load_time_sec` wasn't threaded from the LOAD response into the following
-   classify call. 239 backend tests passing, ruff clean on all touched files. **Frontend wiring not
-   built yet** — the endpoint exists, nothing in the UI calls it. **Open risk, documented not
-   silently accepted**: the idle-unload timer is the only VRAM-contention mitigation between this
-   scheduler and the audio `InferenceScheduler` — they don't share a real budget, so a resident Qwen
-   worker (~6GB) alongside a resident audio model on the 20GB pod card is a real risk during
-   overlapping requests, not just at idle.
-3. **Advanced editing** — the panel is read-only today; the full per-segment IR editor (the "Advanced
-   tab for pros") is not built. Simple mode (summary + chip + apply checkbox) is what shipped.
-   **Backend contract landed (2026-08-11):** `direction_plan` on `TTSGenerateRequest` accepts
-   client-edited per-segment prosody overrides, sparse/index-keyed, re-validated server-side against a
-   fresh `analyze()` of the same text (422 on a stale/unknown index) — never a client-controlled segment
-   text or emphasis. Frontend editor UI in progress.
+   classify call. **Open risk, documented not silently accepted**: the idle-unload timer is the only
+   VRAM-contention mitigation between this scheduler and the audio `InferenceScheduler` — they don't
+   share a real budget, so a resident Qwen worker (~6GB) alongside a resident audio model on the 20GB
+   pod card is a real risk during overlapping requests, not just at idle. Not yet stress-tested under
+   a real concurrent request.
+3. **Advanced editing — shipped (2026-08-12, `08046b7`).** The full per-segment IR editor (the
+   "Advanced tab for pros") is built: `DirectionPanel.tsx`'s `showAdvanced` disclosure renders
+   editable selects for emotion/intensity/energy/rate and a numeric `pause_after_ms` per segment
+   (deliberately no Tone control — no runtime honors it, same reasoning that got
+   Emotion/Style-Exaggeration deleted elsewhere), a per-segment "Reset to detected" and a bulk
+   "Reset all edited," and an edited-count badge on the disclosure toggle. Never editable: segment
+   text or boundaries — the editor changes prosody only. `Composer.tsx` owns the edit state
+   (`directionEdits`, sparse/index-keyed) and the staleness check that clears it if the underlying
+   segmentation changes enough that old indices may no longer line up, telling the user why rather
+   than silently dropping their edits. Backend contract landed 2026-08-11: `direction_plan` on
+   `TTSGenerateRequest` accepts these overrides, re-validated server-side against a fresh `analyze()`
+   of the same text (422 on a stale/unknown index) — never a client-controlled segment text or
+   emphasis.
 
 **Original design notes (unchanged):**
 
