@@ -206,6 +206,18 @@ the signature of a shared input problem rather than a per-model one. **Not fixed
 whoever next revises the corpus; fixing it would change the `date`/`num_ascii`/`num_eastern` items
 for every arm, which is a change big enough to warrant its own re-run rather than a mid-analysis edit.
 
+**Sharper still, per the owner's direct listen (2026-08-15, not independently re-verified by ear
+here): within the `date` item's own sentence** — `یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔` ("this
+report is due 14 August 2026") — **the day-of-month number (14) and the year (2026) were NOT
+mispronounced equally.** 14 came out wrong (something close to "chodan" rather than چودہ/"chauda"),
+while 2026 was rendered correctly and idiomatically as "do hazar chabees." That is consistent with
+the corpus-authoring-gap explanation above rather than a separate defect: year numbers said aloud in
+South Asian speech are conventionally read as a compound ("two thousand twenty-six" /
+"دو ہزار چھبیس"), which is closer to how these models plausibly learned digit sequences from training
+data, whereas a bare 1-2 digit cardinal like "14" has no such strong convention pulling it toward the
+correct spoken form. Same root cause, different surface symptom — not yet independently reproduced
+against a specific arm's audio, flagged here for whoever next revisits this corpus.
+
 **Two clips (of 130) could not be scored: `[C/female/num_eastern]` and `[D/owner/owner_02_file]`,
 both reported as "audio is muted, I am unable to unmute it."** Checked directly: both source WAVs
 have normal peak amplitude (0.99 and 0.92) and are not silent, so this reads as a page/browser
