@@ -331,6 +331,126 @@ properly-scaled fine-tune) is integrated and verified. The runtime's LoRA-loadin
 generic, tested, and costs nothing unused — so any future LoRA, on a larger dataset, ships without
 re-threading the wire protocol.
 
+### 5b. Arm Eprod — real owner listen `[LISTEN]` (2026-08-15)
+
+The remaining step §5's arm-Eprod note flagged — an owner listen against the actual production-backend
+clips, not just their CER/cosine numbers — is done. All 26 clips (13 items × owner + female reference,
+`eval/results/urdu_bakeoff/arm_Eprod_{owner,female}/`) were listened to directly.
+
+**Verdict: mostly very good, with one systematic, real weakness — numbers and dates.** Consistent
+across both references:
+
+| Item | Verdict | Detail |
+|---|---|---|
+| `owner_01_sick` | ✅ perfect | — |
+| `owner_04_late` | ✅ correct | code-switched "office"/"late" both landed |
+| `long_multiclause` | ✅ correct | "meeting" pronounced correctly here specifically |
+| `owner_03_deadline`, `owner_05_github`, `names`, `colloquial` | ✅ good | no issue flagged |
+| `num_ascii` | 🔴 wrong | digits (3, 45) mispronounced, **and "meeting" itself came out wrong in this item** despite being correct in `long_multiclause` — a digit nearby seems to drag down an otherwise-fine word, not just the digit itself |
+| `num_eastern` | 🔴 wrong | same failure, Eastern Arabic-Indic digit glyphs (۳، ۴۵) — the digit *script* isn't the variable, the fact that they're digits is |
+| `date` | 🔴 wrong | both 14 and 2026 mispronounced — **unlike the VoxCPM2/LoRA-era finding in §3c**, where 2026 alone came out correct ("do hazar chabees") and only 14 failed. OmniVoice fails on both; this is a per-model difference, not a universal digit rule |
+| `abbreviations` | 🔴 partial | "برائے کرم" (please) mispronounced; **"URL" rendered as "oo r l"** rather than the expected English-letter reading |
+| `technical` | 🔴 partial | "database" pronounced with an Arabic-accented T |
+| `owner_02_file` | 🟡 minor | "check" comes out closer to "chaeck" — small vowel drift, not a real problem |
+
+**One concrete case of the numeric gate being wrong in the *optimistic* direction, not just the
+pessimistic one already on record:** `owner_05_github` has the single worst CER in the whole arm-Eprod
+run (0.4478, both references) — the corpus's most heavily code-switched sentence
+(`GitHub`/`pull request`/`create`/`review`). It was listened to and judged **good**. The likely
+explanation is the same one §2 already gives for CER in general: Whisper's own transcription of
+code-switched audio is unreliable, so a high CER here is at least partly an ASR artifact, not proof the
+speech is bad. This is the mirror image of the numbers finding below — CER *underclaimed* quality on
+`owner_05_github` and *overclaimed* it on nothing (the numbers items' CER was already visibly elevated
+in the score files — 0.13/0.13/0.32 for owner, 0.09/0.15/0.24 for female — so the metric did flag them,
+just not with enough magnitude relative to `owner_05_github`'s much higher number to make severity
+rank correctly by CER alone).
+
+**Net finding:** the failure is narrow and specific — number/date reading and a handful of
+technical-English loanwords (URL, database) — not a general Urdu-quality problem. Ordinary
+conversational Urdu, including code-switched English words in casual use ("office", "late"), came
+through clean on both voices. This mirrors a pattern already on record for a different model+context in
+§3c (digit pronunciation being a weak point generally), reinforcing that this is closer to "Urdu TTS
+digit-reading is an unsolved, cross-model gap" than "OmniVoice specifically is bad at this."
+
+### 5c. Numbers/dates fix, verified by ear (2026-08-15)
+
+`eval/urdu_numerals.py` expands digit runs (ASCII and Eastern Arabic-Indic) into the Urdu cardinal
+words they're actually spoken as before synthesis — `14` → `چودہ`, `2026` → `دو ہزار چھبیس` — the same
+technique every production TTS frontend uses for numbers. Re-synthesized the 3 broken items
+(`num_ascii`, `num_eastern`, `date`) with expanded text through the real production
+`OmniVoiceBackend`, both references (`eval/run_number_fix_check.py`,
+`eval/results/urdu_bakeoff/number_fix_check/`, before/after comparison page at
+`eval/results/urdu_bakeoff/number_fix_check.html`).
+
+**A real bug surfaced during this check, not a model problem:** the verification script initially
+reused the owner's reference transcript for the *female* reference clip too. `reference_text`
+describes what the reference audio says, not the text being synthesized — feeding OmniVoice the wrong
+transcript against a different speaker's clip broke cloning outright, producing jibberish. Fixed by
+omitting `reference_text` for the female reference (matching how the original arm-Eprod female run
+worked — OmniVoice's own Whisper auto-transcribes when it's not supplied). Re-ran; confirmed correct.
+
+**Owner's verdict on the re-listen: numbers now correct in both references, and `owner_04`'s
+"میٹنگ" mispronunciation (flagged in §5b as inconsistent — correct in `long_multiclause`, wrong in
+`num_ascii`/`num_eastern`) is now also correct in the female clip.** This is consistent with the §5b
+hypothesis that the digit-heavy phrasing itself, not the digit glyphs specifically, was dragging the
+neighboring word down — expanding the digits to words appears to have resolved both symptoms together.
+
+**Still open, not touched by this fix:** the English-technical-loanword pronunciation issues from §5b
+(`URL` → "oo r l", `database`'s Arabic-accented T, `برائے کرم` mispronounced) are a different failure
+mode (word-level, not digit-level) and remain unaddressed.
+
+**Not yet shipped to production.** `eval/urdu_numerals.py` is eval-only by the same rule
+`urdu_represent.py` follows — nothing here may be imported by `backend/app/` until wiring it into the
+real generation path is a deliberate decision, not an eval-script side effect. That wiring (where in
+`domain/routing.py`'s transform seam it belongs, whether it's declared in the `route: {transform,
+lossy, rationale}` chip per golden rule 5, whether it applies automatically to all Urdu Perso-Arabic
+generation or is opt-in) is a real design decision, not made here.
+
+### 5d. Consolidated pronunciation verification model `[LISTEN]` (2026-08-15)
+
+Continuing past §5b/§5c with per-word isolation testing (bare word vs minimal sentence vs full
+corpus/synthetic sentence, owner reference, real production `OmniVoiceBackend`, no normalization
+applied unless stated) —
+`eval/run_isolated_word_checks.py`, `eval/run_database_respell_check.py`,
+`eval/run_database_respell_v2.py`, `eval/run_more_checks.py`, clips and listen pages under
+`eval/results/urdu_bakeoff/{isolated_word_checks,database_respell_check,database_respell_v2,
+more_checks}*`.
+
+**The important conclusion is not "OmniVoice cannot pronounce X."** Across every case tested, the
+pattern is the same: **OmniVoice performs well on realistic conversational Urdu, but certain written
+representations are poor inputs for synthesis. The frontend can normalize some of these
+representations into forms the model handles more reliably.** That is a distinction between model
+capability and frontend normalization requirements, not a verdict on the model.
+
+| Category | Status | Basis |
+|---|---|---|
+| Native Urdu | **PASS** | Ordinary conversational Urdu, including long/multiclause sentences, names, and colloquial text, is generally working well in the tested corpus |
+| Numbers/dates — raw digits | **FAIL** | Both ASCII and Eastern Arabic-Indic digits fail identically — the issue is being a digit, not the script |
+| Numbers/dates — Urdu word expansion | **PASS / verified on tested cases** | Verified across the original 3 failing corpus items, 5 additional synthetic sentences, both references, with regression checks showing no damage to already-correct ordinary-Urdu cases. Not claimed to be exhaustive over every possible numeric context — verified on the tested corpus and representative synthetic cases only |
+| English code-switch in realistic sentences | **PASS** | `office`, `check`, `GitHub`/`pull request`/`review` confirmed working in realistic sentence contexts, both in isolation and in the original corpus |
+| Sparse/bare inputs | **UNRELIABLE / evaluation limitation** | Bare single words or 2–3 word fragments are substantially less reliable than realistic full sentences, independent of what they contain (میٹنگ, URL, and database all failed bare; office and check did not). This is recorded as a limitation of testing sparse inputs, not as proof that sparse input explains every individual failure — some failures (numbers, `database`) reproduce in full-sentence context too |
+| `URL` | **Targeted respelling verified in the demonstrated realistic failure** | Bare: unreliable/silent. Short sentence: correct. Busy realistic sentence (the original "abbreviations" corpus item): incorrect ("oo r l"). `یو آر ایل` respelling fixes the busy realistic sentence specifically — not claimed to fix every possible `URL` context |
+| `database` | **Context-dependent; targeted fix verified only in the realistic sentence** | Bare and short-context forms are unreliable in every direct form tested. The all-Urdu respelling `ڈیٹا بیس` collides with the existing Urdu word for "twenty" (بیس) and is inconsistent. The mixed respelling `ڈیٹا` (Urdu) + `base` (Latin, left unchanged) produces the correct pronunciation in the realistic full-sentence case (the original "technical" corpus item) but not in the bare/short forms. **Not fixed everywhere** — verified only in the demonstrated realistic case |
+
+**No broad English-transliteration system is being introduced.** office/check/GitHub already work as
+plain Latin text; URL and database needed a small, specific respelling each, found and verified
+individually — the same one-word-at-a-time, verify-by-ear discipline as every other finding in this
+bake-off, not a general rule.
+
+**Still eval-only, nothing wired to production.** Three rules now have eval-verified evidence behind
+them:
+
+1. Digit/date expansion (`eval/urdu_numerals.py`)
+2. `URL` → `یو آر ایل`, where the demonstrated busy-sentence context requires it
+3. `database` → `ڈیٹا` + Latin `base` (mixed script), where the demonstrated realistic-sentence context
+   requires it
+
+Before any production integration, an open design question remains: do these belong in one general
+normalization layer, or a small targeted pronunciation lexicon (closer to what the evidence actually
+supports, given how narrowly each fix has been shown to apply)? Not decided here. No further isolated
+word testing is planned unless a specific, unresolved, production-relevant failure surfaces — the
+current evidence is sufficient to move from exploration to designing the normalization layer itself.
+
 ---
 
 ## 6. What happens next

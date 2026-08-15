@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>database respelling v2 — mixed script</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.item { margin: 1rem 0; padding: .75rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .85rem; color: #6c8cff; margin-bottom: .3rem; }
+.text { font-size: 1.15rem; margin: .3rem 0; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>database respelling v2 — ڈیٹا (Urdu) + base (Latin, unchanged)</h1>
+<p>ڈیٹا بیس collided with بیس = the Urdu number 20 ("bees"), so the model read "base" as "twenty" in
+2 of 3 contexts. This tries the mixed-script version instead: only "data" gets respelled (the part that
+was actually broken), "base" stays Latin since English loanwords already work elsewhere in this corpus.</p>
+
+  <div class="item">
+    <div class="meta">mixed_bare</div>
+    <div class="text" dir="rtl">ڈیٹا base</div>
+    <audio controls src="database_respell_v2/mixed_bare.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">mixed_context</div>
+    <div class="text" dir="rtl">ہمیں ڈیٹا base چاہیے۔</div>
+    <audio controls src="database_respell_v2/mixed_context.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">mixed_full</div>
+    <div class="text" dir="rtl">ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+    <audio controls src="database_respell_v2/mixed_full.wav"></audio>
+  </div>
+</body></html>

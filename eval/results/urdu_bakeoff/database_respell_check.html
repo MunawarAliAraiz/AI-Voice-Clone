@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>database respelling check</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.item { margin: 1rem 0; padding: .75rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .85rem; color: #6c8cff; margin-bottom: .3rem; }
+.text { font-size: 1.15rem; margin: .3rem 0; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>database → ڈیٹا بیس respelling, same pattern as the URL fix</h1>
+
+  <div class="item">
+    <div class="meta">database_respelled_bare — compare to database_bare (isolated_word_checks/)</div>
+    <div class="text" dir="rtl">ڈیٹا بیس</div>
+    <audio controls src="database_respell_check/database_respelled_bare.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">database_respelled_context — compare to database_context (isolated_word_checks/)</div>
+    <div class="text" dir="rtl">ہمیں ڈیٹا بیس چاہیے۔</div>
+    <audio controls src="database_respell_check/database_respelled_context.wav"></audio>
+  </div>
+  <div class="item">
+    <div class="meta">database_respelled_full — the original technical corpus sentence, database swapped for the respelling</div>
+    <div class="text" dir="rtl">ہمیں ڈیٹا بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+    <audio controls src="database_respell_check/database_respelled_full.wav"></audio>
+  </div>
+</body></html>
