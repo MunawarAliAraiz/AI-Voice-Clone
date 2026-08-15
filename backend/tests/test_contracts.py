@@ -337,41 +337,54 @@ def test_voxcpm2_urdu_arabic_requires_explicit_opt_in() -> None:
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 
 
-def test_omnivoice_urdu_is_cc_by_nc_and_experimental() -> None:
+def test_omnivoice_urdu_is_cc_by_nc_and_verified() -> None:
     """
-    Bake-off arm E: the best pronunciation result of the whole bake-off, and
-    the only Urdu cell whose automated gate passes on both references — but
-    it is CC-BY-NC (personal use only, see docs/URDU_MODEL_LICENSING.md) and
-    verified=False until the PRODUCTION runtime (OmniVoiceBackend, not the
-    eval harness's isolated loader) has its own pod smoke test.
+    Bake-off arm E: the best pronunciation result of the whole bake-off, the
+    only Urdu cell whose automated gate passes on both references (against
+    the production `OmniVoiceBackend`, arm Eprod), and CC-BY-NC (personal
+    use only, see docs/URDU_MODEL_LICENSING.md). `verified` flipped True
+    2026-08-15 — owner's explicit call on top of the numeric gate.
+
+    `experimental_listing` is now False: that field advertises a spec's
+    UNVERIFIED cells (see `spec.py`), and this spec's one cell no longer is
+    one. The license restriction is unaffected by either flag — see
+    `commercial_use`/`ModelCatalog.candidates()`'s NC filter.
     """
     omni = CATALOG.require("omnivoice_urdu")
     assert omni.runtime is RuntimeKind.OMNIVOICE
     assert omni.license is License.CC_BY_NC
     assert not omni.license.is_permissive, "CC-BY-NC must never read as commercially shippable"
     assert omni.license.personal_use_ok, "but it must be legal for personal use"
-    assert omni.experimental_listing is True
+    assert omni.experimental_listing is False
     assert omni.claims("ur", Script.ARABIC)
-    assert not omni.supports("ur", Script.ARABIC), (
-        "verified=False until the production runtime is pod-verified"
-    )
-    assert omni.caveat, "an experimental spec must carry a user-facing caveat"
+    assert omni.supports("ur", Script.ARABIC), "verified=True as of 2026-08-15"
+    assert omni.caveat, "a non-commercial spec must still carry a user-facing caveat"
 
 
-def test_omnivoice_urdu_requires_explicit_opt_in() -> None:
+def test_omnivoice_urdu_reachable_by_explicit_request_no_opt_in_needed() -> None:
+    """
+    Verified now, so a plain named request reaches it without
+    `allow_experimental` — that flag is for bypassing an unverified gate,
+    which no longer applies here. `experimental=False` on the resulting plan
+    reflects that this is no longer a bypass.
+    """
     profile = profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur")
-    plan = resolve(profile, "omnivoice_urdu", CATALOG, allow_experimental=True)
+    plan = resolve(profile, "omnivoice_urdu", CATALOG)
     assert plan.model_id == "omnivoice_urdu"
-    assert plan.experimental is True
+    assert plan.experimental is False
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 
 
 def test_auto_urdu_routing_still_prefers_no_model_over_an_nc_one() -> None:
     """
-    Two experimental candidates now claim (ur, ARABIC) — voxcpm2_urdu_arabic
-    and omnivoice_urdu — and NEITHER may be Auto-selected, licensing aside.
-    A CC-BY-NC spec being the "best" one must never tempt Auto routing into
-    picking it silently; only an explicit, named request may reach it.
+    omnivoice_urdu is now verified=True for (ur, ARABIC) — the best-scoring
+    Urdu cell in the catalog — but it is CC-BY-NC, and `ModelCatalog.candidates()`
+    deliberately excludes non-permissive-licensed specs even once verified
+    (golden rule 6). voxcpm2_urdu_arabic (permissive) stays unverified. So
+    Auto routing still finds nothing for Perso-Arabic Urdu: a CC-BY-NC spec
+    being the "best" one must never tempt Auto routing into picking it
+    silently; only an explicit, named request may reach it (see
+    test_omnivoice_urdu_reachable_by_explicit_request_no_opt_in_needed).
     """
     with pytest.raises(NoRouteError):
         resolve(profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur"), None, CATALOG)

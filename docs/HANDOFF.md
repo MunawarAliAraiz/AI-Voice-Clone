@@ -75,11 +75,16 @@ steps 10-11). Everything from this checkpoint is committed and pushed to `fork/f
 (`2634372` at time of writing) — nothing was left pod-only.
 
 **Still open, unchanged from before:** IndicF5 (arms H/I/J) blocked on `HF_TOKEN`. Also still open:
-Phase 2 (transliteration viability probe via Qwen2.5-3B — gated on clearing the bake-off's hand-authored
-gold Devanagari, not started), Phase 3 (IndicF5 arms H/I/J), Phase 4 (fine-tune VoxCPM2 on UrduSpeech,
-largest, not started). `OMNIVOICE_URDU`'s `(ur, ARABIC)` cell stays `verified=False` until a real
-CER/cosine gate re-run scores the production backend's own output (the smoke test proved the audio is
-real, not that it clears the gate) plus a fresh owner listen.
+Phase 3 (IndicF5 arms H/I/J), Phase 4 (fine-tune VoxCPM2 on UrduSpeech, largest, not started).
+
+**Resolved since:** the production CER/cosine gate re-run (arm Eprod) cleared comfortably on both
+references, and the owner flipped `OMNIVOICE_URDU`'s `(ur, ARABIC)` cell to `verified=True` on
+2026-08-15 on top of that. It is still CC-BY-NC, so `ModelCatalog.candidates()`
+(`inference/catalog.py`) now excludes non-permissively-licensed specs even once verified — Auto routing
+still never reaches it, only an explicit `model_id=omnivoice_urdu` request does (and no longer needs
+`allow_experimental=True` to do so). Phase 2 (transliteration viability probe via Qwen2.5-3B) ran twice
+— Devanagari target (§8) and, since OmniVoice's own cell is Perso-Arabic not Devanagari, a Perso-Arabic
+target retry (§8b) — both missed the gate. Full detail: `docs/URDU_BAKEOFF_RESULTS.md` §5d/§8/§8b.
 
 **Root-cause finding that reframed the work:** VoxCPM2's published list is 30 languages including
 Hindi and Arabic but **not Urdu**, and its card says it infers language from the text. So Roman Urdu
