@@ -15,6 +15,22 @@
 # (ephemeral, chmod 600) — NEVER to /workspace, which persists and is snapshotted:
 #
 #   ssh root@HOST -p PORT "GH_USER=u GH_TOKEN=t bash -s" < scripts/pod-bootstrap.sh
+#
+# The full real-world invocation — provision, then start backend + ngrok, with
+# the public domain and the frontend origin remembered on /workspace so a later
+# re-run needs neither:
+#
+#   ssh root@HOST -p PORT "START=1 NGROK_AUTHTOKEN=... NGROK_DOMAIN=your.ngrok-free.dev \
+#     FRONTEND_URL=https://your-frontend.example bash -s" < scripts/pod-bootstrap.sh
+#
+# Carry your EXISTING secrets onto a fresh pod (otherwise a new /workspace mints
+# a new VCS_API_KEY and every browser must be re-paired — see step 15):
+#
+#   ... VCS_API_KEY=... VCS_MEDIA_TOKEN_SECRET=... bash -s" < scripts/pod-bootstrap.sh
+#
+# Provisions five Python envs, ~15GB of weights, and takes 15-30 min on a cold
+# /workspace. Re-running against a warm one is fast and is the intended way to
+# restart things — every step is idempotent.
 
 set -euo pipefail
 
@@ -153,9 +169,11 @@ PY
 
 echo "== 10. OmniVoice runtime env (separate interpreter, same reason as VoxCPM) =="
 # CC-BY-NC weights — personal use only, see docs/URDU_MODEL_LICENSING.md and
-# golden rule 6's 2026-08-15 amendment. Not routable by default (unverified
-# cell — Phase 1 pod smoke test needed before verified=True), but the venv +
-# weights are worth having warm the same way Chatterbox's are (step 8).
+# golden rule 6's 2026-08-15 amendment. Its (ur, ARABIC) cell is verified=True
+# as of 2026-08-15, so this venv is REQUIRED, not just convenient: an explicit
+# model_id=omnivoice_urdu request fails without it. Auto-routing still never
+# picks it — ModelCatalog.candidates() excludes non-permissive licences even
+# when verified — but the picker offers it and the owner uses it by name.
 OV_VENV="$REPO_DIR/backend/.venv-omnivoice"
 if [ ! -x "$OV_VENV/bin/python" ]; then
   uv venv "$OV_VENV" --python 3.12
@@ -184,7 +202,44 @@ p = snapshot_download("k2-fsa/OmniVoice", revision=sys.argv[1])
 print("   weights at", p)
 PY
 
-echo "== 12. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
+echo "== 12. Qwen Speech-Direction analyzer env (NOT an audio runtime) =="
+# Powers POST /api/direction/analyze-llm — the "Let AI suggest emotion/tone"
+# button in the Advanced editor. Without this venv the endpoint raises
+# (analyzer_scheduler.py: "set VCS_QWEN_ANALYZER_PYTHON") and that button
+# fails on a fresh pod, which is exactly how this step came to be missing
+# for three days after the feature shipped.
+#
+# Deliberately NOT a RuntimeKind and NOT in Settings.interpreters(): this
+# classifies text, never synthesizes audio, and must stay unreachable from
+# domain/routing.py's resolve(). AnalyzerScheduler reads its own setting.
+# Same venv the eval probes use (eval/run_qwen_analyzer_probe.py,
+# run_translit_probe.py, run_roman_arabic_probe.py) — one Qwen stack, not two.
+QWEN_VENV="$REPO_DIR/backend/.venv-qwen"
+if [ ! -x "$QWEN_VENV/bin/python" ]; then
+  uv venv "$QWEN_VENV" --python 3.12
+fi
+# Same cu130-silent-CPU trap as every other runtime above — pin cu128.
+uv pip install --python "$QWEN_VENV" \
+  torch --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+# `jiwer` is only needed by the transliteration probes, not by production —
+# harmless and small, and it keeps this venv able to run every eval/ Qwen
+# script without a second provisioning step.
+uv pip install --python "$QWEN_VENV" transformers accelerate jiwer 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$QWEN_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 13. Qwen analyzer weights (pinned revision, ~6GB, cached on /workspace) =="
+# Pinned per golden rule 7. Must match QWEN_ANALYZER_HF_REVISION in
+# backend/app/inference/analyzer_scheduler.py — if you bump one, bump both.
+QWEN_REV="aa8e72537993ba99e69dfaafa59ed015b17504d1"
+"$QWEN_VENV/bin/python" - "$QWEN_REV" <<'PY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download("Qwen/Qwen2.5-3B-Instruct", revision=sys.argv[1])
+print("   weights at", p)
+PY
+
+echo "== 14. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
 # A separate venv from every runtime, deliberately: the harness's own deps
 # (transformers, speechbrain) have no reason to co-resolve with a runtime's
 # torch pin, and mixing them risks silently upgrading the runtime's torch
@@ -208,7 +263,7 @@ uv pip install --python "$EVAL_VENV" \
 # this reason — don't "fix" a torchcodec ModuleNotFoundError by installing it.
 "$EVAL_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
 
-echo "== 13. secrets (generated once, reused on every restart) =="
+echo "== 15. secrets (generated once, reused on every restart) =="
 # These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
 # frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
 # invalidates every signed audio URL already handed out. So they are generated
@@ -249,12 +304,12 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$SECRETS_FILE"; set +a
 
-echo "== 14. research lab =="
+echo "== 16. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 15. verify =="
+echo "== 17. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
 # VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
@@ -266,7 +321,7 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
   uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 16. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 18. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 # Remember the domain the same way FRONTEND_URL is remembered. A restart that
 # forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
 # the deployed frontend has no way to reach, so the app looks broken for a
@@ -300,7 +355,7 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
-echo "== 17. serve script (CORS baked in, remembered across runs) =="
+echo "== 19. serve script (CORS baked in, remembered across runs) =="
 # CORS is the easiest thing to get wrong here, and it fails in the least
 # obvious way: the origin must match the deployed frontend EXACTLY — scheme,
 # host, no trailing slash — or every request dies in preflight with "No
@@ -335,9 +390,15 @@ export VCS_VOXCPM_PYTHON=${VOX_VENV}/bin/python
 # 4c), but pointing this at the venv now means routing needs no redeploy the
 # moment a cell flips verified=True.
 export VCS_CHATTERBOX_PYTHON=${CB_VENV}/bin/python
-# omnivoice_urdu is likewise unverified (experimental_listing=True only) —
-# same reasoning as Chatterbox above.
+# omnivoice_urdu's (ur, ARABIC) cell is verified=True (2026-08-15), so this
+# one is load-bearing, not speculative: without it every explicit
+# model_id=omnivoice_urdu request fails with "no interpreter configured for
+# runtime 'omnivoice'".
 export VCS_OMNIVOICE_PYTHON=${OV_VENV}/bin/python
+# Speech Direction's LLM analyzer (POST /api/direction/analyze-llm, the "Let
+# AI suggest emotion/tone" button). Deliberately NOT a RuntimeKind — see
+# step 12 and analyzer_scheduler.py's docstring.
+export VCS_QWEN_ANALYZER_PYTHON=${QWEN_VENV}/bin/python
 export VCS_WORKER_CWD=${REPO_DIR}/backend
 cd ${REPO_DIR}/backend
 exec uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
@@ -360,7 +421,7 @@ if [ "${START:-0}" = "1" ]; then
   done
 fi
 
-echo "== 18. current status =="
+echo "== 20. current status =="
 # Without START=1 bootstrap only provisions, so on a first run both of these are
 # expected to be down. The value is on a RE-RUN against a live pod, where it
 # answers "is the thing I already started still up?" without a second SSH trip.
@@ -401,8 +462,10 @@ fi
 echo
 echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
-echo "  runtime: $VOX_VENV  (torch cu128)"
-echo "  runtime: $CB_VENV  (torch cu128, not yet routable — Phase 4c)"
+echo "  runtime: $VOX_VENV  (torch cu128, routable — English + Roman Urdu)"
+echo "  runtime: $OV_VENV  (torch cu128, routable by explicit pick — Perso-Arabic Urdu)"
+echo "  runtime: $CB_VENV  (torch cu128, NOT routable — failed its identity listen, Phase 4c)"
+echo "  analyzer:$QWEN_VENV  (torch cu128, Speech Direction 'suggest emotion/tone')"
 echo "  eval:    $EVAL_VENV  (torch cu128, Whisper CER + ECAPA speaker cosine)"
 echo "  lab:     /workspace/engines-lab/"
 echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"

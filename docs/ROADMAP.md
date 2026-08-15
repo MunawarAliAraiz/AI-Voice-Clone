@@ -13,8 +13,11 @@ must never break while you do it."
 
 ## Where things stand
 
-**Branch:** `feature/jobs-mobile-perf`, pushed to `fork` (`https://github.com/MunawarAliAraiz/AI-Voice-Clone`).
-Not yet merged to `main`, no PR opened yet as of 2026-08-10.
+**Branch:** everything below is merged to **`main`** (`fork` =
+`https://github.com/MunawarAliAraiz/AI-Voice-Clone`, the push target — not `origin`). The
+`feature/jobs-mobile-perf` branch this file was first written against is long merged; work since
+then has gone through one short-lived feature branch + PR per change, none outstanding as of
+2026-08-15.
 
 | Phase | Status | Summary |
 |---|---|---|

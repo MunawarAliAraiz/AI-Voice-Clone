@@ -6,12 +6,40 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ In flight right now — LoRA withdrawn, OmniVoice shipped, code-switch bug fixed (2026-08-15)
+## ⚡ Start here (state as of 2026-08-15, end of day)
 
-Branch **`feature/urdu-bakeoff`**. The bake-off itself (130/130 blind-scored, arms A–E) was already
-complete as of the previous checkpoint below, and arm D (VoxCPM2 + LoRA) had been integrated as
-`voxcpm2_urdu_lora`. **This checkpoint reverses that** based on real usage, then ships the bake-off's
-actual best-scoring arm properly.
+**Everything below is merged to `main`.** No branch is outstanding. The last four PRs (#18–#21)
+covered: the Urdu pronunciation normalization layer, full Hindi removal + Direction-preview model
+passthrough + language-based model pre-select, the `OMNIVOICE_URDU.verified=True` flip + the
+licence-aware auto-routing filter, and the 7B transliteration escalation.
+
+**What a fresh session should do first:**
+1. **The pod is dead.** `69.30.85.171:22002` stopped responding mid-session (connection refused,
+   RunPod reclaimed it). Bootstrap a new one — `scripts/pod-bootstrap.sh` now provisions the Qwen
+   analyzer venv too (it was missing for three days after that feature shipped), so a fresh pod is
+   fully capable including the "Let AI suggest emotion/tone" button. Update
+   `.claude/remote.local.md` with the new endpoint.
+2. **Three things wait on the owner's ears, not on code**: the two never-scored bake-off clips
+   (§3c), the multi-segment directed-audio clip (`eval/results/direction/pod_directed_hi.wav`,
+   local + untracked, passed every objective check but never perceptually confirmed), and — once a
+   pod exists again — a re-run of `eval/run_user_report_check.py`, whose output was lost with the
+   pod before it could be downloaded.
+3. **IndicF5 (arms H/I/J) is still blocked**, and the blocker is now precisely known: the HF token
+   supplied on 2026-08-15 authenticates fine (`whoami: munawaraliaraiz`) but the account has **not
+   been granted access to the gated `ai4bharat/IndicF5` repo** — fetching weights returns
+   `403 … you are not in the authorized list`. One click at huggingface.co/ai4bharat/IndicF5 while
+   signed in as that account fixes it; nothing else about this arm can proceed until then.
+
+Historical detail on how the current state came to be follows.
+
+---
+
+## LoRA withdrawn, OmniVoice shipped, code-switch bug fixed (2026-08-15)
+
+Originally branch **`feature/urdu-bakeoff`**, since merged. The bake-off itself (130/130
+blind-scored, arms A–E) was already complete as of the previous checkpoint below, and arm D (VoxCPM2
++ LoRA) had been integrated as `voxcpm2_urdu_lora`. **This checkpoint reverses that** based on real
+usage, then ships the bake-off's actual best-scoring arm properly.
 
 **1. The LoRA was withdrawn.** Using the real running app (not the eval harness), the owner's verdict
 was that **base VoxCPM2 sounds better than the LoRA** — contradicting the blind-listen median (4.0 vs

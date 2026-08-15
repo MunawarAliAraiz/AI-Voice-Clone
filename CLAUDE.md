@@ -152,7 +152,7 @@ process holds 20 GB.
 
 ## Commands
 
-**Dependencies are managed with `uv`, not pip.** `uv` earns it here: the three runtimes pin
+**Dependencies are managed with `uv`, not pip.** `uv` earns it here: the runtimes pin
 `transformers`/`torchaudio` stacks that are not expected to co-resolve, and `[tool.uv] conflicts` locks them
 independently instead of failing — or worse, resolving to something that satisfies the solver and breaks at
 import. That is the exact class of failure that killed the predecessor (`transformers>=4.57.6` vs
@@ -166,11 +166,24 @@ cd backend && uv run pytest -m gpu        # pod only: real subprocess, real weig
 cd frontend && npm run build      # tsc -b + vite build (no test script yet)
 ```
 
-Runtime environments are separate and are NOT part of `uv sync` — one venv per worker type:
+Runtime environments are separate and are NOT part of `uv sync` — one venv per worker type. On a pod,
+**don't build these by hand**: `scripts/pod-bootstrap.sh` provisions all five, with the pinned
+revisions and the cu128 torch pin every one of them needs (a plain install silently resolves cu130,
+`torch.cuda.is_available()` goes False, and synthesis runs on CPU until it times out). The venvs and
+what needs them:
 
-```bash
-uv venv --python 3.12 .venv-f5 && uv pip install --python .venv-f5 -e ".[f5]"
-```
+| venv | Needed for | Env var |
+|---|---|---|
+| `.venv-voxcpm` | `voxcpm2`, `voxcpm2_urdu_arabic` — English + Roman Urdu, the default route | `VCS_VOXCPM_PYTHON` |
+| `.venv-omnivoice` | `omnivoice_urdu` — Perso-Arabic Urdu, verified, picked by name | `VCS_OMNIVOICE_PYTHON` |
+| `.venv-chatterbox` | `chatterbox_ml_v3` — **not routable** (failed its identity listen, Phase 4c) | `VCS_CHATTERBOX_PYTHON` |
+| `.venv-qwen` | Speech Direction's LLM analyzer — *not* an audio runtime, see below | `VCS_QWEN_ANALYZER_PYTHON` |
+| `.venv-eval` | `eval/` harness only (Whisper CER, ECAPA cosine) — never the API | — |
+
+The Qwen analyzer is deliberately **not** a `RuntimeKind` and not in `Settings.interpreters()`: it
+classifies text and must stay unreachable from `resolve()`. `AnalyzerScheduler` reads its own setting.
+Forgetting `VCS_QWEN_ANALYZER_PYTHON` doesn't break generation — it breaks only the "Let AI suggest
+emotion/tone" button, with a clear error naming the variable.
 
 Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
 
@@ -204,7 +217,9 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
 - **`df` does not show the `/workspace` quota.** It is a MooseFS mount and `df` reports the whole cluster —
   it will cheerfully say "164 TB free" while the volume is full. Use `du -sh /workspace` against the volume
   size in the RunPod console. This already cost an hour: a real "disk quota exceeded" was dismissed as a
-  misdiagnosis because `df` looked fine. Four runtime venvs plus the uv cache reached ~49 GB.
+  misdiagnosis because `df` looked fine. Four runtime venvs plus the uv cache reached ~49 GB; a fully
+  bootstrapped pod (five venvs + all pinned weights, including Qwen2.5-3B's ~6 GB) measured **76 GB**.
+  Size the volume for that, not for the older number.
 - **`chatterbox-tts` needs `setuptools<81` in its own venv.** Its watermarking dependency
   (`resemble-perth`) does `from pkg_resources import resource_filename`, an API `setuptools>=81`
   removed outright. The failure is silent: `perth/__init__.py` wraps the real import in a bare
