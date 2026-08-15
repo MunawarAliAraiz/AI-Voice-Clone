@@ -108,6 +108,7 @@ def _route_info(plan: RoutePlan, catalog: ModelCatalog) -> RouteInfo:
         source_script=plan.source_script.value,
         alternatives=list(plan.alternatives),
         experimental=plan.experimental,
+        text_normalizations=list(plan.text_normalizations),
     )
 
 

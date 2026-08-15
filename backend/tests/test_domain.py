@@ -16,6 +16,7 @@ import pytest
 from app.domain.language import Script, detect_script, profile_text
 from app.domain.routing import TransformKind, UrduStrategy, resolve
 from app.domain.text import chunk_for_synthesis, normalize_whitespace, split_sentences
+from app.domain.urdu_text import TextNormalization
 from app.exceptions import AmbiguousScriptError, ModelNotFoundError, NoRouteError
 
 URDU = "السلام علیکم، آپ کیسے ہیں؟"
@@ -35,6 +36,9 @@ class StubSpec:
     #: Pairs this stub CLAIMS but is not verified for — mirrors a real spec
     #: with experimental_listing=True and an unverified LanguageSupport cell.
     experimental_pairs: tuple[tuple[str, Script], ...] = ()
+    #: Mirrors ModelSpec.text_normalizations — empty by default, same as a
+    #: real spec that was never tested with any normalization.
+    text_normalizations: tuple[TextNormalization, ...] = ()
 
     def supports(self, language: str, script: Script) -> bool:
         return (language, script) in self.pairs
@@ -81,6 +85,16 @@ EXPERIMENTAL_SPEC = StubSpec(
     experimental_pairs=(("ur", Script.ARABIC),),
 )
 CATALOG_WITH_EXPERIMENTAL = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B, EXPERIMENTAL_SPEC))
+
+#: A second (ur, ARABIC) claimant, this one WITH normalizations declared —
+#: mirrors OMNIVOICE_URDU vs. f5_openbible_urdu (URDU_SPEC, which declares
+#: none). Both specs are reachable only via explicit `requested=`, since
+#: auto-routing would always pick URDU_SPEC (catalog order).
+NORMALIZING_SPEC = StubSpec(
+    "normalizing_stub", "Normalizing Stub", (("ur", Script.ARABIC),),
+    text_normalizations=(TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON),
+)
+CATALOG_WITH_NORMALIZING_SPEC = StubCatalog((URDU_SPEC, NORMALIZING_SPEC, HINDI_A, HINDI_B))
 
 
 # ── Script detection ─────────────────────────────────────────────────────────
@@ -381,6 +395,51 @@ def test_alternatives_exclude_the_chosen_model() -> None:
     plan = resolve(profile_text(HINDI, "hi"), None, CATALOG)
     assert plan.model_id not in plan.alternatives
     assert "voxcpm2" in plan.alternatives
+
+
+def test_text_normalization_applies_only_to_the_spec_that_declares_it() -> None:
+    """
+    The regression test that proves scoping is per-spec, not global: the SAME
+    input, routed to two different specs claiming the SAME (language, script),
+    is normalized only for the one that declares it.
+    """
+    text_with_digits = "میٹنگ 3 بجے ہے"
+
+    normalized = resolve(
+        profile_text(text_with_digits, "ur"), "normalizing_stub",
+        CATALOG_WITH_NORMALIZING_SPEC,
+    )
+    assert normalized.resolved_text != text_with_digits
+    assert "تین" in normalized.resolved_text  # "3" expanded to "teen"
+    assert normalized.text_normalizations == ("numbers",)
+
+    unnormalized = resolve(
+        profile_text(text_with_digits, "ur"), "f5_openbible_urdu",
+        CATALOG_WITH_NORMALIZING_SPEC,
+    )
+    assert unnormalized.resolved_text == text_with_digits
+    assert unnormalized.text_normalizations == ()
+
+
+def test_text_normalization_reports_only_what_actually_changed() -> None:
+    """
+    A spec can declare LOANWORD_LEXICON and still see () reported for it when
+    nothing in the text matched — the plan reflects reality, not capability.
+    """
+    plan = resolve(
+        profile_text("عام سا جملہ ہے", "ur"), "normalizing_stub",
+        CATALOG_WITH_NORMALIZING_SPEC,
+    )
+    assert plan.resolved_text == "عام سا جملہ ہے"
+    assert plan.text_normalizations == ()
+
+
+def test_normalization_is_mentioned_in_the_rationale() -> None:
+    plan = resolve(
+        profile_text("میٹنگ 3 بجے ہے", "ur"), "normalizing_stub",
+        CATALOG_WITH_NORMALIZING_SPEC,
+    )
+    assert "numbers normalized" in plan.rationale
 
 
 def test_resolve_is_pure() -> None:

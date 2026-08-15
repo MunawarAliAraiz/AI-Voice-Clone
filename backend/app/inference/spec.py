@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from ..domain.language import Script
+from ..domain.urdu_text import TextNormalization
 
 __all__ = [
     "RuntimeKind",
@@ -32,6 +33,7 @@ __all__ = [
     "ModelState",
     "LanguageSupport",
     "ModelSpec",
+    "TextNormalization",
 ]
 
 
@@ -248,6 +250,15 @@ class ModelSpec:
     #: of hiding it outright. Auto-routing never consults this — see
     #: `supports_experimental()`.
     experimental_listing: bool = False
+
+    #: Pronunciation fixes `domain.routing.resolve()` applies to `resolved_text`
+    #: for THIS spec specifically, before synthesis — never global. Each entry
+    #: must be backed by real, per-spec, verify-by-ear evidence (see
+    #: docs/URDU_BAKEOFF_RESULTS.md SS5c/SS5d for OMNIVOICE_URDU's). A spec this
+    #: was never tested against — even another Urdu spec — keeps the default
+    #: empty tuple; do not copy another spec's normalizations on the assumption
+    #: they transfer.
+    text_normalizations: tuple[TextNormalization, ...] = field(default_factory=tuple)
 
     def supports(self, language: str, script: Script) -> bool:
         """

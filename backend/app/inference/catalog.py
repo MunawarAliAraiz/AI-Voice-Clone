@@ -31,7 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..domain.language import LanguageCode, Script
-from .spec import LanguageSupport, License, ModelSpec, RuntimeKind
+from .spec import LanguageSupport, License, ModelSpec, RuntimeKind, TextNormalization
 
 __all__ = ["PENDING_PIN", "PENDING_REPO", "ModelCatalog", "CATALOG", "build_catalog"]
 
@@ -401,6 +401,16 @@ OMNIVOICE_URDU = ModelSpec(
         "see docs/URDU_BAKEOFF_RESULTS.md."
     ),
     caveat="Best pronunciation so far, but non-commercial (personal use only).",
+    # Eval-verified, OmniVoice-specific (docs/URDU_BAKEOFF_RESULTS.md SS5c/SS5d):
+    # raw digits are mispronounced regardless of script (ASCII or Eastern
+    # Arabic-Indic) — NUMBERS expands them to spoken Urdu words. URL and
+    # database each needed an individually-verified respelling — see
+    # domain/urdu_text.py's lexicon; LOANWORD_LEXICON is exactly those 2
+    # entries, not a general English-transliteration rule. Neither
+    # normalization has been tested against any other spec — do not copy
+    # this tuple onto voxcpm2_urdu_arabic or anything else without the same
+    # per-spec verify-by-ear evidence.
+    text_normalizations=(TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON),
 )
 
 

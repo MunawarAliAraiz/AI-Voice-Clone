@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from .language import Script
+from .urdu_text import TextNormalization
 
 __all__ = ["SpecView", "CatalogView"]
 
@@ -55,6 +56,11 @@ class SpecView(Protocol):
     def supports_experimental(self, language: str, script: Script) -> bool:
         """True for a claimed pair on a spec explicitly opted into listing
         despite being unverified. See `ModelSpec.supports_experimental`."""
+        ...
+
+    @property
+    def text_normalizations(self) -> tuple[TextNormalization, ...]:
+        """Pronunciation fixes declared for THIS spec. See `ModelSpec`'s field."""
         ...
 
 

@@ -28,6 +28,7 @@ from enum import StrEnum
 from ..exceptions import AmbiguousScriptError, ModelNotFoundError, NoRouteError
 from .language import LanguageCode, Script, TextProfile
 from .ports import CatalogView, SpecView
+from .urdu_text import apply_text_normalizations
 
 __all__ = [
     "TransformKind",
@@ -120,6 +121,12 @@ class RoutePlan:
     #: routing to a model that failed its own accuracy gate must never look
     #: like routing to a verified one).
     experimental: bool = False
+    #: Which of the chosen spec's declared `text_normalizations` were actually
+    #: applied to `resolved_text`. Reflects reality, not capability — a spec
+    #: can declare `LOANWORD_LEXICON` and still report `()` here if nothing in
+    #: this particular text matched. Empty for every spec that declares none
+    #: (see `ModelSpec.text_normalizations`) — never applied globally.
+    text_normalizations: tuple[str, ...] = ()
 
     @property
     def lossy(self) -> bool:
@@ -246,17 +253,35 @@ def resolve(
         # Catalog order IS preference order, and it consults no load state.
         chosen = candidates[0]
 
+    # Pronunciation normalization is pure (table lookup + regex), unlike
+    # TransformKind's script transforms which need a model — so it runs here,
+    # synchronously, rather than through the impure with_resolved_text() seam.
+    # Only applied when transform.is_identity: normalization targets the
+    # script the CHOSEN model actually receives, and is declared per-spec
+    # (ModelSpec.text_normalizations), never globally for "Urdu".
+    if transform.is_identity and chosen.text_normalizations:
+        resolved_text, applied_normalizations = apply_text_normalizations(
+            profile.text, chosen.text_normalizations
+        )
+    else:
+        # Identity transforms with no declared normalization pass through
+        # unchanged. Non-identity transforms are filled in by the service
+        # layer via with_resolved_text() — see needs_transform.
+        resolved_text, applied_normalizations = profile.text, ()
+
     return RoutePlan(
         model_id=chosen.id,
         transform=transform,
-        # Identity transforms are already resolved. Anything else is filled in
-        # by the service layer via with_resolved_text() — see needs_transform.
-        resolved_text=profile.text,
+        resolved_text=resolved_text,
         requested_language=profile.language,
         source_script=profile.script,
-        rationale=_rationale(profile, chosen, transform, experimental=experimental),
+        rationale=_rationale(
+            profile, chosen, transform,
+            experimental=experimental, normalizations=applied_normalizations,
+        ),
         alternatives=tuple(c.id for c in candidates if c.id != chosen.id),
         experimental=experimental,
+        text_normalizations=tuple(n.value for n in applied_normalizations),
     )
 
 
@@ -326,12 +351,22 @@ def _suggest(profile: TextProfile) -> str | None:
     return None
 
 
+#: User-facing clauses for each normalization kind, keyed by value (not the
+#: enum itself — keeps this function importable without a domain.urdu_text
+#: dependency at call sites that only pass through the plan).
+_NORMALIZATION_CLAUSES: dict[str, str] = {
+    "numbers": "numbers normalized to spoken Urdu words",
+    "loanword_lexicon": "select English words respelled for pronunciation",
+}
+
+
 def _rationale(
     profile: TextProfile,
     spec: SpecView,
     transform: TextTransform,
     *,
     experimental: bool = False,
+    normalizations: tuple = (),
 ) -> str:
     """User-facing prose for the route chip. Displayed verbatim."""
     name = getattr(spec, "display_name", spec.id)
@@ -344,6 +379,9 @@ def _rationale(
         )
     else:
         base = f"{profile.language} in {profile.script.value} script rendered by {name}"
+    if normalizations:
+        clauses = ", ".join(_NORMALIZATION_CLAUSES[n.value] for n in normalizations)
+        base = f"{base} ({clauses})"
     if experimental:
         return (
             f"{base} — EXPERIMENTAL: you explicitly picked this model despite it "

@@ -451,6 +451,45 @@ supports, given how narrowly each fix has been shown to apply)? Not decided here
 word testing is planned unless a specific, unresolved, production-relevant failure surfaces — the
 current evidence is sufficient to move from exploration to designing the normalization layer itself.
 
+### 5e. Normalization layer shipped to production (2026-08-15)
+
+The open design question from §5d is answered: **a small, per-spec targeted lexicon, not a general
+normalization layer** — the evidence never supported "general" (numbers are systematic; URL/database
+are two individually-verified words, not a pattern).
+
+`backend/app/domain/urdu_text.py` ports `expand_numbers_in_text`/`_LOANWORD_LEXICON` from
+`eval/urdu_numerals.py` into production. Key finding that shaped the design: unlike
+`routing.TransformKind` (Perso-Arabic → Devanagari, needs a model, hence the impure
+`with_resolved_text()` seam), digit/loanword normalization is pure text manipulation — no I/O — so it
+runs synchronously **inside** `resolve()` itself. `TransformKind`/`needs_transform`/
+`with_resolved_text()` are untouched.
+
+**Scoped per-spec, not per-language**, the same way `needs_reference_text`/`caveat`/
+`experimental_listing` already are: `ModelSpec.text_normalizations` is a new declared field, empty by
+default. Only `OMNIVOICE_URDU` sets it — `voxcpm2_urdu_arabic` and everything else stay unaffected,
+since the evidence is OmniVoice-specific and was never tested elsewhere. A regression test
+(`test_text_normalization_applies_only_to_the_spec_that_declares_it`) asserts exactly this: identical
+input routed to two different Perso-Arabic Urdu specs is normalized for one and not the other.
+
+**Visible, per golden rule 5**: `RoutePlan.text_normalizations` reports what was actually applied to
+*this* text (not just what the spec declares — a loanword-lexicon miss still reports `()`), and the
+route chip's `rationale` names it, e.g. *"...rendered by OmniVoice (Urdu) (numbers normalized to
+spoken Urdu words, select English words respelled for pronunciation)"*.
+
+**Verified three ways**, not just unit-tested:
+1. 280 backend tests pass (9 new), ruff clean, frontend build clean.
+2. A local dry run against the **real catalog** (not stubs) confirmed `omnivoice_urdu` normalizes and
+   `voxcpm2_urdu_arabic` does not, on identical input.
+3. A real pod run (`eval/run_normalization_layer_check.py`) called the actual `resolve()` against the
+   real catalog, fed `plan.resolved_text` to the real `OmniVoiceBackend`, and produced
+   `eval/results/urdu_bakeoff/normalization_layer_check/combined_via_resolve.wav` — closing the loop
+   between "eval-verified" and "what production actually sends." Not yet independently re-verified by
+   ear against that specific clip.
+
+**Still not done:** `OMNIVOICE_URDU.verified` stays `False` — the normalization layer being shipped and
+correct doesn't by itself answer whether to flip the flag now (with the remaining loanword gaps as a
+caveat) or hold for further work. Owner's call.
+
 ---
 
 ## 6. What happens next
