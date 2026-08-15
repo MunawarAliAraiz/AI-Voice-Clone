@@ -486,9 +486,13 @@ spoken Urdu words, select English words respelled for pronunciation)"*.
    between "eval-verified" and "what production actually sends." Not yet independently re-verified by
    ear against that specific clip.
 
-**Still not done:** `OMNIVOICE_URDU.verified` stays `False` — the normalization layer being shipped and
-correct doesn't by itself answer whether to flip the flag now (with the remaining loanword gaps as a
-caveat) or hold for further work. Owner's call.
+**Decided:** `OMNIVOICE_URDU.verified` flipped to `True` 2026-08-15, the owner's explicit call on top of
+the normalization layer landing and the arm Eprod gate clearing comfortably on both references. Being
+CC-BY-NC still means it is never picked silently: `ModelCatalog.candidates()` (`inference/catalog.py`)
+now excludes non-permissively-licensed specs even once verified, so Auto routing and the `alternatives`
+list still skip it — only an explicit `model_id=omnivoice_urdu` request reaches it, same as before, just
+without needing `allow_experimental=True` any more. See `test_omnivoice_urdu_is_cc_by_nc_and_verified`
+and `test_auto_urdu_routing_still_prefers_no_model_over_an_nc_one` in `test_contracts.py`.
 
 ---
 
@@ -587,4 +591,56 @@ tried here. `[INFER]`.
 ```bash
 # on the pod, in .venv-qwen (provisioned by the same flow as pod-bootstrap.sh's other venvs)
 .venv-qwen/bin/python eval/run_translit_probe.py
+```
+
+### 8b. Retry against the actually-correct target script: Roman → Perso-Arabic `[BENCH]`
+
+**§8 tested the wrong target for OmniVoice specifically.** `OMNIVOICE_URDU`'s catalog cell only claims
+`(ur, Script.ARABIC)` — no Devanagari path exists for it at all. §8's probe targeted Devanagari because
+that route existed to unlock the VoxCPM2/Hindi-model arms (C/I/J), not OmniVoice. To type Roman and
+reach OmniVoice, the actual missing conversion is Roman → **Perso-Arabic**, plausibly easier than
+Roman → Devanagari since Perso-Arabic Urdu, like Roman, largely leaves short vowels implicit — no
+abjad→abugida vowel-restoration step. Untested until this run.
+
+**Run for real, 2026-08-15, on the pod.** `eval/run_roman_arabic_probe.py`, same model
+(`Qwen/Qwen2.5-3B-Instruct`, `.venv-qwen`), same corpus, gold reference is `perso_arabic` directly (the
+corpus's own `cer_reference` field, not a derived value). Two prompt variants: zero-shot, and few-shot
+using `colloquial`/`technical` as exemplars (excluded from the scored set to avoid leakage). Full
+manifest: `eval/results/roman_arabic_probe/manifest.json` (24 scored cases, 12 items × 2 variants).
+
+| Variant | Mean CER | OK | Unparseable |
+|---|---|---|---|
+| Zero-shot | **0.2332** | 12 | 1 |
+| Few-shot | **0.1942** (among parseable) | 9 | 2 |
+
+**owner_core items:**
+
+| Item | Zero-shot CER | Few-shot CER |
+|---|---|---|
+| owner_01_sick | 0.3125 | unparseable |
+| owner_02_file | 0.0833 | 0.1667 |
+| owner_03_deadline | 0.2885 | 0.2692 |
+| owner_04_late | 0.2830 | unparseable |
+| owner_05_github | 0.1642 | 0.1791 |
+
+**This also misses the gate.** Same criterion as §8: not close to gold on the owner_* items, and
+few-shot's apparently-better mean is inflated by dropping the two hardest owner items outright rather
+than actually improving on them — 2 of 5 owner_core sentences came back with no Perso-Arabic-script
+characters at all (the model answered in Latin script, unparseable by design of the harness, same as
+§8's parse-validation approach). Perso-Arabic being closer to Roman in vowel representation than
+Devanagari did **not** translate into a materially better score than §8's Devanagari attempt (0.23 vs
+0.28–0.31) — the errors are not primarily vowel-restoration errors either here (dropped/substituted
+words, occasional script refusal), same failure shape as §8.
+
+**What this means:** the `NoRouteError` on Roman Urdu → OmniVoice stays as-is; no transform layer is
+being built on this model on either target script. Per this project's own escalation order (cheapest
+test first): a bigger model (e.g. `Qwen2.5-7B-Instruct`) and a dedicated non-LLM Roman-Urdu
+transliterator both remain untried, and neither is ruled out by this result — this closes out the
+Qwen2.5-3B / both-target-script line of investigation, not transliteration as a whole.
+
+**Reproducing:**
+
+```bash
+# on the pod, in .venv-qwen
+.venv-qwen/bin/python eval/run_roman_arabic_probe.py
 ```

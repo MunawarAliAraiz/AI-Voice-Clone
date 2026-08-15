@@ -47,7 +47,14 @@ def test_perso_arabic_urdu_produces_a_sensible_plan() -> None:
     assert len(plan.segments) == 2
 
 
-def test_devanagari_hindi_produces_a_sensible_plan() -> None:
+def test_devanagari_script_produces_a_sensible_plan() -> None:
+    """
+    analyze() derives script from the TEXT (detect_script), not from
+    `language` — Hindi is no longer a real product language, but this still
+    exercises Devanagari-script analysis (segmentation, terminators) since
+    that's language-agnostic. `language` here is just a plain, unvalidated
+    string echoed onto the returned plan.
+    """
     plan = analyze("आप कैसे हैं? मुझे बहुत खुशी है।", "hi")
     assert plan.source_script == "devanagari"
     assert len(plan.segments) == 2

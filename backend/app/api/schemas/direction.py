@@ -37,14 +37,32 @@ __all__ = [
 class DirectionAnalyzeRequest(BaseModel):
     """Text + user-declared language to preview a `DirectionPlan` for.
 
-    Same shape as `ScriptDetectRequest` — this endpoint is a preview, not a
-    generation request, so it needs nothing else (no `profile_id`, no
-    `model_id`): routing runs to find the capability report, but nothing is
-    synthesized.
+    `model_id`/`allow_experimental` mirror `TTSGenerateRequest` (`schemas/tts.py`)
+    exactly, so the capability report reflects whatever model the Composer
+    actually has selected — auto-routing (`model_id=None`) never picks an
+    unverified/experimental spec, same rule `resolve()` enforces everywhere
+    else. No `profile_id`: this is a preview, nothing is synthesized. Also
+    reused unchanged by `analyze-llm` (`routers/direction.py`), which never
+    calls `resolve()` at all — these two fields are simply unused there.
     """
 
     text: str = Field(..., min_length=1, max_length=5000, examples=["aap kaise hain?"])
-    language: str = Field(..., examples=["ur", "hi", "en"])
+    language: str = Field(..., examples=["ur", "en"])
+    model_id: str | None = Field(
+        None,
+        examples=["omnivoice_urdu"],
+        description=(
+            "Pin a specific model for the capability report. Refused with "
+            "422 if it cannot serve the text."
+        ),
+    )
+    allow_experimental: bool = Field(
+        False,
+        description=(
+            "Required alongside model_id to preview a model that hasn't passed "
+            "its own accuracy gate. Ignored when model_id is unset."
+        ),
+    )
 
 
 class EmphasisSpanOut(BaseModel):

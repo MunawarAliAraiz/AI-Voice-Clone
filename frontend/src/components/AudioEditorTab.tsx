@@ -558,7 +558,6 @@ export function AudioEditorTab({ onEnrolled }: Props) {
                     <div className="select-wrap">
                       <select value={language} onChange={(e) => setLanguage(e.target.value)}>
                         <option value="ur">Urdu (Roman / Perso-Arabic)</option>
-                        <option value="hi">Hindi</option>
                         <option value="en">English</option>
                       </select>
                     </div>

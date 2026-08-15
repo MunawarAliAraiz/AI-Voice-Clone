@@ -20,7 +20,7 @@ from app.domain.urdu_text import TextNormalization
 from app.exceptions import AmbiguousScriptError, ModelNotFoundError, NoRouteError
 
 URDU = "السلام علیکم، آپ کیسے ہیں؟"
-HINDI = "नमस्ते, आज का दिन कैसा है?"
+DEVANAGARI_TEXT = "नमस्ते, आज का दिन कैसा है?"
 ENGLISH = "Hello, how are you today?"
 ROMAN_URDU = "Aap kaise hain, sab theek hai?"
 
@@ -67,16 +67,21 @@ class StubCatalog:
 
 
 URDU_SPEC = StubSpec("f5_openbible_urdu", "OpenBible Urdu", (("ur", Script.ARABIC),))
-HINDI_A = StubSpec("chatterbox_ml_v3", "Chatterbox", (
+# "hi"/Devanagari below is a STUB-ONLY language code — Hindi was fully removed
+# as a real product language (no real spec claims it anymore). It survives
+# here purely as a second, distinct (language, script) pair so multi-candidate
+# routing mechanics (catalog-order preference, alternatives, the structural
+# ROMAN_TO_DEVA/ARAB_TO_DEVA transform paths `routing.py` deliberately keeps
+# in place) still have something concrete to exercise. Real routing.py never
+# validates "hi" against `LanguageCode` — it is a plain string internally too.
+SECOND_SPEC_A = StubSpec("chatterbox_ml_v3", "Chatterbox", (
     ("hi", Script.DEVANAGARI), ("en", Script.LATIN),
 ))
-HINDI_B = StubSpec("voxcpm2", "VoxCPM 2", (
-    # VoxCPM2 renders romanized hi/ur directly (tokenizer-free), so it declares
-    # the Latin cells too — no transliteration needed.
+SECOND_SPEC_B = StubSpec("voxcpm2", "VoxCPM 2", (
     ("hi", Script.DEVANAGARI), ("hi", Script.LATIN),
     ("ur", Script.LATIN), ("en", Script.LATIN),
 ))
-CATALOG = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B))
+CATALOG = StubCatalog((URDU_SPEC, SECOND_SPEC_A, SECOND_SPEC_B))
 
 #: Mirrors Chatterbox: claims (ur, ARABIC) but only experimentally — not in
 #: `.pairs` (so `.supports()` is False), only in `.experimental_pairs`.
@@ -84,7 +89,9 @@ EXPERIMENTAL_SPEC = StubSpec(
     "experimental_model", "Experimental Model", pairs=(),
     experimental_pairs=(("ur", Script.ARABIC),),
 )
-CATALOG_WITH_EXPERIMENTAL = StubCatalog((URDU_SPEC, HINDI_A, HINDI_B, EXPERIMENTAL_SPEC))
+CATALOG_WITH_EXPERIMENTAL = StubCatalog(
+    (URDU_SPEC, SECOND_SPEC_A, SECOND_SPEC_B, EXPERIMENTAL_SPEC)
+)
 
 #: A second (ur, ARABIC) claimant, this one WITH normalizations declared —
 #: mirrors OMNIVOICE_URDU vs. f5_openbible_urdu (URDU_SPEC, which declares
@@ -94,7 +101,9 @@ NORMALIZING_SPEC = StubSpec(
     "normalizing_stub", "Normalizing Stub", (("ur", Script.ARABIC),),
     text_normalizations=(TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON),
 )
-CATALOG_WITH_NORMALIZING_SPEC = StubCatalog((URDU_SPEC, NORMALIZING_SPEC, HINDI_A, HINDI_B))
+CATALOG_WITH_NORMALIZING_SPEC = StubCatalog(
+    (URDU_SPEC, NORMALIZING_SPEC, SECOND_SPEC_A, SECOND_SPEC_B)
+)
 
 
 # ── Script detection ─────────────────────────────────────────────────────────
@@ -104,7 +113,7 @@ CATALOG_WITH_NORMALIZING_SPEC = StubCatalog((URDU_SPEC, NORMALIZING_SPEC, HINDI_
     ("text", "expected"),
     [
         (URDU, Script.ARABIC),
-        (HINDI, Script.DEVANAGARI),
+        (DEVANAGARI_TEXT, Script.DEVANAGARI),
         (ENGLISH, Script.LATIN),
         (ROMAN_URDU, Script.LATIN),
         ("", Script.UNKNOWN),
@@ -154,7 +163,11 @@ def test_rtl_keys_off_script_not_language() -> None:
 
 CODE_SWITCHED_URDU = "میں نے GitHub پر ایک نیا پل ریکویسٹ بھیجا ہے"
 HEAVY_CODE_SWITCH = "میں نے GitHub پر pull request create کر دی ہے"
-CODE_SWITCHED_HINDI = "मैंने GitHub पर pull request बनाई है"
+# There used to be a third case here testing the same rescue for Hindi-declared
+# Devanagari text. Removed along with Hindi: `NATIVE_SCRIPTS` (language.py) no
+# longer has an entry for "hi", so the rescue this parametrize proves would no
+# longer fire for it — Urdu is the only native-non-Latin-script language left
+# to demonstrate this mechanism with.
 
 
 @pytest.mark.parametrize(
@@ -165,7 +178,6 @@ CODE_SWITCHED_HINDI = "मैंने GitHub पर pull request बनाई �
         (CODE_SWITCHED_URDU, "ur", Script.ARABIC),
         # 63.9% Latin. Still Urdu: the Perso-Arabic carries the sentence frame.
         (HEAVY_CODE_SWITCH, "ur", Script.ARABIC),
-        (CODE_SWITCHED_HINDI, "hi", Script.DEVANAGARI),
     ],
 )
 def test_english_islands_do_not_make_native_text_ambiguous(
@@ -185,8 +197,11 @@ def test_island_rescue_keeps_the_true_measured_ratios() -> None:
 
 def test_two_native_scripts_stay_ambiguous() -> None:
     """
-    Urdu + Hindi in one string is real ambiguity, not code-switching. Latin is
-    discounted as islands; another language-bearing script never is.
+    Arabic-script Urdu mixed with substantial Devanagari is real ambiguity,
+    not code-switching — the rescue only discounts LATIN islands (see
+    `_resolve_latin_islands`'s docstring), never a second language-bearing
+    script, regardless of whether that script belongs to a currently-declared
+    product language.
     """
     assert profile_text("یہ اردو ہے मगर यह हिन्दी है", "ur").script is Script.MIXED
 
@@ -293,9 +308,15 @@ def test_roman_urdu_routes_directly_when_a_model_renders_it() -> None:
 
 
 def test_roman_urdu_falls_back_to_devanagari_hop_without_a_latin_model() -> None:
-    # Catalog with no (ur, Latin) support: the lossless Roman->Devanagari one-hop
-    # is used so a Devanagari-only model (F5) can still serve it.
-    catalog = StubCatalog((URDU_SPEC, HINDI_A))  # chatterbox has no (ur, Latin)
+    """
+    Catalog with no (ur, Latin) support: the lossless Roman->Devanagari one-hop
+    is used so a Devanagari-only model could still serve it. No real catalog
+    spec claims (hi, Devanagari) anymore (Hindi removed), so this fallback is
+    currently always unreachable in production — this test proves the
+    `routing.py` mechanism itself still works structurally, since it was
+    deliberately left in place rather than deleted.
+    """
+    catalog = StubCatalog((URDU_SPEC, SECOND_SPEC_A))  # chatterbox has no (ur, Latin)
     plan = resolve(profile_text(ROMAN_URDU, "ur"), None, catalog)
     assert plan.model_id == "chatterbox_ml_v3"
     assert plan.transform.kind is TransformKind.ROMAN_TO_DEVA
@@ -304,21 +325,29 @@ def test_roman_urdu_falls_back_to_devanagari_hop_without_a_latin_model() -> None
 
 
 def test_perso_arabic_translit_strategy_is_lossy() -> None:
+    """
+    Same structural-coverage caveat as the fallback test above: in the real
+    catalog this strategy is always `NoRouteError` now (no spec claims
+    (hi, Devanagari)), but `_plan_transform`'s TRANSLITERATE branch is left in
+    place, so it's still tested here against a stub catalog that does.
+    """
     plan = resolve(profile_text(URDU, "ur"), None, CATALOG,
                    strategy=UrduStrategy.TRANSLITERATE)
     assert plan.transform.kind is TransformKind.ARAB_TO_DEVA
     assert plan.lossy, "short vowels are inferred — the UI must warn"
 
 
-def test_hindi_and_english_route_directly() -> None:
-    assert resolve(profile_text(HINDI, "hi"), None, CATALOG).model_id == "chatterbox_ml_v3"
+def test_second_language_and_english_route_directly() -> None:
+    """Stub-catalog mechanics only — "hi" is not a real product language."""
+    plan = resolve(profile_text(DEVANAGARI_TEXT, "hi"), None, CATALOG)
+    assert plan.model_id == "chatterbox_ml_v3"
     assert resolve(profile_text(ENGLISH, "en"), None, CATALOG).model_id == "chatterbox_ml_v3"
 
 
 def test_urdu_in_devanagari_is_rejected_with_a_suggestion() -> None:
     with pytest.raises(NoRouteError) as exc:
-        resolve(profile_text(HINDI, "ur"), None, CATALOG)
-    assert "hi" in exc.value.to_problem()["suggestion"]
+        resolve(profile_text(DEVANAGARI_TEXT, "ur"), None, CATALOG)
+    assert "Devanagari" in exc.value.to_problem()["suggestion"]
 
 
 def test_mixed_script_is_rejected_rather_than_guessed() -> None:
@@ -336,7 +365,7 @@ def test_unroutable_enumerates_what_would_work() -> None:
 
 
 def test_explicit_model_is_honored() -> None:
-    plan = resolve(profile_text(HINDI, "hi"), "voxcpm2", CATALOG)
+    plan = resolve(profile_text(DEVANAGARI_TEXT, "hi"), "voxcpm2", CATALOG)
     assert plan.model_id == "voxcpm2"
 
 
@@ -351,7 +380,7 @@ def test_explicit_model_that_cannot_serve_is_refused_not_swapped() -> None:
 
 def test_unknown_model_id_raises() -> None:
     with pytest.raises(ModelNotFoundError):
-        resolve(profile_text(HINDI, "hi"), "does_not_exist", CATALOG)
+        resolve(profile_text(DEVANAGARI_TEXT, "hi"), "does_not_exist", CATALOG)
 
 
 def test_experimental_model_refused_by_default() -> None:
@@ -376,7 +405,7 @@ def test_experimental_opt_in_does_not_rescue_a_pair_not_even_claimed() -> None:
     it must not become a second, looser claims() check for ANY pair."""
     with pytest.raises(NoRouteError):
         resolve(
-            profile_text(HINDI, "hi"), "experimental_model", CATALOG_WITH_EXPERIMENTAL,
+            profile_text(DEVANAGARI_TEXT, "hi"), "experimental_model", CATALOG_WITH_EXPERIMENTAL,
             allow_experimental=True,
         )
 
@@ -392,7 +421,7 @@ def test_experimental_opt_in_never_affects_auto_routing() -> None:
 
 
 def test_alternatives_exclude_the_chosen_model() -> None:
-    plan = resolve(profile_text(HINDI, "hi"), None, CATALOG)
+    plan = resolve(profile_text(DEVANAGARI_TEXT, "hi"), None, CATALOG)
     assert plan.model_id not in plan.alternatives
     assert "voxcpm2" in plan.alternatives
 
@@ -444,7 +473,7 @@ def test_normalization_is_mentioned_in_the_rationale() -> None:
 
 def test_resolve_is_pure() -> None:
     """Same inputs, same output. No clock, no randomness, no load state."""
-    profile = profile_text(HINDI, "hi")
+    profile = profile_text(DEVANAGARI_TEXT, "hi")
     assert resolve(profile, None, CATALOG) == resolve(profile, None, CATALOG)
 
 
@@ -454,14 +483,14 @@ def test_resolve_ignores_load_state_entirely() -> None:
     catalog has no residency concept at all — which is the point: there is
     nowhere for load state to enter this function.
     """
-    plan = resolve(profile_text(HINDI, "hi"), None, CATALOG)
+    plan = resolve(profile_text(DEVANAGARI_TEXT, "hi"), None, CATALOG)
     assert plan.model_id == CATALOG.candidates("hi", Script.DEVANAGARI)[0].id
 
 
 def test_with_resolved_text_closes_the_transform_seam() -> None:
     # Use a catalog with no (ur, Latin) model so the transform seam is exercised
     # (with a direct-Latin model the plan needs no transform at all).
-    catalog = StubCatalog((URDU_SPEC, HINDI_A))
+    catalog = StubCatalog((URDU_SPEC, SECOND_SPEC_A))
     plan = resolve(profile_text(ROMAN_URDU, "ur"), None, catalog)
     assert plan.needs_transform
     final = plan.with_resolved_text("आप कैसे हैं")

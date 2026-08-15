@@ -132,11 +132,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, language }),
     }),
-  analyzeDirection: (text: string, language: string) =>
+  analyzeDirection: (
+    text: string,
+    language: string,
+    modelId: string | null = null,
+    allowExperimental: boolean = false,
+  ) =>
     request<DirectionAnalyzeResponse>('/api/direction/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, language }),
+      body: JSON.stringify({
+        text,
+        language,
+        model_id: modelId,
+        allow_experimental: allowExperimental,
+      }),
     }),
   // LLM-backed Speech Direction classification — same {text, language} body
   // as analyzeDirection() above, but async: 202 with a job to poll (kind

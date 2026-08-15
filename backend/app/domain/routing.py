@@ -56,20 +56,24 @@ class UrduStrategy(StrEnum):
     """
     How to handle Urdu, when there is a choice.
 
-    Exists because no truly-free model does Urdu zero-shot cloning *well*. The
-    one free native checkpoint (OpenBible-Urdu, CC-BY-SA) is Bible-domain read
-    speech — accurate but liturgical. Routing Urdu through a stronger Hindi
-    model via transliteration is often better on conversational text, and is
-    linguistically sound: Hindi and Urdu are the same spoken language.
-
-    That is a taste judgement, so it is the user's to make, not a default we
-    silently impose.
+    Originally existed because no truly-free model does Urdu zero-shot
+    cloning *well*, and routing Perso-Arabic Urdu through a stronger Hindi
+    model via transliteration was a candidate escape hatch. Hindi has since
+    been fully removed as a target language (see CLAUDE.md), so
+    `TRANSLITERATE` below is now permanently unroutable — kept as a
+    structurally valid enum value (not deleted) because it was already
+    unimplemented before the removal (see `TRANSLITERATE`'s own docstring);
+    a request that sets it correctly gets `NoRouteError`, not a crash.
     """
 
-    #: Perso-Arabic goes to the native Urdu checkpoint. The default.
+    #: Perso-Arabic goes to the native Urdu checkpoint. The default, and the
+    #: only strategy with a live route.
     NATIVE = "native"
-    #: Perso-Arabic is transliterated to Devanagari and rendered by a Hindi
-    #: model. Lossy; `RoutePlan.lossy` is set so the UI can say so.
+    #: Was meant to transliterate Perso-Arabic to Devanagari for a Hindi
+    #: model. Never actually implemented (`ARAB_TO_DEVA` has no real
+    #: transliteration call behind it), and now permanently unroutable since
+    #: Hindi was removed — always `NoRouteError`. Left in place rather than
+    #: deleted; see `resolve()`'s routing-table docstring.
     TRANSLITERATE = "translit"
 
 
@@ -194,18 +198,26 @@ def resolve(
     The routing table:
 
         ur + Perso-Arabic                 -> f5_openbible_urdu, transform NONE
-        ur + Perso-Arabic (TRANSLITERATE) -> best Hindi spec, ARAB_TO_DEVA (lossy)
-        ur + Latin  (Roman Urdu)          -> best Hindi spec, ROMAN_TO_DEVA
-        hi + Devanagari                   -> best Hindi spec, transform NONE
+        ur + Perso-Arabic (TRANSLITERATE) -> NoRouteError (see below)
+        ur + Latin  (Roman Urdu)          -> voxcpm2, transform NONE
         en + Latin                        -> best English spec, transform NONE
         anything else                     -> NoRouteError
 
-    Two pairs are rejected on purpose rather than accommodated:
+    Hindi was fully removed as a target language (see CLAUDE.md) — its
+    catalog `LanguageSupport` cells are gone, so `hi`/Devanagari is no longer
+    a routable destination for anything. `UrduStrategy.TRANSLITERATE` and the
+    Roman-Urdu Devanagari fallback both used to target a Hindi spec and are
+    now unreachable in practice (they were already dead code before this:
+    TRANSLITERATE's transform was never actually implemented, and the Roman
+    fallback never fired because `voxcpm2` already serves `(ur, Latin)`
+    natively). Both are left in place structurally rather than deleted — they
+    correctly degrade to `NoRouteError` (empty candidates for `hi`) instead
+    of being surgically removed from this contract module.
 
-      * (ur, DEVANAGARI) — that is Hindi's script. Raise, and suggest
-        language="hi". Accepting it would quietly make the language field
-        meaningless.
-      * (en, ARABIC) and friends — no spec claims them.
+    (ur, DEVANAGARI) is rejected on purpose rather than accommodated — no
+    spec renders Urdu from Devanagari, and accepting it would quietly make
+    the language field meaningless. Likewise (en, ARABIC) and friends — no
+    spec claims them.
 
     And note what is NOT here: no Roman-Urdu-versus-English classifier. Both are
     Latin, short inputs are genuinely ambiguous, and a classifier would be
@@ -298,7 +310,13 @@ def _plan_transform(
 ) -> tuple[_Target, TextTransform]:
     """Decide the target pair and the transform needed to reach it."""
     lang, script = profile.language, profile.script
-    hindi = _Target(LanguageCode.HINDI.value, Script.DEVANAGARI)
+    # "hi" is not a `LanguageCode` member (Hindi was fully removed as a target
+    # language) — used here as a plain string on purpose, so this target never
+    # matches any catalog spec and `resolve()` correctly falls through to
+    # `NoRouteError` rather than crashing on a deleted enum attribute. See the
+    # module-level note on TRANSLITERATE and the Roman-Urdu fallback below:
+    # both were already unreachable in practice before Hindi's removal.
+    hindi = _Target("hi", Script.DEVANAGARI)
 
     if lang == LanguageCode.URDU.value:
         if script is Script.ARABIC:
@@ -332,7 +350,10 @@ def _plan_transform(
                 language=lang,
                 script=script.value,
                 supported=_supported(catalog),
-                suggestion="That is Devanagari — did you mean language='hi'?",
+                suggestion=(
+                    "Urdu text detected as Devanagari script is not supported — "
+                    "use Perso-Arabic (اردو) or Roman script."
+                ),
             )
 
     return (

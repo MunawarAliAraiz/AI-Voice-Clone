@@ -56,11 +56,13 @@ async def analyze_direction(
     body: DirectionAnalyzeRequest,
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
 ) -> DirectionAnalyzeResponse:
-    # Pure routing, exactly like `POST /generate` — decides what WOULD run.
-    # Raises NoRouteError (422, lists what works) / AmbiguousScriptError,
-    # both mapped to problem+json by the installed handler.
+    # Pure routing, exactly like `POST /generate` — decides what WOULD run,
+    # honoring the caller's model_id/allow_experimental exactly like
+    # `tts.py`'s `_route_info` does, instead of always auto-routing. Raises
+    # NoRouteError (422, lists what works) / AmbiguousScriptError, both
+    # mapped to problem+json by the installed handler.
     text_profile = profile_text(body.text, body.language)
-    plan = resolve(text_profile, None, catalog)
+    plan = resolve(text_profile, body.model_id, catalog, allow_experimental=body.allow_experimental)
 
     spec = catalog.get(plan.model_id)
     assert spec is not None  # resolve() only returns catalog ids

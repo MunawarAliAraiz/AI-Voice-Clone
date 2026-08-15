@@ -371,6 +371,5 @@ export function EnrollCard({ languages, onEnrolled }: Props) {
 
 const FALLBACK_LANGS: LanguageInfo[] = [
   { code: 'en', display_name: 'English', native_name: 'English', scripts: ['latin'], model_ids: [], requires_transform: false },
-  { code: 'hi', display_name: 'Hindi (हिन्दी)', native_name: 'हिन्दी', scripts: ['latin'], model_ids: [], requires_transform: false },
   { code: 'ur', display_name: 'Urdu (اردو)', native_name: 'اردو', scripts: ['latin'], model_ids: [], requires_transform: false },
 ];

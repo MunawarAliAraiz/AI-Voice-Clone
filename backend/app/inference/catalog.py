@@ -3,7 +3,7 @@ AI Voice Clone Studio — The model catalog.
 
 CONTRACT MODULE. Wave 0.
 
-Four runtimes, six specs. This is the single place where "what models exist"
+Four runtimes, five specs. This is the single place where "what models exist"
 is written down; nothing else may invent a model id.
 
 STATUS OF THE VALUES IN THIS FILE
@@ -94,39 +94,10 @@ F5_OPENBIBLE_URDU = ModelSpec(
     ),
 )
 
-F5_INDIC = ModelSpec(
-    id="f5_indic",
-    display_name="IndicF5 (Hindi)",
-    runtime=RuntimeKind.F5,
-    license=License.MIT,
-    hf_repo="ai4bharat/IndicF5",
-    # ⚠️ This revision is verified for the README ONLY. The repo is GATED
-    # ("gated": "auto") and every other file 401s without an accepted license
-    # and an HF_TOKEN. An earlier commit called this "verified from the
-    # downloaded snapshot" — that was wrong; the snapshot directory existed but
-    # held only the README. The weights have never been fetched.
-    #
-    # It is nonetheless a SECURITY CONTROL, not mere hygiene: R1b confirmed
-    # IndicF5 ships its own model.py and requires
-    # AutoModel.from_pretrained(..., trust_remote_code=True), i.e. arbitrary
-    # code execution from the repo. The pin fixes WHICH code runs.
-    hf_revision="ba85abedf18dc479a447eaa0eccbd76ab78a47d5",
-    gated=True,
-    languages=(
-        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
-    ),
-    vram_mb=4000,
-    est_load_sec=40.0,
-    needs_reference_text=True,
-    reference_max_sec=12.0,
-    notes=(
-        "GATED — needs an accepted HF license and an HF_TOKEN before it can be "
-        "downloaded at all. Loads via AutoModel(trust_remote_code=True) against "
-        "a bundled model.py (architecture INF5Model, model_type inf5), so it "
-        "needs a SEPARATE loader from the raw-checkpoint F5 path — one runtime "
-        "class does NOT serve both. Nothing here is runtime-verified yet."
-    ),
-)
+# f5_indic — REMOVED (Hindi support fully retired from the catalog). Existed
+# solely to serve Hindi (`(hi, Script.DEVANAGARI)`, gated repo, never actually
+# fetched — see git history if the trust_remote_code security-control
+# reasoning is ever needed again for a different gated repo).
 
 # f5_openf5_en — DROPPED (R1b, 2026-08-04).
 #
@@ -162,7 +133,6 @@ CHATTERBOX_ML_V3 = ModelSpec(
     # independently on the model card, GitHub, and PyPI (chatterbox-tts 0.1.7).
     hf_revision="5bb1f6ee58e50c3b8d408bc82a6d3740c2db6e18",
     languages=(
-        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI),
         LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN),
     ),
     vram_mb=6000,
@@ -171,7 +141,7 @@ CHATTERBOX_ML_V3 = ModelSpec(
     params={
         # R2 confirms the real parameter names and ranges. These replace the
         # nine emotion presets, which resolved to an atempo multiplier and were
-        # a no-op on Urdu and Hindi — the target languages.
+        # a no-op on the target languages.
         "exaggeration": {
             "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.5,
             "title": "Expressiveness",
@@ -206,21 +176,17 @@ VOXCPM2 = ModelSpec(
     # resolves the repo id itself.
     hf_revision="bffb3df5a29440629464e5e839f4d214c8714c3d",
     # VERIFIED 2026-08-05 by the E1/E2 cross-lingual tests + the owner's ear.
-    # VoxCPM2 is tokenizer-free and renders ROMANIZED Hindi/Urdu directly (owner
-    # confirmed Roman ~= Devanagari by ear), so it serves Latin-script hi/ur with
-    # NO transliteration step — the whole ai4bharat hop was dropped. speaker_cosine
-    # is ECAPA against public-domain references; CER for the Latin cells is not
+    # VoxCPM2 is tokenizer-free and renders ROMANIZED Urdu directly (owner
+    # confirmed by ear), so it serves Latin-script Urdu with NO transliteration
+    # step — the whole ai4bharat hop was dropped. speaker_cosine is ECAPA
+    # against public-domain references; CER for the Latin cell is not
     # re-measured (owner listening is authoritative, per the screen-not-verdict
-    # rule), and the Devanagari CER is the Phase-A figure.
+    # rule).
     languages=(
         LanguageSupport(language=LanguageCode.ENGLISH.value, script=Script.LATIN,
                         verified=True, speaker_cosine=0.795),
-        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.LATIN,
-                        verified=True, speaker_cosine=0.887),
         LanguageSupport(language=LanguageCode.URDU.value, script=Script.LATIN,
                         verified=True, speaker_cosine=0.826),
-        LanguageSupport(language=LanguageCode.HINDI.value, script=Script.DEVANAGARI,
-                        verified=True, cer=0.086, speaker_cosine=0.887),
     ),
     # MEASURED on the A5000 (sm_86), R3b. 6.2 GB resident after load, 7.3 GB
     # peak during generation per nvidia-smi (the real total, including CUDA
@@ -349,10 +315,18 @@ OMNIVOICE_URDU = ModelSpec(
     # this catalog actually dispatches to. `cer`/`speaker_cosine` below are
     # the arm Eprod (production-backend) numbers.
     #
-    # Still `verified=False`: the numeric gate is a SCREEN, not a verdict —
-    # this project's own rule (VoxCPM2 once passed CER and still sounded like
-    # a stranger). A fresh owner listen against these specific arm Eprod
-    # clips is the remaining step before this flips.
+    # `verified=True` as of 2026-08-15 — owner's explicit call, made after
+    # reviewing the arm Eprod numbers below (production backend, gate cleared
+    # comfortably on both references) plus the arm E blind listen (5.0/5
+    # pronunciation, the single best result of the whole bake-off). Per this
+    # project's own rule that a numeric pass is a screen, not a verdict, the
+    # decision itself — not just the numbers — is what flips this: CC-BY-NC
+    # licensing still means this is never routed to silently (see the
+    # license-aware filter in `domain/routing.py`'s auto-routing branch,
+    # added alongside this flip) — only an explicit `model_id=omnivoice_urdu`
+    # request reaches it, same as before, just without needing
+    # `allow_experimental=True` any more since it has now genuinely passed
+    # the gate rather than bypassing it.
     #
     # [LISTEN] blind listening, one rater, n=26 (13 sentences x 2 references),
     # against arm E's (pre-production-backend) clips: pronunciation 5.0/5 —
@@ -365,7 +339,7 @@ OMNIVOICE_URDU = ModelSpec(
     languages=(
         LanguageSupport(
             language=LanguageCode.URDU.value, script=Script.ARABIC,
-            verified=False, cer=0.0800, speaker_cosine=0.7450,
+            verified=True, cer=0.0800, speaker_cosine=0.7450,
         ),
     ),
     # MEASURED, bake-off: 4699 MB (female) peak, the LOWEST of any arm —
@@ -385,7 +359,12 @@ OMNIVOICE_URDU = ModelSpec(
     # of the two references; the owner reference measured 0.442.
     est_rtf=0.736,
     needs_reference_text=False,
-    experimental_listing=True,
+    # False as of 2026-08-15: this field advertises a spec's UNVERIFIED cells
+    # (spec.py's docstring) — OMNIVOICE_URDU's one cell is now verified=True,
+    # so there is nothing left to flag as an opt-in experimental listing.
+    # `commercial_use=False` (from the CC-BY-NC license) still badges it
+    # "Non-commercial" independently — that badge was never tied to this flag.
+    experimental_listing=False,
     notes=(
         "CC-BY-NC weights (Apache-2.0 code) — personal use only, see "
         "docs/URDU_MODEL_LICENSING.md. Bake-off arm E: best pronunciation of "
@@ -394,9 +373,8 @@ OMNIVOICE_URDU = ModelSpec(
         "actual production `OmniVoiceBackend` class — CER roughly halved "
         "(0.0800 owner / 0.0400 female vs arm E's 0.1489 / 0.0851), cosine "
         "slightly better (0.7450 / 0.8158 vs 0.7366 / 0.7938). Both gates "
-        "clear comfortably on the real dispatch target, but verified=False "
-        "stays until a fresh owner listen against these specific clips — a "
-        "numeric pass is a screen, not a verdict. "
+        "clear comfortably on the real dispatch target. verified=True as of "
+        "2026-08-15, owner's explicit call on top of the numeric screen. "
         "Weakest on code-switching (3.0/5, scored against arm E's clips) — "
         "see docs/URDU_BAKEOFF_RESULTS.md."
     ),
@@ -414,21 +392,22 @@ OMNIVOICE_URDU = ModelSpec(
 )
 
 
-#: 3 runtimes, 5 specs. Was 5, dropped to 4 when f5_openf5_en was removed for
-#: licensing (see the note where it used to be defined). The personal LoRA
-#: fine-tune (voxcpm2_urdu_lora) held the 5th slot 2026-08-14 to 2026-08-15,
-#: then was withdrawn on the owner's real-use verdict — base VoxCPM2 sounded
-#: better than the fine-tune, overriding the blind-listen median under this
-#: project's own "owner listening is authoritative" rule (see git history and
-#: docs/URDU_BAKEOFF_RESULTS.md §5 for the full account). VOXCPM2_URDU_ARABIC
-#: above holds the 5th slot now: the same base checkpoint, still explicitly
-#: experimental, so Perso-Arabic Urdu keeps a working answer. OMNIVOICE_URDU
-#: is a 6th spec and a 4th runtime, added 2026-08-15 (bake-off arm E, the
-#: single best pronunciation result of the whole bake-off) — CC-BY-NC, so it
-#: is legal here only under golden rule 6's personal-use amendment.
+#: 4 runtimes, 5 specs. f5_indic was removed along with all Hindi support
+#: (Hindi is no longer a target language — see CLAUDE.md); f5_openf5_en was
+#: removed earlier for licensing (see the note where it used to be defined).
+#: The personal LoRA fine-tune (voxcpm2_urdu_lora) held a slot 2026-08-14 to
+#: 2026-08-15, then was withdrawn on the owner's real-use verdict — base
+#: VoxCPM2 sounded better than the fine-tune, overriding the blind-listen
+#: median under this project's own "owner listening is authoritative" rule
+#: (see git history and docs/URDU_BAKEOFF_RESULTS.md §5 for the full
+#: account). VOXCPM2_URDU_ARABIC holds that slot now: the same base
+#: checkpoint, still explicitly experimental, so Perso-Arabic Urdu keeps a
+#: working answer. OMNIVOICE_URDU is a 4th runtime, added 2026-08-15
+#: (bake-off arm E, the single best pronunciation result of the whole
+#: bake-off) — CC-BY-NC, so it is legal here only under golden rule 6's
+#: personal-use amendment.
 ALL_SPECS: tuple[ModelSpec, ...] = (
     F5_OPENBIBLE_URDU,
-    F5_INDIC,
     CHATTERBOX_ML_V3,
     VOXCPM2,
     VOXCPM2_URDU_ARABIC,
@@ -466,14 +445,30 @@ class ModelCatalog:
 
     def candidates(self, language: str, script: Script) -> tuple[ModelSpec, ...]:
         """
-        Specs that natively and *verifiably* handle (language, script).
+        Specs that natively and *verifiably* handle (language, script), AND
+        may be reached without the caller naming them.
 
         Ordering is catalog order, which is preference order. Note this consults
         no load state whatsoever — a cold spec ranks exactly as high as a
         resident one. Preferring whatever happens to be loaded is how the
         predecessor picked mock every time.
+
+        Excludes CC-BY-NC (or stricter) specs even once verified — golden rule
+        6: a non-commercial model passing its own accuracy gate is not license
+        to auto-select it or silently fall back to it (`RoutePlan.alternatives`
+        is built from this same tuple). `domain.routing.resolve()`'s explicit
+        `requested=` path does not call this method — it checks
+        `spec.supports()` directly on the fetched spec — so a named request
+        still reaches a verified CC-BY-NC spec; this filter only keeps it out
+        of what Auto routing (and "or try…") may pick on its own. This is also
+        why `SpecView`/`CatalogView` (`domain/ports.py`) never expose license
+        to the pure routing layer: the policy lives here, in the one place
+        that already owns `ModelSpec.license`, not duplicated into `resolve()`.
         """
-        return tuple(s for s in self.specs if s.supports(language, script))
+        return tuple(
+            s for s in self.specs
+            if s.supports(language, script) and s.license.is_permissive
+        )
 
     def by_runtime(self, runtime: RuntimeKind) -> tuple[ModelSpec, ...]:
         """All specs sharing a worker process type."""

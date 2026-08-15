@@ -244,7 +244,7 @@ def test_experimental_specs_have_a_caveat() -> None:
             )
 
 
-def test_four_runtimes_six_specs() -> None:
+def test_four_runtimes_five_specs() -> None:
     """
     The lineup is a decision, not an accident. Changing it is a plan change.
 
@@ -264,29 +264,25 @@ def test_four_runtimes_six_specs() -> None:
     arm E, the best pronunciation result of the whole bake-off) is a genuinely
     new runtime — the first CC-BY-NC spec in the catalog, legal only under
     golden rule 6's personal-use amendment.
+
+    Back down to five specs (still four runtimes) when Hindi was fully removed
+    as a target language: `f5_indic` existed solely to serve Hindi
+    (`(hi, Script.DEVANAGARI)`), so it was deleted outright rather than left
+    with an empty `languages` tuple.
     """
-    assert len(CATALOG.specs) == 6
+    assert len(CATALOG.specs) == 5
     assert {s.runtime for s in CATALOG.specs} == {
         RuntimeKind.F5,
         RuntimeKind.CHATTERBOX,
         RuntimeKind.VOXCPM,
         RuntimeKind.OMNIVOICE,
     }
-    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 2
+    assert len(CATALOG.by_runtime(RuntimeKind.F5)) == 1
     assert len(CATALOG.by_runtime(RuntimeKind.VOXCPM)) == 2
     assert len(CATALOG.by_runtime(RuntimeKind.OMNIVOICE)) == 1
     assert CATALOG.get("f5_openf5_en") is None
     assert CATALOG.get("voxcpm2_urdu_lora") is None, "withdrawn 2026-08-15"
-
-
-def test_gated_specs_are_flagged() -> None:
-    """
-    A gated repo cannot be downloaded without human action (accepting a license
-    and supplying an HF_TOKEN). It must be declared so the scheduler can fail
-    with an actionable message instead of a bare 401 from inside a loader.
-    """
-    indic = CATALOG.require("f5_indic")
-    assert indic.gated, "ai4bharat/IndicF5 is gated ('gated': 'auto' on the HF API)"
+    assert CATALOG.get("f5_indic") is None, "Hindi fully removed 2026-08-15"
 
 
 def test_voxcpm2_urdu_arabic_shares_base_checkpoint() -> None:
@@ -341,41 +337,54 @@ def test_voxcpm2_urdu_arabic_requires_explicit_opt_in() -> None:
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 
 
-def test_omnivoice_urdu_is_cc_by_nc_and_experimental() -> None:
+def test_omnivoice_urdu_is_cc_by_nc_and_verified() -> None:
     """
-    Bake-off arm E: the best pronunciation result of the whole bake-off, and
-    the only Urdu cell whose automated gate passes on both references — but
-    it is CC-BY-NC (personal use only, see docs/URDU_MODEL_LICENSING.md) and
-    verified=False until the PRODUCTION runtime (OmniVoiceBackend, not the
-    eval harness's isolated loader) has its own pod smoke test.
+    Bake-off arm E: the best pronunciation result of the whole bake-off, the
+    only Urdu cell whose automated gate passes on both references (against
+    the production `OmniVoiceBackend`, arm Eprod), and CC-BY-NC (personal
+    use only, see docs/URDU_MODEL_LICENSING.md). `verified` flipped True
+    2026-08-15 — owner's explicit call on top of the numeric gate.
+
+    `experimental_listing` is now False: that field advertises a spec's
+    UNVERIFIED cells (see `spec.py`), and this spec's one cell no longer is
+    one. The license restriction is unaffected by either flag — see
+    `commercial_use`/`ModelCatalog.candidates()`'s NC filter.
     """
     omni = CATALOG.require("omnivoice_urdu")
     assert omni.runtime is RuntimeKind.OMNIVOICE
     assert omni.license is License.CC_BY_NC
     assert not omni.license.is_permissive, "CC-BY-NC must never read as commercially shippable"
     assert omni.license.personal_use_ok, "but it must be legal for personal use"
-    assert omni.experimental_listing is True
+    assert omni.experimental_listing is False
     assert omni.claims("ur", Script.ARABIC)
-    assert not omni.supports("ur", Script.ARABIC), (
-        "verified=False until the production runtime is pod-verified"
-    )
-    assert omni.caveat, "an experimental spec must carry a user-facing caveat"
+    assert omni.supports("ur", Script.ARABIC), "verified=True as of 2026-08-15"
+    assert omni.caveat, "a non-commercial spec must still carry a user-facing caveat"
 
 
-def test_omnivoice_urdu_requires_explicit_opt_in() -> None:
+def test_omnivoice_urdu_reachable_by_explicit_request_no_opt_in_needed() -> None:
+    """
+    Verified now, so a plain named request reaches it without
+    `allow_experimental` — that flag is for bypassing an unverified gate,
+    which no longer applies here. `experimental=False` on the resulting plan
+    reflects that this is no longer a bypass.
+    """
     profile = profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur")
-    plan = resolve(profile, "omnivoice_urdu", CATALOG, allow_experimental=True)
+    plan = resolve(profile, "omnivoice_urdu", CATALOG)
     assert plan.model_id == "omnivoice_urdu"
-    assert plan.experimental is True
+    assert plan.experimental is False
     assert plan.transform.is_identity, "Perso-Arabic reaches this spec unchanged"
 
 
 def test_auto_urdu_routing_still_prefers_no_model_over_an_nc_one() -> None:
     """
-    Two experimental candidates now claim (ur, ARABIC) — voxcpm2_urdu_arabic
-    and omnivoice_urdu — and NEITHER may be Auto-selected, licensing aside.
-    A CC-BY-NC spec being the "best" one must never tempt Auto routing into
-    picking it silently; only an explicit, named request may reach it.
+    omnivoice_urdu is now verified=True for (ur, ARABIC) — the best-scoring
+    Urdu cell in the catalog — but it is CC-BY-NC, and `ModelCatalog.candidates()`
+    deliberately excludes non-permissive-licensed specs even once verified
+    (golden rule 6). voxcpm2_urdu_arabic (permissive) stays unverified. So
+    Auto routing still finds nothing for Perso-Arabic Urdu: a CC-BY-NC spec
+    being the "best" one must never tempt Auto routing into picking it
+    silently; only an explicit, named request may reach it (see
+    test_omnivoice_urdu_reachable_by_explicit_request_no_opt_in_needed).
     """
     with pytest.raises(NoRouteError):
         resolve(profile_text("السلام علیکم، آپ کیسے ہیں؟", "ur"), None, CATALOG)
@@ -519,15 +528,15 @@ def test_no_route_error_enumerates_what_would_work() -> None:
     err = NoRouteError(
         language="ur",
         script="devanagari",
-        supported=(("ur", "arabic"), ("hi", "devanagari")),
-        suggestion="Did you mean language='hi'?",
+        supported=(("ur", "arabic"), ("en", "latin")),
+        suggestion="Use Perso-Arabic (اردو) or Roman script for Urdu.",
     )
     problem = err.to_problem(instance="/api/tts/generate")
     assert problem["status"] == 422
     assert problem["code"] == "NO_ROUTE"
     assert problem["instance"] == "/api/tts/generate"
-    assert {"language": "hi", "script": "devanagari"} in problem["supported"]
-    assert "hi" in problem["detail"] or "hi" in problem["suggestion"]
+    assert {"language": "en", "script": "latin"} in problem["supported"]
+    assert "Perso-Arabic" in problem["suggestion"]
 
 
 def test_problem_document_shape() -> None:
@@ -610,4 +619,4 @@ def test_model_spec_supports_requires_exact_script() -> None:
     )
     assert spec.supports("ur", Script.ARABIC)
     assert not spec.supports("ur", Script.LATIN)
-    assert not spec.supports("hi", Script.ARABIC)
+    assert not spec.supports("en", Script.ARABIC)

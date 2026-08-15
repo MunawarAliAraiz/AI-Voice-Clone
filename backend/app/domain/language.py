@@ -54,7 +54,6 @@ class LanguageCode(StrEnum):
     """
 
     URDU = "ur"
-    HINDI = "hi"
     ENGLISH = "en"
 
 
@@ -88,7 +87,6 @@ SCRIPT_DOMINANCE_THRESHOLD = 0.85
 #: input is ambiguous. Only languages with a non-Latin native script appear.
 NATIVE_SCRIPTS: dict[str, Script] = {
     LanguageCode.URDU.value: Script.ARABIC,
-    LanguageCode.HINDI.value: Script.DEVANAGARI,
 }
 
 #: How much Latin a declared-native text may carry before it stops being
