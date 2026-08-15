@@ -372,7 +372,39 @@ through clean on both voices. This mirrors a pattern already on record for a dif
 §3c (digit pronunciation being a weak point generally), reinforcing that this is closer to "Urdu TTS
 digit-reading is an unsolved, cross-model gap" than "OmniVoice specifically is bad at this."
 
-**Decision on `verified=True` — owner's call, not made unilaterally here; see chat.**
+### 5c. Numbers/dates fix, verified by ear (2026-08-15)
+
+`eval/urdu_numerals.py` expands digit runs (ASCII and Eastern Arabic-Indic) into the Urdu cardinal
+words they're actually spoken as before synthesis — `14` → `چودہ`, `2026` → `دو ہزار چھبیس` — the same
+technique every production TTS frontend uses for numbers. Re-synthesized the 3 broken items
+(`num_ascii`, `num_eastern`, `date`) with expanded text through the real production
+`OmniVoiceBackend`, both references (`eval/run_number_fix_check.py`,
+`eval/results/urdu_bakeoff/number_fix_check/`, before/after comparison page at
+`eval/results/urdu_bakeoff/number_fix_check.html`).
+
+**A real bug surfaced during this check, not a model problem:** the verification script initially
+reused the owner's reference transcript for the *female* reference clip too. `reference_text`
+describes what the reference audio says, not the text being synthesized — feeding OmniVoice the wrong
+transcript against a different speaker's clip broke cloning outright, producing jibberish. Fixed by
+omitting `reference_text` for the female reference (matching how the original arm-Eprod female run
+worked — OmniVoice's own Whisper auto-transcribes when it's not supplied). Re-ran; confirmed correct.
+
+**Owner's verdict on the re-listen: numbers now correct in both references, and `owner_04`'s
+"میٹنگ" mispronunciation (flagged in §5b as inconsistent — correct in `long_multiclause`, wrong in
+`num_ascii`/`num_eastern`) is now also correct in the female clip.** This is consistent with the §5b
+hypothesis that the digit-heavy phrasing itself, not the digit glyphs specifically, was dragging the
+neighboring word down — expanding the digits to words appears to have resolved both symptoms together.
+
+**Still open, not touched by this fix:** the English-technical-loanword pronunciation issues from §5b
+(`URL` → "oo r l", `database`'s Arabic-accented T, `برائے کرم` mispronounced) are a different failure
+mode (word-level, not digit-level) and remain unaddressed.
+
+**Not yet shipped to production.** `eval/urdu_numerals.py` is eval-only by the same rule
+`urdu_represent.py` follows — nothing here may be imported by `backend/app/` until wiring it into the
+real generation path is a deliberate decision, not an eval-script side effect. That wiring (where in
+`domain/routing.py`'s transform seam it belongs, whether it's declared in the `route: {transform,
+lossy, rationale}` chip per golden rule 5, whether it applies automatically to all Urdu Perso-Arabic
+generation or is opt-in) is a real design decision, not made here.
 
 ---
 
