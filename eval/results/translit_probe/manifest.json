@@ -1,0 +1,460 @@
+{
+  "meta": {
+    "model_id": "Qwen/Qwen2.5-3B-Instruct",
+    "item_count": 26,
+    "load_time_sec": 21.87427854537964,
+    "python": "3.12.3",
+    "platform": "Linux-6.8.0-85-generic-x86_64-with-glibc2.39",
+    "timestamp": "2026-08-15T08:36:22.262766+00:00"
+  },
+  "summary": {
+    "by_direction": {
+      "perso_arabic": {
+        "mean_cer": 0.2770680620805902,
+        "ok": 13,
+        "unparseable": 0
+      },
+      "roman": {
+        "mean_cer": 0.30754806470294416,
+        "ok": 13,
+        "unparseable": 0
+      }
+    },
+    "by_category": {
+      "abbreviations": {
+        "perso_arabic": 0.5263157894736842,
+        "roman": 0.49122807017543857
+      },
+      "conversational_pakistani": {
+        "perso_arabic": 0.16326530612244897,
+        "roman": 0.2653061224489796
+      },
+      "dates": {
+        "perso_arabic": 0.2,
+        "roman": 0.075
+      },
+      "long_form": {
+        "perso_arabic": 0.27380952380952384,
+        "roman": 0.27380952380952384
+      },
+      "numbers": {
+        "perso_arabic": 0.30851063829787234,
+        "roman": 0.425531914893617
+      },
+      "owner_core": {
+        "perso_arabic": 0.29244348582985585,
+        "roman": 0.2570940964133023
+      },
+      "proper_nouns": {
+        "perso_arabic": 0.07547169811320754,
+        "roman": 0.18867924528301888
+      },
+      "technical_terms": {
+        "perso_arabic": 0.28378378378378377,
+        "roman": 0.5675675675675675
+      }
+    },
+    "owner_core_items": [
+      {
+        "item_id": "owner_01_sick",
+        "direction": "perso_arabic",
+        "status": "ok",
+        "cer": 0.3484848484848485
+      },
+      {
+        "item_id": "owner_01_sick",
+        "direction": "roman",
+        "status": "ok",
+        "cer": 0.25757575757575757
+      },
+      {
+        "item_id": "owner_02_file",
+        "direction": "perso_arabic",
+        "status": "ok",
+        "cer": 0.20833333333333334
+      },
+      {
+        "item_id": "owner_02_file",
+        "direction": "roman",
+        "status": "ok",
+        "cer": 0.14583333333333334
+      },
+      {
+        "item_id": "owner_03_deadline",
+        "direction": "perso_arabic",
+        "status": "ok",
+        "cer": 0.16363636363636364
+      },
+      {
+        "item_id": "owner_03_deadline",
+        "direction": "roman",
+        "status": "ok",
+        "cer": 0.2
+      },
+      {
+        "item_id": "owner_04_late",
+        "direction": "perso_arabic",
+        "status": "ok",
+        "cer": 0.2641509433962264
+      },
+      {
+        "item_id": "owner_04_late",
+        "direction": "roman",
+        "status": "ok",
+        "cer": 0.2641509433962264
+      },
+      {
+        "item_id": "owner_05_github",
+        "direction": "perso_arabic",
+        "status": "ok",
+        "cer": 0.47761194029850745
+      },
+      {
+        "item_id": "owner_05_github",
+        "direction": "roman",
+        "status": "ok",
+        "cer": 0.417910447761194
+      }
+    ]
+  },
+  "results": [
+    {
+      "item_id": "owner_01_sick",
+      "category": "owner_core",
+      "direction": "perso_arabic",
+      "source_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "gold_devanagari": "यार, आज मैं ऑफ़िस नहीं आ सकूँ गा क्योंकि मेरी तबीयत कुछ ठीक नहीं है।",
+      "status": "ok",
+      "raw_output": "यार , आज मिं आफस नेहीं आ सकोंगा कियुनकह मेरी तप्याई कच्च हे नेहीं है ।",
+      "parsed_output": "यार , आज मिं आफस नेहीं आ सकोंगा कियुनकह मेरी तप्याई कच्च हे नेहीं है ।",
+      "cer": 0.3484848484848485,
+      "gen_time_sec": 4.303881883621216,
+      "error": ""
+    },
+    {
+      "item_id": "owner_01_sick",
+      "category": "owner_core",
+      "direction": "roman",
+      "source_text": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "gold_devanagari": "यार, आज मैं ऑफ़िस नहीं आ सकूँ गा क्योंकि मेरी तबीयत कुछ ठीक नहीं है।",
+      "status": "ok",
+      "raw_output": "यार , आज मain फोकस नहीं आ सकूग ये क्युन्कि मेरी ताबियत कुछ थेके नहीं है।",
+      "parsed_output": "यार , आज मain फोकस नहीं आ सकूग ये क्युन्कि मेरी ताबियत कुछ थेके नहीं है।",
+      "cer": 0.25757575757575757,
+      "gen_time_sec": 2.028968572616577,
+      "error": ""
+    },
+    {
+      "item_id": "owner_02_file",
+      "category": "owner_core",
+      "direction": "perso_arabic",
+      "source_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "gold_devanagari": "आप ने जो फ़ाइल भेजी थी, मैं ने उसे चेक कर लिया है।",
+      "status": "ok",
+      "raw_output": "आप ने जो फ़ाils भीज थी, मिन ने इसे चीक कर लिये है।",
+      "parsed_output": "आप ने जो फ़ाils भीज थी, मिन ने इसे चीक कर लिये है।",
+      "cer": 0.20833333333333334,
+      "gen_time_sec": 1.4255528450012207,
+      "error": ""
+    },
+    {
+      "item_id": "owner_02_file",
+      "category": "owner_core",
+      "direction": "roman",
+      "source_text": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "gold_devanagari": "आप ने जो फ़ाइल भेजी थी, मैं ने उसे चेक कर लिया है।",
+      "status": "ok",
+      "raw_output": "आपने जो फ़ाiles बेजी थी, मैंने उसे चेक कर लिया है।",
+      "parsed_output": "आपने जो फ़ाiles बेजी थी, मैंने उसे चेक कर लिया है।",
+      "cer": 0.14583333333333334,
+      "gen_time_sec": 1.455216407775879,
+      "error": ""
+    },
+    {
+      "item_id": "owner_03_deadline",
+      "category": "owner_core",
+      "direction": "perso_arabic",
+      "source_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "gold_devanagari": "मुझे लगता है के हमें यह काम कल तक मुकम्मल कर लेना चाहिए।",
+      "status": "ok",
+      "raw_output": "मग्हे लगता है कह इमें ये काम कल तक मक्मल कर लिना चाहिए।",
+      "parsed_output": "मग्हे लगता है कह इमें ये काम कल तक मक्मल कर लिना चाहिए।",
+      "cer": 0.16363636363636364,
+      "gen_time_sec": 1.3244264125823975,
+      "error": ""
+    },
+    {
+      "item_id": "owner_03_deadline",
+      "category": "owner_core",
+      "direction": "roman",
+      "source_text": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "gold_devanagari": "मुझे लगता है के हमें यह काम कल तक मुकम्मल कर लेना चाहिए।",
+      "status": "ok",
+      "raw_output": "मुझे लगता है कि हमें यह काम कल से मुक्तिमान करना चाहिए।",
+      "parsed_output": "मुझे लगता है कि हमें यह काम कल से मुक्तिमान करना चाहिए।",
+      "cer": 0.2,
+      "gen_time_sec": 1.2625548839569092,
+      "error": ""
+    },
+    {
+      "item_id": "owner_04_late",
+      "category": "owner_core",
+      "direction": "perso_arabic",
+      "source_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "gold_devanagari": "यार, आज office में काफ़ी काम था, इस लिए मैं late हो गया।",
+      "status": "ok",
+      "raw_output": "यार , आज फोर्मेशन में काफी काम था , इसलिए मैं लate हो گई।",
+      "parsed_output": "यार , आज फोर्मेशन में काफी काम था , इसलिए मैं लate हो گई।",
+      "cer": 0.2641509433962264,
+      "gen_time_sec": 1.2809345722198486,
+      "error": ""
+    },
+    {
+      "item_id": "owner_04_late",
+      "category": "owner_core",
+      "direction": "roman",
+      "source_text": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "gold_devanagari": "यार, आज office में काफ़ी काम था, इस लिए मैं late हो गया।",
+      "status": "ok",
+      "raw_output": "यार, आज फोर्कस में काफी काम था, इस लिये मैं लेट इ हो गया।",
+      "parsed_output": "यार, आज फोर्कस में काफी काम था, इस लिये मैं लेट इ हो गया।",
+      "cer": 0.2641509433962264,
+      "gen_time_sec": 1.3852028846740723,
+      "error": ""
+    },
+    {
+      "item_id": "owner_05_github",
+      "category": "owner_core",
+      "direction": "perso_arabic",
+      "source_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "gold_devanagari": "मैं ने GitHub पर pull request create कर दी है, आप उसे review कर लेना।",
+      "status": "ok",
+      "raw_output": "मिने ने गिटहाब पर पूल प्रिकस्ट्र create कर दी है, आप इसे रिवीजन कर लें।",
+      "parsed_output": "मिने ने गिटहाब पर पूल प्रिकस्ट्र create कर दी है, आप इसे रिवीजन कर लें।",
+      "cer": 0.47761194029850745,
+      "gen_time_sec": 1.5379843711853027,
+      "error": ""
+    },
+    {
+      "item_id": "owner_05_github",
+      "category": "owner_core",
+      "direction": "roman",
+      "source_text": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "gold_devanagari": "मैं ने GitHub पर pull request create कर दी है, आप उसे review कर लेना।",
+      "status": "ok",
+      "raw_output": "मैंने गिटहाब पर पूल प्रिक्सेट create कर दी है, आप उसे रिवीवर कर लें।",
+      "parsed_output": "मैंने गिटहाब पर पूल प्रिक्सेट create कर दी है, आप उसे रिवीवर कर लें।",
+      "cer": 0.417910447761194,
+      "gen_time_sec": 1.5048980712890625,
+      "error": ""
+    },
+    {
+      "item_id": "num_ascii",
+      "category": "numbers",
+      "direction": "perso_arabic",
+      "source_text": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+      "gold_devanagari": "मीटिंग 3 बजे शुरू होगी और तक़रीबन 45 मिनट चलेगी।",
+      "status": "ok",
+      "raw_output": "मिट्टनग 3 बजे शुरू होगी और तकनीयाँ 45 मिनट चलेंगी।",
+      "parsed_output": "मिट्टनग 3 बजे शुरू होगी और तकनीयाँ 45 मिनट चलेंगी।",
+      "cer": 0.2127659574468085,
+      "gen_time_sec": 1.2758209705352783,
+      "error": ""
+    },
+    {
+      "item_id": "num_ascii",
+      "category": "numbers",
+      "direction": "roman",
+      "source_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_devanagari": "मीटिंग 3 बजे शुरू होगी और तक़रीबन 45 मिनट चलेगी।",
+      "status": "ok",
+      "raw_output": "मित्राना ३ बजे शुरू होगी और तार्कीकीय ४५ मिनट चलाय जाय.",
+      "parsed_output": "मित्राना ३ बजे शुरू होगी और तार्कीकीय ४५ मिनट चलाय जाय.",
+      "cer": 0.425531914893617,
+      "gen_time_sec": 1.4523699283599854,
+      "error": ""
+    },
+    {
+      "item_id": "num_eastern",
+      "category": "numbers",
+      "direction": "perso_arabic",
+      "source_text": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+      "gold_devanagari": "मीटिंग ३ बजे शुरू होगी और तक़रीबन ४५ मिनट चलेगी।",
+      "status": "ok",
+      "raw_output": "मिट्टनग् ३ बजे शुरुअँ होगी और तक्रारपणा ४५ मंट चले गईं।",
+      "parsed_output": "मिट्टनग् ३ बजे शुरुअँ होगी और तक्रारपणा ४५ मंट चले गईं।",
+      "cer": 0.40425531914893614,
+      "gen_time_sec": 1.4531152248382568,
+      "error": ""
+    },
+    {
+      "item_id": "num_eastern",
+      "category": "numbers",
+      "direction": "roman",
+      "source_text": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_devanagari": "मीटिंग ३ बजे शुरू होगी और तक़रीबन ४५ मिनट चलेगी।",
+      "status": "ok",
+      "raw_output": "मित्राना ३ बजे शुरू होगी और तार्कीकीय ४५ मिनट चलाय जाय.",
+      "parsed_output": "मित्राना ३ बजे शुरू होगी और तार्कीकीय ४५ मिनट चलाय जाय.",
+      "cer": 0.425531914893617,
+      "gen_time_sec": 1.4683527946472168,
+      "error": ""
+    },
+    {
+      "item_id": "date",
+      "category": "dates",
+      "direction": "perso_arabic",
+      "source_text": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+      "gold_devanagari": "यह रिपोर्ट 14 अगस्त 2026 तक जमा करानी है।",
+      "status": "ok",
+      "raw_output": "यह रपोर्ट 14 अगस्त 2026 तक संकलनीय है।",
+      "parsed_output": "यह रपोर्ट 14 अगस्त 2026 तक संकलनीय है।",
+      "cer": 0.2,
+      "gen_time_sec": 0.9698562622070312,
+      "error": ""
+    },
+    {
+      "item_id": "date",
+      "category": "dates",
+      "direction": "roman",
+      "source_text": "Yeh report 14 August 2026 tak jama karani hai.",
+      "gold_devanagari": "यह रिपोर्ट 14 अगस्त 2026 तक जमा करानी है।",
+      "status": "ok",
+      "raw_output": "यह रिपोर्ट १४ अगस्त २०२६ तक जमाकरी है।",
+      "parsed_output": "यह रिपोर्ट १४ अगस्त २०२६ तक जमाकरी है।",
+      "cer": 0.075,
+      "gen_time_sec": 1.1640286445617676,
+      "error": ""
+    },
+    {
+      "item_id": "names",
+      "category": "proper_nouns",
+      "direction": "perso_arabic",
+      "source_text": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+      "gold_devanagari": "अली अहमद और फ़ातिमा ने कराची से लाहौर तक का सफ़र किया।",
+      "status": "ok",
+      "raw_output": "अली अहमद और फात्मा ने क्राची से लाहौर तक का सफर किया।",
+      "parsed_output": "अली अहमद और फात्मा ने क्राची से लाहौर तक का सफर किया।",
+      "cer": 0.07547169811320754,
+      "gen_time_sec": 1.2905912399291992,
+      "error": ""
+    },
+    {
+      "item_id": "names",
+      "category": "proper_nouns",
+      "direction": "roman",
+      "source_text": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
+      "gold_devanagari": "अली अहमद और फ़ातिमा ने कराची से लाहौर तक का सफ़र किया।",
+      "status": "ok",
+      "raw_output": "अली अहमद और फतिमा ने कारखाना से लहور तक का सफार किया.",
+      "parsed_output": "अली अहमद और फतिमा ने कारखाना से लहور तक का सफार किया.",
+      "cer": 0.18867924528301888,
+      "gen_time_sec": 1.251873254776001,
+      "error": ""
+    },
+    {
+      "item_id": "abbreviations",
+      "category": "abbreviations",
+      "direction": "perso_arabic",
+      "source_text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "gold_devanagari": "बराए मेहरबानी PDF फ़ाइल ईमेल कर दें और URL भी साथ भेज दें।",
+      "status": "ok",
+      "raw_output": "ब्रह कर्म पीडीएफ फाईल इ मिल कर दिएं और यूआरएल भी साथ भीज दिएं।",
+      "parsed_output": "ब्रह कर्म पीडीएफ फाईल इ मिल कर दिएं और यूआरएल भी साथ भीज दिएं।",
+      "cer": 0.5263157894736842,
+      "gen_time_sec": 1.4851562976837158,
+      "error": ""
+    },
+    {
+      "item_id": "abbreviations",
+      "category": "abbreviations",
+      "direction": "roman",
+      "source_text": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
+      "gold_devanagari": "बराए मेहरबानी PDF फ़ाइल ईमेल कर दें और URL भी साथ भेज दें।",
+      "status": "ok",
+      "raw_output": "बारे में मेर्हेबनी पीडीएफ फाइल इमेल कर दिन और यूआरएल भी साथ भेज दिन।",
+      "parsed_output": "बारे में मेर्हेबनी पीडीएफ फाइल इमेल कर दिन और यूआरएल भी साथ भेज दिन।",
+      "cer": 0.49122807017543857,
+      "gen_time_sec": 1.6655476093292236,
+      "error": ""
+    },
+    {
+      "item_id": "technical",
+      "category": "technical_terms",
+      "direction": "perso_arabic",
+      "source_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "gold_devanagari": "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
+      "status": "ok",
+      "raw_output": "हमिन्हे database का backup लिना होगा और पर एसर्टर दोबारा रेस्टैट करना पड़ेगा।",
+      "parsed_output": "हमिन्हे database का backup लिना होगा और पर एसर्टर दोबारा रेस्टैट करना पड़ेगा।",
+      "cer": 0.28378378378378377,
+      "gen_time_sec": 1.5551135540008545,
+      "error": ""
+    },
+    {
+      "item_id": "technical",
+      "category": "technical_terms",
+      "direction": "roman",
+      "source_text": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
+      "gold_devanagari": "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
+      "status": "ok",
+      "raw_output": "हमें डेटाबेस का बैकप लगाना होगा और प्रत्येक सेवर दोबरा रिस्टार्ट करना पराय गा.",
+      "parsed_output": "हमें डेटाबेस का बैकप लगाना होगा और प्रत्येक सेवर दोबरा रिस्टार्ट करना पराय गा.",
+      "cer": 0.5675675675675675,
+      "gen_time_sec": 1.8574223518371582,
+      "error": ""
+    },
+    {
+      "item_id": "colloquial",
+      "category": "conversational_pakistani",
+      "direction": "perso_arabic",
+      "source_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "gold_devanagari": "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
+      "status": "ok",
+      "raw_output": "अरे यार छोडो ना, कोई बात नहीं, अगली दफ़ाचा दिखलाइये।",
+      "parsed_output": "अरे यार छोडो ना, कोई बात नहीं, अगली दफ़ाचा दिखलाइये।",
+      "cer": 0.16326530612244897,
+      "gen_time_sec": 1.3856589794158936,
+      "error": ""
+    },
+    {
+      "item_id": "colloquial",
+      "category": "conversational_pakistani",
+      "direction": "roman",
+      "source_text": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
+      "gold_devanagari": "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
+      "status": "ok",
+      "raw_output": "अराय यार चहरो न, कोई बात नही, अलगी दफा देख लेिं गे.",
+      "parsed_output": "अराय यार चहरो न, कोई बात नही, अलगी दफा देख लेिं गे.",
+      "cer": 0.2653061224489796,
+      "gen_time_sec": 1.333329439163208,
+      "error": ""
+    },
+    {
+      "item_id": "long_multiclause",
+      "category": "long_form",
+      "direction": "perso_arabic",
+      "source_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "gold_devanagari": "कल जब मैं दफ़्तर पहुँचा तो पता चला के मीटिंग मुल्तवी हो गई है, इस लिए मैं ने सोचा के पहले बाक़ी काम मुकम्मल कर लूँ, और फिर दोपहर के खाने के बाद रिपोर्ट पर काम शुरू करूँगा।",
+      "status": "ok",
+      "raw_output": "कल जब मीं द्यौतपहनचा तो पता चला कह मीटनग मल्लत्व हो गई है, इस लिये मीं ने सोचा कह पहले बाकी काम मकमल कर लो, और पहले पहुंचे के दोपहर के कहने के बाद रपोर्ट पर काम शुरू कर लोग।",
+      "parsed_output": "कल जब मीं द्यौतपहनचा तो पता चला कह मीटनग मल्लत्व हो गई है, इस लिये मीं ने सोचा कह पहले बाकी काम मकमल कर लो, और पहले पहुंचे के दोपहर के कहने के बाद रपोर्ट पर काम शुरू कर लोग।",
+      "cer": 0.27380952380952384,
+      "gen_time_sec": 3.962430477142334,
+      "error": ""
+    },
+    {
+      "item_id": "long_multiclause",
+      "category": "long_form",
+      "direction": "roman",
+      "source_text": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "gold_devanagari": "कल जब मैं दफ़्तर पहुँचा तो पता चला के मीटिंग मुल्तवी हो गई है, इस लिए मैं ने सोचा के पहले बाक़ी काम मुकम्मल कर लूँ, और फिर दोपहर के खाने के बाद रिपोर्ट पर काम शुरू करूँगा।",
+      "status": "ok",
+      "raw_output": "कल जब मैं दास्ताना पहुंचौ तो पता चला के मे�eting मूल्तवी हो गई है, इस लिये मैंने सोचा के पहले बाजार का काम मुकम्मल कर लो, और पहले घण्टे के क़hanay के बाद रिपोर्ट पर काम शुरू कर लोग।",
+      "parsed_output": "कल जब मैं दास्ताना पहुंचौ तो पता चला के मे�eting मूल्तवी हो गई है, इस लिये मैंने सोचा के पहले बाजार का काम मुकम्मल कर लो, और पहले घण्टे के क़hanay के बाद रिपोर्ट पर काम शुरू कर लोग।",
+      "cer": 0.27380952380952384,
+      "gen_time_sec": 4.135654449462891,
+      "error": ""
+    }
+  ]
+}
