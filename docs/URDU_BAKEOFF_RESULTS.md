@@ -331,6 +331,49 @@ properly-scaled fine-tune) is integrated and verified. The runtime's LoRA-loadin
 generic, tested, and costs nothing unused — so any future LoRA, on a larger dataset, ships without
 re-threading the wire protocol.
 
+### 5b. Arm Eprod — real owner listen `[LISTEN]` (2026-08-15)
+
+The remaining step §5's arm-Eprod note flagged — an owner listen against the actual production-backend
+clips, not just their CER/cosine numbers — is done. All 26 clips (13 items × owner + female reference,
+`eval/results/urdu_bakeoff/arm_Eprod_{owner,female}/`) were listened to directly.
+
+**Verdict: mostly very good, with one systematic, real weakness — numbers and dates.** Consistent
+across both references:
+
+| Item | Verdict | Detail |
+|---|---|---|
+| `owner_01_sick` | ✅ perfect | — |
+| `owner_04_late` | ✅ correct | code-switched "office"/"late" both landed |
+| `long_multiclause` | ✅ correct | "meeting" pronounced correctly here specifically |
+| `owner_03_deadline`, `owner_05_github`, `names`, `colloquial` | ✅ good | no issue flagged |
+| `num_ascii` | 🔴 wrong | digits (3, 45) mispronounced, **and "meeting" itself came out wrong in this item** despite being correct in `long_multiclause` — a digit nearby seems to drag down an otherwise-fine word, not just the digit itself |
+| `num_eastern` | 🔴 wrong | same failure, Eastern Arabic-Indic digit glyphs (۳، ۴۵) — the digit *script* isn't the variable, the fact that they're digits is |
+| `date` | 🔴 wrong | both 14 and 2026 mispronounced — **unlike the VoxCPM2/LoRA-era finding in §3c**, where 2026 alone came out correct ("do hazar chabees") and only 14 failed. OmniVoice fails on both; this is a per-model difference, not a universal digit rule |
+| `abbreviations` | 🔴 partial | "برائے کرم" (please) mispronounced; **"URL" rendered as "oo r l"** rather than the expected English-letter reading |
+| `technical` | 🔴 partial | "database" pronounced with an Arabic-accented T |
+| `owner_02_file` | 🟡 minor | "check" comes out closer to "chaeck" — small vowel drift, not a real problem |
+
+**One concrete case of the numeric gate being wrong in the *optimistic* direction, not just the
+pessimistic one already on record:** `owner_05_github` has the single worst CER in the whole arm-Eprod
+run (0.4478, both references) — the corpus's most heavily code-switched sentence
+(`GitHub`/`pull request`/`create`/`review`). It was listened to and judged **good**. The likely
+explanation is the same one §2 already gives for CER in general: Whisper's own transcription of
+code-switched audio is unreliable, so a high CER here is at least partly an ASR artifact, not proof the
+speech is bad. This is the mirror image of the numbers finding below — CER *underclaimed* quality on
+`owner_05_github` and *overclaimed* it on nothing (the numbers items' CER was already visibly elevated
+in the score files — 0.13/0.13/0.32 for owner, 0.09/0.15/0.24 for female — so the metric did flag them,
+just not with enough magnitude relative to `owner_05_github`'s much higher number to make severity
+rank correctly by CER alone).
+
+**Net finding:** the failure is narrow and specific — number/date reading and a handful of
+technical-English loanwords (URL, database) — not a general Urdu-quality problem. Ordinary
+conversational Urdu, including code-switched English words in casual use ("office", "late"), came
+through clean on both voices. This mirrors a pattern already on record for a different model+context in
+§3c (digit pronunciation being a weak point generally), reinforcing that this is closer to "Urdu TTS
+digit-reading is an unsolved, cross-model gap" than "OmniVoice specifically is bad at this."
+
+**Decision on `verified=True` — owner's call, not made unilaterally here; see chat.**
+
 ---
 
 ## 6. What happens next

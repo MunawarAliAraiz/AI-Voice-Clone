@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Arm Eprod — owner listen</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; } h2 { margin-top: 2rem; border-bottom: 1px solid #333; padding-bottom: .3rem; }
+.item { margin: 1rem 0; padding: .75rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .85rem; color: #9aa4b2; margin-bottom: .3rem; }
+.cat { color: #6c8cff; }
+.text { font-size: 1.15rem; margin: .4rem 0; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>OmniVoice — arm Eprod (production backend re-run, 2026-08-15)</h1>
+<p>13 corpus items × 2 references, synthesized through the actual <code>OmniVoiceBackend</code> class.
+Owner-sentence items are tagged <span class="cat">[owner_core]</span>. This is the specific set of
+clips <code>OMNIVOICE_URDU.verified</code> is waiting on.</p>
+<h2>Reference: owner (male, the project owner)</h2>
+    <div class="item">
+      <div class="meta"><b>owner_01_sick</b> <span class="cat">[owner_core]</span> — CER 0.0313, cosine 0.7783</div>
+      <div class="text" dir="rtl">یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_owner_01_sick.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_02_file</b> <span class="cat">[owner_core]</span> — CER 0.0000, cosine 0.7490</div>
+      <div class="text" dir="rtl">آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_owner_02_file.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_03_deadline</b> <span class="cat">[owner_core]</span> — CER 0.0000, cosine 0.7450</div>
+      <div class="text" dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_owner_03_deadline.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_04_late</b> <span class="cat">[owner_core]</span> — CER 0.1887, cosine 0.6740</div>
+      <div class="text" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_owner_04_late.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_05_github</b> <span class="cat">[owner_core]</span> — CER 0.4478, cosine 0.7056</div>
+      <div class="text" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_owner_05_github.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>num_ascii</b> <span class="cat">[numbers]</span> — CER 0.1277, cosine 0.7365</div>
+      <div class="text" dir="rtl">میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_num_ascii.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>num_eastern</b> <span class="cat">[numbers]</span> — CER 0.1277, cosine 0.7254</div>
+      <div class="text" dir="rtl">میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_num_eastern.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>date</b> <span class="cat">[dates]</span> — CER 0.3243, cosine 0.7444</div>
+      <div class="text" dir="rtl">یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_date.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>names</b> <span class="cat">[proper_nouns]</span> — CER 0.0000, cosine 0.7891</div>
+      <div class="text" dir="rtl">علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_names.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>abbreviations</b> <span class="cat">[abbreviations]</span> — CER 0.2632, cosine 0.7351</div>
+      <div class="text" dir="rtl">براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_abbreviations.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>technical</b> <span class="cat">[technical_terms]</span> — CER 0.0800, cosine 0.7486</div>
+      <div class="text" dir="rtl">ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_technical.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>colloquial</b> <span class="cat">[conversational_pakistani]</span> — CER 0.0192, cosine 0.7653</div>
+      <div class="text" dir="rtl">ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_colloquial.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>long_multiclause</b> <span class="cat">[long_form]</span> — CER 0.0125, cosine 0.7897</div>
+      <div class="text" dir="rtl">کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔</div>
+      <audio controls src="arm_Eprod_owner/Eprod_owner_long_multiclause.wav"></audio>
+    </div><h2>Reference: female (female)</h2>
+    <div class="item">
+      <div class="meta"><b>owner_01_sick</b> <span class="cat">[owner_core]</span> — CER 0.0313, cosine 0.8656</div>
+      <div class="text" dir="rtl">یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_owner_01_sick.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_02_file</b> <span class="cat">[owner_core]</span> — CER 0.0000, cosine 0.8281</div>
+      <div class="text" dir="rtl">آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_owner_02_file.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_03_deadline</b> <span class="cat">[owner_core]</span> — CER 0.0385, cosine 0.7621</div>
+      <div class="text" dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_owner_03_deadline.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_04_late</b> <span class="cat">[owner_core]</span> — CER 0.1887, cosine 0.7799</div>
+      <div class="text" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_owner_04_late.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>owner_05_github</b> <span class="cat">[owner_core]</span> — CER 0.4478, cosine 0.8247</div>
+      <div class="text" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_owner_05_github.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>num_ascii</b> <span class="cat">[numbers]</span> — CER 0.0851, cosine 0.6770</div>
+      <div class="text" dir="rtl">میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_num_ascii.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>num_eastern</b> <span class="cat">[numbers]</span> — CER 0.1489, cosine 0.6916</div>
+      <div class="text" dir="rtl">میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_num_eastern.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>date</b> <span class="cat">[dates]</span> — CER 0.2432, cosine 0.7865</div>
+      <div class="text" dir="rtl">یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_date.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>names</b> <span class="cat">[proper_nouns]</span> — CER 0.0000, cosine 0.7800</div>
+      <div class="text" dir="rtl">علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_names.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>abbreviations</b> <span class="cat">[abbreviations]</span> — CER 0.3158, cosine 0.8158</div>
+      <div class="text" dir="rtl">براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_abbreviations.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>technical</b> <span class="cat">[technical_terms]</span> — CER 0.0400, cosine 0.8240</div>
+      <div class="text" dir="rtl">ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_technical.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>colloquial</b> <span class="cat">[conversational_pakistani]</span> — CER 0.0000, cosine 0.8465</div>
+      <div class="text" dir="rtl">ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_colloquial.wav"></audio>
+    </div>
+    <div class="item">
+      <div class="meta"><b>long_multiclause</b> <span class="cat">[long_form]</span> — CER 0.0125, cosine 0.8469</div>
+      <div class="text" dir="rtl">کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔</div>
+      <audio controls src="arm_Eprod_female/Eprod_female_long_multiclause.wav"></audio>
+    </div>
+</body></html>
