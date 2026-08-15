@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Number fix — before/after</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.item { margin: 1.5rem 0; padding: 1rem; background: #161922; border-radius: 8px; }
+.meta { font-size: .9rem; color: #9aa4b2; margin-bottom: .6rem; }
+.pair { display: flex; gap: 1rem; }
+.col { flex: 1; }
+.label { font-size: .75rem; color: #6c8cff; text-transform: uppercase; letter-spacing: .04em; margin-bottom: .3rem; }
+.text { font-size: 1.1rem; margin: .4rem 0; min-height: 2.6em; }
+audio { width: 100%; margin-top: .3rem; }
+</style></head>
+<body>
+<h1>OmniVoice — number/date pronunciation fix, before vs after</h1>
+<p>The 3 items the arm-Eprod owner listen flagged as broken (num_ascii, num_eastern, date), each
+synthesized twice: once with raw digits (the original arm-Eprod clip) and once with digits expanded to
+Urdu words via <code>eval/urdu_numerals.py</code> before synthesis. Same reference voice, same
+production <code>OmniVoiceBackend</code>, same everything else.</p>
+
+  <div class="item">
+    <div class="meta"><b>num_ascii</b> — reference: owner</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔</div>
+        <audio controls src="arm_Eprod_owner/Eprod_owner_num_ascii.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">میٹنگ تین بجے شروع ہوگی اور تقریباً پینتالیس منٹ چلے گی۔</div>
+        <audio controls src="number_fix_check/owner_num_ascii_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>num_eastern</b> — reference: owner</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔</div>
+        <audio controls src="arm_Eprod_owner/Eprod_owner_num_eastern.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">میٹنگ تین بجے شروع ہوگی اور تقریباً پینتالیس منٹ چلے گی۔</div>
+        <audio controls src="number_fix_check/owner_num_eastern_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>date</b> — reference: owner</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔</div>
+        <audio controls src="arm_Eprod_owner/Eprod_owner_date.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">یہ رپورٹ چودہ اگست دو ہزار چھبیس تک جمع کرانی ہے۔</div>
+        <audio controls src="number_fix_check/owner_date_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>num_ascii</b> — reference: female</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔</div>
+        <audio controls src="arm_Eprod_female/Eprod_female_num_ascii.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">میٹنگ تین بجے شروع ہوگی اور تقریباً پینتالیس منٹ چلے گی۔</div>
+        <audio controls src="number_fix_check/female_num_ascii_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>num_eastern</b> — reference: female</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔</div>
+        <audio controls src="arm_Eprod_female/Eprod_female_num_eastern.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">میٹنگ تین بجے شروع ہوگی اور تقریباً پینتالیس منٹ چلے گی۔</div>
+        <audio controls src="number_fix_check/female_num_eastern_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>date</b> — reference: female</div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">BEFORE (digits, from arm Eprod)</div>
+        <div class="text" dir="rtl">یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔</div>
+        <audio controls src="arm_Eprod_female/Eprod_female_date.wav"></audio>
+      </div>
+      <div class="col">
+        <div class="label">AFTER (numbers expanded to words)</div>
+        <div class="text" dir="rtl">یہ رپورٹ چودہ اگست دو ہزار چھبیس تک جمع کرانی ہے۔</div>
+        <audio controls src="number_fix_check/female_date_expanded.wav"></audio>
+      </div>
+    </div>
+  </div>
+</body></html>
