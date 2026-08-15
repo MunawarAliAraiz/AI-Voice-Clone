@@ -88,6 +88,11 @@ ARMS: dict[str, Arm] = {
              question="Does the existing LoRA help, fed its own training script?"),
     "E": Arm("E", "omnivoice", Representation.PERSO_ARABIC,
              question="211h of native Urdu training data, 0.6B."),
+    "Eprod": Arm("Eprod", "omnivoice_production", Representation.PERSO_ARABIC,
+                 question="Same cells as arm E, but through the actual shipped "
+                          "OmniVoiceBackend class (backend/app/inference/runtimes/"
+                          "omnivoice.py), not this file's own hand-rolled loader — "
+                          "closes the gap `verified=False` was left open for."),
     "F": Arm("F", "higgs_v3", Representation.PERSO_ARABIC,
              question="Urdu in the production-quality tier, PK-flagged."),
     "H": Arm("H", "indicf5", Representation.PERSO_ARABIC,
@@ -255,6 +260,54 @@ def _load_omnivoice(reference: Path, reference_text: str):
     return synth, _resolve_revision(OMNIVOICE_REPO)
 
 
+#: Must match `OMNIVOICE_URDU.hf_revision` in backend/app/inference/catalog.py.
+#: Duplicated rather than imported: importing the catalog module here would
+#: pull in the whole `app.inference` package (spec.py, other runtimes) into a
+#: venv that only has `omnivoice` installed, defeating the per-runtime-venv
+#: isolation this project's other loaders are careful to preserve.
+_OMNIVOICE_PRODUCTION_REV = "c5fdb5ccb189668d56333f77ba2629f4cd7535f4"
+
+
+def _load_omnivoice_production(reference: Path, reference_text: str):
+    """
+    Arm Eprod. Drives the ACTUAL shipped `OmniVoiceBackend` class instead of
+    hand-rolling calls against the `omnivoice` package (which is what
+    `_load_omnivoice` above does). `OMNIVOICE_URDU.verified` stays False until
+    a gate run scores THIS class's own output — a smoke test proving the class
+    produces real audio is necessary but not sufficient; this closes that gap.
+
+    `OmniVoiceBackend.synth()` writes straight to a path and returns a summary
+    dict, not `(audio, sr)` — adapted here to the `synth(text) -> (ndarray, sr)`
+    shape every other loader in this file returns, by reading the file back.
+    """
+    import tempfile
+
+    import soundfile as sf
+
+    sys.path.insert(0, str(_REPO_ROOT / "backend"))
+    from app.inference.runtimes.omnivoice import OmniVoiceBackend
+
+    backend = OmniVoiceBackend()
+    backend.load("omnivoice_urdu", OMNIVOICE_REPO, _OMNIVOICE_PRODUCTION_REV)
+    scratch_dir = Path(tempfile.mkdtemp(prefix="omnivoice_prod_gate_"))
+
+    def synth(text: str):
+        out_path = scratch_dir / "clip.wav"
+        result = backend.synth(
+            text=text,
+            reference_audio=str(reference),
+            output_path=str(out_path),
+            params={"language": "ur"},
+            sample_rate=24000,
+            reference_text=reference_text or None,
+        )
+        audio, sr = sf.read(str(out_path))
+        assert sr == result["sample_rate"], (sr, result["sample_rate"])
+        return audio, sr
+
+    return synth, _OMNIVOICE_PRODUCTION_REV
+
+
 #: Why arm F is unrunnable here. Recorded verbatim into the manifest so the
 #: results table shows a reason rather than a blank that reads as "tested, fine".
 _HIGGS_BLOCKED = (
@@ -332,6 +385,7 @@ _LOADERS = {
     "voxcpm2": _load_voxcpm,
     "indicf5": _load_indicf5,
     "omnivoice": _load_omnivoice,
+    "omnivoice_production": _load_omnivoice_production,
     "higgs_v3": _load_higgs,
 }
 

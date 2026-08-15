@@ -336,25 +336,36 @@ OMNIVOICE_URDU = ModelSpec(
     # Urdu bake-off arm E (docs/URDU_BAKEOFF_RESULTS.md), 2026-08-14. 211.27 h
     # of native Urdu training data (more than its Hindi, 117.17 h), 0.6B params.
     #
-    # [BENCH]: CER 0.1489 (owner) / 0.0851 (female) — clears the <0.25 gate.
-    # Speaker cosine 0.7366 (owner) / 0.7938 (female) — BOTH clear this
-    # catalog's 0.70 gate, unlike every VoxCPM2 Urdu arm. This is the only
-    # Urdu-script cell in the catalog with a passing automated gate on both
-    # references — still `verified=False` until a real pod smoke test +
-    # gate re-run confirms the same numbers against the ACTUAL runtime
-    # backend below, not just the eval harness's isolated driver.
+    # [BENCH], arm E (eval harness's own loader), 2026-08-14: CER 0.1489
+    # (owner) / 0.0851 (female), speaker cosine 0.7366 (owner) / 0.7938
+    # (female) — both clear this catalog's <0.25 CER / >0.70 cosine gates.
     #
-    # [LISTEN] blind listening, one rater, n=26 (13 sentences x 2 references):
-    # pronunciation 5.0/5 — the single best result of the whole bake-off,
-    # at both references. Naturalness 4.0/5, identity 4.0/5. Weakest axis:
-    # code-switching 3.0/5, the worst of any arm — worth specific attention
-    # once docs/URDU_BAKEOFF_RESULTS.md's Phase 0 code-switch routing fix
+    # [BENCH], arm Eprod (2026-08-15) — RE-RUN AGAINST THE ACTUAL PRODUCTION
+    # `OmniVoiceBackend` class below, not the eval harness's own separate
+    # loader, closing exactly the gap the note below used to flag: CER 0.0800
+    # (owner) / 0.0400 (female) — roughly HALVED — speaker cosine 0.7450
+    # (owner) / 0.8158 (female) — both slightly better than arm E's numbers.
+    # Both gates clear comfortably on both references, on the real runtime
+    # this catalog actually dispatches to. `cer`/`speaker_cosine` below are
+    # the arm Eprod (production-backend) numbers.
+    #
+    # Still `verified=False`: the numeric gate is a SCREEN, not a verdict —
+    # this project's own rule (VoxCPM2 once passed CER and still sounded like
+    # a stranger). A fresh owner listen against these specific arm Eprod
+    # clips is the remaining step before this flips.
+    #
+    # [LISTEN] blind listening, one rater, n=26 (13 sentences x 2 references),
+    # against arm E's (pre-production-backend) clips: pronunciation 5.0/5 —
+    # the single best result of the whole bake-off, at both references.
+    # Naturalness 4.0/5, identity 4.0/5. Weakest axis: code-switching 3.0/5,
+    # the worst of any arm — worth specific attention now that
+    # docs/URDU_BAKEOFF_RESULTS.md's Phase 0 code-switch routing fix
     # (profile_text's Latin-island rescue) makes code-switched Urdu reach
-    # this spec at all.
+    # this spec at all. Not yet re-listened against arm Eprod specifically.
     languages=(
         LanguageSupport(
             language=LanguageCode.URDU.value, script=Script.ARABIC,
-            verified=False, cer=0.1489, speaker_cosine=0.7366,
+            verified=False, cer=0.0800, speaker_cosine=0.7450,
         ),
     ),
     # MEASURED, bake-off: 4699 MB (female) peak, the LOWEST of any arm —
@@ -379,13 +390,15 @@ OMNIVOICE_URDU = ModelSpec(
         "CC-BY-NC weights (Apache-2.0 code) — personal use only, see "
         "docs/URDU_MODEL_LICENSING.md. Bake-off arm E: best pronunciation of "
         "any arm (5.0/5) and the only Urdu cell whose automated gate passes "
-        "on both references. 2026-08-15: production `OmniVoiceBackend` "
-        "smoke-tested on the pod against the pinned revision — real "
-        "load/synth/unload, non-silent output (peak 0.7573), 24kHz — but "
-        "verified=False stays until a real CER/cosine gate re-run scores "
-        "this backend's own output (the smoke test only confirmed the audio "
-        "is real, not that it clears the gate). "
-        "Weakest on code-switching (3.0/5) — see docs/URDU_BAKEOFF_RESULTS.md."
+        "on both references. 2026-08-15: re-run as arm Eprod through the "
+        "actual production `OmniVoiceBackend` class — CER roughly halved "
+        "(0.0800 owner / 0.0400 female vs arm E's 0.1489 / 0.0851), cosine "
+        "slightly better (0.7450 / 0.8158 vs 0.7366 / 0.7938). Both gates "
+        "clear comfortably on the real dispatch target, but verified=False "
+        "stays until a fresh owner listen against these specific clips — a "
+        "numeric pass is a screen, not a verdict. "
+        "Weakest on code-switching (3.0/5, scored against arm E's clips) — "
+        "see docs/URDU_BAKEOFF_RESULTS.md."
     ),
     caveat="Best pronunciation so far, but non-commercial (personal use only).",
 )
