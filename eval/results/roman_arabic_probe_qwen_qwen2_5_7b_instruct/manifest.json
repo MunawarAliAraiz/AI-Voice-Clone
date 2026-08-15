@@ -1,0 +1,438 @@
+{
+  "meta": {
+    "model_id": "Qwen/Qwen2.5-7B-Instruct",
+    "item_count": 24,
+    "fewshot_exemplar_ids": [
+      "colloquial",
+      "technical"
+    ],
+    "load_time_sec": 41.89456248283386,
+    "python": "3.12.3",
+    "platform": "Linux-6.8.0-85-generic-x86_64-with-glibc2.39",
+    "timestamp": "2026-08-15T14:54:24.333066+00:00"
+  },
+  "summary": {
+    "by_variant": {
+      "few_shot": {
+        "mean_cer": 0.20286456629017302,
+        "ok": 11,
+        "unparseable": 0
+      },
+      "zero_shot": {
+        "mean_cer": 0.2692564212716316,
+        "ok": 13,
+        "unparseable": 0
+      }
+    },
+    "by_category": {
+      "abbreviations": {
+        "few_shot": 0.3508771929824561,
+        "zero_shot": 0.19298245614035087
+      },
+      "conversational_pakistani": {
+        "few_shot": null,
+        "zero_shot": 0.25
+      },
+      "dates": {
+        "few_shot": 0.21621621621621623,
+        "zero_shot": 0.16216216216216217
+      },
+      "long_form": {
+        "few_shot": 0.14375,
+        "zero_shot": 0.18125
+      },
+      "numbers": {
+        "few_shot": 0.2553191489361702,
+        "zero_shot": 0.40425531914893614
+      },
+      "owner_core": {
+        "few_shot": 0.1900057044241781,
+        "zero_shot": 0.2637523106528316
+      },
+      "proper_nouns": {
+        "few_shot": 0.06,
+        "zero_shot": 0.08
+      },
+      "technical_terms": {
+        "few_shot": null,
+        "zero_shot": 0.5066666666666667
+      }
+    },
+    "owner_core_items": [
+      {
+        "item_id": "owner_01_sick",
+        "variant": "zero_shot",
+        "status": "ok",
+        "cer": 0.28125
+      },
+      {
+        "item_id": "owner_02_file",
+        "variant": "zero_shot",
+        "status": "ok",
+        "cer": 0.10416666666666667
+      },
+      {
+        "item_id": "owner_03_deadline",
+        "variant": "zero_shot",
+        "status": "ok",
+        "cer": 0.15384615384615385
+      },
+      {
+        "item_id": "owner_04_late",
+        "variant": "zero_shot",
+        "status": "ok",
+        "cer": 0.3018867924528302
+      },
+      {
+        "item_id": "owner_05_github",
+        "variant": "zero_shot",
+        "status": "ok",
+        "cer": 0.47761194029850745
+      },
+      {
+        "item_id": "owner_01_sick",
+        "variant": "few_shot",
+        "status": "ok",
+        "cer": 0.1875
+      },
+      {
+        "item_id": "owner_02_file",
+        "variant": "few_shot",
+        "status": "ok",
+        "cer": 0.14583333333333334
+      },
+      {
+        "item_id": "owner_03_deadline",
+        "variant": "few_shot",
+        "status": "ok",
+        "cer": 0.19230769230769232
+      },
+      {
+        "item_id": "owner_04_late",
+        "variant": "few_shot",
+        "status": "ok",
+        "cer": 0.24528301886792453
+      },
+      {
+        "item_id": "owner_05_github",
+        "variant": "few_shot",
+        "status": "ok",
+        "cer": 0.1791044776119403
+      }
+    ]
+  },
+  "results": [
+    {
+      "item_id": "owner_01_sick",
+      "category": "owner_core",
+      "variant": "zero_shot",
+      "source_roman": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "gold_perso_arabic": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "status": "ok",
+      "raw_output": "یار، امروز میں اوپسی ک نہیں آ سکوں گا کیونکہ میری تبیयت کچھ طے نہیں हے۔",
+      "parsed_output": "یار، امروز میں اوپسی ک نہیں آ سکوں گا کیونکہ میری تبیयت کچھ طے نہیں हے۔",
+      "cer": 0.28125,
+      "gen_time_sec": 4.23586106300354,
+      "error": ""
+    },
+    {
+      "item_id": "owner_02_file",
+      "category": "owner_core",
+      "variant": "zero_shot",
+      "source_roman": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "gold_perso_arabic": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "status": "ok",
+      "raw_output": "آپ نے جو فایل بھیجی تھی، میں نے اسے چک کر کیا है।",
+      "parsed_output": "آپ نے جو فایل بھیجی تھی، میں نے اسے چک کر کیا है।",
+      "cer": 0.10416666666666667,
+      "gen_time_sec": 1.0342025756835938,
+      "error": ""
+    },
+    {
+      "item_id": "owner_03_deadline",
+      "category": "owner_core",
+      "variant": "zero_shot",
+      "source_roman": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "gold_perso_arabic": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "status": "ok",
+      "raw_output": "میں لگتا ہے کہ نئے یہ کام کل تک مکمل کر لیناچاہیے",
+      "parsed_output": "میں لگتا ہے کہ نئے یہ کام کل تک مکمل کر لیناچاہیے",
+      "cer": 0.15384615384615385,
+      "gen_time_sec": 0.9630162715911865,
+      "error": ""
+    },
+    {
+      "item_id": "owner_04_late",
+      "category": "owner_core",
+      "variant": "zero_shot",
+      "source_roman": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "gold_perso_arabic": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "status": "ok",
+      "raw_output": "یار، امروز اوфس میں کافی کام تھا، اس لئے میں لیٹے हو گیا۔",
+      "parsed_output": "یار، امروز اوфس میں کافی کام تھا، اس لئے میں لیٹے हو گیا۔",
+      "cer": 0.3018867924528302,
+      "gen_time_sec": 1.0918152332305908,
+      "error": ""
+    },
+    {
+      "item_id": "owner_05_github",
+      "category": "owner_core",
+      "variant": "zero_shot",
+      "source_roman": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "gold_perso_arabic": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "status": "ok",
+      "raw_output": "میں نے گیٹیوب کے پر پل ریquest کیسٹر کر دی हے، آپ_usے_ ریویو کر لینا.",
+      "parsed_output": "میں نے گیٹیوب کے پر پل ریquest کیسٹر کر دی हے، آپ_usے_ ریویو کر لینا.",
+      "cer": 0.47761194029850745,
+      "gen_time_sec": 1.2740070819854736,
+      "error": ""
+    },
+    {
+      "item_id": "num_ascii",
+      "category": "numbers",
+      "variant": "zero_shot",
+      "source_roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_perso_arabic": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+      "status": "ok",
+      "raw_output": "ملاقات ۳ بजے شروع हوگی اور تقریبًا ۴۵ دسمین تک_chالے گی.",
+      "parsed_output": "ملاقات ۳ بजے شروع हوگی اور تقریبًا ۴۵ دسمین تک_chالے گی.",
+      "cer": 0.40425531914893614,
+      "gen_time_sec": 1.0060575008392334,
+      "error": ""
+    },
+    {
+      "item_id": "num_eastern",
+      "category": "numbers",
+      "variant": "zero_shot",
+      "source_roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_perso_arabic": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+      "status": "ok",
+      "raw_output": "ملاقات ۳ بजے شروع हوگی اور تقریبًا ۴۵ دسمین تک_chالے گی.",
+      "parsed_output": "ملاقات ۳ بजے شروع हوگی اور تقریبًا ۴۵ دسمین تک_chالے گی.",
+      "cer": 0.40425531914893614,
+      "gen_time_sec": 1.0010221004486084,
+      "error": ""
+    },
+    {
+      "item_id": "date",
+      "category": "dates",
+      "variant": "zero_shot",
+      "source_roman": "Yeh report 14 August 2026 tak jama karani hai.",
+      "gold_perso_arabic": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+      "status": "ok",
+      "raw_output": "یہ گزارش 14 اگست 2026 تک جمع کرنا ہے।",
+      "parsed_output": "یہ گزارش 14 اگست 2026 تک جمع کرنا ہے।",
+      "cer": 0.16216216216216217,
+      "gen_time_sec": 0.7515354156494141,
+      "error": ""
+    },
+    {
+      "item_id": "names",
+      "category": "proper_nouns",
+      "variant": "zero_shot",
+      "source_roman": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
+      "gold_perso_arabic": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+      "status": "ok",
+      "raw_output": "عیل احمد او فاطمہ نے کراچی سے لاهور تک کا سفر کیا۔",
+      "parsed_output": "عیل احمد او فاطمہ نے کراچی سے لاهور تک کا سفر کیا۔",
+      "cer": 0.08,
+      "gen_time_sec": 0.8336412906646729,
+      "error": ""
+    },
+    {
+      "item_id": "abbreviations",
+      "category": "abbreviations",
+      "variant": "zero_shot",
+      "source_roman": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
+      "gold_perso_arabic": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "status": "ok",
+      "raw_output": "برایے مہربانی PDF فائل ایمیل کر دین اور URL بھی ساتھ بھیج دین۔",
+      "parsed_output": "برایے مہربانی PDF فائل ایمیل کر دین اور URL بھی ساتھ بھیج دین۔",
+      "cer": 0.19298245614035087,
+      "gen_time_sec": 0.9529983997344971,
+      "error": ""
+    },
+    {
+      "item_id": "technical",
+      "category": "technical_terms",
+      "variant": "zero_shot",
+      "source_roman": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
+      "gold_perso_arabic": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "status": "ok",
+      "raw_output": "ہمیں دیٹا بیس کا بک آپ کرنا ہوگا اور پھر سرور دوبارہ ری استارت کرنے پر آگہی گا۔",
+      "parsed_output": "ہمیں دیٹا بیس کا بک آپ کرنا ہوگا اور پھر سرور دوبارہ ری استارت کرنے پر آگہی گا۔",
+      "cer": 0.5066666666666667,
+      "gen_time_sec": 1.405738115310669,
+      "error": ""
+    },
+    {
+      "item_id": "colloquial",
+      "category": "conversational_pakistani",
+      "variant": "zero_shot",
+      "source_roman": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
+      "gold_perso_arabic": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "status": "ok",
+      "raw_output": "ارے يار خورो نا کوی بات نہیں اگلی دفہ دکھ لین جائےں",
+      "parsed_output": "ارے يار خورो نا کوی بات نہیں اگلی دفہ دکھ لین جائےں",
+      "cer": 0.25,
+      "gen_time_sec": 0.9027583599090576,
+      "error": ""
+    },
+    {
+      "item_id": "long_multiclause",
+      "category": "long_form",
+      "variant": "zero_shot",
+      "source_roman": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "gold_perso_arabic": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "status": "ok",
+      "raw_output": "کل جب میں دفتر پہنچا تو پता چلا کہ مٹنگ ملتا وہیں گیا، اس لئے میں نے فکر کیا کہ پہلے باقی کام مکمل کر لوں، اور فری دھر کے خانے کے بعده رپورٹ پर کام شروع کروں گا.",
+      "parsed_output": "کل جب میں دفتر پہنچا تو پता چلا کہ مٹنگ ملتا وہیں گیا، اس لئے میں نے فکر کیا کہ پہلے باقی کام مکمل کر لوں، اور فری دھر کے خانے کے بعده رپورٹ پर کام شروع کروں گا.",
+      "cer": 0.18125,
+      "gen_time_sec": 2.7981834411621094,
+      "error": ""
+    },
+    {
+      "item_id": "owner_01_sick",
+      "category": "owner_core",
+      "variant": "few_shot",
+      "source_roman": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "gold_perso_arabic": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "status": "ok",
+      "raw_output": "یار، اج میں اوپسی نہیں آ سکوں گا کیونکہ میری تبیयت کچھ طے نہیں हے۔",
+      "parsed_output": "یار، اج میں اوپسی نہیں آ سکوں گا کیونکہ میری تبیयت کچھ طے نہیں हے۔",
+      "cer": 0.1875,
+      "gen_time_sec": 1.31488037109375,
+      "error": ""
+    },
+    {
+      "item_id": "owner_02_file",
+      "category": "owner_core",
+      "variant": "few_shot",
+      "source_roman": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "gold_perso_arabic": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "status": "ok",
+      "raw_output": "آپ نے جو فایل بھجی تھی، میں نے عسے چکٹ کر لیआ हے۔",
+      "parsed_output": "آپ نے جو فایل بھجی تھی، میں نے عسے چکٹ کر لیआ हے۔",
+      "cer": 0.14583333333333334,
+      "gen_time_sec": 1.011021614074707,
+      "error": ""
+    },
+    {
+      "item_id": "owner_03_deadline",
+      "category": "owner_core",
+      "variant": "few_shot",
+      "source_roman": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "gold_perso_arabic": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "status": "ok",
+      "raw_output": "میں لگتا ہے کہ हمیں ایسा کام کل تک مکمل کر لینا_chاہیے۔",
+      "parsed_output": "میں لگتا ہے کہ हمیں ایسा کام کل تک مکمل کر لینا_chاہیے۔",
+      "cer": 0.19230769230769232,
+      "gen_time_sec": 1.0649566650390625,
+      "error": ""
+    },
+    {
+      "item_id": "owner_04_late",
+      "category": "owner_core",
+      "variant": "few_shot",
+      "source_roman": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "gold_perso_arabic": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "status": "ok",
+      "raw_output": "یار، اج اوфسیس میں کافی کام تھا، اس لیے میں لیٹے हو گयا۔",
+      "parsed_output": "یار، اج اوфسیس میں کافی کام تھا، اس لیے میں لیٹے हو گयا۔",
+      "cer": 0.24528301886792453,
+      "gen_time_sec": 1.1145553588867188,
+      "error": ""
+    },
+    {
+      "item_id": "owner_05_github",
+      "category": "owner_core",
+      "variant": "few_shot",
+      "source_roman": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "gold_perso_arabic": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "status": "ok",
+      "raw_output": "میں نے GitHub پर pull request create کر دی हوی، آپ_usے review کر کن_لاں۔",
+      "parsed_output": "میں نے GitHub پर pull request create کر دی हوی، آپ_usے review کر کن_لاں۔",
+      "cer": 0.1791044776119403,
+      "gen_time_sec": 0.8850879669189453,
+      "error": ""
+    },
+    {
+      "item_id": "num_ascii",
+      "category": "numbers",
+      "variant": "few_shot",
+      "source_roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_perso_arabic": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
+      "status": "ok",
+      "raw_output": "ملاقات ۳ بजے شروع ہوگی اور تقریبًا ۴۵ مینٹیٹ چالے گی۔",
+      "parsed_output": "ملاقات ۳ بजے شروع ہوگی اور تقریبًا ۴۵ مینٹیٹ چالے گی۔",
+      "cer": 0.2553191489361702,
+      "gen_time_sec": 1.0871586799621582,
+      "error": ""
+    },
+    {
+      "item_id": "num_eastern",
+      "category": "numbers",
+      "variant": "few_shot",
+      "source_roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
+      "gold_perso_arabic": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
+      "status": "ok",
+      "raw_output": "ملاقات ۳ بजے شروع ہوگی اور تقریبًا ۴۵ مینٹیٹ چالے گی۔",
+      "parsed_output": "ملاقات ۳ بजے شروع ہوگی اور تقریبًا ۴۵ مینٹیٹ چالے گی۔",
+      "cer": 0.2553191489361702,
+      "gen_time_sec": 1.0919239521026611,
+      "error": ""
+    },
+    {
+      "item_id": "date",
+      "category": "dates",
+      "variant": "few_shot",
+      "source_roman": "Yeh report 14 August 2026 tak jama karani hai.",
+      "gold_perso_arabic": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
+      "status": "ok",
+      "raw_output": "ایہ گریپٹ 14 اگست 2026 تک جمہ کرنای ہے۔",
+      "parsed_output": "ایہ گریپٹ 14 اگست 2026 تک جمہ کرنای ہے۔",
+      "cer": 0.21621621621621623,
+      "gen_time_sec": 0.8895049095153809,
+      "error": ""
+    },
+    {
+      "item_id": "names",
+      "category": "proper_nouns",
+      "variant": "few_shot",
+      "source_roman": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
+      "gold_perso_arabic": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
+      "status": "ok",
+      "raw_output": "عیسی احمد اور فاطمہ نے کراچی سے لاهور تک کا سفر کیا۔",
+      "parsed_output": "عیسی احمد اور فاطمہ نے کراچی سے لاهور تک کا سفر کیا۔",
+      "cer": 0.06,
+      "gen_time_sec": 0.9128668308258057,
+      "error": ""
+    },
+    {
+      "item_id": "abbreviations",
+      "category": "abbreviations",
+      "variant": "few_shot",
+      "source_roman": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
+      "gold_perso_arabic": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "status": "ok",
+      "raw_output": "برایے مہربانی PDF فائل email کر دein اور URL بھی ساتھ بھیج دein۔",
+      "parsed_output": "برایے مہربانی PDF فائل email کر دein اور URL بھی ساتھ بھیج دein۔",
+      "cer": 0.3508771929824561,
+      "gen_time_sec": 0.8868637084960938,
+      "error": ""
+    },
+    {
+      "item_id": "long_multiclause",
+      "category": "long_form",
+      "variant": "few_shot",
+      "source_roman": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "gold_perso_arabic": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "status": "ok",
+      "raw_output": "کل جب میں دفتر پہنچا تو پता چलا کہ ملاقات ملتا وہی گیا ہے، اس لیے میں نے فکر کیا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے خانے کے بعد رپورٹ پर کام شروع کروں گا۔",
+      "parsed_output": "کل جب میں دفتر پہنچا تو پता چलا کہ ملاقات ملتا وہی گیا ہے، اس لیے میں نے فکر کیا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے خانے کے بعد رپورٹ پर کام شروع کروں گا۔",
+      "cer": 0.14375,
+      "gen_time_sec": 2.8613274097442627,
+      "error": ""
+    }
+  ]
+}

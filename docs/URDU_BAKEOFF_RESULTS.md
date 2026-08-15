@@ -644,3 +644,37 @@ Qwen2.5-3B / both-target-script line of investigation, not transliteration as a 
 # on the pod, in .venv-qwen
 .venv-qwen/bin/python eval/run_roman_arabic_probe.py
 ```
+
+### 8c. Escalation to a bigger model: Qwen2.5-7B-Instruct `[BENCH]`
+
+**Run for real, 2026-08-15, on the pod.** Same script (`eval/run_roman_arabic_probe.py`, now
+parameterized via `PROBE_MODEL_ID` so this reused the exact §8b scaffolding rather than forking a
+near-duplicate), same corpus, same two variants. Freed the pod's full 24 GB (an idle backend session
+from earlier verification work was resident) before loading — 7B at bf16 is ~15 GB. Full manifest:
+`eval/results/roman_arabic_probe_qwen_qwen2_5_7b_instruct/manifest.json`.
+
+| Variant | 3B mean CER | 7B mean CER | 3B unparseable | 7B unparseable |
+|---|---|---|---|---|
+| Zero-shot | 0.2332 | **0.2693** | 1 | **0** |
+| Few-shot | 0.1942 (among parseable) | **0.2029** | 2 | **0** |
+
+**Mixed result, not a clean win.** 7B's mean CER is not better than 3B's — zero-shot is measurably
+worse (0.27 vs 0.23) and few-shot is about the same (0.20 vs 0.19). What 7B *does* fix is reliability:
+zero unparseable responses in either variant, versus 3 combined for 3B (including 2 of the 5
+owner_core items on few-shot, which is exactly the priority slice). All 5 owner_core few-shot items
+now score, mean CER ≈0.19 — every one of them still far from "close to gold."
+
+**This also misses the gate**, same criterion as §8/§8b. A bigger model bought reliability
+(everything parses) but not accuracy — the errors are not fundamentally different in kind from the 3B
+run's, just no longer failing outright on the hardest inputs. This closes out the "try a bigger model"
+escalation named in §8b's closing note; the only item left in that note (a dedicated non-LLM
+transliterator) was researched and found to have no adoptable option (see docs/ROADMAP.md's
+transliteration row). **Both untried escalation paths from §8b are now tried, and both miss the gate.**
+Roman Urdu → OmniVoice stays unbuilt.
+
+**Reproducing:**
+
+```bash
+# on the pod, in .venv-qwen
+PROBE_MODEL_ID=Qwen/Qwen2.5-7B-Instruct .venv-qwen/bin/python eval/run_roman_arabic_probe.py
+```

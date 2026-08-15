@@ -30,12 +30,21 @@ Run on the pod, in the existing .venv-qwen (same one run_translit_probe.py and
 run_qwen_analyzer_probe.py use -- no new provisioning needed):
 
     backend/.venv-qwen/bin/python eval/run_roman_arabic_probe.py
+
+Escalation to a bigger model (e.g. after the 3B run misses the gate) reuses
+this same script and venv -- transformers/torch don't care which checkpoint
+they load -- via PROBE_MODEL_ID:
+
+    PROBE_MODEL_ID=Qwen/Qwen2.5-7B-Instruct \
+        backend/.venv-qwen/bin/python eval/run_roman_arabic_probe.py
 """
 
 from __future__ import annotations
 
 import json
+import os
 import platform
+import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
@@ -51,12 +60,18 @@ from urdu_represent import CorpusItem, load_corpus  # noqa: E402
 
 from app.domain.language import Script, detect_script  # noqa: E402
 
-MODEL_ID = "Qwen/Qwen2.5-3B-Instruct"
-# Unpinned on purpose for this probe only -- golden rule 7 applies to what
-# SHIPS, not a one-off capability check. Same reasoning as the two Qwen
-# probes this one is a sibling of.
+# Overridable via PROBE_MODEL_ID so the 7B escalation (see
+# docs/URDU_BAKEOFF_RESULTS.md SS8b's closing note) reuses this exact
+# scaffolding rather than forking a near-duplicate script. Unpinned on
+# purpose for this probe only -- golden rule 7 applies to what SHIPS, not a
+# one-off capability check. Same reasoning as the two Qwen probes this one
+# is a sibling of.
+MODEL_ID = os.environ.get("PROBE_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
 
-OUT_DIR = _REPO_ROOT / "eval" / "results" / "roman_arabic_probe"
+# Model-specific output dir so a bigger-model rerun doesn't clobber the
+# smaller model's manifest -- both are findings worth keeping side by side.
+_MODEL_SLUG = re.sub(r"[^a-zA-Z0-9]+", "_", MODEL_ID).strip("_").lower()
+OUT_DIR = _REPO_ROOT / "eval" / "results" / f"roman_arabic_probe_{_MODEL_SLUG}"
 
 #: Held out as few-shot exemplars; excluded from few_shot scoring so the
 #: model is never scored on an example it was shown.
