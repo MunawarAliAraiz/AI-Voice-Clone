@@ -113,3 +113,78 @@ def test_no_normalizations_is_a_pure_pass_through() -> None:
     text, applied = apply_text_normalizations("کوئی بھی متن 123", ())
     assert text == "کوئی بھی متن 123"
     assert applied == ()
+
+
+# ── The user-editable lexicon (2026-08-16) ──────────────────────────────────
+#
+# `apply_text_normalizations` now takes the lexicon as an argument so the
+# per-user dictionary can be supplied without `routing.resolve()` doing I/O.
+# These pin the behaviours the dictionary depends on; the shipped-default
+# tests above pin that omitting the argument still behaves exactly as before.
+
+
+def test_supplied_lexicon_replaces_the_shipped_defaults_entirely() -> None:
+    """Not merged with the defaults — the caller decides the whole table."""
+    text, applied = apply_text_normalizations(
+        "ہمیں database چاہیے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"chaiye": "چاہیے"},
+    )
+    assert text == "ہمیں database چاہیے۔", "the default `database` entry must not leak in"
+    assert applied == ()
+
+
+def test_lexicon_keys_may_be_perso_arabic() -> None:
+    """
+    A3's one defect: میٹنگ is read as "mating", and it arrives already in
+    Perso-Arabic, so a Latin-keyed table can never match it.
+    """
+    text, applied = apply_text_normalizations(
+        "کہ میٹنگ ملتوی ہو گئی ہے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"میٹنگ": "مِیٹِنگ"},
+    )
+    assert text == "کہ مِیٹِنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+def test_perso_arabic_keys_still_respect_word_boundaries() -> None:
+    """`\b` is Unicode-aware, so a key must not match inside a longer word."""
+    text, _ = apply_text_normalizations(
+        "میٹنگوں میں",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"میٹنگ": "مِیٹِنگ"},
+    )
+    assert text == "میٹنگوں میں", "میٹنگ must not match inside میٹنگوں"
+
+
+def test_lexicon_matching_is_case_insensitive() -> None:
+    """A user writes the entry once; they will not type every case variant."""
+    text, _ = apply_text_normalizations(
+        "Database, DATABASE and database",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"database": "ڈیٹا بےس"},
+    )
+    assert text == "ڈیٹا بےس, ڈیٹا بےس and ڈیٹا بےس"
+
+
+def test_longer_keys_win_over_shorter_ones() -> None:
+    """
+    Python alternation is first-match-wins and dict order is the user's, which
+    is no order at all — so the pattern sorts by length itself.
+    """
+    text, _ = apply_text_normalizations(
+        "open a pull request please",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"request": "رِیکویسٹ", "pull request": "پُل رِیکویسٹ"},
+    )
+    assert text == "open a پُل رِیکویسٹ please"
+
+
+def test_empty_lexicon_is_a_pass_through_not_a_crash() -> None:
+    """A user with no dictionary entries is the common case, not an edge one."""
+    text, applied = apply_text_normalizations(
+        "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,), lexicon={}
+    )
+    assert text == "ہمیں database چاہیے۔"
+    assert applied == ()

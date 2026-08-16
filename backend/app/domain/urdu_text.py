@@ -19,19 +19,32 @@ WHAT IS NOT HERE
 ------------------
 No general English-transliteration system. `office`/`check`/`GitHub`/`pull
 request` already render correctly as plain Latin text and must stay
-untouched — `_LOANWORD_LEXICON` holds exactly the words individually tested
-and verified by ear, not a starting point for "respell every English word".
-Extending it requires the same per-word verify-by-ear discipline as URL and
-database got, not a heuristic.
+untouched — `DEFAULT_LOANWORD_LEXICON` holds exactly the words individually
+tested and verified by ear, not a starting point for "respell every English
+word". Extending the SHIPPED table requires the same per-word verify-by-ear
+discipline as URL and database got, not a heuristic.
+
+The user's own dictionary is a different matter and is deliberately not held
+to that bar: they hear the defect, they choose the respelling, and they hear
+the result. The discipline above exists because a maintainer is guessing on
+behalf of users who cannot check; it does not apply to a user fixing their own
+output. Which is why `apply_text_normalizations` takes the lexicon as an
+argument rather than reading this module's table.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from enum import StrEnum
+from functools import lru_cache
+from types import MappingProxyType
 
-__all__ = ["TextNormalization", "apply_text_normalizations"]
+__all__ = [
+    "DEFAULT_LOANWORD_LEXICON",
+    "TextNormalization",
+    "apply_text_normalizations",
+]
 
 
 class TextNormalization(StrEnum):
@@ -154,29 +167,68 @@ def _expand_numbers(text: str) -> str:
 # clip of the whole experiment ("most accurate for a native Urdu speaker") and
 # still scored 4/12. Picking a spelling by its best clip would have shipped the
 # second-worst one.
-_LOANWORD_LEXICON: dict[str, str] = {
-    "URL": "یو آر ایل",
-    "database": "ڈیٹا بےس",
-}
-
-_LOANWORD_PATTERN = re.compile(
-    "|".join(rf"\b{re.escape(word)}\b" for word in _LOANWORD_LEXICON)
+DEFAULT_LOANWORD_LEXICON: Mapping[str, str] = MappingProxyType(
+    {
+        "URL": "یو آر ایل",
+        "database": "ڈیٹا بےس",
+    }
 )
 
 
-def _respell_loanwords(text: str) -> str:
-    """Word-boundary substitution for the verified loanword lexicon only."""
-    return _LOANWORD_PATTERN.sub(lambda m: _LOANWORD_LEXICON[m.group(0)], text)
+# ── Keys may be in EITHER script ────────────────────────────────────────────
+#
+# Until 2026-08-16 every key here was Latin, because every measured defect was
+# an English loanword sitting in Latin inside Urdu text. A3's passing run
+# produced the counter-example: میٹنگ is read as "mating", and the text arrives
+# ALREADY in Perso-Arabic -- the transliterator converted it, and the corpus
+# gold spells it that way too. A Latin-keyed table cannot reach that word at
+# all, so keys are matched in whatever script they are written in.
+#
+# `\b` is Unicode-aware in Python's `re`: Perso-Arabic letters are `\w`, so a
+# word boundary falls between میٹنگ and a space or an Urdu full stop exactly as
+# it does for Latin. No separate Arabic code path is needed.
+#
+# Matching is CASE-INSENSITIVE, which is a deliberate change from the
+# hardcoded table's behaviour. A user typing a dictionary entry will write
+# `Database` once and then type `database` in the Composer; a table that
+# silently missed the second is a support burden with no upside. The
+# REPLACEMENT is used verbatim -- case is not carried over, because the
+# replacement is usually Perso-Arabic, which has no case to carry.
+#
+# Longest key first, so `pull request` wins over a hypothetical `request`.
+# Python's alternation is first-match-wins, not longest-match-wins, and the
+# dict's insertion order is the user's, which is no order at all.
+@lru_cache(maxsize=64)
+def _compiled(entries: tuple[tuple[str, str], ...]) -> tuple[re.Pattern[str], Mapping[str, str]]:
+    by_key = {key.casefold(): replacement for key, replacement in entries}
+    pattern = re.compile(
+        "|".join(
+            rf"\b{re.escape(key)}\b"
+            for key in sorted((k for k, _ in entries), key=len, reverse=True)
+        ),
+        re.IGNORECASE,
+    )
+    return pattern, by_key
 
 
-_APPLIERS: dict[TextNormalization, Callable[[str], str]] = {
-    TextNormalization.NUMBERS: _expand_numbers,
+def _respell_loanwords(text: str, lexicon: Mapping[str, str]) -> str:
+    """Word-boundary substitution for the supplied lexicon only."""
+    if not lexicon:
+        return text
+    pattern, by_key = _compiled(tuple(lexicon.items()))
+    return pattern.sub(lambda m: by_key[m.group(0).casefold()], text)
+
+
+_APPLIERS: dict[TextNormalization, Callable[[str, Mapping[str, str]], str]] = {
+    TextNormalization.NUMBERS: lambda text, _lexicon: _expand_numbers(text),
     TextNormalization.LOANWORD_LEXICON: _respell_loanwords,
 }
 
 
 def apply_text_normalizations(
-    text: str, kinds: tuple[TextNormalization, ...]
+    text: str,
+    kinds: tuple[TextNormalization, ...],
+    lexicon: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
 ) -> tuple[str, tuple[TextNormalization, ...]]:
     """
     Apply each declared normalization, in the order given.
@@ -185,10 +237,16 @@ def apply_text_normalizations(
     a spec can declare `LOANWORD_LEXICON` and still see `()` returned for it on
     a particular input with no matching word, so callers reflect reality
     (`RoutePlan.text_normalizations`), not mere capability.
+
+    `lexicon` is a PARAMETER rather than a module global so the user-editable
+    dictionary can be passed in without this module — or `routing.resolve()`,
+    which calls it — ever touching the database. Golden rule 4 says routing is
+    pure; a pure function is allowed to receive data, it is just not allowed to
+    go and fetch it. The caller loads the rows; this applies them.
     """
     applied: list[TextNormalization] = []
     for kind in kinds:
-        new_text = _APPLIERS[kind](text)
+        new_text = _APPLIERS[kind](text, lexicon)
         if new_text != text:
             applied.append(kind)
         text = new_text
