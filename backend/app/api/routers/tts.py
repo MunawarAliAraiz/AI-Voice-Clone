@@ -45,7 +45,14 @@ from ...inference.catalog import ModelCatalog
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
 from ...jobs.direction import render as render_direction
-from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
+from ..deps import (
+    get_catalog,
+    get_db,
+    get_job_runner,
+    get_lexicon,
+    get_scheduler,
+    get_settings,
+)
 from ..schemas.jobs import JobStatusResponse
 from ..schemas.tts import (
     DirectionPlanIn,
@@ -121,6 +128,7 @@ async def generate(
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
     settings: Annotated[Settings, Depends(get_settings)],
     runner: Annotated[JobRunner, Depends(get_job_runner)],
+    lexicon: Annotated[dict[str, str], Depends(get_lexicon)],
 ) -> JobStatusResponse:
     profile = await db.get_profile(body.profile_id)
     if profile is None:
@@ -133,7 +141,7 @@ async def generate(
     text_profile = profile_text(body.text, body.language)
     plan = resolve(
         text_profile, body.model_id, catalog, _urdu_strategy(body.urdu_strategy),
-        allow_experimental=body.allow_experimental,
+        allow_experimental=body.allow_experimental, lexicon=lexicon,
     )
 
     spec = catalog.get(plan.model_id)
@@ -237,13 +245,17 @@ async def generate(
 async def detect_script(
     body: ScriptDetectRequest,
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
+    lexicon: Annotated[dict[str, str], Depends(get_lexicon)],
 ) -> ScriptDetectResponse:
     from ...exceptions import AmbiguousScriptError
 
     tp = profile_text(body.text, body.language)
     routable, hint, would = True, None, None
     try:
-        plan = resolve(tp, None, catalog)
+        # The user's dictionary is passed here too, so the preview's
+        # `text_normalizations` says what WILL happen rather than what would
+        # happen to someone with no entries.
+        plan = resolve(tp, None, catalog, lexicon=lexicon)
         would = _route_info(plan, catalog)
     except (NoRouteError, AmbiguousScriptError) as exc:
         routable, hint = False, exc.detail

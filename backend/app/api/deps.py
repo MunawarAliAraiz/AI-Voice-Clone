@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import hmac
 from collections.abc import Awaitable, Callable
+from typing import Annotated
 
-from fastapi import Request
+from fastapi import Depends, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
 from ..config import Settings
 from ..db import Database
+from ..domain.urdu_text import effective_lexicon
 from ..exceptions import PROBLEM_BASE_URI, PROBLEM_CONTENT_TYPE
 from ..inference.catalog import CATALOG, ModelCatalog
 from ..inference.protocol import SchedulerProtocol
@@ -27,6 +29,7 @@ __all__ = [
     "get_catalog",
     "get_db",
     "get_job_runner",
+    "get_lexicon",
     "ApiKeyMiddleware",
 ]
 
@@ -100,3 +103,21 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     @staticmethod
     def _exempt(path: str) -> bool:
         return path in _EXEMPT_EXACT or path.startswith(_EXEMPT_PREFIXES)
+
+
+async def get_lexicon(db: Annotated[Database, Depends(get_db)]) -> dict[str, str]:
+    """
+    The user's pronunciation dictionary, merged over the shipped defaults.
+
+    This is the I/O that `routing.resolve()` is forbidden to do itself (golden
+    rule 4). Loading it here, in a dependency, means routing receives a plain
+    mapping and stays a pure function of its arguments — testable with no
+    database, and unable to route differently depending on what a query
+    happened to return.
+
+    Disabled rows are loaded deliberately: `effective_lexicon` needs them,
+    because a disabled row whose key matches a shipped default is the only way
+    to switch that default off.
+    """
+    rows = await db.list_pronunciations(language="ur")
+    return effective_lexicon(rows)

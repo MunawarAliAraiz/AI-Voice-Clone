@@ -39,11 +39,10 @@ from collections.abc import Callable, Iterable, Mapping
 from enum import StrEnum
 from functools import lru_cache
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import Any
 
 __all__ = [
     "DEFAULT_LOANWORD_LEXICON",
-    "LexiconEntry",
     "TextNormalization",
     "apply_text_normalizations",
     "effective_lexicon",
@@ -259,29 +258,16 @@ _APPLIERS: dict[TextNormalization, Callable[[str, Mapping[str, str]], str]] = {
 }
 
 
-class LexiconEntry(Protocol):
-    """
-    The shape `effective_lexicon` needs from a `pronunciation_entries` row.
-
-    A Protocol rather than an import, because `domain/` must not depend on
-    `db/` — an `aiosqlite.Row` satisfies this structurally, and so does a plain
-    object in a test.
-    """
-
-    @property
-    def key_text(self) -> str: ...
-    @property
-    def replacement(self) -> str: ...
-    @property
-    def is_enabled(self) -> bool: ...
-
-
 def effective_lexicon(
     entries: Iterable[Mapping[str, Any]],
     defaults: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
 ) -> dict[str, str]:
     """
     Merge a user's dictionary rows over the shipped defaults.
+
+    `entries` are read by SUBSCRIPT (`entry["key_text"]`), which is what an
+    `aiosqlite.Row` and a plain dict both support — so `domain/` keeps not
+    importing `db/` and the tests need no database.
 
     Three behaviours, in this order of precedence:
 

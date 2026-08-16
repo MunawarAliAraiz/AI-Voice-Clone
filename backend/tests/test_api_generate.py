@@ -15,6 +15,7 @@ as before: routing and param validation run BEFORE any job row is created.
 from __future__ import annotations
 
 import io
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any
@@ -230,3 +231,120 @@ def test_detect_script(tmp_path: Path) -> None:
         assert body["routable"] is True
         assert body["would_route_to"]["model_id"] == "voxcpm2"
         assert body["is_rtl"] is False  # Roman Urdu is Latin, not RTL
+
+
+# ── the user's pronunciation dictionary reaches synthesis ────────────────────
+
+
+def _seed_pronunciation(tmp_path: Path, **row: Any) -> None:
+    """
+    Insert a dictionary row into the app's SQLite file BEFORE the app opens it.
+
+    Not via the API, because the CRUD endpoints do not exist yet, and not via
+    `app.state.db`, because `TestClient` runs the lifespan on its own anyio
+    portal thread and awaiting that connection from here is a cross-loop await
+    (see `test_api_read.py`). A plain synchronous `sqlite3` write to the same
+    file is neither, and it exercises `get_lexicon` for real rather than
+    stubbing it out — which is the whole point: a dependency override would
+    still pass if `resolve()` ignored the lexicon entirely.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    schema = (Path(__file__).parents[1] / "app" / "db" / "schema.sql").read_text(encoding="utf-8")
+    conn = sqlite3.connect(tmp_path / "voiceclone.db")
+    try:
+        conn.executescript(schema)
+        conn.execute(
+            """INSERT INTO pronunciation_entries
+               (key_text, replacement, language, is_enabled) VALUES (?, ?, ?, ?)""",
+            (row["key_text"], row["replacement"], row.get("language", "ur"),
+             int(row.get("is_enabled", True))),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_user_dictionary_entry_changes_the_text_the_worker_receives(tmp_path: Path) -> None:
+    """
+    The end-to-end proof that the dictionary is wired, not merely present.
+
+    A Perso-Arabic key, which is the case the shipped Latin-keyed table could
+    never reach, and the one A3 surfaced (میٹنگ read as "mating").
+    """
+    _seed_pronunciation(tmp_path, key_text="دفتر", replacement="دَفتر")
+    client, sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "ur")
+        r = _generate_and_poll(c, {
+            "profile_id": pid, "text": "میں دفتر جا رہا ہوں", "language": "ur",
+            "model_id": "omnivoice_urdu",
+        })
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "succeeded"
+
+        assert sched.requests[-1].text == "میں دَفتر جا رہا ہوں"
+        assert "loanword_lexicon" in r.json()["route"]["text_normalizations"]
+
+
+def test_disabled_user_entry_suppresses_a_shipped_default(tmp_path: Path) -> None:
+    """
+    The only way to switch off a built-in entry, so it has to work through the
+    whole stack and not just in `effective_lexicon`'s unit tests.
+    """
+    _seed_pronunciation(tmp_path, key_text="میٹنگ", replacement="unused", is_enabled=False)
+    client, sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "ur")
+        r = _generate_and_poll(c, {
+            "profile_id": pid, "text": "میٹنگ ملتوی ہو گئی", "language": "ur",
+            "model_id": "omnivoice_urdu",
+        })
+        assert r.status_code == 200, r.text
+        assert sched.requests[-1].text == "میٹنگ ملتوی ہو گئی", (
+            "the shipped مِیٹِنگ default must be suppressed, not applied"
+        )
+        assert "loanword_lexicon" not in r.json()["route"]["text_normalizations"]
+
+
+def test_shipped_defaults_still_apply_with_an_empty_dictionary(tmp_path: Path) -> None:
+    """The no-entries case is the common one — it must not regress to nothing."""
+    client, sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "ur")
+        _generate_and_poll(c, {
+            "profile_id": pid, "text": "میٹنگ ملتوی ہو گئی", "language": "ur",
+            "model_id": "omnivoice_urdu",
+        })
+        assert sched.requests[-1].text == "مِیٹِنگ ملتوی ہو گئی"
+
+
+def test_detect_script_passes_the_dictionary_but_cannot_show_it_yet(tmp_path: Path) -> None:
+    """
+    `/api/detect-script` is given the user's lexicon so its preview says what
+    WILL happen rather than what would happen to someone with no entries.
+
+    Today that is unobservable, and this test pins WHY rather than leaving a
+    silently useless argument behind. The preview only ever AUTO-routes
+    (`resolve(tp, None, ...)`), auto-routing excludes non-permissive licences,
+    and `omnivoice_urdu` — the sole spec declaring `text_normalizations` — is
+    CC-BY-NC. So Perso-Arabic Urdu is not auto-routable at all and the preview
+    correctly reports it as such.
+
+    If a permissively-licensed Perso-Arabic model is ever added, or the preview
+    starts honouring an explicit `model_id`, this test should start failing and
+    be replaced by one asserting the normalization is reported.
+    """
+    _seed_pronunciation(tmp_path, key_text="دفتر", replacement="دَفتر")
+    client, _ = _client(tmp_path)
+    with client as c:
+        r = c.post("/api/detect-script", json={
+            "text": "میں دفتر جا رہا ہوں", "language": "ur",
+        })
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["script"] == "arabic"
+        assert body["routable"] is False, (
+            "Perso-Arabic Urdu has no auto route: omnivoice_urdu is CC-BY-NC "
+            "and ModelCatalog.candidates() excludes non-permissive licences"
+        )
+        assert body["would_route_to"] is None
