@@ -969,3 +969,99 @@ matters, since the feature's whole premise is that editing the suggestion beats 
 
 Neither limit rescues §10c: translation, Devanagari contamination and register changes are wrong
 against *any* reasonable gold.
+
+---
+
+## 11. Phase A4 — surveying purpose-trained Roman-Urdu→Urdu models `[CARD]`
+
+§10d met the plan's condition for this survey: the Qwen baseline is insufficient. Every candidate was
+vetted on three axes before any accuracy claim was entertained — **licence** (golden rule 6),
+**pinnable revision** (rule 7), and **dependency footprint** against the existing venvs.
+
+| candidate | direction | licence | verdict |
+|---|---|---|---|
+| `Mavkif/m2m100_rup_rur_to_ur` | Roman→Urdu ✅ | **none declared** | ❌ rule 6 |
+| `Mavkif/MLM_pretrained_RomanUrdu_Urdu` | pretraining ckpt | **none declared** | ❌ rule 6 |
+| `waqas0707/roman-to-urdu` | Roman→Urdu ✅ | `unknown` | ❌ **repo contains no weights** |
+| `waqas0707/roman-urdu-to-urdu-translation` | Roman→Urdu ✅ | **none declared** | ❌ rule 6 |
+| `psidharth567/indic-xlit-{50M,270M}` | Roman→Indic | **none declared** | ❌ rule 6 |
+| `rekhtalabs/hi-2-ur-translit` | **Devanagari**→Urdu | — | ❌ wrong input script; Hindi is gone |
+| **AI4Bharat IndicXlit** | Roman→Urdu ✅ | **MIT** ✅ | ❌ on accuracy + dependencies — see §11b |
+
+### 11a. The best-performing candidate has no licence at all
+
+`Mavkif/m2m100_rup_rur_to_ur` is exactly the right direction and carries the strongest published
+numbers in this space — Char-BLEU **97.44** for Roman-Urdu→Urdu (arXiv 2503.21530, LoResMT 2025),
+beating RNN baselines and GPT-4o Mini. Its commit SHA `e723a8d…` is pinnable, satisfying rule 7.
+
+**It declares no licence.** Confirmed against the HF API rather than the rendered page: the model's
+tags are `["safetensors","m2m_100","region:us"]`, with no `license:` entry and no `cardData`. No
+licence means all rights reserved, not "probably fine".
+
+The trap here is precisely the one golden rule 6 was written for. **The paper is CC BY 4.0** — and
+that covers the *article*, not the weights. Rule 6 requires the licence be checked at the HF card
+*separately* from the associated publication or code, because this project's own survey already found
+two candidates where the two disagreed and the permissive-looking answer was wrong both times. This is
+a third instance, and the worst kind: not a mismatch but an absence.
+
+Two further problems, independent of licence: the repo is a raw training dump — it ships
+`optimizer.pt`, `rng_state.pth`, `scheduler.pt`, `trainer_state.json` and `training_args.bin` — has
+**no model card**, and contains **no tokenizer** (that lives in a separate repo,
+`Mavkif/m2m100_rup_tokenizer_both`, also unlicensed).
+
+### 11b. The only correctly-licensed candidate is not accurate enough, and cannot be installed
+
+**AI4Bharat IndicXlit** is the one genuinely clean licence: **MIT**, covering code and models,
+explicitly listing Urdu among its 21 languages, ~11M parameters. It is the right shape and the right
+licence. It fails on the other two axes.
+
+**Accuracy.** Its own README reports Urdu word-level top-1 accuracy of **61.45%** (Dakshina) and
+**48.37%** (Aksharantar native words). Across the 21 languages accuracy ranges 42–77%, so Urdu is
+mid-pack rather than a weak outlier — this is simply what the model does. The consequence for us is
+decisive: **it is word-level, not sentence-level.** Its README states plainly that the model is
+trained on words as inputs, so users must split sentences into words first. At 61% per word, an
+average 10-word sentence has roughly a **0.7%** chance of coming out entirely correct. As a
+whole-sentence converter it is not usable alone, and it has no context with which to disambiguate
+`kia` from `kya` either — the exact problem arXiv 2109.14197 exists to address.
+
+**Dependencies.** `ai4bharat-transliteration` (last released **September 2022**) requires `fairseq`
+and `urduhack`. `urduhack` in turn requires **`tensorflow~=2.2`** — a 2020 release that does not
+build on Python 3.12. Installing this means a fairseq + TensorFlow 2.2 environment sitting beside
+five venvs already pinned to torch 2.8/2.11+cu128. That is the dependency-hell failure mode that
+killed this project's predecessor (`transformers>=4.57.6` versus fish-speech's `<=4.57.3`), and it
+would be self-inflicted this time.
+
+**Third problem, and the interesting one:** IndicXlit has no notion of leaving a word alone. It
+transliterates everything, so `office` becomes an Urdu spelling. Against the §10 contract that is a
+code-switch preservation failure — but see §11d, because it may not be a failure for the product.
+
+### 11c. Conclusion: no adoptable option, same shape as the licensing survey before it
+
+**A4 finds nothing adoptable.** The accurate model is unlicensed; the licensed model is neither
+accurate enough nor installable. This is structurally the same result `docs/URDU_MODEL_LICENSING.md`
+reached for TTS — no permissively-licensed model both lists Urdu and does the job — now reproduced
+for transliteration.
+
+What remains untried, in order of cost:
+
+1. **Ask the Mavkif authors to add a licence.** One issue on the HF repo. The paper is CC BY 4.0 and
+   the authors describe the models as open-sourced, so an omitted licence tag is the likelier
+   explanation than a deliberate reservation. Cheapest possible unblock, and it converts the best
+   candidate in the field from unusable to usable.
+2. **Train one.** Roman-Urdu-Parl and Dakshina are both public, and this project has already trained a
+   LoRA on this pod. Real work, but no licence obstacle.
+3. **Accept the Qwen baseline as an editable assist** and let A3 decide by ear whether ~46%
+   contract-clean output still saves the user time versus typing Urdu directly.
+
+### 11d. A connection worth not losing
+
+IndicXlit transliterating English words rather than preserving them looks like a contract violation —
+but §9e measured that **17.2% of English loanwords are mispronounced by OmniVoice** precisely
+*because* they are Latin, and that 9 of the 11 failing words fail deterministically. Rendering
+`interview` phonetically in Urdu script is exactly the remedy the pronunciation dictionary would
+apply by hand.
+
+So "convert English words too" may be the right behaviour for *pronunciation* while being wrong for
+*fidelity to what the user typed*. These two goals genuinely conflict, and the conflict is not
+resolved anywhere yet. It should be settled by ear in A3, not assumed in either direction — and it
+directly affects the dictionary design deferred in §9d.
