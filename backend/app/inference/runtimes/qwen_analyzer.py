@@ -98,6 +98,16 @@ def _validate_title(value: Any) -> str:
     return title
 
 
+#: Enough of a bad response to see the shape of the failure — truncation,
+#: a stray quote, trailing prose — without pasting a whole generation into a
+#: log line.
+_SNIPPET_CHARS = 400
+
+
+def _snippet(raw: str) -> str:
+    return repr(raw if len(raw) <= _SNIPPET_CHARS else raw[:_SNIPPET_CHARS] + "…[truncated]")
+
+
 def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[str, Any]]]:
     """
     Parse+validate exactly what the probe's `validate_response` reported as
@@ -114,7 +124,16 @@ def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[s
     try:
         payload = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"analyzer response JSON parse failed: {exc}") from exc
+        # Include what the model actually said. Without it the error names a
+        # line and column in a string nobody can see, which is how a real
+        # production failure ("Expecting ',' delimiter: line 6 column 93")
+        # stayed undiagnosable — truncated output, an unescaped quote inside
+        # an Urdu title, and a model rambling past the object all produce it
+        # and need different fixes.
+        raise RuntimeError(
+            f"analyzer response JSON parse failed: {exc}; "
+            f"model returned {_snippet(raw)}"
+        ) from exc
 
     if not isinstance(payload, dict):
         raise RuntimeError("analyzer response is not a JSON object")
