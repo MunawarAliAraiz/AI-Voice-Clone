@@ -6,29 +6,42 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ Start here (state as of 2026-08-15, end of day)
+## ⚡ Start here (state as of 2026-08-16, end of day)
 
-**Everything below is merged to `main`.** No branch is outstanding. The last four PRs (#18–#21)
-covered: the Urdu pronunciation normalization layer, full Hindi removal + Direction-preview model
-passthrough + language-based model pre-select, the `OMNIVOICE_URDU.verified=True` flip + the
-licence-aware auto-routing filter, and the 7B transliteration escalation.
+**Live pod:** see `.claude/remote.local.md`. Bootstrapped clean, all six venvs, `.venv-qwen`
+provisioned by the script for the first time (that gap is fixed).
+
+**The headline: the Roman-Urdu → Perso-Arabic feature is CLOSED, having failed its listening gate.**
+Phase A ran end to end and returned four independent negatives (A0, A2, A4, A3) —
+[URDU_BAKEOFF_RESULTS.md §9–§12](URDU_BAKEOFF_RESULTS.md) has the reasoning per dead end. Phase B
+was never started; that was the plan's explicit gate. Don't reopen it by re-running the Qwen probes:
+four arms across two model sizes are measured and §10a shows prompt engineering is not the lever.
 
 **What a fresh session should do first:**
-1. **The pod is dead.** `69.30.85.171:22002` stopped responding mid-session (connection refused,
-   RunPod reclaimed it). Bootstrap a new one — `scripts/pod-bootstrap.sh` now provisions the Qwen
-   analyzer venv too (it was missing for three days after that feature shipped), so a fresh pod is
-   fully capable including the "Let AI suggest emotion/tone" button. Update
-   `.claude/remote.local.md` with the new endpoint.
-2. **Three things wait on the owner's ears, not on code**: the two never-scored bake-off clips
-   (§3c), the multi-segment directed-audio clip (`eval/results/direction/pod_directed_hi.wav`,
-   local + untracked, passed every objective check but never perceptually confirmed), and — once a
-   pod exists again — a re-run of `eval/run_user_report_check.py`, whose output was lost with the
-   pod before it could be downloaded.
-3. **IndicF5 (arms H/I/J) is still blocked**, and the blocker is now precisely known: the HF token
-   supplied on 2026-08-15 authenticates fine (`whoami: munawaraliaraiz`) but the account has **not
-   been granted access to the gated `ai4bharat/IndicF5` repo** — fetching weights returns
-   `403 … you are not in the authorized list`. One click at huggingface.co/ai4bharat/IndicF5 while
-   signed in as that account fixes it; nothing else about this arm can proceed until then.
+
+1. **Build the user-editable pronunciation dictionary.** This is now the highest-value Urdu work and
+   it is unblocked. §9e measured that **17.2% of English loanword instances** (11 of 54 distinct
+   words, 32.5% of generations) are mispronounced by OmniVoice — and 9 of the 11 fail *every* time,
+   so a respelling genuinely fixes them. It was deferred pending A3; A3's failure removed the reason
+   (§12c). Design notes and constraints are on the task and in §9d.
+2. **Two one-click owner actions** that unblock other people's work:
+   - post `docs/outreach/mavkif-licence-request.md` — the only cheap thing that could reopen the
+     Roman-Urdu feature, since `Mavkif/m2m100_rup_rur_to_ur` is Char-BLEU 97.44 versus the 46% Qwen
+     baseline A3 rejected;
+   - accept the licence at huggingface.co/ai4bharat/IndicF5 to unblock bake-off arms H/I/J.
+3. **Native review of the 32 new corpus gold strings** (`_meta.authoring_rule_EXCEPTION_phase_a_items`).
+   They were drafted by Claude, and any number scored against them is provisional until reviewed.
+
+**Two live findings that change how all future evaluation is done here:**
+
+- **Synthesis is unseeded** (§9b). `OmniVoiceBackend.synth()` sets no seed, so a word's pronunciation
+  is a random variable and any n=1 listening verdict is a coin flip. This is not theoretical — it
+  produced two opposite owner verdicts on one byte-identical sentence an hour apart, and it explains
+  `late` passing, failing, then passing across three listens. Sample repeatedly and listen blind;
+  `eval/run_loanword_reliability.py` is the pattern.
+- **Numeric screens can only fail something, never approve it.** A0's ASR screen looked encouraging
+  and the owner heard a plain English accent; §10's contract metric passed `owner_01_sick`, whose
+  Urdu is mangled. Both are recorded in place.
 
 Historical detail on how the current state came to be follows.
 

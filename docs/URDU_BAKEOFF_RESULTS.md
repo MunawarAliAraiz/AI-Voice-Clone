@@ -1065,3 +1065,59 @@ So "convert English words too" may be the right behaviour for *pronunciation* wh
 *fidelity to what the user typed*. These two goals genuinely conflict, and the conflict is not
 resolved anywhere yet. It should be settled by ear in A3, not assumed in either direction — and it
 directly affects the dictionary design deferred in §9d.
+
+---
+
+## 12. Phase A3 — the gate. **Failed.** `[LISTEN]`
+
+Ten sentences, each synthesized twice through the real `OmniVoiceBackend` against the owner
+reference: column **A** from the Qwen 7B `strict_zero_shot` conversion of the Roman input, column
+**B** from the corpus's Perso-Arabic gold — i.e. what the user gets by typing correct Urdu
+themselves. Six items had passed A2's contract and four had failed it, labelled as such. Both arms
+went through production normalization. Driver `eval/run_a3_full_chain.py`, clips and page at
+`eval/results/a3_full_chain/`.
+
+The question put to the owner was deliberately not "is A perfect" — A2 had already established it
+would not be. It was: **would editing A be less work than typing B yourself?**
+
+**Owner's verdict: "column A is not usable."**
+
+**Phase B is therefore not started.** That was the plan's explicit gate, and this is the gate
+closing rather than a setback to be worked around. The Roman-Urdu → Perso-Arabic conversion feature
+is not built, and `NoRouteError` on Roman Urdu → OmniVoice stands.
+
+### 12a. What Phase A established, end to end
+
+| step | result |
+|---|---|
+| **A0** — does OmniVoice read Roman Urdu unaided? | ❌ No. Words right, accent English. CER could not see it |
+| **A1** — expand the corpus | ✅ 13 → 45 items; new gold still needs a native review |
+| **A2** — strong Qwen baseline | ❌ Best arm 46% contract-clean. Strict prompting bought nothing; few-shot traded preservation against completeness |
+| **A4** — purpose-trained models | ❌ Best model declares no licence; only MIT-licensed one is word-level, 61% top-1, and needs TensorFlow 2.2 |
+| **A3** — the full chain, by ear | ❌ **Not usable** |
+
+Four independent routes to the same feature, four negatives. That is a strong result, not an absence
+of one: the question "can a user type Roman Urdu and get good Perso-Arabic speech?" now has a
+documented answer with the reasoning for each dead end preserved.
+
+### 12b. What would reopen it
+
+Only one thing is cheap: **`Mavkif/m2m100_rup_rur_to_ur` acquiring a licence** (§11a,
+`docs/outreach/mavkif-licence-request.md`). At Char-BLEU 97.44 it is in a different class from the
+46% Qwen baseline that A3 just rejected, so it would genuinely deserve a fresh A2/A3 run rather than
+being assumed to fail alongside it. Training a replacement on the public Roman-Urdu-Parl and
+Dakshina corpora is the other route, and is real work rather than a request.
+
+Nothing else identified. Do not re-run the Qwen probes hoping for a different answer — four arms
+across two model sizes have now been measured, and §10a showed prompt engineering is not the lever.
+
+### 12c. The one thing A3 *unblocked*
+
+§11d parked a genuine conflict: should English loanwords be converted to Urdu script (better
+pronunciation, §9e measured 17.2% of them mispronounced) or preserved verbatim (fidelity to what the
+user typed)? That question only existed because an LLM converter was going to make the choice.
+
+**With Phase B dead, the conflict dissolves.** The only Perso-Arabic text reaching OmniVoice is text
+the user typed, so nothing is deciding on their behalf — and the pronunciation dictionary (§9d/§9e)
+becomes both simpler and, at a measured 17.2% failure rate, the most valuable Urdu work outstanding.
+It was deferred pending A3; it no longer is.
