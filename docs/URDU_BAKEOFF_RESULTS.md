@@ -735,3 +735,43 @@ Two different things:
 `eval/run_loanword_late_check.py` puts both, plus `office` as a control, in front of the owner:
 `late` as Latin / `لیٹ` / `لیٹھ`, `database` as verbatim / production / all-Urdu. **Pending the
 owner's listen** — nothing enters `_LOANWORD_LEXICON` on a hunch, per its docstring.
+
+### 9b. The finding that reframes every listen in this document: **synthesis is unseeded**
+
+Chasing `database` produced something more important than a spelling. On 2026-08-16 the owner
+judged `ڈیٹا base` to be "data-boss" (wrong), and about an hour later judged the *same sentence*
+correct. The two texts were verified byte-identical from the two manifests — same reference, same
+checkpoint, same code path. The only difference was that they were **two separate generations**.
+
+`OmniVoiceBackend.synth()` sets no seed. `self._model.generate(...)` samples freshly on every call,
+so **a loanword's pronunciation is a random variable, not a property of the spelling.**
+
+That is not a criticism of the owner's ear; it is a property of the experiment. Every single-listen
+verdict in this document is an n=1 draw:
+
+| verdict | where | now reads as |
+|---|---|---|
+| "late passes, code-switched office/late both landed" | §5b | n=1 |
+| "`ڈیٹا base` verified correct in this sentence" | §5c | n=1 |
+| "column B mispronounces late" | §9 | n=1 |
+| "`ڈیٹا base` is data-boss" / "…is correct" | §9a | n=1 each, and they disagree |
+
+Their disagreement is the *expected* outcome of sampling a coin, not a contradiction needing an
+explanation — and it is the simplest account of `late` passing in §5b, failing in §9, then passing
+again on the focused re-listen. It also means §5c's method (choose a respelling from one clip) could
+not have worked reliably even in principle.
+
+**Consequences, in order of importance:**
+
+1. **The question changes from "is this spelling correct" to "how *often* is it correct".** A
+   spelling right 2 times in 4 is not a fix; it is the same coin flip with extra steps.
+   `eval/run_loanword_reliability.py` measures this — 8 variants × 4 samples, shuffled under a fixed
+   seed and presented as bare numbers, since the owner has now rated identical audio two ways and
+   knowing which clip ships is exactly the bias worth removing.
+2. **A wrong lexicon entry is worse than none.** Verbatim `database` is merely imperfect;
+   `_LOANWORD_LEXICON` actively rewrites it, so a bad entry *introduces* an error for every user.
+3. **Users see this variance too.** Even a perfect lexicon leaves any single generation able to come
+   out wrong, which makes "regenerate" a real remedy rather than a shrug — and is an argument for
+   the editable-text design over any silent transform.
+4. **Seeding is worth considering separately** — it would make experiments reproducible, but it also
+   freezes one draw, so it must not be added *just* to make this table look stable.
