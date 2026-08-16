@@ -2,18 +2,31 @@
 Phase A3 -- the gate. Roman Urdu -> LLM conversion -> real OmniVoice audio ->
 the owner's ear.
 
-RUN 2 (2026-08-16): Ministral-3-8B, after the owner rejected run 1.
+RUN 3 (2026-08-16): Gemma-4-31B, after run 2's ten reported defects.
 --------------------------------------------------------------------
-Run 1 fed Qwen2.5-7B's `strict_zero_shot` output and the owner's verdict was
-"column A is not usable". SS13 then re-ran A2 unchanged on
-`mistralai/Ministral-3-8B-Instruct-2512` (Apache 2.0) and measured 74%
-contract-clean at CER 0.0777 against Qwen's 46% / 0.2733. That is a different
-class of result, so the gate is re-run rather than assumed to give the same
-answer -- a text metric can only reject, never approve, and no one has heard
-Ministral's output.
+Run 1 was Qwen2.5-7B ("not usable"). Run 2 was Ministral-3-8B, and the owner
+reported ten defects; nine were text errors, and the damaging ones were valid
+Urdu words meaning something else -- کال for کل, طباعت for طبیعت, بجھ for بھیج.
 
-Run 1's clips and page are preserved at `eval/results/a3_full_chain/`; this
-writes to `eval/results/a3_ministral/` so the two are directly comparable.
+`unsloth/gemma-4-31B-it-unsloth-bnb-4bit` (Gemma 4, verified Apache 2.0 at
+Google's own licence page) is the strongest model on UrduMMLU that fits this
+card, and on the A2 corpus it scores CER 0.0471 against Ministral's 0.0777.
+More to the point, it fixes ALL TEN of run 2's reported defects in text. That
+is why this runs again rather than stopping: the failures the owner named are
+gone, so the ear has a genuinely different thing to judge.
+
+The arm is `strict_zero_shot` -- statistically tied with control_zero_shot, but
+it is the prompt that states the output contract, so it is the honest
+production candidate. Being zero-shot it excludes no exemplars, which restores
+RUN 1's EXACT TEN ITEMS: run 1 and run 3 compare clip for clip, same sentences.
+
+Its two contract "failures" are the good kind -- `office`, `file` and `check`
+kept in Latin where the corpus gold converts them. Rule 2 of the contract says
+keeping them is correct, so here the metric penalises the model for following
+the instruction more faithfully than the gold does. Judged by ear, not by badge.
+
+Run 1 is at `eval/results/a3_full_chain/`, run 2 at `eval/results/a3_ministral/`;
+this writes to `eval/results/a3_gemma31b/`.
 
 Everything before this point measured TEXT. A0 already showed why that is not
 enough in the other direction (an ASR screen looked encouraging and the owner
@@ -27,21 +40,16 @@ by hearing what the converted text actually sounds like.
 
 WHAT IS COMPARED
 ----------------
-  A  Ministral `strict_few_shot` output -> OmniVoice   (the real pipeline)
-  B  the corpus's Perso-Arabic gold      -> OmniVoice   (the ceiling)
+  A  Gemma-4-31B `strict_zero_shot` output -> OmniVoice  (the real pipeline)
+  B  the corpus's Perso-Arabic gold        -> OmniVoice  (the ceiling)
 
 Arm B is what the user would get by typing correct Urdu themselves, so it is
 the thing arm A has to justify itself against -- not against silence, and not
 against Roman-direct, which A0 already rejected.
 
-The ten items keep run 1's deliberate mix: **six passed A2's contract and four
-failed it**. A page of only the successes would answer a question nobody asked.
-Eight items are held over from run 1 so the two pages can be compared clip for
-clip; `technical` and `colloquial` had to be dropped because `strict_few_shot`
-uses them as prompt exemplars, and scoring a model on its own examples is not
-scoring. Their replacements are this arm's two *worst* items by CER
-(`cs_06_interview` 0.340, `abbreviations` 0.281), which is the harder
-substitution, not the kinder one.
+The ten items are run 1's exactly, unchanged. Eight of them now pass the
+contract where run 1 had four failures -- that is the result, not a change of
+subject, because the sentence list was fixed before any of these models existed.
 
 The conversions are read from A2's committed manifest rather than regenerated,
 so this is scoring the exact outputs §10's numbers describe. Nothing is
@@ -73,10 +81,10 @@ from app.domain.urdu_text import (  # noqa: E402
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = _REPO_ROOT / "eval" / "results" / "a3_ministral"
+OUT_DIR = _REPO_ROOT / "eval" / "results" / "a3_gemma31b"
 _A2_MANIFEST = (
     _REPO_ROOT / "eval" / "results"
-    / "roman_arabic_probe_mistralai_ministral_3_8b_instruct_2512" / "manifest.json"
+    / "roman_arabic_probe_unsloth_gemma_4_31b_it_unsloth_bnb_4bit" / "manifest.json"
 )
 _CORPUS = _REPO_ROOT / "eval" / "fixtures" / "urdu_corpus.json"
 _REF_AUDIO = _REPO_ROOT / "eval" / "fixtures" / "voice_urdu.wav"
@@ -87,34 +95,31 @@ _REF_TEXT = (
 _HF_REPO = "k2-fsa/OmniVoice"
 _HF_REVISION = "c5fdb5ccb189668d56333f77ba2629f4cd7535f4"
 
-#: Best-reliability A2 arm: 0 unparseable at 7B, and 62% contract-clean on the
-#: trusted original-13 subset. Not the best mean CER -- that was
-#: strict_few_shot, which has the WORST contract rate (§10b).
-#:
-#: RUN 2: Ministral's best arm is `strict_few_shot` on every metric at once --
-#: CER 0.0777, preservation 0.848, completeness 0.966, 29/39 contract-clean,
-#: 0 unparseable. Nothing is traded away, so run 1's "best-reliability versus
-#: best-CER" choice does not arise.
-_A2_ARM = "strict_few_shot"
+#: RUN 3: on Gemma-4-31B the four arms are within noise of each other
+#: (contract 30-33/45, CER 0.041-0.049, 0 unparseable everywhere) -- prompt
+#: engineering buys nothing because the model already holds the constraints.
+#: `strict_zero_shot` is chosen over the marginally-better control arm because
+#: it is the prompt that states the contract, and because zero-shot excludes no
+#: exemplars, which is what restores run 1's exact ten items.
+_A2_ARM = "strict_zero_shot"
 
 _NORMALIZATIONS = (TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON)
 
-#: Six A2 contract passes, four failures -- run 1's mix, held to deliberately.
-#: Eight items carry over so the two pages compare clip for clip.
-#: `technical` and `colloquial` are `strict_few_shot` exemplars and scoring a
-#: model on its own examples is not scoring; their replacements are this arm's
-#: two WORST items by CER, which is the harder substitution, not the kinder one.
+#: Run 1's list, byte for byte. Under this model 8 of the 10 pass the contract
+#: (run 1: 6). The two that fail do so by keeping `office`/`file`/`check` in
+#: Latin where the gold converts them -- contract rule 2 says that is correct,
+#: so the badge is wrong about them, not the model.
 _ITEM_IDS = (
-    "owner_01_sick",       # A2 fail: `office` kept Latin where gold converts it
-    "owner_02_file",
+    "owner_01_sick",       # A2 "fail" of the GOOD kind: kept `office` Latin, gold converts it
+    "owner_02_file",       # ditto for `file`/`check`
     "owner_03_deadline",
-    "owner_04_late",       # a Qwen contract FAILURE that Ministral passes at 0.038
-    "owner_05_github",     # ditto at 0.045 -- Qwen broke these tokens mid-word
-    "cs_06_interview",     # A2 fail, worst CER in the arm (0.340)
-    "abbreviations",       # A2 fail, second-worst (0.281), `file` left in Latin
+    "owner_04_late",
+    "owner_05_github",
+    "technical",
+    "colloquial",
     "long_multiclause",
     "conv_01_greeting",
-    "cs_04_laptop",        # A2 fail: `upgrade` translated away
+    "cs_04_laptop",
 )
 
 
@@ -212,32 +217,29 @@ h1 {{ font-size: 1.3rem; }}
 audio {{ width:100%; margin-top:.3rem; }}
 </style></head>
 <body>
-<h1>A3, run 2 &mdash; same question, a different model</h1>
-<p class="q"><b>You listened to run 1 and said "column A is not usable."</b> That was
-Qwen2.5-7B: 46% of sentences fully clean, CER 0.27. Column A here is a different model
-&mdash; <b>Ministral-3-8B</b> (Apache&nbsp;2.0), which scores <b>74% clean at CER 0.078</b>
-on the identical corpus, prompt and metrics. Column B is unchanged: the hand-written Urdu
-gold, i.e. what you'd get by typing correct Urdu yourself.<br><br>
-The question is still <b>not</b> "is A perfect". It's: <b>would editing A be less work than
-typing B yourself?</b> If yes, Phase B is worth building. If you'd still rather type Urdu,
-it isn't, and the feature stays closed &mdash; this time on two models rather than one.</p>
-<p><b>6 of these 10 passed A2's text contract and 4 failed it</b> &mdash; the failures are
-labelled, so you can hear whether a "failed" conversion is actually unusable or merely imperfect.
-That distinction is the whole decision. Both columns go through the same production normalization
-(numbers spelled out, loanword lexicon applied), so this is what the app would really send.</p>
-<p><b>Eight of the ten items are the same as run 1</b>, so you can open the two pages side by side
-and compare clip for clip. <code>technical</code> and <code>colloquial</code> are gone because this
-arm uses them as prompt examples &mdash; scoring a model on its own examples isn't scoring. Their
-replacements, <code>cs_06_interview</code> and <code>abbreviations</code>, are this arm's two
-<i>worst</i> items by CER, not two easy ones.</p>
-<p class="caveat"><b>"contract OK" does not mean "the Urdu is correct", and "FAILED" does not mean
-unusable.</b> The contract only checks that no English word was translated away and no Urdu was
-left in Latin letters. It says nothing about whether the Urdu that came out is the right Urdu
-&mdash; in run 1 <code>owner_01_sick</code> was badged OK while mangling <i>aaj</i> into
-<span dir="rtl">امیدوار رہا کہ</span>. The reverse also happens here: three of the four failures
-below (<code>owner_01_sick</code>, <code>abbreviations</code>, <code>cs_04_laptop</code>) failed
-only because an English word went one way rather than the other, which may well sound
-<i>better</i>. <b>Judge by ear; the badges are context, not a verdict.</b></p>
+<h1>A3, run 3 &mdash; Gemma-4-31B, and every defect you named</h1>
+<p class="q"><b>You reported ten defects in run 2.</b> Nine were Ministral writing the wrong
+word &mdash; <span dir="rtl">&#1705;&#1575;&#1604;</span> ("call") for
+<span dir="rtl">&#1705;&#1604;</span> ("tomorrow"),
+<span dir="rtl">&#1591;&#1576;&#1575;&#1593;&#1578;</span> ("printing") for
+<span dir="rtl">&#1591;&#1576;&#1740;&#1593;&#1578;</span> ("health"),
+<span dir="rtl">&#1576;&#1580;&#1726;</span> ("extinguish") for
+<span dir="rtl">&#1576;&#1726;&#1740;&#1580;</span> ("send").
+<b>Column A here is a different model, and in text it fixes all ten.</b><br><br>
+Same ten sentences as run 1, so you can open all three pages and compare clip for clip.
+Column B is unchanged: the hand-written gold.<br><br>
+The question is unchanged too: <b>would editing A be less work than typing B yourself?</b></p>
+<p><b>8 of the 10 now pass the text contract</b>, against 6 in run 1. The model is
+<code>unsloth/gemma-4-31B-it-unsloth-bnb-4bit</code> &mdash; Gemma 4, Apache 2.0, 4-bit,
+CER 0.047 against Ministral's 0.078 and Qwen's 0.273. Both columns go through the same
+production normalization, so this is what the app would really send.</p>
+<p class="caveat"><b>Read the two "FAILED" badges backwards.</b> <code>owner_01_sick</code> and
+<code>owner_02_file</code> fail only because the model kept <i>office</i>, <i>file</i> and
+<i>check</i> in Latin while the corpus gold converts them to Urdu script. Rule 2 of our own
+contract says keeping them is <i>correct</i> &mdash; so here the metric is penalising the model
+for following the instruction more faithfully than the gold does. Whether Latin or Urdu script
+sounds better for those words is exactly the open question, and it is a question for your ear.
+Nothing on this page is a verdict.</p>
 {"".join(blocks)}
 </body></html>
 """
