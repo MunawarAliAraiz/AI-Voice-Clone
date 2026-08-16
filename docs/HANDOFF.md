@@ -6,7 +6,7 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ Start here (state as of 2026-08-16, end of day)
+## ⚡ Start here (state as of 2026-08-17)
 
 **Live pod:** see `.claude/remote.local.md`. Bootstrapped clean, all six venvs, `.venv-qwen`
 provisioned by the script for the first time (that gap is fixed).
@@ -31,13 +31,35 @@ Qwen could not hold them at all.
    gets away with it only because Qwen2.5-3B's ~6 GB fits in the slack. **Ministral is the named
    fallback, but run 2 is the measured record of how it sounds and it did not pass — do not
    substitute on VRAM grounds without re-running A3 on the substitute.**
-2. **The one remaining defect is dictionary work with a new requirement.** میٹنگ is read as
-   *mating*; gold writes میٹنگ too, so it is not the model's doing. The text arrives already in
-   Perso-Arabic, so `_LOANWORD_LEXICON`'s **Latin-only keys never match** — entries must be keyable
-   on either script. Any candidate respelling goes through §9b blind repeat sampling first;
-   `database` needed twelve samples per candidate and its best-sounding clip scored 4/12.
+2. ~~**The one remaining defect is dictionary work with a new requirement.**~~ **Done — the
+   dictionary shipped 2026-08-16/17** (see below). میٹنگ is read as *mating*; gold writes میٹنگ too,
+   so it was never the model's doing. Because the text arrives already in Perso-Arabic,
+   `_LOANWORD_LEXICON`'s Latin-only keys could never match it — the lexicon is now data-driven and
+   `مِیٹِنگ` ships as the first Perso-Arabic-keyed default, which is what proves the either-script
+   requirement is satisfiable rather than merely stated.
+
+**Shipped since the gate passed (2026-08-16/17):** the **pronunciation dictionary** end to end
+(`pronunciation_entries` table, `/api/pronunciations` CRUD, a `Pronunciation` tab, a pure
+`effective_lexicon` merge policy, and a `get_lexicon(db)` dependency that keeps golden rule 4's
+`resolve()` free of I/O), plus the Studio workflow changes: analyzer-suggested editable titles
+returned in the *same* CLASSIFY response as the prosody rows, a Generate button that enqueues and
+re-enables immediately with a queued toast and an In progress strip, Recent+History merged, an
+editor toolbar attached to the textarea, adaptive job polling that stops when nothing is in flight,
+and startup warm-up that runs a throwaway synthesis per model (weights alone don't remove the
+~160 s stall — OmniVoice's embedded Whisper loads on first `synth()`). It also added **the first
+schema migration this project has had**: an add-only `PRAGMA table_info` + `ALTER TABLE ADD COLUMN`
+pass in `Database.connect()`, because a new `title` column would otherwise have reached a fresh
+install and silently missed the pod's real database. `pytest -m "not gpu"` and `npm run build` are
+both green; **none of it has been exercised against the pod in a browser yet** — that needs the
+API key pasted into Settings, and it is the first thing to do.
 
 **What a fresh session should do first:**
+
+0. **Click through the shipped UI against the pod** (SSH tunnel + `npm run dev`, key pasted into
+   Settings): add a dictionary entry and hear it applied, generate twice in a row without the
+   button locking, confirm the queued toast and the In progress strip, and check the startup log
+   shows both models warmed *and* synthesized. Everything above is verified by tests and a local
+   build only.
 
 1. **Design Phase B, starting with the VRAM question above.** The plan
    (`~/.claude/plans/yes-i-d-refine-your-quiet-blossom.md`, mirrored in ROADMAP) has the full
@@ -48,10 +70,14 @@ Qwen could not hold them at all.
    **`resolve()` and `TransformKind` are not touched** — the output is editable text, not a routing
    transform. What the plan does NOT yet answer is constraint 1: how a 19 GB transliterator
    coexists with the GPU-slot semaphore.
-2. **Build the user-editable pronunciation dictionary.** §9e measured that **17.2% of English
-   loanword instances** (11 of 54 distinct words, 32.5% of generations) are mispronounced by
-   OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely fixes them. The gate
-   pass adds میٹنگ→*mating* and with it the either-script keying requirement (constraint 2).
+2. ~~**Build the user-editable pronunciation dictionary.**~~ **Built.** §9e's measurement is why it
+   exists — **17.2% of English loanword instances** (11 of 54 distinct words, 32.5% of generations)
+   are mispronounced by OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely
+   fixes them rather than shifting a coin flip. What remains is owner work, not code: the built-in
+   defaults are deliberately thin (three entries), and adding a fourth means picking a respelling
+   by ear. §15f's tie stands unbroken — five spellings of `meeting` scored equally over 4 blind
+   samples each, and the owner's point that hand-picking respellings is exactly the work the
+   dictionary exists to hand back to the user is why no second sampling round was run.
    Design notes in §9d/§15d.
 3. **One one-click owner action:** accept the licence at huggingface.co/ai4bharat/IndicF5 to unblock
    bake-off arms H/I/J. (`docs/outreach/mavkif-licence-request.md` is now **moot** — it existed only

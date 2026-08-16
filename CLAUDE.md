@@ -252,4 +252,12 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   otherwise. The API key lives in `localStorage`, read/written directly in `App.tsx`'s `ApiKeyControl`.
   Toasts and other UI-only state are plain `useState`. Don't add Zustand on the assumption it's already
   a project dependency — check `package.json` first.
+- **Schema changes: add a column, nothing else.** `Database.connect()` runs an add-only pass driven by
+  `_ADDED_COLUMNS` — `PRAGMA table_info`, then `ALTER TABLE … ADD COLUMN` for anything missing. Adding a
+  column is one line in that tuple. It is deliberately *not* a migration framework: no renames, drops,
+  type changes, backfills, or version counter, because `ADD COLUMN` is the one SQLite change that is O(1)
+  and cannot lose data. Anything beyond that needs a real mechanism, which does not exist yet — don't
+  extend this one into one. Older comments in `schema.sql` claiming there is no migration mechanism at
+  all predate this and have been corrected; the pod's database holds the owner's real voices and history,
+  so a column added only to `schema.sql` reaches a fresh install and silently misses production.
 - No `.catch(() => {})`. Ever.
