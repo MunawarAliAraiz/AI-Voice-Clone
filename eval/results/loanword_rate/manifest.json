@@ -1,0 +1,585 @@
+{
+  "normalizations": [
+    "numbers",
+    "loanword_lexicon"
+  ],
+  "samples_per_item": 2,
+  "plan": [
+    {
+      "id": "owner_04_late",
+      "raw": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "office",
+        "late"
+      ],
+      "sample": 1,
+      "wav": "owner_04_late_s1.wav",
+      "clip_no": 1
+    },
+    {
+      "id": "owner_04_late",
+      "raw": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "office",
+        "late"
+      ],
+      "sample": 2,
+      "wav": "owner_04_late_s2.wav",
+      "clip_no": 2
+    },
+    {
+      "id": "owner_05_github",
+      "raw": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "GitHub",
+        "pull",
+        "request",
+        "create",
+        "review"
+      ],
+      "sample": 1,
+      "wav": "owner_05_github_s1.wav",
+      "clip_no": 3
+    },
+    {
+      "id": "owner_05_github",
+      "raw": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "GitHub",
+        "pull",
+        "request",
+        "create",
+        "review"
+      ],
+      "sample": 2,
+      "wav": "owner_05_github_s2.wav",
+      "clip_no": 4
+    },
+    {
+      "id": "abbreviations",
+      "raw": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "normalizations_applied": [
+        "loanword_lexicon"
+      ],
+      "latin_words": [
+        "PDF"
+      ],
+      "sample": 1,
+      "wav": "abbreviations_s1.wav",
+      "clip_no": 5
+    },
+    {
+      "id": "abbreviations",
+      "raw": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "normalizations_applied": [
+        "loanword_lexicon"
+      ],
+      "latin_words": [
+        "PDF"
+      ],
+      "sample": 2,
+      "wav": "abbreviations_s2.wav",
+      "clip_no": 6
+    },
+    {
+      "id": "technical",
+      "raw": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "normalizations_applied": [
+        "loanword_lexicon"
+      ],
+      "latin_words": [
+        "backup",
+        "server",
+        "restart"
+      ],
+      "sample": 1,
+      "wav": "technical_s1.wav",
+      "clip_no": 7
+    },
+    {
+      "id": "technical",
+      "raw": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "normalizations_applied": [
+        "loanword_lexicon"
+      ],
+      "latin_words": [
+        "backup",
+        "server",
+        "restart"
+      ],
+      "sample": 2,
+      "wav": "technical_s2.wav",
+      "clip_no": 8
+    },
+    {
+      "id": "conv_02_plans",
+      "raw": "چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔",
+      "text": "چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "call"
+      ],
+      "sample": 1,
+      "wav": "conv_02_plans_s1.wav",
+      "clip_no": 9
+    },
+    {
+      "id": "conv_02_plans",
+      "raw": "چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔",
+      "text": "چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "call"
+      ],
+      "sample": 2,
+      "wav": "conv_02_plans_s2.wav",
+      "clip_no": 10
+    },
+    {
+      "id": "conv_05_apology",
+      "raw": "معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔",
+      "text": "معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "message"
+      ],
+      "sample": 1,
+      "wav": "conv_05_apology_s1.wav",
+      "clip_no": 11
+    },
+    {
+      "id": "conv_05_apology",
+      "raw": "معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔",
+      "text": "معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "message"
+      ],
+      "sample": 2,
+      "wav": "conv_05_apology_s2.wav",
+      "clip_no": 12
+    },
+    {
+      "id": "cs_01_deploy",
+      "raw": "میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔",
+      "text": "میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "staging",
+        "deploy",
+        "production",
+        "wait"
+      ],
+      "sample": 1,
+      "wav": "cs_01_deploy_s1.wav",
+      "clip_no": 13
+    },
+    {
+      "id": "cs_01_deploy",
+      "raw": "میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔",
+      "text": "میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "staging",
+        "deploy",
+        "production",
+        "wait"
+      ],
+      "sample": 2,
+      "wav": "cs_01_deploy_s2.wav",
+      "clip_no": 14
+    },
+    {
+      "id": "cs_02_meeting",
+      "raw": "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+      "text": "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "client",
+        "meeting",
+        "reschedule",
+        "Friday"
+      ],
+      "sample": 1,
+      "wav": "cs_02_meeting_s1.wav",
+      "clip_no": 15
+    },
+    {
+      "id": "cs_02_meeting",
+      "raw": "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+      "text": "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "client",
+        "meeting",
+        "reschedule",
+        "Friday"
+      ],
+      "sample": 2,
+      "wav": "cs_02_meeting_s2.wav",
+      "clip_no": 16
+    },
+    {
+      "id": "cs_03_bug",
+      "raw": "یہ bug production میں آ رہا ہے، log check کرو پہلے۔",
+      "text": "یہ bug production میں آ رہا ہے، log check کرو پہلے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "bug",
+        "production",
+        "log",
+        "check"
+      ],
+      "sample": 1,
+      "wav": "cs_03_bug_s1.wav",
+      "clip_no": 17
+    },
+    {
+      "id": "cs_03_bug",
+      "raw": "یہ bug production میں آ رہا ہے، log check کرو پہلے۔",
+      "text": "یہ bug production میں آ رہا ہے، log check کرو پہلے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "bug",
+        "production",
+        "log",
+        "check"
+      ],
+      "sample": 2,
+      "wav": "cs_03_bug_s2.wav",
+      "clip_no": 18
+    },
+    {
+      "id": "cs_04_laptop",
+      "raw": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "text": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "laptop",
+        "slow",
+        "RAM",
+        "upgrade"
+      ],
+      "sample": 1,
+      "wav": "cs_04_laptop_s1.wav",
+      "clip_no": 19
+    },
+    {
+      "id": "cs_04_laptop",
+      "raw": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "text": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "laptop",
+        "slow",
+        "RAM",
+        "upgrade"
+      ],
+      "sample": 2,
+      "wav": "cs_04_laptop_s2.wav",
+      "clip_no": 20
+    },
+    {
+      "id": "cs_05_whatsapp",
+      "raw": "میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔",
+      "text": "میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "WhatsApp",
+        "screenshot"
+      ],
+      "sample": 1,
+      "wav": "cs_05_whatsapp_s1.wav",
+      "clip_no": 21
+    },
+    {
+      "id": "cs_05_whatsapp",
+      "raw": "میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔",
+      "text": "میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "WhatsApp",
+        "screenshot"
+      ],
+      "sample": 2,
+      "wav": "cs_05_whatsapp_s2.wav",
+      "clip_no": 22
+    },
+    {
+      "id": "cs_06_interview",
+      "raw": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "text": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "interview",
+        "CV",
+        "update"
+      ],
+      "sample": 1,
+      "wav": "cs_06_interview_s1.wav",
+      "clip_no": 23
+    },
+    {
+      "id": "cs_06_interview",
+      "raw": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "text": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "interview",
+        "CV",
+        "update"
+      ],
+      "sample": 2,
+      "wav": "cs_06_interview_s2.wav",
+      "clip_no": 24
+    },
+    {
+      "id": "name_03_institution",
+      "raw": "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+      "text": "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "Aga",
+        "Khan",
+        "Hospital",
+        "appointment"
+      ],
+      "sample": 1,
+      "wav": "name_03_institution_s1.wav",
+      "clip_no": 25
+    },
+    {
+      "id": "name_03_institution",
+      "raw": "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+      "text": "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "Aga",
+        "Khan",
+        "Hospital",
+        "appointment"
+      ],
+      "sample": 2,
+      "wav": "name_03_institution_s2.wav",
+      "clip_no": 26
+    },
+    {
+      "id": "numd_01_time",
+      "raw": "meeting صبح 9 بجے ہے، please 10 منٹ پہلے آ جانا۔",
+      "text": "meeting صبح نو بجے ہے، please دس منٹ پہلے آ جانا۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "meeting",
+        "please"
+      ],
+      "sample": 1,
+      "wav": "numd_01_time_s1.wav",
+      "clip_no": 27
+    },
+    {
+      "id": "numd_01_time",
+      "raw": "meeting صبح 9 بجے ہے، please 10 منٹ پہلے آ جانا۔",
+      "text": "meeting صبح نو بجے ہے، please دس منٹ پہلے آ جانا۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "meeting",
+        "please"
+      ],
+      "sample": 2,
+      "wav": "numd_01_time_s2.wav",
+      "clip_no": 28
+    },
+    {
+      "id": "numd_02_price",
+      "raw": "اس کی قیمت 2500 روپے ہے، discount کے بعد 2000 ہو جائے گی۔",
+      "text": "اس کی قیمت دو ہزار پانچ سو روپے ہے، discount کے بعد دو ہزار ہو جائے گی۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "discount"
+      ],
+      "sample": 1,
+      "wav": "numd_02_price_s1.wav",
+      "clip_no": 29
+    },
+    {
+      "id": "numd_02_price",
+      "raw": "اس کی قیمت 2500 روپے ہے، discount کے بعد 2000 ہو جائے گی۔",
+      "text": "اس کی قیمت دو ہزار پانچ سو روپے ہے، discount کے بعد دو ہزار ہو جائے گی۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "discount"
+      ],
+      "sample": 2,
+      "wav": "numd_02_price_s2.wav",
+      "clip_no": 30
+    },
+    {
+      "id": "numd_04_phone",
+      "raw": "میرا نمبر 0300 1234567 ہے، save کر لو۔",
+      "text": "میرا نمبر تین سو بارہ لاکھ چونتیس ہزار پانچ سو سڑسٹھ ہے، save کر لو۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "save"
+      ],
+      "sample": 1,
+      "wav": "numd_04_phone_s1.wav",
+      "clip_no": 31
+    },
+    {
+      "id": "numd_04_phone",
+      "raw": "میرا نمبر 0300 1234567 ہے، save کر لو۔",
+      "text": "میرا نمبر تین سو بارہ لاکھ چونتیس ہزار پانچ سو سڑسٹھ ہے، save کر لو۔",
+      "normalizations_applied": [
+        "numbers"
+      ],
+      "latin_words": [
+        "save"
+      ],
+      "sample": 2,
+      "wav": "numd_04_phone_s2.wav",
+      "clip_no": 32
+    },
+    {
+      "id": "messy_02_runon",
+      "raw": "میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا",
+      "text": "میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا",
+      "normalizations_applied": [],
+      "latin_words": [
+        "time",
+        "market"
+      ],
+      "sample": 1,
+      "wav": "messy_02_runon_s1.wav",
+      "clip_no": 33
+    },
+    {
+      "id": "messy_02_runon",
+      "raw": "میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا",
+      "text": "میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا",
+      "normalizations_applied": [],
+      "latin_words": [
+        "time",
+        "market"
+      ],
+      "sample": 2,
+      "wav": "messy_02_runon_s2.wav",
+      "clip_no": 34
+    },
+    {
+      "id": "messy_03_abbrev",
+      "raw": "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+      "text": "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+      "normalizations_applied": [],
+      "latin_words": [
+        "asap",
+        "reply",
+        "plz",
+        "boss",
+        "urgent"
+      ],
+      "sample": 1,
+      "wav": "messy_03_abbrev_s1.wav",
+      "clip_no": 35
+    },
+    {
+      "id": "messy_03_abbrev",
+      "raw": "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+      "text": "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+      "normalizations_applied": [],
+      "latin_words": [
+        "asap",
+        "reply",
+        "plz",
+        "boss",
+        "urgent"
+      ],
+      "sample": 2,
+      "wav": "messy_03_abbrev_s2.wav",
+      "clip_no": 36
+    },
+    {
+      "id": "tech_01_api",
+      "raw": "API کا response slow ہے، cache enable کرنا پڑے گا۔",
+      "text": "API کا response slow ہے، cache enable کرنا پڑے گا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "API",
+        "response",
+        "slow",
+        "cache",
+        "enable"
+      ],
+      "sample": 1,
+      "wav": "tech_01_api_s1.wav",
+      "clip_no": 37
+    },
+    {
+      "id": "tech_01_api",
+      "raw": "API کا response slow ہے، cache enable کرنا پڑے گا۔",
+      "text": "API کا response slow ہے، cache enable کرنا پڑے گا۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "API",
+        "response",
+        "slow",
+        "cache",
+        "enable"
+      ],
+      "sample": 2,
+      "wav": "tech_01_api_s2.wav",
+      "clip_no": 38
+    },
+    {
+      "id": "tech_02_git",
+      "raw": "git pull کرنے کے بعد merge conflict آ گیا ہے۔",
+      "text": "git pull کرنے کے بعد merge conflict آ گیا ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "git",
+        "pull",
+        "merge",
+        "conflict"
+      ],
+      "sample": 1,
+      "wav": "tech_02_git_s1.wav",
+      "clip_no": 39
+    },
+    {
+      "id": "tech_02_git",
+      "raw": "git pull کرنے کے بعد merge conflict آ گیا ہے۔",
+      "text": "git pull کرنے کے بعد merge conflict آ گیا ہے۔",
+      "normalizations_applied": [],
+      "latin_words": [
+        "git",
+        "pull",
+        "merge",
+        "conflict"
+      ],
+      "sample": 2,
+      "wav": "tech_02_git_s2.wav",
+      "clip_no": 40
+    }
+  ]
+}
