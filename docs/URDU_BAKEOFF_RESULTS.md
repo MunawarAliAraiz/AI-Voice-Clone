@@ -1121,3 +1121,52 @@ user typed)? That question only existed because an LLM converter was going to ma
 the user typed, so nothing is deciding on their behalf — and the pronunciation dictionary (§9d/§9e)
 becomes both simpler and, at a measured 17.2% failure rate, the most valuable Urdu work outstanding.
 It was deferred pending A3; it no longer is.
+
+---
+
+## 13. A2 revisited — Ministral-3-8B, and why §12's closure was premature `[BENCH]`
+
+§12 closed the feature on A3's listening verdict. That verdict was correct **about the model it
+tested**. Asked afterwards whether any freely-licensed open-weights model could do better, the survey
+pointed at [UrduMMLU](https://arxiv.org/abs/2606.07167) (26,431 Urdu MCQs, 30 models), where
+`Ministral-3-8B` co-leads the ≤25B open group at ~55–57% against Qwen3-8B's ~50%. It is **Apache 2.0**
+— cleanly permissive, no rule 6 friction, no non-commercial badge.
+
+Same probe, same corpus, same four arms, same three metrics. Only `PROBE_MODEL_ID` changed.
+
+| model | arm | contract ✅ | CER | preserve | complete | unparse |
+|---|---|---|---|---|---|---|
+| Qwen2.5-7B | strict_zero_shot | 18/45 (40%) | 0.3061 | 0.587 | 0.696 | 0 |
+| Qwen2.5-7B | strict_few_shot | 10/38 (26%) | 0.2733 | 0.852 | 0.450 | 1 |
+| **Ministral-3-8B** | control_few_shot | 26/43 (60%) | 0.1562 | 0.629 | **1.0000** | 0 |
+| **Ministral-3-8B** | **strict_few_shot** | **29/39 (74%)** | **0.0777** | 0.848 | 0.966 | **0** |
+
+On the **trusted original-13** items (gold predating this session): **82%** contract-clean, against
+Qwen's 27% on the same arm and same items.
+
+**Three things are qualitatively different, not just numerically better:**
+
+1. **Conversion completeness reaches 1.0000 on three of four arms.** Ministral never leaves Urdu
+   sitting in Latin letters. That was Qwen's single worst failure mode — `تum`, `ریquest`, half-
+   converted sentences — and it is simply absent.
+2. **CER 0.0777** on the best arm, against Qwen's best of 0.2733. Nearly 4× closer to gold.
+3. **Few-shot helps here, and hurt Qwen.** §10b found examples raising preservation while wrecking
+   completeness (0.696 → 0.450), because Qwen over-generalised "keep English" into keeping Urdu.
+   Ministral takes both lessons at once: preservation 0.848 *and* completeness 0.966. That is a model
+   able to hold two constraints instead of trading one against the other.
+
+Zero unparseable responses in all four arms, versus Qwen's scattered failures.
+
+**What this does and does not establish.** It does not reverse A3. Text metrics have twice been shown
+here to be unable to approve anything — A0's ASR screen looked fine while the owner heard an English
+accent, and §10's contract metric passed `owner_01_sick` while its Urdu was mangled. **A3's listening
+test must be re-run on Ministral's output before any claim that the feature works.**
+
+What it does establish is that **§12's closure was a verdict on Qwen, not on the idea.** The feature
+was rejected at 46% contract-clean and CER 0.27; the candidate now on the table is 74% and CER 0.078
+on a permissive licence. That deserves the gate re-run, not inheritance of the previous answer.
+
+The remaining weakness is code-switch preservation at 0.848 — Ministral still converts some English
+words to Urdu script. §11d is exactly the open question about whether that is a defect or an
+improvement, and §9e's measured 17.2% loanword mispronunciation rate is the reason it might be the
+latter. The ear decides that too.
