@@ -1,0 +1,139 @@
+{
+  "a2_arm": "strict_few_shot",
+  "a2_source": "eval/results/roman_arabic_probe_mistralai_ministral_3_8b_instruct_2512/manifest.json",
+  "normalizations": [
+    "numbers",
+    "loanword_lexicon"
+  ],
+  "rows": [
+    {
+      "id": "owner_01_sick",
+      "roman": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "a2_contract_ok": false,
+      "a2_cer": 0.140625,
+      "a2_lost": [],
+      "a2_residue": [
+        "office"
+      ],
+      "llm_raw": "ارے، آج میں office نہیں آ سکوں گا کیونکہ میری طباعت کچھ ٹھیک نہیں ہے۔",
+      "llm_text": "ارے، آج میں office نہیں آ سکوں گا کیونکہ میری طباعت کچھ ٹھیک نہیں ہے۔",
+      "gold_raw": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "gold_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔"
+    },
+    {
+      "id": "owner_02_file",
+      "roman": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.0,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "llm_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "gold_raw": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "gold_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔"
+    },
+    {
+      "id": "owner_03_deadline",
+      "roman": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.07692307692307693,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کرنا چاہئے۔",
+      "llm_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کرنا چاہئے۔",
+      "gold_raw": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "gold_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔"
+    },
+    {
+      "id": "owner_04_late",
+      "roman": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.03773584905660377,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "ارے، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "llm_text": "ارے، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "gold_raw": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "gold_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔"
+    },
+    {
+      "id": "owner_05_github",
+      "roman": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.04477611940298507,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کرنا۔",
+      "llm_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کرنا۔",
+      "gold_raw": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "gold_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔"
+    },
+    {
+      "id": "cs_06_interview",
+      "roman": "Kal interview hai, main ne apna CV update kar liya hai.",
+      "a2_contract_ok": false,
+      "a2_cer": 0.3404255319148936,
+      "a2_lost": [
+        "interview",
+        "update"
+      ],
+      "a2_residue": [],
+      "llm_raw": "کال انٹرویو ہے، میں نے اپنا CV اپ ڈیٹ کر لیا ہے۔",
+      "llm_text": "کال انٹرویو ہے، میں نے اپنا CV اپ ڈیٹ کر لیا ہے۔",
+      "gold_raw": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "gold_text": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔"
+    },
+    {
+      "id": "abbreviations",
+      "roman": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
+      "a2_contract_ok": false,
+      "a2_cer": 0.2807017543859649,
+      "a2_lost": [],
+      "a2_residue": [
+        "file"
+      ],
+      "llm_raw": "بارے مہربانی PDF file ای میل کر دیں اور URL بھی ساتھ بجھ دیں۔",
+      "llm_text": "بارے مہربانی PDF file ای میل کر دیں اور یو آر ایل بھی ساتھ بجھ دیں۔",
+      "gold_raw": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "gold_text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔"
+    },
+    {
+      "id": "long_multiclause",
+      "roman": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.03125,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "کال جب میں دفتر پہنچا تو پتا چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کا کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "llm_text": "کال جب میں دفتر پہنچا تو پتا چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کا کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "gold_raw": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "gold_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔"
+    },
+    {
+      "id": "conv_01_greeting",
+      "roman": "Assalam o alaikum, kya haal hai aap ka? Bohat dinon baad baat hui.",
+      "a2_contract_ok": true,
+      "a2_cer": 0.0196078431372549,
+      "a2_lost": [],
+      "a2_residue": [],
+      "llm_raw": "اسلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔",
+      "llm_text": "اسلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔",
+      "gold_raw": "السلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔",
+      "gold_text": "السلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔"
+    },
+    {
+      "id": "cs_04_laptop",
+      "roman": "Mera laptop slow ho gaya hai, shayad RAM upgrade karni paray gi.",
+      "a2_contract_ok": false,
+      "a2_cer": 0.16363636363636364,
+      "a2_lost": [
+        "upgrade"
+      ],
+      "a2_residue": [],
+      "llm_raw": "میںرا laptop slow ہو گیا ہے، شاید RAM اپگریڈ کرنا پڑے گی۔",
+      "llm_text": "میںرا laptop slow ہو گیا ہے، شاید RAM اپگریڈ کرنا پڑے گی۔",
+      "gold_raw": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "gold_text": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔"
+    }
+  ]
+}
