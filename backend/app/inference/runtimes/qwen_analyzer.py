@@ -113,10 +113,13 @@ def _snippet(raw: str) -> str:
     return repr(raw if len(raw) <= _SNIPPET_CHARS else raw[:_SNIPPET_CHARS] + "…[truncated]")
 
 
-def _matching_brace(raw: str, start: int) -> int | None:
+def _scan_object(raw: str, start: int) -> tuple[int | None, str]:
     """
-    Index of the `}` that closes the `{` at `start`, or None if it never
-    closes.
+    Find the `}` closing the `{` at `start`.
+
+    Returns `(end_index, "")` when the object closes properly, or
+    `(None, closers)` when it does not — where `closers` is the exact
+    sequence of `]`/`}` that would balance what is still open at EOF.
 
     Replaces an `rfind("}")` that produced a genuinely misleading failure in
     production. Given a response whose only flaw was a missing final brace,
@@ -131,7 +134,7 @@ def _matching_brace(raw: str, start: int) -> int | None:
     are model-written free text and this analyzer's are frequently Urdu, so
     braces and escapes inside them are not hypothetical.
     """
-    depth = 0
+    stack: list[str] = []
     in_string = False
     escaped = False
     for i in range(start, len(raw)):
@@ -147,12 +150,18 @@ def _matching_brace(raw: str, start: int) -> int | None:
         if ch == '"':
             in_string = True
         elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return i
-    return None
+            stack.append("}")
+        elif ch == "[":
+            stack.append("]")
+        elif ch in "}]":
+            if not stack or stack[-1] != ch:
+                # Mismatched close. Not something to reason about further —
+                # the response is malformed in a way no completion fixes.
+                return None, ""
+            stack.pop()
+            if not stack:
+                return i, ""
+    return None, "".join(reversed(stack))
 
 
 def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[str, Any]]]:
@@ -168,17 +177,34 @@ def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[s
     start = raw.find("{")
     if start == -1:
         raise RuntimeError(f"no JSON object found in analyzer response: {raw!r}")
-    end = _matching_brace(raw, start)
-    if end is None:
-        # Genuinely unterminated. Say that plainly instead of letting the
-        # parser report a confusing column number inside a slice the caller
-        # never sees — this is what a too-small `max_new_tokens` looks like.
+    end, closers = _scan_object(raw, start)
+    if end is not None:
+        candidate = raw[start : end + 1]
+    elif closers:
+        # WHY THIS IS COMPLETION AND NOT REPAIR, AND WHY IT IS ALLOWED HERE.
+        #
+        # Qwen2.5-3B measurably ends this response with `]` and then stops,
+        # omitting the object's own final `}`. Verified on the pod: the output
+        # is byte-identical at max_new_tokens=300 and 900, and decoding is
+        # greedy (`do_sample=False`), so the model is choosing to stop — it is
+        # not being cut off. Raising here means the feature simply does not
+        # work on the analyzer this project actually ships.
+        #
+        # What is appended is only `]`/`}` for brackets THIS SCAN WATCHED OPEN.
+        # No key, no value, no default classification, nothing the model did
+        # not say. And it cannot paper over a genuinely incomplete response:
+        # a half-written row or a cut-off string still fails `json.loads`
+        # below, and every field still goes through the same strict validation
+        # afterwards. The only responses this rescues are the ones that were
+        # already complete.
+        candidate = raw[start:] + closers
+    else:
         raise RuntimeError(
-            f"analyzer response object is unterminated (likely truncated by "
-            f"max_new_tokens); model returned {_snippet(raw)}"
+            f"analyzer response object never closes and cannot be completed; "
+            f"model returned {_snippet(raw)}"
         )
     try:
-        payload = json.loads(raw[start : end + 1])
+        payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
         # Include what the model actually said. Without it the error names a
         # line and column in a string nobody can see, which is how a real

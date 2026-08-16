@@ -94,16 +94,18 @@ def test_row_validation_still_applies_alongside_the_title() -> None:
         _parse_and_validate(raw, 1)
 
 
-def test_truncated_response_is_reported_as_truncation_not_a_syntax_error() -> None:
+def test_the_models_missing_final_brace_is_completed() -> None:
     """
-    REGRESSION (2026-08-17), verbatim from the pod. The model emitted a
-    complete, correct object and was cut off before its final `}` —
-    `max_new_tokens` was sized for the rows before the title was added.
+    REGRESSION (2026-08-17), verbatim from the pod — this exact string is what
+    Qwen2.5-3B returns. It closes the rows array and stops, omitting the
+    object's own final `}`. Byte-identical at max_new_tokens 300 and 900 under
+    greedy decoding, so the model is choosing to stop, not being cut off.
 
-    The old `rfind("}")` extraction then landed on the LAST ROW's closing
-    brace, discarding the `]` too, so a one-character truncation surfaced as
-    `Expecting ',' delimiter: line 6 column 93` pointing into the middle of a
-    perfectly valid array. The message has to name the real problem.
+    Every title was the text fallback because of this one character. The old
+    `rfind("}")` extraction made it unreadable on top: it landed on the LAST
+    ROW's closing brace, discarding the `]` too, so the failure surfaced as
+    `Expecting ',' delimiter: line 6 column 93` — pointing into the middle of
+    a perfectly valid array.
     """
     raw = (
         '{\n"title": "Greeting",\n"rows": [\n'
@@ -114,7 +116,30 @@ def test_truncated_response_is_reported_as_truncation_not_a_syntax_error() -> No
         '{"index": 2, "emotion": "neutral", "intensity": "low", '
         '"energy": "medium", "rate": "normal"}\n]'
     )
-    with pytest.raises(RuntimeError, match="unterminated"):
+    title, rows = _parse_and_validate(raw, 3)
+    assert title == "Greeting"
+    assert len(rows) == 3
+
+
+def test_completion_cannot_rescue_a_genuinely_incomplete_response() -> None:
+    """
+    The line that keeps the completion above honest. Closing brackets are
+    appended for what was watched open — nothing else — so a response cut off
+    mid-row still fails, because the row it was writing is not valid JSON no
+    matter what is appended after it.
+    """
+    raw = (
+        '{"title": "Greeting", "rows": [{"index": 0, "emotion": "neut'
+    )
+    with pytest.raises(RuntimeError):
+        _parse_and_validate(raw, 1)
+
+
+def test_completion_does_not_invent_a_missing_row() -> None:
+    """A completed object is still fully validated afterwards: the row count,
+    every enum, every required key. Completion buys parseability, never a pass."""
+    raw = '{"title": "Greeting", "rows": [' + json.dumps(_rows(1)[0])
+    with pytest.raises(RuntimeError, match="expected 3"):
         _parse_and_validate(raw, 3)
 
 
