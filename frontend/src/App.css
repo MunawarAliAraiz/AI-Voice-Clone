@@ -1565,12 +1565,33 @@ textarea {
   color: var(--muted);
 }
 
-/* The Composer's title input sits beside the tool row above the textarea. */
+/* Title sits with the other generation properties, near the top. */
 .editor-bar {
   display: flex;
   align-items: flex-end;
   gap: var(--space-3);
   margin-bottom: var(--space-2);
+}
+
+/* The tool row is glued to the textarea: labelled "Text", flush with the field
+   below it, and sharing its top corners so it reads as one control rather than
+   three buttons floating near the top of the card. */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 10px;
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.editor-toolbar + .textarea-wrapper textarea,
+.editor-toolbar ~ .textarea-wrapper textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .editor-title {

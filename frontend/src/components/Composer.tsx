@@ -272,6 +272,12 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
         .then((res) => {
           setDirection(res);
           setDirectionErr(null);
+          // Opening the preview is the user saying "I'm about to generate
+          // this", which is the right moment to have a name for it. The
+          // preview itself is heuristic and carries no title, so this asks
+          // separately — and only when the field is EMPTY, so it can never
+          // overwrite what the user typed.
+          void fillTitleIfEmpty(t);
         })
         .catch((e) => {
           setDirection(null);
@@ -440,6 +446,24 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
   const [copied, setCopied] = useState(false);
   const [clipboardError, setClipboardError] = useState<string | null>(null);
 
+  /**
+   * Fill the title from the analyzer, but never overwrite the user's own.
+   * Silent on failure: this is opportunistic, and Generate has its own
+   * fallback — a toast here would be noise about a field that fills itself.
+   */
+  async function fillTitleIfEmpty(forText: string): Promise<void> {
+    if (title.trim() || titling || !forText.trim()) return;
+    setTitling(true);
+    try {
+      const suggested = (await api.suggestTitle(forText.trim(), language)).title;
+      setTitle((current) => current.trim() || suggested);
+    } catch {
+      // Leave it empty; generate() will fall back to the text.
+    } finally {
+      setTitling(false);
+    }
+  }
+
   async function copyText() {
     setClipboardError(null);
     try {
@@ -490,48 +514,8 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
             aria-label="Generation title"
           />
         </label>
-        <div className="composer-tools">
-          {text.length > 0 && <span className="count">{text.length} / 5000</span>}
-          <button
-            type="button"
-            className="icon-btn tiny"
-            onClick={() => void copyText()}
-            disabled={!text}
-            title="Copy text"
-            aria-label="Copy text"
-          >
-            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
-          </button>
-          <button
-            type="button"
-            className="icon-btn tiny"
-            onClick={() => void pasteText()}
-            title="Paste at the cursor"
-            aria-label="Paste at the cursor"
-          >
-            <IconPaste size={13} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn tiny danger"
-            onClick={() => {
-              setText('');
-              textareaRef.current?.focus();
-            }}
-            disabled={!text}
-            title="Clear text"
-            aria-label="Clear text"
-          >
-            <IconTrash size={13} />
-          </button>
-        </div>
       </div>
 
-      {clipboardError && (
-        <div className="inline-error" role="alert">
-          <IconAlert size={14} /> {clipboardError}
-        </div>
-      )}
 
       <div className="row">
         <label className="field">
@@ -626,6 +610,55 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
           </div>
         </label>
       </div>
+
+      <div className="editor-toolbar">
+        {/* Directly on top of the textarea, and labelled, because these act on
+            THAT field. Sitting them up beside the Title left ~150px of voice,
+            language, model and speed controls between the buttons and the text
+            they clear. */}
+        <span className="field-label">Text</span>
+        <div className="composer-tools">
+          {text.length > 0 && <span className="count">{text.length} / 5000</span>}
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void copyText()}
+            disabled={!text}
+            title="Copy text"
+            aria-label="Copy text"
+          >
+            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void pasteText()}
+            title="Paste at the cursor"
+            aria-label="Paste at the cursor"
+          >
+            <IconPaste size={13} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny danger"
+            onClick={() => {
+              setText('');
+              textareaRef.current?.focus();
+            }}
+            disabled={!text}
+            title="Clear text"
+            aria-label="Clear text"
+          >
+            <IconTrash size={13} />
+          </button>
+        </div>
+      </div>
+
+      {clipboardError && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} /> {clipboardError}
+        </div>
+      )}
 
       <div className="textarea-wrapper">
         <textarea
