@@ -1,0 +1,74 @@
+{
+  "clips": [
+    {
+      "group": "late",
+      "variant": "latin",
+      "label": "Latin `late` (what runs today)",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "wav": "late_latin.wav"
+    },
+    {
+      "group": "late",
+      "variant": "urdu_let",
+      "label": "Respelled لیٹ",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں لیٹ ہو گیا۔",
+      "wav": "late_urdu_let.wav"
+    },
+    {
+      "group": "late",
+      "variant": "urdu_leyt",
+      "label": "Respelled لیٹھ (aspirated, in case لیٹ reads too short)",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں لیٹھ ہو گیا۔",
+      "wav": "late_urdu_leyt.wav"
+    },
+    {
+      "group": "late",
+      "variant": "bare_latin",
+      "label": "Bare Latin `late` (isolated, for contrast)",
+      "text": "late",
+      "wav": "late_bare_latin.wav"
+    },
+    {
+      "group": "late",
+      "variant": "bare_urdu",
+      "label": "Bare لیٹ (isolated, for contrast)",
+      "text": "لیٹ",
+      "wav": "late_bare_urdu.wav"
+    },
+    {
+      "group": "database",
+      "variant": "verbatim",
+      "label": "Raw `database` — what A0 fed (NOT production)",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_verbatim.wav"
+    },
+    {
+      "group": "database",
+      "variant": "production",
+      "label": "`ڈیٹا base` — what production actually sends",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_production.wav"
+    },
+    {
+      "group": "database",
+      "variant": "all_urdu",
+      "label": "`ڈیٹا بیس` — the all-Urdu form §5c rejected (بیس = 'twenty')",
+      "text": "ہمیں ڈیٹا بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_all_urdu.wav"
+    },
+    {
+      "group": "office",
+      "variant": "latin",
+      "label": "Latin `office` (control — should already be fine)",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں دیر سے آیا۔",
+      "wav": "office_latin.wav"
+    },
+    {
+      "group": "office",
+      "variant": "urdu",
+      "label": "Respelled آفس (control)",
+      "text": "یار، آج آفس میں کافی کام تھا، اس لیے میں دیر سے آیا۔",
+      "wav": "office_urdu.wav"
+    }
+  ]
+}
