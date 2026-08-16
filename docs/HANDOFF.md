@@ -11,11 +11,22 @@ project lost a day of planning because the only copy lived on a pod that was ter
 **Live pod:** see `.claude/remote.local.md`. Bootstrapped clean, all six venvs, `.venv-qwen`
 provisioned by the script for the first time (that gap is fixed).
 
-**The headline: the Roman-Urdu → Perso-Arabic feature is CLOSED, having failed its listening gate.**
-Phase A ran end to end and returned four independent negatives (A0, A2, A4, A3) —
-[URDU_BAKEOFF_RESULTS.md §9–§12](URDU_BAKEOFF_RESULTS.md) has the reasoning per dead end. Phase B
-was never started; that was the plan's explicit gate. Don't reopen it by re-running the Qwen probes:
-four arms across two model sizes are measured and §10a shows prompt engineering is not the lever.
+**The headline: the Roman-Urdu → Perso-Arabic feature FAILED its listening gate on Qwen, and a
+better-licensed candidate has since appeared.** Phase A ran end to end and returned four independent
+negatives (A0, A2, A4, A3) — [URDU_BAKEOFF_RESULTS.md §9–§12](URDU_BAKEOFF_RESULTS.md) has the
+reasoning per dead end. Phase B was never started; that was the plan's explicit gate. Don't reopen it
+by re-running the *Qwen* probes: four arms across two model sizes are measured and §10a shows prompt
+engineering is not the lever. **But §13 (2026-08-16) re-ran A2 unchanged on
+`mistralai/Ministral-3-8B-Instruct-2512` (Apache 2.0) and got 74% contract-clean at CER 0.0777,
+against Qwen's 46% / 0.27 — 82% on the trusted original-13 items, and conversion completeness 1.0000
+on three of four arms.** That is a different class of result, not an increment, so §12's closure
+reads as a verdict on Qwen rather than on the idea. It does **not** reverse A3: no one has listened
+to Ministral's output yet, and text metrics have twice failed to see what the ear caught (A0's ASR
+screen, §10's contract metric on `owner_01_sick`). **Re-running A3 on Ministral is a live option;
+the owner chose to weigh it against the dictionary rather than automatically taking it.**
+`eval/run_a3_full_chain.py` needs only `_A2_MANIFEST`/`_A2_ARM` repointed at
+`eval/results/roman_arabic_probe_mistralai_ministral_3_8b_instruct_2512/manifest.json`,
+arm `strict_few_shot`.
 
 **What a fresh session should do first:**
 
