@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>A3 &mdash; the full chain</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto;
+       padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.q { background:#1d2230; border-left:3px solid #6c8cff; padding:.9rem 1.1rem;
+     border-radius:4px; }
+.item { margin: 1.6rem 0; padding: 1rem; background:#161922; border-radius:8px; }
+.meta { font-size:.9rem; color:#9aa4b2; margin-bottom:.5rem; }
+.roman { font-size:1rem; color:#c9cfda; margin-bottom:.7rem; padding:.4rem .6rem;
+         background:#0f121a; border-radius:4px; }
+.pair { display:flex; gap:1rem; }
+.col { flex:1; }
+.label { font-size:.75rem; color:#6c8cff; text-transform:uppercase;
+         letter-spacing:.04em; margin-bottom:.3rem; }
+.text { font-size:1.1rem; margin:.4rem 0; min-height:3.2em; }
+.note { font-size:.8rem; color:#e0846c; min-height:1.2em; margin-top:.3rem; }
+.pass { color:#8fd3a6; font-weight:600; }
+.fail { color:#e0846c; font-weight:600; }
+.cer { color:#6f7a8a; margin-left:.5rem; }
+.caveat { background:#2a1d1d; border-left:3px solid #e0846c; padding:.9rem 1.1rem;
+          border-radius:4px; font-size:.95rem; }
+audio { width:100%; margin-top:.3rem; }
+</style></head>
+<body>
+<h1>A3, run 3 &mdash; Gemma-4-31B, and every defect you named</h1>
+<p class="q"><b>You reported ten defects in run 2.</b> Nine were Ministral writing the wrong
+word &mdash; <span dir="rtl">&#1705;&#1575;&#1604;</span> ("call") for
+<span dir="rtl">&#1705;&#1604;</span> ("tomorrow"),
+<span dir="rtl">&#1591;&#1576;&#1575;&#1593;&#1578;</span> ("printing") for
+<span dir="rtl">&#1591;&#1576;&#1740;&#1593;&#1578;</span> ("health"),
+<span dir="rtl">&#1576;&#1580;&#1726;</span> ("extinguish") for
+<span dir="rtl">&#1576;&#1726;&#1740;&#1580;</span> ("send").
+<b>Column A here is a different model, and in text it fixes all ten.</b><br><br>
+Same ten sentences as run 1, so you can open all three pages and compare clip for clip.
+Column B is unchanged: the hand-written gold.<br><br>
+The question is unchanged too: <b>would editing A be less work than typing B yourself?</b></p>
+<p><b>8 of the 10 now pass the text contract</b>, against 6 in run 1. The model is
+<code>unsloth/gemma-4-31B-it-unsloth-bnb-4bit</code> &mdash; Gemma 4, Apache 2.0, 4-bit,
+CER 0.047 against Ministral's 0.078 and Qwen's 0.273. Both columns go through the same
+production normalization, so this is what the app would really send.</p>
+<p class="caveat"><b>Read the two "FAILED" badges backwards.</b> <code>owner_01_sick</code> and
+<code>owner_02_file</code> fail only because the model kept <i>office</i>, <i>file</i> and
+<i>check</i> in Latin while the corpus gold converts them to Urdu script. Rule 2 of our own
+contract says keeping them is <i>correct</i> &mdash; so here the metric is penalising the model
+for following the instruction more faithfully than the gold does. Whether Latin or Urdu script
+sounds better for those words is exactly the open question, and it is a question for your ear.
+Nothing on this page is a verdict.</p>
+
+  <div class="item">
+    <div class="meta"><b>owner_01_sick</b> <span class="fail">A2: contract FAILED</span>
+      <span class="cer">CER 0.094</span></div>
+    <div class="roman">You typed: <b>Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">یار، آج میں office نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔</div>
+        <audio controls src="owner_01_sick_llm.wav"></audio>
+        <div class="note"> left in Latin: office.</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔</div>
+        <audio controls src="owner_01_sick_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>owner_02_file</b> <span class="fail">A2: contract FAILED</span>
+      <span class="cer">CER 0.188</span></div>
+    <div class="roman">You typed: <b>Aap ne jo file bheji thi, main ne usay check kar liya hai.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">آپ نے جو file بھیجی تھی، میں نے اسے check کر لیا ہے۔</div>
+        <audio controls src="owner_02_file_llm.wav"></audio>
+        <div class="note"> left in Latin: file, check.</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔</div>
+        <audio controls src="owner_02_file_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>owner_03_deadline</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.000</span></div>
+    <div class="roman">You typed: <b>Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔</div>
+        <audio controls src="owner_03_deadline_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔</div>
+        <audio controls src="owner_03_deadline_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>owner_04_late</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.000</span></div>
+    <div class="roman">You typed: <b>Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+        <audio controls src="owner_04_late_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+        <audio controls src="owner_04_late_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>owner_05_github</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.000</span></div>
+    <div class="roman">You typed: <b>Main ne GitHub par pull request create kar di hai, aap usay review kar lena.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+        <audio controls src="owner_05_github_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+        <audio controls src="owner_05_github_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>technical</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.000</span></div>
+    <div class="roman">You typed: <b>Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+        <audio controls src="technical_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+        <audio controls src="technical_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>colloquial</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.019</span></div>
+    <div class="roman">You typed: <b>Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">ارے یار چھوڑو نہ، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔</div>
+        <audio controls src="colloquial_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔</div>
+        <audio controls src="colloquial_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>long_multiclause</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.006</span></div>
+    <div class="roman">You typed: <b>Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">کل جب میں دفتر پہنچا تو پتا چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔</div>
+        <audio controls src="long_multiclause_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔</div>
+        <audio controls src="long_multiclause_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>conv_01_greeting</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.039</span></div>
+    <div class="roman">You typed: <b>Assalam o alaikum, kya haal hai aap ka? Bohat dinon baad baat hui.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">السلام و علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔</div>
+        <audio controls src="conv_01_greeting_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">السلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔</div>
+        <audio controls src="conv_01_greeting_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+  <div class="item">
+    <div class="meta"><b>cs_04_laptop</b> <span class="pass">A2: contract OK</span>
+      <span class="cer">CER 0.000</span></div>
+    <div class="roman">You typed: <b>Mera laptop slow ho gaya hai, shayad RAM upgrade karni paray gi.</b></div>
+    <div class="pair">
+      <div class="col">
+        <div class="label">A &mdash; what the feature would produce</div>
+        <div class="text" dir="rtl">میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی ۔</div>
+        <audio controls src="cs_04_laptop_llm.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+      <div class="col">
+        <div class="label">B &mdash; typing correct Urdu yourself (the ceiling)</div>
+        <div class="text" dir="rtl">میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔</div>
+        <audio controls src="cs_04_laptop_gold.wav"></audio>
+        <div class="note">&nbsp;</div>
+      </div>
+    </div>
+  </div>
+</body></html>
