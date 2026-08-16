@@ -1380,6 +1380,8 @@ textarea {
 .toast.error { border-color: rgba(255, 107, 122, 0.32); }
 .toast.success svg { color: var(--success); flex-shrink: 0; margin-top: 2px; }
 .toast.error svg { color: var(--danger); flex-shrink: 0; margin-top: 2px; }
+.toast.info { border-color: var(--accent-line); }
+.toast.info svg { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
 
 .toast-msg { flex: 1; line-height: 1.4; }
 

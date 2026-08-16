@@ -7,6 +7,7 @@
  * drift, and the queued/running states are exactly where a drift is invisible
  * until someone is waiting.
  */
+import { memo } from 'react';
 import type { JobStatusResponse } from '../types/api';
 import { fmtDuration, relativeTime } from '../lib/format';
 import { IconAlert, IconCheck, IconSpinner, IconX } from './icons';
@@ -16,7 +17,7 @@ import { IconAlert, IconCheck, IconSpinner, IconX } from './icons';
  * rendering both would show every clip twice. That is why there is no audio
  * player here: a row in this group has no audio by definition.
  */
-export function ActiveJobRow({
+function ActiveJobRowImpl({
   job,
   onCancel,
   cancelling,
@@ -96,3 +97,19 @@ function StatusChip({ status }: { status: JobStatusResponse['status'] }) {
     </span>
   );
 }
+
+/**
+ * Memoized because both lists that render it now re-render every 2s while
+ * anything is in flight, and a row whose job object has not changed has no
+ * reason to re-render with it. `job` is a fresh object per fetch, so this only
+ * pays off for rows whose FIELDS are unchanged — which is most of them, most
+ * polls.
+ */
+export const ActiveJobRow = memo(ActiveJobRowImpl, (a, b) =>
+  a.cancelling === b.cancelling &&
+  a.job.id === b.job.id &&
+  a.job.status === b.job.status &&
+  a.job.title === b.job.title &&
+  a.job.position === b.job.position &&
+  a.job.eta_sec === b.job.eta_sec,
+);

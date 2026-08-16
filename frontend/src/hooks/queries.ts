@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import type {
+  JobList,
   JobStatusResponse,
   PronunciationCreate,
   PronunciationUpdate,
@@ -44,10 +45,29 @@ export function useHistory(page: number, pageSize: number) {
   });
 }
 
+/**
+ * The job list, polled ONLY while something is actually running.
+ *
+ * It previously never polled at all, which was invisible while the list was a
+ * passive archive and became a bug the moment it started driving the
+ * "In progress" section: a running job's status and ETA never changed, and a
+ * finished one sat there until some unrelated action invalidated the key.
+ *
+ * The interval stops itself when every job is terminal, so an idle app makes no
+ * requests — the alternative, a fixed interval, polls forever for nothing.
+ */
 export function useJobsList(page: number, pageSize: number) {
   return useQuery({
     queryKey: queryKeys.jobs(page, pageSize),
     queryFn: () => api.jobs(page, pageSize),
+    refetchInterval: (query) => {
+      const data = query.state.data as JobList | undefined;
+      if (!data) return false;
+      const busy = data.items.some(
+        (j) => j.status === 'queued' || j.status === 'running',
+      );
+      return busy ? 2000 : false;
+    },
   });
 }
 

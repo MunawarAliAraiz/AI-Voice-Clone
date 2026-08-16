@@ -36,6 +36,8 @@ interface Props {
   languages: LanguageInfo[];
   /** Fires exactly once per job, the moment it first reaches a terminal status. */
   onJobSettled?: (job: JobStatusResponse) => void;
+  /** Fired the moment the queue accepts the job (202), not when it finishes. */
+  onJobQueued?: (job: JobStatusResponse) => void;
   /** Switches to the Recent tab. Undefined hides the pointer entirely. */
   onOpenRecent?: () => void;
 }
@@ -59,7 +61,7 @@ function fallbackTitle(text: string): string {
   return text.trim().split(/\s+/).slice(0, 4).join(' ');
 }
 
-export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Props) {
+export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenRecent }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -414,6 +416,7 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
       });
       settledJobId.current = null;
       setJobId(newJob.id);
+      onJobQueued?.(newJob);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'INVALID_DIRECTION_PLAN') {
         // The text changed after the Advanced editor's overrides were made,

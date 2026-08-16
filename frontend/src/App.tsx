@@ -102,6 +102,22 @@ export default function App() {
     [addToast]
   );
 
+  // Acknowledge the enqueue immediately. Generate returns in milliseconds now,
+  // so without this the only feedback for a job that takes a minute is a row
+  // quietly appearing in a list further down the page.
+  const onJobQueued = useCallback(
+    (job: JobStatusResponse) => {
+      const name = job.title || job.input_text?.slice(0, 40);
+      addToast(
+        'info',
+        name
+          ? `“${name}” is queued — you'll be notified when it's ready.`
+          : "Queued — you'll be notified when it's ready.",
+      );
+    },
+    [addToast]
+  );
+
   // API key changed: every prior response may have been scoped to different
   // credentials (or none). Nothing short of a full invalidation is safe.
   const onApiKeySaved = useCallback(() => {
@@ -190,6 +206,7 @@ export default function App() {
                 voices={voicesQ.data?.profiles ?? []}
                 languages={languagesQ.data?.languages ?? []}
                 onJobSettled={onJobSettled}
+                onJobQueued={onJobQueued}
                 onOpenRecent={() => setActiveTab('recent')}
               />
               {/* Generate no longer blocks, so several clips can be in flight
