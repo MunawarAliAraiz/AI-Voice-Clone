@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -156,5 +157,90 @@ async def test_list_pronunciations_is_newest_first() -> None:
         await db.create_pronunciation(key_text="database", replacement="a")
         second = await db.create_pronunciation(key_text="URL", replacement="b")
         assert (await db.list_pronunciations())[0]["id"] == second["id"]
+    finally:
+        await db.close()
+
+
+# ── schema evolution ─────────────────────────────────────────────────────────
+
+
+async def test_added_columns_reach_a_database_that_predates_them(tmp_path: Path) -> None:
+    """
+    The case `CREATE TABLE IF NOT EXISTS` cannot handle, and the reason
+    `_ADDED_COLUMNS` exists: a database created before `title` was added keeps
+    its old shape forever, so every read of `row["title"]` would raise there.
+
+    Builds a real old-shape database (schema.sql with the column stripped),
+    inserts a row into it, then connects with the current code and asserts both
+    that the column appeared and that the pre-existing row survived.
+    """
+    db_file = tmp_path / "old.db"
+    old_schema = (
+        (Path(__file__).parents[1] / "app" / "db" / "schema.sql")
+        .read_text(encoding="utf-8")
+        .replace("    title           TEXT,\n", "")
+    )
+    conn = sqlite3.connect(db_file)
+    try:
+        conn.executescript(old_schema)
+        conn.execute(
+            "INSERT INTO voice_profiles (name, audio_path, language) VALUES (?, ?, ?)",
+            ("v", "/x/a.wav", "ur"),
+        )
+        conn.execute(
+            """INSERT INTO generation_history
+               (profile_id, input_text, language, output_path, model_id, transform,
+                source_script, route_rationale)
+               VALUES (1, 'old row', 'ur', '/x/o.wav', 'voxcpm2', 'none', 'arabic', 'r')""",
+        )
+        conn.commit()
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(generation_history)")}
+        assert "title" not in cols, "fixture must actually predate the column"
+    finally:
+        conn.close()
+
+    db = Database(db_file)
+    await db.connect()
+    try:
+        row = await db.get_generation(1)
+        assert row is not None
+        assert row["input_text"] == "old row", "the existing row must survive"
+        assert row["title"] is None, "the new column reads as NULL, not an error"
+
+        # And the connect is idempotent — a second one must not fail on a
+        # duplicate ADD COLUMN.
+        await db.close()
+        await db.connect()
+        assert (await db.get_generation(1))["input_text"] == "old row"
+    finally:
+        await db.close()
+
+
+async def test_title_round_trips_on_a_generation(tmp_path: Path) -> None:
+    db = Database(tmp_path / "new.db")
+    await db.connect()
+    try:
+        p = await db.create_profile(
+            name="v", audio_path="/x/a.wav", language="ur", transcript=None,
+            duration_sec=1.0, sample_rate=24000, peak_dbfs=-3.0, is_clipped=False,
+        )
+        g = await db.create_generation(
+            profile_id=p["id"], input_text="میں دفتر جا رہا ہوں", language="ur",
+            output_path="/x/o.wav", output_format="wav", duration_sec=2.0,
+            gen_time_sec=1.0, model_id="omnivoice_urdu", transform="none",
+            is_lossy=False, source_script="arabic", route_rationale="r",
+            resolved_text=None, title="Office message",
+        )
+        assert g["title"] == "Office message"
+
+        # Omitting it is still valid — nothing forces a title.
+        g2 = await db.create_generation(
+            profile_id=p["id"], input_text="x", language="ur",
+            output_path="/x/o2.wav", output_format="wav", duration_sec=1.0,
+            gen_time_sec=1.0, model_id="omnivoice_urdu", transform="none",
+            is_lossy=False, source_script="arabic", route_rationale="r",
+            resolved_text=None,
+        )
+        assert g2["title"] is None
     finally:
         await db.close()

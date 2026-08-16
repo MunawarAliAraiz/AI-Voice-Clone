@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS generation_history (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     profile_id      INTEGER NOT NULL REFERENCES voice_profiles(id) ON DELETE CASCADE,
 
+    -- Short human label, 2-3 words, suggested by the analyzer and editable
+    -- before generating. Nullable: every row written before 2026-08-16 has
+    -- none, and the UI falls back to the text.
+    title           TEXT,
+
     input_text      TEXT    NOT NULL,
     language        TEXT    NOT NULL,
     output_path     TEXT    NOT NULL,
@@ -172,11 +177,15 @@ CREATE TABLE IF NOT EXISTS transliteration_cache (
 -- `app/jobs/estimate.py`, which keeps the scheduler's eviction-under-slot
 -- invariant untouched. See `app/jobs/__init__.py` for the full design.
 --
--- There is no migration mechanism (see the note at the top of this file's
--- history for voice_profiles/generation_history — the same applies here):
--- CREATE TABLE IF NOT EXISTS means an existing table keeps its old shape
--- forever. Every column any foreseeable job kind will need must exist NOW,
--- including result_json for kinds that never produce a generation_history row.
+-- There is a LIMITED migration mechanism as of 2026-08-16: `_ADDED_COLUMNS` in
+-- database.py applies missing ADD COLUMNs on every connect, so a column added
+-- here also reaches databases that already exist. It is ADD COLUMN ONLY — no
+-- renames, drops, type changes or constraint changes, and no way to backfill.
+-- So the rule below is relaxed, not repealed: a column can be added later, but
+-- getting the SHAPE right still matters, because nothing here can change it.
+-- CREATE TABLE IF NOT EXISTS still means an existing table keeps everything
+-- else it has. Prefer having the column now, including result_json for kinds
+-- that never produce a generation_history row.
 
 CREATE TABLE IF NOT EXISTS jobs (
     -- AUTOINCREMENT doubles as the FIFO sequence: monotonic, so "how many jobs
@@ -251,10 +260,10 @@ CREATE INDEX IF NOT EXISTS idx_jobs_profile
 -- keeps routing pure, and a pure function may receive data but not fetch it.
 -- The enqueue path loads these rows and passes them down.
 --
--- Same no-migration constraint as `jobs` above: CREATE TABLE IF NOT EXISTS means
--- an existing table keeps its shape forever, so every column this will
--- foreseeably need exists now. `language` and `notes` are here for that reason
--- rather than because anything reads them yet.
+-- Same constraint as `jobs` above: a missing column can be added later via
+-- `_ADDED_COLUMNS`, but nothing else about an existing table can change. So
+-- every column this will foreseeably need exists now -- `language` and `notes`
+-- are here for that reason rather than because anything reads them yet.
 
 CREATE TABLE IF NOT EXISTS pronunciation_entries (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,

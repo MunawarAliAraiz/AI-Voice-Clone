@@ -24,6 +24,24 @@ __all__ = ["Database"]
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
+#: Columns added to a table AFTER it first shipped.
+#:
+#: `CREATE TABLE IF NOT EXISTS` leaves an existing database at its original
+#: shape forever, so a column added to `schema.sql` reaches new installs and
+#: silently misses every database that already exists. This list is applied on
+#: every connect, so both converge.
+#:
+#: DELIBERATELY ADD-COLUMN ONLY. No renames, no drops, no type changes, no
+#: version counter. SQLite's ADD COLUMN is O(1) and cannot lose data, which is
+#: what makes this safe without a real migration framework — anything beyond it
+#: is not, and needs one. New columns must be nullable or carry a constant
+#: DEFAULT, because SQLite refuses to add a NOT NULL column with no default to
+#: a table that already has rows.
+_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # (table, column, full DDL fragment)
+    ("generation_history", "title", "title TEXT"),
+)
+
 
 class Database:
     def __init__(self, path: str | Path) -> None:
@@ -41,6 +59,7 @@ class Database:
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
         await self._conn.commit()
+        await self._add_missing_columns()
         # The job queue's atomic claim (UPDATE ... RETURNING) needs SQLite 3.35+
         # (2021). Assert it here rather than discovering it at the first claim,
         # deep inside a request.
@@ -49,6 +68,24 @@ class Database:
                 f"SQLite {sqlite3.sqlite_version} is too old for the job queue's "
                 f"atomic claim (UPDATE ... RETURNING needs 3.35+)."
             )
+
+    async def _add_missing_columns(self) -> None:
+        """
+        Bring an existing database up to `_ADDED_COLUMNS`. Idempotent.
+
+        Reads the live shape with `PRAGMA table_info` rather than tracking a
+        schema version, so it is correct no matter which subset of columns a
+        given database already has — including a database this code has never
+        seen before.
+        """
+        for table, column, ddl in _ADDED_COLUMNS:
+            cur = await self._c.execute(f"PRAGMA table_info({table})")
+            existing = {row["name"] for row in await cur.fetchall()}
+            if column in existing:
+                continue
+            async with self._write_lock:
+                await self._c.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+                await self._c.commit()
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -151,17 +188,18 @@ class Database:
         output_path: str | Path, output_format: str, duration_sec: float | None,
         gen_time_sec: float | None, model_id: str, transform: str, is_lossy: bool,
         source_script: str, route_rationale: str, resolved_text: str | None,
+        title: str | None = None,
     ) -> aiosqlite.Row:
         async with self._write_lock:
             cur = await self._c.execute(
                 """INSERT INTO generation_history
                    (profile_id, input_text, language, output_path, output_format,
                     duration_sec, gen_time_sec, model_id, transform, is_lossy,
-                    source_script, route_rationale, resolved_text)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_script, route_rationale, resolved_text, title)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (profile_id, input_text, language, str(output_path), output_format,
                  duration_sec, gen_time_sec, model_id, transform, int(is_lossy),
-                 source_script, route_rationale, resolved_text),
+                 source_script, route_rationale, resolved_text, title),
             )
             await self._c.commit()
             new_id = cur.lastrowid
