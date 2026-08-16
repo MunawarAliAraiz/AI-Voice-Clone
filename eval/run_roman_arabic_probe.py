@@ -381,6 +381,16 @@ def main() -> int:
     if is_quantized:
         print(f"  (pre-quantized checkpoint: "
               f"{_cfg.quantization_config.get('quant_method', '?')}; dtype left to the config)")
+        # transformers pre-reserves an allocator block sized from the
+        # UNQUANTIZED parameter count: for a 26B model whose 4-bit weights are
+        # ~14 GiB it tried to reserve 22.36 GiB and OOMed on a card that had
+        # room for the actual weights. The warmup is purely an allocator
+        # optimisation -- neutralising it costs load speed and changes no
+        # numerics. Only applied on the quantized path, so unquantized runs
+        # (every result recorded so far) are bit-for-bit unaffected.
+        import transformers.modeling_utils as _mu
+
+        _mu.caching_allocator_warmup = lambda *a, **k: None
     else:
         load_kwargs["dtype"] = torch.bfloat16
 
