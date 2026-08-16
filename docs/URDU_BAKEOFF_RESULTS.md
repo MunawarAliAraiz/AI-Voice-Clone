@@ -883,3 +883,89 @@ Two caveats to carry into that build:
 - Seeding these numbers is one rater, one reference voice, one corpus, n=2. It is firmly enough to
   decide *build vs don't build*; it is not a per-word verdict, and no word above should be given a
   shipped default spelling without the §9c blind-repeat treatment.
+
+---
+
+## 10. Phase A2 — the Qwen baseline, pushed properly `[BENCH]`
+
+The plan requires a *strong* baseline from the existing Qwen infrastructure before any new
+transliteration model is surveyed. This is that attempt: four arms in one model load, at 3B and 7B,
+over the expanded 45-item corpus, scored on three metrics
+(`eval/run_roman_arabic_probe.py`, `eval/translit_metrics.py`).
+
+`control_*` are byte-identical to the arms behind §8b, so a gain is attributable to the prompt and
+not to the corpus having grown from 13 items to 45. `strict_*` states the contract as numbered
+non-negotiables, each naming one of §8/§8b's *observed* failures.
+
+| model | arm | contract ✅ | CER | preserve | complete | unparseable |
+|---|---|---|---|---|---|---|
+| 3B | control_zero_shot | 17/40 (43%) | 0.3268 | 0.652 | 0.693 | 5 |
+| 3B | control_few_shot | 12/37 (32%) | 0.3144 | 0.651 | 0.525 | 6 |
+| 3B | **strict_zero_shot** | **18/39 (46%)** | 0.3698 | 0.628 | 0.727 | 6 |
+| 3B | strict_few_shot | 14/37 (38%) | 0.3094 | 0.670 | 0.487 | 2 |
+| 7B | control_zero_shot | 17/44 (39%) | 0.3241 | 0.573 | 0.659 | 1 |
+| 7B | control_few_shot | 15/42 (36%) | 0.2763 | 0.811 | 0.643 | 1 |
+| 7B | **strict_zero_shot** | **18/45 (40%)** | 0.3061 | 0.587 | 0.696 | 0 |
+| 7B | strict_few_shot | 10/38 (26%) | 0.2733 | **0.852** | 0.450 | 1 |
+
+**"contract" = the gold's Latin survived verbatim AND no Urdu was left unconverted.** No arm clears
+50%. The best is 3B strict_zero_shot at 46%.
+
+### 10a. The strict prompt did not work
+
+On the trustworthy subset (the original 13 items, whose gold predates this session), 7B scores
+**62%** on `control_zero_shot` and **62%** on `strict_zero_shot` — identical. Writing the contract as
+explicit numbered rules bought nothing. §8b's failures were diagnosed as instruction-following
+problems; that diagnosis now looks wrong, or at least not addressable by instruction.
+
+### 10b. Few-shot examples trade preservation against completeness
+
+A real and consistent effect, visible at both sizes: adding examples **raises** code-switch
+preservation (7B: 0.573 → 0.811 control, 0.587 → 0.852 strict) and **wrecks** conversion completeness
+(0.696 → 0.450 on strict). The examples contain Latin islands, so the model learns "keep English" —
+and over-generalises it into keeping Urdu in Latin too. More examples make the contract's two halves
+fight each other rather than reinforcing.
+
+Consequence: few-shot is not simply better here, and the arm with the best CER (7B strict_few_shot,
+0.2733) has the *worst* contract rate (26%). One more demonstration that CER ranks these wrongly.
+
+### 10c. The failures are severe, not cosmetic
+
+This is what decides it. Sampling 7B/strict_zero_shot's failures:
+
+| item | what happened |
+|---|---|
+| `owner_04_late` | `office` → `دفتر` **translated**; `aaj` → `امروز` (a *Persian* word); Devanagari `हو` in the output |
+| `technical` | **all four** English words translated (`database`→`دیٹا بیس`, `backup`→`بک آپ`, `server`→`سرور`, `restart`→`ری استارت`), and the clause ends in nonsense |
+| `owner_05_github` | `pull request create` → `پلر ریquest کیٹر` — tokens broken mid-word, `_usay_` left in Latin with underscores |
+| `num_ascii` | `Meeting` → `ملاقات` translated; Devanagari `बजے`, `हوگی`; a stray Latin `ú` inside `مینút` |
+| `conv_05_apology` | `tumhara` → `تیرا` — **register changed**, second-person familiar swapped |
+| `spell_01_kia_kya` | `tum` → `تum`, a half-converted token — **at CER 0.049**, i.e. a near-perfect CER score on broken output |
+
+Three failure classes here are worse than "imperfect spelling": **translation of code-switched
+English** (the contract's most important rule), **script contamination** (Devanagari and stray Latin
+inside Urdu words), and **word substitution that changes meaning or register** (`امروز`, `تیرا`).
+
+`spell_01_kia_kya` deserves its own note: CER **0.049** — the best-looking number in the sample — on
+output containing `تum`. The residue metric catches it precisely because it does not care how few
+characters are wrong, only that Latin remains where the gold has none.
+
+### 10d. Where this leaves Phase A
+
+**The Qwen baseline is insufficient**, which is exactly the condition the plan set for A4 (surveying
+purpose-trained Roman-Urdu→Urdu models). At best 46% of sentences come out contract-clean, and the
+other half fail in ways a user would have to notice and repair by hand — which is the comparison that
+matters, since the feature's whole premise is that editing the suggestion beats typing Urdu directly.
+
+**Two honest limits on these numbers:**
+
+1. **32 of the 45 gold strings were drafted by Claude, not a native speaker** (flagged in the
+   corpus's `_meta.authoring_rule_EXCEPTION_phase_a_items`, task open). Contract scoring depends on
+   the gold's Latin token set, so on those items it partly measures *my* judgement about which words
+   stay English. The trusted-13 subset is the number to lean on — and it is *better* (62% vs ~30%),
+   so the full-corpus figures may understate the model. The gap is also consistent with the new items
+   simply being harder by design.
+2. One decoding config, greedy, one prompt family per arm.
+
+Neither limit rescues §10c: translation, Devanagari contamination and register changes are wrong
+against *any* reasonable gold.
