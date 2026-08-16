@@ -1601,3 +1601,36 @@ textarea {
   margin-bottom: 0;
   min-width: 0;
 }
+
+/* Sits on the input's baseline, not the label's — `.editor-bar` aligns to
+   flex-end, so no nudging is needed. `flex-shrink: 0` keeps the label from
+   wrapping to two lines when the title field is long. */
+.editor-title-suggest {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* The offered suggestion. Deliberately a row of its own rather than a
+   placeholder or an inline hint: it holds two real choices, and both need to
+   be reachable and hit-target sized. */
+.title-suggestion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-inset);
+}
+
+.title-suggestion-text {
+  font-weight: 600;
+  color: var(--text);
+  /* The suggestion can be Urdu next to English UI chrome; `dir="auto"` on the
+     element picks the direction, and this keeps a long one from pushing the
+     buttons off the row. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

@@ -131,6 +131,12 @@ async def run_synthesize(ctx: JobContext, job: JobRecord) -> JobOutcome:
         route_rationale=str(route.get("rationale", "")),
         resolved_text=params.text,
         title=params.title,
+        # Recorded from what was actually synthesized, not from the request's
+        # `apply_direction` flag: direction only reaches here as rendered
+        # segments, and asking for it on a model that cannot express it yields
+        # none. 0 is a real answer ("one piece, undirected") and distinct from
+        # the NULL that older rows carry.
+        direction_segments=len(params.segments) if params.segments else 0,
     )
 
     # Golden rule 1: fake audio is never silent about being fake. The old

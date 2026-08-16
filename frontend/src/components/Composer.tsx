@@ -123,6 +123,10 @@ export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenR
   // Short label for Recent. Filled by the analyzer (same response as the
   // prosody rows) or by the user; never blocks Generate.
   const [title, setTitle] = useState('');
+  //: An analyzer suggestion produced while the field already had something in
+  //: it. Held rather than applied — see `suggestTitleNow`.
+  const [titleSuggestion, setTitleSuggestion] = useState<string | null>(null);
+  const [titleErr, setTitleErr] = useState<string | null>(null);
   const [titling, setTitling] = useState(false);
 
   const [jobId, setJobId] = useState<number | null>(null);
@@ -462,6 +466,11 @@ export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenR
    * Fill the title from the analyzer, but never overwrite the user's own.
    * Silent on failure: this is opportunistic, and Generate has its own
    * fallback — a toast here would be noise about a field that fills itself.
+   *
+   * Returns early WITHOUT calling the API when the field is occupied, rather
+   * than fetching and discarding: the analyzer is a ~6 GB resident model
+   * behind a single-worker lock, so a request whose answer is already known
+   * to be unwanted is not a free one.
    */
   async function fillTitleIfEmpty(forText: string): Promise<void> {
     if (title.trim() || titling || !forText.trim()) return;
@@ -471,6 +480,33 @@ export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenR
       setTitle((current) => current.trim() || suggested);
     } catch {
       // Leave it empty; generate() will fall back to the text.
+    } finally {
+      setTitling(false);
+    }
+  }
+
+  /**
+   * The explicit "Suggest" press. Distinct from the automatic path above in
+   * one way that matters: it runs even when the field already has something
+   * in it — but it OFFERS the result instead of applying it, because
+   * overwriting a title the user typed on purpose is not what a suggestion
+   * button should do. Empty field, nothing to protect, so it just fills.
+   *
+   * This one surfaces failure. The automatic path is invisible and staying
+   * quiet is right there; a button that visibly does nothing is not.
+   */
+  async function suggestTitleNow(): Promise<void> {
+    const t = text.trim();
+    if (!t || titling) return;
+    setTitleSuggestion(null);
+    setTitleErr(null);
+    setTitling(true);
+    try {
+      const suggested = (await api.suggestTitle(t, language)).title;
+      if (title.trim()) setTitleSuggestion(suggested);
+      else setTitle(suggested);
+    } catch (e) {
+      setTitleErr(e instanceof Error ? e.message : 'Could not suggest a title.');
     } finally {
       setTitling(false);
     }
@@ -520,13 +556,66 @@ export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenR
           <span className="field-label">Title</span>
           <input
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setTitleSuggestion(null);
+              setTitleErr(null);
+            }}
             placeholder={titling ? 'Naming…' : 'Auto-named when you generate'}
             maxLength={60}
             aria-label="Generation title"
           />
         </label>
+        <button
+          type="button"
+          className="btn-sm ghost editor-title-suggest"
+          onClick={() => void suggestTitleNow()}
+          disabled={titling || !text.trim()}
+          title={
+            title.trim()
+              ? 'Ask the analyzer for a name. Yours is kept — the suggestion is shown for you to take or ignore.'
+              : 'Ask the analyzer for a name now, without waiting.'
+          }
+        >
+          {titling ? <IconSpinner size={13} /> : <IconSpark size={13} />}
+          {titling ? 'Naming…' : 'Suggest'}
+        </button>
       </div>
+
+      {/* Only reachable with a non-empty field: with an empty one the
+          suggestion is applied outright and there is nothing to offer. */}
+      {titleSuggestion && (
+        <div className="title-suggestion">
+          <span className="muted">Suggested:</span>
+          <span className="title-suggestion-text" dir="auto">
+            {titleSuggestion}
+          </span>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={() => {
+              setTitle(titleSuggestion);
+              setTitleSuggestion(null);
+            }}
+          >
+            Use it
+          </button>
+          <button
+            type="button"
+            className="btn-sm ghost"
+            onClick={() => setTitleSuggestion(null)}
+            aria-label="Dismiss the suggested title"
+          >
+            Keep mine
+          </button>
+        </div>
+      )}
+
+      {titleErr && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} /> {titleErr}
+        </div>
+      )}
 
 
       <div className="row">

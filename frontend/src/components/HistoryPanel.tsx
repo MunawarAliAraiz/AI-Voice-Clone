@@ -404,6 +404,18 @@ export function HistoryPanel({
                           {h.route.model_display_name}
                         </span>
                         {h.route.lossy && <span className="tag warn">lossy</span>}
+                        {/* Only when it is genuinely > 0. `null` is an older
+                            row that predates the column, and rendering
+                            "undirected" for it would be asserting something
+                            the database does not know. */}
+                        {h.direction_segments != null && h.direction_segments > 0 && (
+                          <span
+                            className="tag"
+                            title={`Speech Direction: synthesized as ${h.direction_segments} separate parts, joined with pauses`}
+                          >
+                            directed · {h.direction_segments}
+                          </span>
+                        )}
                         <span className="dot" />
                         <span>{fmtDuration(h.duration_sec)}</span>
                         <span className="dot" />

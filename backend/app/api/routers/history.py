@@ -45,6 +45,7 @@ def _item(
         ),
         output_format=row["output_format"], duration_sec=row["duration_sec"],
         gen_time_sec=row["gen_time_sec"], is_favorite=bool(row["is_favorite"]),
+        direction_segments=row["direction_segments"],
         route=route, created_at=row["created_at"],
     )
 

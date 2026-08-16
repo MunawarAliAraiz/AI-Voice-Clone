@@ -81,6 +81,13 @@ CREATE TABLE IF NOT EXISTS generation_history (
     -- bug is undebuggable after the fact.
     resolved_text   TEXT,
 
+    -- How many pause-joined segments Speech Direction rendered this into.
+    -- 0 means the text was synthesized in one piece, with no direction applied.
+    -- NULL means the row predates this column and we genuinely do not know --
+    -- deliberately distinct from 0, because backfilling "no direction" onto
+    -- rows that may well have used it would be inventing history.
+    direction_segments INTEGER,
+
     is_favorite     INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );

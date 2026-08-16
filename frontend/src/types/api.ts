@@ -226,6 +226,13 @@ export interface HistoryItem {
   duration_sec: number | null;
   gen_time_sec: number | null;
   is_favorite: boolean;
+  /**
+   * Pause-joined segments Speech Direction rendered this into. `0` means it
+   * was synthesized in one piece with no direction. `null` means the row
+   * predates the column — not the same claim as `0`, so the UI shows nothing
+   * rather than asserting "undirected" about a generation it cannot know.
+   */
+  direction_segments: number | null;
   route: RouteInfo;
   created_at: string;
 }

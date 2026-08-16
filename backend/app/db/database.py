@@ -40,6 +40,7 @@ _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # (table, column, full DDL fragment)
     ("generation_history", "title", "title TEXT"),
+    ("generation_history", "direction_segments", "direction_segments INTEGER"),
 )
 
 
@@ -188,18 +189,20 @@ class Database:
         output_path: str | Path, output_format: str, duration_sec: float | None,
         gen_time_sec: float | None, model_id: str, transform: str, is_lossy: bool,
         source_script: str, route_rationale: str, resolved_text: str | None,
-        title: str | None = None,
+        title: str | None = None, direction_segments: int | None = None,
     ) -> aiosqlite.Row:
         async with self._write_lock:
             cur = await self._c.execute(
                 """INSERT INTO generation_history
                    (profile_id, input_text, language, output_path, output_format,
                     duration_sec, gen_time_sec, model_id, transform, is_lossy,
-                    source_script, route_rationale, resolved_text, title)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_script, route_rationale, resolved_text, title,
+                    direction_segments)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (profile_id, input_text, language, str(output_path), output_format,
                  duration_sec, gen_time_sec, model_id, transform, int(is_lossy),
-                 source_script, route_rationale, resolved_text, title),
+                 source_script, route_rationale, resolved_text, title,
+                 direction_segments),
             )
             await self._c.commit()
             new_id = cur.lastrowid
