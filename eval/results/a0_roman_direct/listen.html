@@ -14,6 +14,8 @@ h1 { font-size: 1.3rem; }
 audio { width: 100%; margin-top: .3rem; }
 .q { background:#1d2230; border-left:3px solid #6c8cff; padding:.8rem 1rem;
      border-radius:4px; }
+.asr { font-size: .85rem; color:#8b96a8; margin-top:.5rem; line-height:1.5; }
+.cer { color:#e6b86c; font-weight:600; margin-right:.4rem; }
 </style></head>
 <body>
 <h1>A0 &mdash; does OmniVoice read Roman Urdu on its own?</h1>
@@ -26,6 +28,10 @@ pipeline is justified and Phase A continues.</p>
 conversion pipeline could ever deliver. Same reference voice, same loaded checkpoint, same
 sampling. Text is fed <b>verbatim</b>: no number normalization anywhere, and these items
 contain no bare digits, so nothing is confounded.</p>
+<p>"Whisper heard" is an <b>ASR screen, not the verdict</b> &mdash; Whisper's Urdu is weak and it
+transcribes Latin code-switch words phonetically in Urdu script, which is why the
+<code>owner_05_github</code> and <code>technical</code> rows score badly in <em>both</em> columns.
+It is there so you know what to listen for. Where it disagrees with your ear, your ear wins.</p>
 
   <div class="item">
     <div class="meta"><b>owner_01_sick</b> &mdash; owner_core
@@ -35,11 +41,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.</div>
         <audio controls src="owner_01_sick_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.109</span> Whisper heard: <span dir="rtl">یار آج مین آفیس نہیں آسا کنگا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔</div>
         <audio controls src="owner_01_sick_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.016</span> Whisper heard: <span dir="rtl">یار آج میں آفس نہیں آسکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے</span></div>
       </div>
     </div>
   </div>
@@ -51,11 +59,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Aap ne jo file bheji thi, main ne usay check kar liya hai.</div>
         <audio controls src="owner_02_file_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.042</span> Whisper heard: <span dir="rtl">آپ نے جو فیل بھیجی تھی میں نے اسے چیک کر لیا ہے</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔</div>
         <audio controls src="owner_02_file_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.000</span> Whisper heard: <span dir="rtl">آپ نے جو فائل بھیجی تھی میں نے اسے چیک کر لیا ہے</span></div>
       </div>
     </div>
   </div>
@@ -67,11 +77,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.</div>
         <audio controls src="owner_03_deadline_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.077</span> Whisper heard: <span dir="rtl">محل لگتا ہے کہ ہمیں یہ کام کل تک مکامل کر لینا چاہیے</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔</div>
         <audio controls src="owner_03_deadline_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.000</span> Whisper heard: <span dir="rtl">مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے</span></div>
       </div>
     </div>
   </div>
@@ -83,11 +95,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.</div>
         <audio controls src="owner_04_late_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.264</span> Whisper heard: <span dir="rtl">یار آج آفیس من کافی کام تھا اس لیے میں ان لیٹ ہو گیا</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
         <audio controls src="owner_04_late_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.189</span> Whisper heard: <span dir="rtl">یار آج آفیس میں کافی کام تھا اس لیے میں لائت ہو گیا</span></div>
       </div>
     </div>
   </div>
@@ -99,11 +113,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Main ne GitHub par pull request create kar di hai, aap usay review kar lena.</div>
         <audio controls src="owner_05_github_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.448</span> Whisper heard: <span dir="rtl">میں نے گھٹھا پرپل ریکویسٹ کریٹ کر دی ہے آپ اسے ریویو کر لینا</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
         <audio controls src="owner_05_github_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.448</span> Whisper heard: <span dir="rtl">میں نے گیت اپ پر پل ریکویسٹ کر دی ہے آپ اسے ریویو کر لینا</span></div>
       </div>
     </div>
   </div>
@@ -115,11 +131,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.</div>
         <audio controls src="colloquial_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.135</span> Whisper heard: <span dir="rtl">ارائیار چھرونا کو بات نہیں اگلی دفعہ دیکھ لیں گے</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔</div>
         <audio controls src="colloquial_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.019</span> Whisper heard: <span dir="rtl">ارے یار چھوڑو نہ کوئی بات نہیں اگلی دفعہ دیکھ لیں گے</span></div>
       </div>
     </div>
   </div>
@@ -131,11 +149,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.</div>
         <audio controls src="technical_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.413</span> Whisper heard: <span dir="rtl">ہمین ڈاتابیس کا بیک اپ لینا ہوگا اور پھر سیور دوبارہ ریسٹارٹ کرنا پرائے گا</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
         <audio controls src="technical_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.267</span> Whisper heard: <span dir="rtl">ہمیں database کا بیک اپ لینا ہوگا اور پھر سیور دوبارہ ری سٹارٹ کرنا پڑے گا</span></div>
       </div>
     </div>
   </div>
@@ -147,11 +167,13 @@ contain no bare digits, so nothing is confounded.</p>
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.</div>
         <audio controls src="long_multiclause_roman.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.125</span> Whisper heard: <span dir="rtl">کل جب میں ان دفتر پہنچا تو پاتا چالا کے میٹنگ ملتا بھی ہو گئی ہے اس لئے میں ان نے سوچا کہ پہلے باقی کام مکامل کر لوں اور پھر دوپہار کے خانے کے بعد ریپورٹ پر کام شروع کروں گا</span></div>
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔</div>
         <audio controls src="long_multiclause_arabic.wav"></audio>
+        <div class="asr"><span class="cer">CER 0.013</span> Whisper heard: <span dir="rtl">کل جب میں دفتر پہنچا تو پتا چلا کہ میٹنگ ملتوی ہو گئی ہے اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کرلوں اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا</span></div>
       </div>
     </div>
   </div>

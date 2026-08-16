@@ -34,7 +34,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from app.inference.runtimes.omnivoice import OmniVoiceBackend  # noqa: E402
+# OmniVoiceBackend is imported lazily inside main() so that --page-only works on
+# the Windows planning box, which has no runtime venv and no GPU.
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CORPUS = _REPO_ROOT / "eval" / "fixtures" / "urdu_corpus.json"
@@ -71,7 +72,31 @@ def _load_items() -> list[dict]:
     return [by_id[i] for i in _ITEM_IDS]
 
 
+def _load_scores() -> dict[tuple[str, str], dict]:
+    """
+    ASR screen results, keyed (item_id, arm). Optional: the page is written by
+    the synthesis run, before scoring has happened, and is regenerated with
+    `--page-only` afterwards once scores.json exists.
+    """
+    path = OUT_DIR / "scores.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {(r["id"], r["arm"]): r for r in data["rows"]}
+
+
+def _score_block(scores: dict, item_id: str, arm: str) -> str:
+    row = scores.get((item_id, arm))
+    if row is None:
+        return ""
+    return (
+        f'<div class="asr"><span class="cer">CER {row["cer_vs_gold"]:.3f}</span> '
+        f'Whisper heard: <span dir="rtl">{escape(row["whisper_transcript"])}</span></div>'
+    )
+
+
 def _write_page(items: list[dict]) -> Path:
+    scores = _load_scores()
     rows = []
     for item in items:
         rows.append(
@@ -84,11 +109,13 @@ def _write_page(items: list[dict]) -> Path:
         <div class="label">A &mdash; Roman Urdu fed DIRECTLY (the question)</div>
         <div class="text" dir="ltr">{escape(item["roman"])}</div>
         <audio controls src="{escape(item["id"])}_roman.wav"></audio>
+        {_score_block(scores, item["id"], "roman")}
       </div>
       <div class="col">
         <div class="label">B &mdash; Perso-Arabic gold (the ceiling / control)</div>
         <div class="text" dir="rtl">{escape(item["perso_arabic"])}</div>
         <audio controls src="{escape(item["id"])}_arabic.wav"></audio>
+        {_score_block(scores, item["id"], "arabic")}
       </div>
     </div>
   </div>"""
@@ -110,6 +137,8 @@ h1 {{ font-size: 1.3rem; }}
 audio {{ width: 100%; margin-top: .3rem; }}
 .q {{ background:#1d2230; border-left:3px solid #6c8cff; padding:.8rem 1rem;
      border-radius:4px; }}
+.asr {{ font-size: .85rem; color:#8b96a8; margin-top:.5rem; line-height:1.5; }}
+.cer {{ color:#e6b86c; font-weight:600; margin-right:.4rem; }}
 </style></head>
 <body>
 <h1>A0 &mdash; does OmniVoice read Roman Urdu on its own?</h1>
@@ -122,6 +151,10 @@ pipeline is justified and Phase A continues.</p>
 conversion pipeline could ever deliver. Same reference voice, same loaded checkpoint, same
 sampling. Text is fed <b>verbatim</b>: no number normalization anywhere, and these items
 contain no bare digits, so nothing is confounded.</p>
+<p>"Whisper heard" is an <b>ASR screen, not the verdict</b> &mdash; Whisper's Urdu is weak and it
+transcribes Latin code-switch words phonetically in Urdu script, which is why the
+<code>owner_05_github</code> and <code>technical</code> rows score badly in <em>both</em> columns.
+It is there so you know what to listen for. Where it disagrees with your ear, your ear wins.</p>
 {"".join(rows)}
 </body></html>
 """
@@ -133,6 +166,14 @@ contain no bare digits, so nothing is confounded.</p>
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     items = _load_items()
+
+    if "--page-only" in sys.argv:
+        # Regenerate the listening page from the existing clips + scores.json,
+        # without a GPU. Used after the ASR screen has run.
+        print(f"wrote {_write_page(items)}", file=sys.stderr)
+        return
+
+    from app.inference.runtimes.omnivoice import OmniVoiceBackend
 
     backend = OmniVoiceBackend()
     print("Loading OmniVoiceBackend...", file=sys.stderr)
