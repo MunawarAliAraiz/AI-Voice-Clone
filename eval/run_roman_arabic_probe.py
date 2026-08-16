@@ -70,6 +70,7 @@ import re
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from typing import Any
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -349,10 +350,38 @@ def main() -> int:
 
     print(f"Loading {MODEL_ID}...")
     t0 = time.time()
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID, dtype=torch.bfloat16, device_map="cuda"
-    )
+
+    # Mistral tokenizers ship a regex that transformers flags as wrong, and
+    # says so as a WARNING rather than an error -- so without this the run
+    # would complete and quietly report the score of a mis-tokenized model.
+    tok_kwargs: dict[str, Any] = {}
+    if "mistral" in MODEL_ID.lower() or "ministral" in MODEL_ID.lower():
+        tok_kwargs["fix_mistral_regex"] = True
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, **tok_kwargs)
+    except TypeError:
+        # Older transformers without the flag; better to run than to abort,
+        # but the caveat goes in the manifest rather than being swallowed.
+        tok_kwargs = {}
+        tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+
+    # Several current instruct models (Ministral-3 among them) declare a
+    # MULTIMODAL config, so AutoModelForCausalLM refuses them outright even
+    # though the text path is exactly what this probe uses. Fall back to the
+    # image-text auto class rather than excluding those families.
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_ID, dtype=torch.bfloat16, device_map="cuda"
+        )
+    except ValueError as exc:
+        if "Unrecognized configuration class" not in str(exc):
+            raise
+        from transformers import AutoModelForImageTextToText
+
+        print(f"  (multimodal config; loading via AutoModelForImageTextToText)")
+        model = AutoModelForImageTextToText.from_pretrained(
+            MODEL_ID, dtype=torch.bfloat16, device_map="cuda"
+        )
     load_time_sec = time.time() - t0
     print(f"Loaded in {load_time_sec:.1f}s")
 
