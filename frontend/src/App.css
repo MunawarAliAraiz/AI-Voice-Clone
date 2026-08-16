@@ -1407,3 +1407,95 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── Pronunciation dictionary ──────────────────────────────────────────────
+   The word and its replacement are frequently in different scripts, so every
+   text node here carries its own dir="auto" in the JSX. Nothing in this block
+   sets `direction` — doing so would override that per-field decision and
+   mangle whichever half disagreed. */
+
+/* Its own tab, so the card would otherwise stretch the full window for two
+   short inputs. Capped at a readable measure and centred instead. */
+.pron-card {
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.pron-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-3);
+}
+
+.pron-form .field { margin-bottom: 0; }
+
+.pron-form .field span {
+  font-size: var(--text-base);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.pron-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pron-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 10px;
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* Disabled rows stay legible rather than being greyed into unreadability:
+   this is the state that switches a built-in spelling OFF, so it has to be
+   findable to be switched back on. */
+.pron-row.off { opacity: 0.62; }
+
+.pron-words {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.pron-key, .pron-value {
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.pron-key { color: var(--text); font-weight: 500; }
+.pron-value { color: var(--accent); }
+.pron-arrow { color: var(--muted); flex: none; }
+
+.pron-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.pron-actions .icon-btn { font-size: var(--text-sm); }
+
+@media (max-width: 640px) {
+  /* Its own tab, so the card would otherwise stretch the full window for two
+   short inputs. Capped at a readable measure and centred instead. */
+.pron-card {
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.pron-form { grid-template-columns: 1fr; }
+}

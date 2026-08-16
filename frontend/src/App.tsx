@@ -6,6 +6,7 @@ import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
 import { JobsPanel } from './components/JobsPanel';
+import { PronunciationPanel } from './components/PronunciationPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
 import {
@@ -24,10 +25,11 @@ const AudioEditorTab = lazy(() =>
 );
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'recent' | 'editor';
+type Tab = 'studio' | 'recent' | 'pronunciation' | 'editor';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
   { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
+  { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
   { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
 ];
 
@@ -153,18 +155,27 @@ export default function App() {
                 languages={languagesQ.data?.languages ?? []}
                 onJobSettled={onJobSettled}
               />
-              <HistoryPanel
-                items={historyQ.data?.items ?? []}
-                total={historyQ.data?.total ?? 0}
-                loading={historyQ.isFetching}
-                hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
-                onLoadMore={loadMore}
-                onChanged={invalidateHistory}
-              />
             </div>
           </>
         )}
-        {activeTab === 'recent' && <JobsPanel />}
+        {/* Recent owns both views of the same thing: JobsPanel is every
+            ATTEMPT (including queued, running and failed), HistoryPanel is the
+            completed clips you can search, favourite and delete. Studio is now
+            only the act of making one. */}
+        {activeTab === 'recent' && (
+          <>
+            <JobsPanel />
+            <HistoryPanel
+              items={historyQ.data?.items ?? []}
+              total={historyQ.data?.total ?? 0}
+              loading={historyQ.isFetching}
+              hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
+              onLoadMore={loadMore}
+              onChanged={invalidateHistory}
+            />
+          </>
+        )}
+        {activeTab === 'pronunciation' && <PronunciationPanel />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>
             <AudioEditorTab onEnrolled={invalidateVoices} />

@@ -5,7 +5,11 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { JobStatusResponse } from '../types/api';
+import type {
+  JobStatusResponse,
+  PronunciationCreate,
+  PronunciationUpdate,
+} from '../types/api';
 
 export const queryKeys = {
   languages: ['languages'] as const,
@@ -14,6 +18,7 @@ export const queryKeys = {
   history: (page: number, pageSize: number) => ['history', page, pageSize] as const,
   jobs: (page: number, pageSize: number) => ['jobs', page, pageSize] as const,
   job: (id: number) => ['job', id] as const,
+  pronunciations: ['pronunciations'] as const,
 };
 
 export function useLanguages() {
@@ -131,4 +136,46 @@ export function useInvalidateVoices() {
 export function useInvalidateHistory() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['history'] });
+}
+
+
+// ── Pronunciation dictionary ────────────────────────────────────────────────
+//
+// Entries take effect on the NEXT generation, not on anything already queued:
+// the route (including the post-normalization text) is decided once at enqueue
+// and stored on the job row. So there is nothing to invalidate beyond this
+// list — no history or jobs refetch, because no existing row changes.
+
+export function usePronunciations() {
+  return useQuery({ queryKey: queryKeys.pronunciations, queryFn: () => api.pronunciations() });
+}
+
+function useInvalidatePronunciations() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.pronunciations });
+}
+
+export function useCreatePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: (body: PronunciationCreate) => api.createPronunciation(body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdatePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: PronunciationUpdate }) =>
+      api.updatePronunciation(id, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: (id: number) => api.deletePronunciation(id),
+    onSuccess: invalidate,
+  });
 }

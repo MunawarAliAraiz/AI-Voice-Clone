@@ -9,6 +9,10 @@ import type {
   LanguageListResponse,
   ModelListResponse,
   ProblemJson,
+  PronunciationCreate,
+  PronunciationItem,
+  PronunciationList,
+  PronunciationUpdate,
   ScriptDetectResponse,
   SystemStatus,
   TTSGenerateRequest,
@@ -177,4 +181,28 @@ export const api = {
     }),
   deleteHistory: (id: number) =>
     request<void>(`/api/history/${id}`, { method: 'DELETE' }),
+
+  // pronunciation dictionary
+  //
+  // The list deliberately includes DISABLED entries: a disabled entry whose
+  // key matches a shipped default is the only way to switch that default off,
+  // so filtering them here would hide the mechanism.
+  pronunciations: (language?: string) =>
+    request<PronunciationList>(
+      language ? `/api/pronunciations?language=${encodeURIComponent(language)}` : '/api/pronunciations',
+    ),
+  createPronunciation: (body: PronunciationCreate) =>
+    request<PronunciationItem>('/api/pronunciations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  updatePronunciation: (id: number, body: PronunciationUpdate) =>
+    request<PronunciationItem>(`/api/pronunciations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deletePronunciation: (id: number) =>
+    request<void>(`/api/pronunciations/${id}`, { method: 'DELETE' }),
 };
