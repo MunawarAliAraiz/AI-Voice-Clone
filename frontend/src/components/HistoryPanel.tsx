@@ -1,5 +1,24 @@
 /**
- * Recent generations.
+ * Recent — one list for everything you have generated.
+ *
+ * MERGED FROM TWO PANELS (2026-08-16). "Recent" and "History" were separate
+ * cards showing overlapping data, which is what the owner (rightly) called the
+ * same thing twice.
+ *
+ * The merge is not a concatenation, because the two sources have different
+ * lifetimes and only one of them is durable:
+ *
+ *   generation_history  kept indefinitely
+ *   jobs                PRUNED after `job_retention_hours` (72h)
+ *
+ * So **history is the spine** and only UNFINISHED jobs are overlaid on top —
+ * queued, running, failed and cancelled, which are exactly the states history
+ * structurally cannot represent because no `generation_history` row exists for
+ * them. A SUCCEEDED job is deliberately not rendered here: it already has a
+ * history row, and showing both would list every clip twice.
+ *
+ * Driving the whole list from `/api/jobs` instead would have been simpler and
+ * wrong — everything older than three days would silently vanish.
  *
  * The predecessor rendered `null` when empty, capped at 20 with no way to see
  * more, and fired favourite/delete with no `.catch` — a failed action was
@@ -9,8 +28,9 @@
 import { useMemo, useState } from 'react';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { HistoryItem } from '../types/api';
+import type { JobStatusResponse } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
-import { IconAlert, IconCheckSquare, IconSearch, IconSpinner, IconStar, IconTrash, IconX } from './icons';
+import { IconAlert, IconCheck, IconCheckSquare, IconSearch, IconSpinner, IconStar, IconTrash, IconX } from './icons';
 import { dayBucket, fmtDuration, relativeTime, type DayBucket } from '../lib/format';
 
 interface Props {
@@ -20,12 +40,23 @@ interface Props {
   hasMore: boolean;
   onLoadMore: () => void;
   onChanged: () => void;
+  /**
+   * Jobs that have NOT succeeded — queued, running, failed, cancelled. The
+   * caller filters; this component renders them pinned above the day groups.
+   * Succeeded jobs must not be passed: they already appear as history rows.
+   */
+  activeJobs?: JobStatusResponse[];
+  onCancelJob?: (id: number) => void;
+  cancellingJobId?: number | null;
 }
 
 type Filter = 'all' | 'favorites';
 const GROUPS: DayBucket[] = ['Today', 'Yesterday', 'Earlier'];
 
-export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onChanged }: Props) {
+export function HistoryPanel({
+  items, total, loading, hasMore, onLoadMore, onChanged,
+  activeJobs = [], onCancelJob, cancellingJobId = null,
+}: Props) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   /** id → optimistic favourite value, pending confirmation from the server. */
@@ -144,7 +175,7 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
     <section className="card history" aria-labelledby="history-h">
       <header className="card-head">
         <h2 id="history-h">
-          History
+          Recent
           {total > 0 && <span className="count">{total}</span>}
         </h2>
 
@@ -256,11 +287,33 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
         </div>
       )}
 
-      {items.length === 0 ? (
+      {activeJobs.length > 0 && (
+        <div className="hist-group" key="active">
+          <div className="group-label">
+            <span>In progress</span>
+            <span className="rule" />
+            <span className="group-count">{activeJobs.length}</span>
+          </div>
+          <ul className="hist">
+            {activeJobs.map((job) => (
+              <ActiveJobRow
+                key={job.id}
+                job={job}
+                onCancel={onCancelJob ? () => onCancelJob(job.id) : undefined}
+                cancelling={cancellingJobId === job.id}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {items.length === 0 && activeJobs.length === 0 ? (
         <EmptyState
           title="No generations yet"
           body="Pick a voice, type something, and hit Generate — your clips will collect here."
         />
+      ) : items.length === 0 ? (
+        null
       ) : showing === 0 ? (
         <EmptyState
           title="Nothing matches"
@@ -431,4 +484,91 @@ function EmptyState({
 /** Script drives direction, never the language code — Roman Urdu is LTR. */
 function isRtl(script: string): boolean {
   return script === 'arabic';
+}
+
+
+/**
+ * A job that has not produced a history row: queued, running, failed or
+ * cancelled.
+ *
+ * Deliberately NOT rendered for succeeded jobs — those are history rows, and
+ * rendering both would show every clip twice. That is why there is no audio
+ * player here: a row in this group has no audio by definition.
+ */
+function ActiveJobRow({
+  job,
+  onCancel,
+  cancelling,
+}: {
+  job: JobStatusResponse;
+  onCancel?: () => void;
+  cancelling: boolean;
+}) {
+  // `analyze_llm` jobs share the `jobs` table but have no route and no audio;
+  // their UI lives entirely in the Composer's Advanced editor. Skip rather
+  // than crash on `job.route.source_script`.
+  if (!job.route) return null;
+
+  const rtl = job.route.source_script === 'arabic';
+  return (
+    <li className="hist-row">
+      <div className="h-head">
+        <p className="h-text" dir={rtl ? 'rtl' : 'ltr'}>
+          {job.input_text || <span className="muted">(no text recorded)</span>}
+        </p>
+        <StatusChip status={job.status} />
+      </div>
+
+      <div className="h-meta">
+        {job.profile_name && <span className="who">{job.profile_name}</span>}
+        <span className="route-chip" title={job.route.rationale}>
+          {job.route.model_display_name}
+        </span>
+        <span className="dot" />
+        <time dateTime={job.queued_at}>{relativeTime(job.queued_at)}</time>
+        {job.status === 'queued' && job.position != null && (
+          <>
+            <span className="dot" />
+            <span>{job.position === 0 ? 'next up' : `#${job.position + 1} in queue`}</span>
+          </>
+        )}
+        {job.status === 'running' && job.eta_sec != null && (
+          <>
+            <span className="dot" />
+            <span>~{fmtDuration(job.eta_sec)} left</span>
+          </>
+        )}
+      </div>
+
+      {job.status === 'queued' && onCancel && (
+        <button type="button" className="btn-sm danger" disabled={cancelling} onClick={onCancel}>
+          {cancelling ? <IconSpinner size={13} /> : <IconX size={13} />}
+          {cancelling ? 'Cancelling…' : 'Cancel'}
+        </button>
+      )}
+
+      {job.status === 'failed' && job.error && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} />
+          <span>
+            <strong>{String(job.error.code)}</strong> — {String(job.error.detail)}
+          </span>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function StatusChip({ status }: { status: JobStatusResponse['status'] }) {
+  const icon =
+    status === 'succeeded' ? <IconCheck size={12} />
+    : status === 'failed' ? <IconAlert size={12} />
+    : status === 'cancelled' ? <IconX size={12} />
+    : <IconSpinner size={12} />;
+  return (
+    <span className={`status-chip ${status}`} aria-label={`Status: ${status}`}>
+      {icon}
+      {status}
+    </span>
+  );
 }

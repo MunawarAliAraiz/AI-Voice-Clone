@@ -9,6 +9,8 @@ import {
   ArrowUpRight,
   Check,
   CheckSquare,
+  ClipboardPaste,
+  Copy,
   ChevronDown,
   ChevronUp,
   Download,
@@ -62,6 +64,8 @@ export const IconSettings = make(Settings2);
 export const IconSearch = make(Search);
 export const IconPlus = make(Plus);
 export const IconCheck = make(Check);
+export const IconCopy = make(Copy);
+export const IconPaste = make(ClipboardPaste);
 export const IconCheckSquare = make(CheckSquare);
 export const IconX = make(X);
 export const IconAlert = make(AlertCircle);

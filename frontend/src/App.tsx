@@ -5,14 +5,15 @@ import type { JobStatusResponse } from './types/api';
 import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
-import { JobsPanel } from './components/JobsPanel';
 import { PronunciationPanel } from './components/PronunciationPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
 import {
+  useCancelJobMutation,
   useHistory,
   useInvalidateHistory,
   useInvalidateVoices,
+  useJobsList,
   useLanguages,
   useVoices,
 } from './hooks/queries';
@@ -43,6 +44,13 @@ export default function App() {
   const languagesQ = useLanguages();
   const voicesQ = useVoices();
   const historyQ = useHistory(1, PAGE_SIZE * pageCount);
+  const jobsQ = useJobsList(1, PAGE_SIZE);
+  const cancelJob = useCancelJobMutation();
+
+  // Only jobs with NO history row. A succeeded job already appears below as a
+  // history item, so including it here would render every clip twice.
+  const activeJobs = (jobsQ.data?.items ?? []).filter((j) => j.status !== 'succeeded');
+  const recentCount = (historyQ.data?.total ?? 0) + activeJobs.length;
   const invalidateVoices = useInvalidateVoices();
   const invalidateHistory = useInvalidateHistory();
 
@@ -109,6 +117,13 @@ export default function App() {
             >
               {t.icon}
               <span className="seg-label">{t.label}</span>
+              {/* Everything you have generated lives behind this tab, and
+                  nothing on Studio said so. The badge is the signpost. */}
+              {t.id === 'recent' && recentCount > 0 && (
+                <span className="seg-badge" aria-label={`${recentCount} generations`}>
+                  {recentCount > 99 ? '99+' : recentCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -154,26 +169,28 @@ export default function App() {
                 voices={voicesQ.data?.profiles ?? []}
                 languages={languagesQ.data?.languages ?? []}
                 onJobSettled={onJobSettled}
+                onOpenRecent={() => setActiveTab('recent')}
               />
             </div>
           </>
         )}
-        {/* Recent owns both views of the same thing: JobsPanel is every
-            ATTEMPT (including queued, running and failed), HistoryPanel is the
-            completed clips you can search, favourite and delete. Studio is now
-            only the act of making one. */}
+        {/* ONE list. History is the spine because it is durable; only
+            unfinished jobs are overlaid, since those are the states a
+            `generation_history` row cannot represent. Succeeded jobs are
+            filtered out here — they are already history rows, and passing
+            them would list every clip twice. */}
         {activeTab === 'recent' && (
-          <>
-            <JobsPanel />
-            <HistoryPanel
-              items={historyQ.data?.items ?? []}
-              total={historyQ.data?.total ?? 0}
-              loading={historyQ.isFetching}
-              hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
-              onLoadMore={loadMore}
-              onChanged={invalidateHistory}
-            />
-          </>
+          <HistoryPanel
+            items={historyQ.data?.items ?? []}
+            total={historyQ.data?.total ?? 0}
+            loading={historyQ.isFetching}
+            hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
+            onLoadMore={loadMore}
+            onChanged={invalidateHistory}
+            activeJobs={activeJobs}
+            onCancelJob={(id) => cancelJob.mutate(id)}
+            cancellingJobId={cancelJob.isPending ? (cancelJob.variables ?? null) : null}
+          />
         )}
         {activeTab === 'pronunciation' && <PronunciationPanel />}
         {activeTab === 'editor' && (

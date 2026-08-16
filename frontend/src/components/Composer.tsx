@@ -17,13 +17,27 @@ import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
 import { DirectionPanel } from './DirectionPanel';
-import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner, IconX } from './icons';
+import {
+  IconAlert,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconCopy,
+  IconHistory,
+  IconPaste,
+  IconSpark,
+  IconSpinner,
+  IconTrash,
+  IconX,
+} from './icons';
 
 interface Props {
   voices: VoiceProfile[];
   languages: LanguageInfo[];
   /** Fires exactly once per job, the moment it first reaches a terminal status. */
   onJobSettled?: (job: JobStatusResponse) => void;
+  /** Switches to the Recent tab. Undefined hides the pointer entirely. */
+  onOpenRecent?: () => void;
 }
 
 /**
@@ -40,7 +54,7 @@ function modelSuffix(m: { experimental: boolean; commercial_use: boolean }): str
   return tags.length ? ` (${tags.join(', ')})` : '';
 }
 
-export function Composer({ voices, languages, onJobSettled }: Props) {
+export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -382,6 +396,41 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   const langs = languages.length ? languages : [];
   const rtl = detect?.is_rtl ?? false;
   const busy = generateMutation.isPending || (job != null && !isTerminal(job.status));
+  // Text-editor tools. `copied` is a transient confirmation rather than a
+  // toast: the feedback belongs on the button you just pressed, and a toast
+  // for "copied" is noise next to a toast for "generation failed".
+  const [copied, setCopied] = useState(false);
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+
+  async function copyText() {
+    setClipboardError(null);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access is refused outright on a non-secure origin and can be
+      // denied by permission policy. Say so rather than looking like nothing
+      // happened — no `.catch(() => {})` here.
+      setClipboardError('Your browser blocked clipboard access.');
+    }
+  }
+
+  async function pasteText() {
+    setClipboardError(null);
+    try {
+      const clip = await navigator.clipboard.readText();
+      // Appended at the caret rather than replacing: pasting over text you
+      // already typed, with no undo, is the kind of "help" nobody wants.
+      const el = textareaRef.current;
+      const at = el?.selectionStart ?? text.length;
+      const next = (text.slice(0, at) + clip + text.slice(el?.selectionEnd ?? at)).slice(0, 5000);
+      setText(next);
+    } catch {
+      setClipboardError('Your browser blocked clipboard access.');
+    }
+  }
+
   const disabled = busy || !voices.length;
   const aiSuggestBusy =
     analyzeLlmMutation.isPending || (llmJob != null && !isTerminal(llmJob.status));
@@ -390,8 +439,48 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     <section className="card composer" aria-labelledby="composer-h">
       <header className="card-head">
         <h2 id="composer-h">Generate speech</h2>
-        {text.length > 0 && <span className="count">{text.length} / 5000</span>}
+        <div className="composer-tools">
+          {text.length > 0 && <span className="count">{text.length} / 5000</span>}
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void copyText()}
+            disabled={!text}
+            title="Copy text"
+            aria-label="Copy text"
+          >
+            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void pasteText()}
+            title="Paste at the cursor"
+            aria-label="Paste at the cursor"
+          >
+            <IconPaste size={13} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny danger"
+            onClick={() => {
+              setText('');
+              textareaRef.current?.focus();
+            }}
+            disabled={!text}
+            title="Clear text"
+            aria-label="Clear text"
+          >
+            <IconTrash size={13} />
+          </button>
+        </div>
       </header>
+
+      {clipboardError && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} /> {clipboardError}
+        </div>
+      )}
 
       <div className="row">
         <label className="field">
@@ -574,6 +663,14 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
       </button>
 
       {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
+
+      {/* Studio no longer shows any past generation, so without this there is
+          nothing on this screen telling you where your clips went. */}
+      {onOpenRecent && (
+        <button type="button" className="link composer-recent-link" onClick={onOpenRecent}>
+          <IconHistory size={13} /> Your generations are in Recent
+        </button>
+      )}
     </section>
   );
 }

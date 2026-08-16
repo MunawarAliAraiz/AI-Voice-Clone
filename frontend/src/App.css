@@ -1499,3 +1499,41 @@ textarea {
 
 .pron-form { grid-template-columns: 1fr; }
 }
+
+/* ── Composer text tools + the pointer to Recent ───────────────────────────── */
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* The character count sits inside the tool row now, so it must not also push
+   itself to the right or it fights the row's own `margin-left: auto`. */
+.composer-tools .count { margin-right: 4px; }
+
+.composer-recent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+  align-self: center;
+}
+
+/* Count badge on the Recent tab — the signpost from Studio. */
+.seg-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
