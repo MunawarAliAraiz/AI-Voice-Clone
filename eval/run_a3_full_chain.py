@@ -1,6 +1,19 @@
 """
-Phase A3 -- the gate. Roman Urdu -> Qwen conversion -> real OmniVoice audio ->
+Phase A3 -- the gate. Roman Urdu -> LLM conversion -> real OmniVoice audio ->
 the owner's ear.
+
+RUN 2 (2026-08-16): Ministral-3-8B, after the owner rejected run 1.
+--------------------------------------------------------------------
+Run 1 fed Qwen2.5-7B's `strict_zero_shot` output and the owner's verdict was
+"column A is not usable". SS13 then re-ran A2 unchanged on
+`mistralai/Ministral-3-8B-Instruct-2512` (Apache 2.0) and measured 74%
+contract-clean at CER 0.0777 against Qwen's 46% / 0.2733. That is a different
+class of result, so the gate is re-run rather than assumed to give the same
+answer -- a text metric can only reject, never approve, and no one has heard
+Ministral's output.
+
+Run 1's clips and page are preserved at `eval/results/a3_full_chain/`; this
+writes to `eval/results/a3_ministral/` so the two are directly comparable.
 
 Everything before this point measured TEXT. A0 already showed why that is not
 enough in the other direction (an ASR screen looked encouraging and the owner
@@ -14,16 +27,21 @@ by hearing what the converted text actually sounds like.
 
 WHAT IS COMPARED
 ----------------
-  A  Qwen 7B `strict_zero_shot` output -> OmniVoice   (the real pipeline)
-  B  the corpus's Perso-Arabic gold    -> OmniVoice   (the ceiling)
+  A  Ministral `strict_few_shot` output -> OmniVoice   (the real pipeline)
+  B  the corpus's Perso-Arabic gold      -> OmniVoice   (the ceiling)
 
 Arm B is what the user would get by typing correct Urdu themselves, so it is
 the thing arm A has to justify itself against -- not against silence, and not
 against Roman-direct, which A0 already rejected.
 
-The ten items are a deliberate mix: **six passed A2's contract and four failed
-it** (`owner_04_late`, `owner_05_github`, `technical`, `cs_04_laptop`). A page
-of only the successes would answer a question nobody asked.
+The ten items keep run 1's deliberate mix: **six passed A2's contract and four
+failed it**. A page of only the successes would answer a question nobody asked.
+Eight items are held over from run 1 so the two pages can be compared clip for
+clip; `technical` and `colloquial` had to be dropped because `strict_few_shot`
+uses them as prompt exemplars, and scoring a model on its own examples is not
+scoring. Their replacements are this arm's two *worst* items by CER
+(`cs_06_interview` 0.340, `abbreviations` 0.281), which is the harder
+substitution, not the kinder one.
 
 The conversions are read from A2's committed manifest rather than regenerated,
 so this is scoring the exact outputs §10's numbers describe. Nothing is
@@ -55,10 +73,10 @@ from app.domain.urdu_text import (  # noqa: E402
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-OUT_DIR = _REPO_ROOT / "eval" / "results" / "a3_full_chain"
+OUT_DIR = _REPO_ROOT / "eval" / "results" / "a3_ministral"
 _A2_MANIFEST = (
     _REPO_ROOT / "eval" / "results"
-    / "roman_arabic_probe_qwen_qwen2_5_7b_instruct" / "manifest.json"
+    / "roman_arabic_probe_mistralai_ministral_3_8b_instruct_2512" / "manifest.json"
 )
 _CORPUS = _REPO_ROOT / "eval" / "fixtures" / "urdu_corpus.json"
 _REF_AUDIO = _REPO_ROOT / "eval" / "fixtures" / "voice_urdu.wav"
@@ -72,22 +90,31 @@ _HF_REVISION = "c5fdb5ccb189668d56333f77ba2629f4cd7535f4"
 #: Best-reliability A2 arm: 0 unparseable at 7B, and 62% contract-clean on the
 #: trusted original-13 subset. Not the best mean CER -- that was
 #: strict_few_shot, which has the WORST contract rate (§10b).
-_A2_ARM = "strict_zero_shot"
+#:
+#: RUN 2: Ministral's best arm is `strict_few_shot` on every metric at once --
+#: CER 0.0777, preservation 0.848, completeness 0.966, 29/39 contract-clean,
+#: 0 unparseable. Nothing is traded away, so run 1's "best-reliability versus
+#: best-CER" choice does not arise.
+_A2_ARM = "strict_few_shot"
 
 _NORMALIZATIONS = (TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON)
 
-#: Six A2 contract passes, four failures. Chosen before any audio existed.
+#: Six A2 contract passes, four failures -- run 1's mix, held to deliberately.
+#: Eight items carry over so the two pages compare clip for clip.
+#: `technical` and `colloquial` are `strict_few_shot` exemplars and scoring a
+#: model on its own examples is not scoring; their replacements are this arm's
+#: two WORST items by CER, which is the harder substitution, not the kinder one.
 _ITEM_IDS = (
-    "owner_01_sick",
+    "owner_01_sick",       # A2 fail: `office` kept Latin where gold converts it
     "owner_02_file",
     "owner_03_deadline",
-    "owner_04_late",       # A2 fail: office/late translated away
-    "owner_05_github",     # A2 fail: tokens broken mid-word
-    "technical",           # A2 fail: all four English words translated
-    "colloquial",
+    "owner_04_late",       # a Qwen contract FAILURE that Ministral passes at 0.038
+    "owner_05_github",     # ditto at 0.045 -- Qwen broke these tokens mid-word
+    "cs_06_interview",     # A2 fail, worst CER in the arm (0.340)
+    "abbreviations",       # A2 fail, second-worst (0.281), `file` left in Latin
     "long_multiclause",
     "conv_01_greeting",
-    "cs_04_laptop",        # A2 fail
+    "cs_04_laptop",        # A2 fail: `upgrade` translated away
 )
 
 
@@ -105,7 +132,7 @@ def _build_rows() -> list[dict]:
             raise SystemExit(f"{item_id} was unparseable in A2 -- pick another item")
         item = corpus[item_id]
 
-        qwen_text, _ = apply_text_normalizations(conv["parsed_output"], _NORMALIZATIONS)
+        llm_text, _ = apply_text_normalizations(conv["parsed_output"], _NORMALIZATIONS)
         gold_text, _ = apply_text_normalizations(item["perso_arabic"], _NORMALIZATIONS)
 
         rows.append(
@@ -116,8 +143,8 @@ def _build_rows() -> list[dict]:
                 "a2_cer": conv["cer"],
                 "a2_lost": conv["lost_code_switch"],
                 "a2_residue": conv["unconverted_residue"],
-                "qwen_raw": conv["parsed_output"],
-                "qwen_text": qwen_text,
+                "llm_raw": conv["parsed_output"],
+                "llm_text": llm_text,
                 "gold_raw": item["perso_arabic"],
                 "gold_text": gold_text,
             }
@@ -146,8 +173,8 @@ def _write_page(rows: list[dict]) -> Path:
     <div class="pair">
       <div class="col">
         <div class="label">A &mdash; what the feature would produce</div>
-        <div class="text" dir="rtl">{escape(r["qwen_text"])}</div>
-        <audio controls src="{escape(r["id"])}_qwen.wav"></audio>
+        <div class="text" dir="rtl">{escape(r["llm_text"])}</div>
+        <audio controls src="{escape(r["id"])}_llm.wav"></audio>
         <div class="note">{why or "&nbsp;"}</div>
       </div>
       <div class="col">
@@ -185,24 +212,32 @@ h1 {{ font-size: 1.3rem; }}
 audio {{ width:100%; margin-top:.3rem; }}
 </style></head>
 <body>
-<h1>A3 &mdash; does the Roman&rarr;Urdu feature actually save you work?</h1>
-<p class="q"><b>The question is not "is A perfect".</b> It won't be &mdash; A2 measured 46%
-of sentences coming out fully clean. The question is:
-<b>would editing A be less work than typing B yourself?</b> If yes, the feature is worth
-building even at 46%. If you'd rather just type Urdu, it isn't, and Phase B should not start.</p>
+<h1>A3, run 2 &mdash; same question, a different model</h1>
+<p class="q"><b>You listened to run 1 and said "column A is not usable."</b> That was
+Qwen2.5-7B: 46% of sentences fully clean, CER 0.27. Column A here is a different model
+&mdash; <b>Ministral-3-8B</b> (Apache&nbsp;2.0), which scores <b>74% clean at CER 0.078</b>
+on the identical corpus, prompt and metrics. Column B is unchanged: the hand-written Urdu
+gold, i.e. what you'd get by typing correct Urdu yourself.<br><br>
+The question is still <b>not</b> "is A perfect". It's: <b>would editing A be less work than
+typing B yourself?</b> If yes, Phase B is worth building. If you'd still rather type Urdu,
+it isn't, and the feature stays closed &mdash; this time on two models rather than one.</p>
 <p><b>6 of these 10 passed A2's text contract and 4 failed it</b> &mdash; the failures are
 labelled, so you can hear whether a "failed" conversion is actually unusable or merely imperfect.
 That distinction is the whole decision. Both columns go through the same production normalization
 (numbers spelled out, loanword lexicon applied), so this is what the app would really send.</p>
-<p class="caveat"><b>"contract OK" does not mean "the Urdu is correct."</b> It means only that no
-English word was translated away and no Urdu was left sitting in Latin letters. It says nothing
-about whether the Urdu that came out is the right Urdu. <b><code>owner_01_sick</code>, the very
-first item below, is the proof</b>: it is badged contract OK, and its output mangles
-<i>aaj</i> into <span dir="rtl">امیدوار رہا کہ</span> and leaks a Devanagari
-<span dir="rtl">हे</span>. Its CER of 0.406 is the number that caught it. Across the whole arm the
-two metrics do agree &mdash; contract-passing items have a median CER of 0.188 against 0.324 for
-failures, and this is the only contract-pass above 0.30 &mdash; so treat the badge and the CER
-together, and your ear over both.</p>
+<p><b>Eight of the ten items are the same as run 1</b>, so you can open the two pages side by side
+and compare clip for clip. <code>technical</code> and <code>colloquial</code> are gone because this
+arm uses them as prompt examples &mdash; scoring a model on its own examples isn't scoring. Their
+replacements, <code>cs_06_interview</code> and <code>abbreviations</code>, are this arm's two
+<i>worst</i> items by CER, not two easy ones.</p>
+<p class="caveat"><b>"contract OK" does not mean "the Urdu is correct", and "FAILED" does not mean
+unusable.</b> The contract only checks that no English word was translated away and no Urdu was
+left in Latin letters. It says nothing about whether the Urdu that came out is the right Urdu
+&mdash; in run 1 <code>owner_01_sick</code> was badged OK while mangling <i>aaj</i> into
+<span dir="rtl">امیدوار رہا کہ</span>. The reverse also happens here: three of the four failures
+below (<code>owner_01_sick</code>, <code>abbreviations</code>, <code>cs_04_laptop</code>) failed
+only because an English word went one way rather than the other, which may well sound
+<i>better</i>. <b>Judge by ear; the badges are context, not a verdict.</b></p>
 {"".join(blocks)}
 </body></html>
 """
@@ -227,7 +262,7 @@ def main() -> None:
 
     try:
         for r in rows:
-            for arm, text in (("qwen", r["qwen_text"]), ("gold", r["gold_text"])):
+            for arm, text in (("llm", r["llm_text"]), ("gold", r["gold_text"])):
                 print(f"synth {r['id']} [{arm}] ...", file=sys.stderr)
                 backend.synth(
                     text=text,
