@@ -430,7 +430,7 @@ capability and frontend normalization requirements, not a verdict on the model.
 | English code-switch in realistic sentences | **PASS** | `office`, `check`, `GitHub`/`pull request`/`review` confirmed working in realistic sentence contexts, both in isolation and in the original corpus |
 | Sparse/bare inputs | **UNRELIABLE / evaluation limitation** | Bare single words or 2–3 word fragments are substantially less reliable than realistic full sentences, independent of what they contain (میٹنگ, URL, and database all failed bare; office and check did not). This is recorded as a limitation of testing sparse inputs, not as proof that sparse input explains every individual failure — some failures (numbers, `database`) reproduce in full-sentence context too |
 | `URL` | **Targeted respelling verified in the demonstrated realistic failure** | Bare: unreliable/silent. Short sentence: correct. Busy realistic sentence (the original "abbreviations" corpus item): incorrect ("oo r l"). `یو آر ایل` respelling fixes the busy realistic sentence specifically — not claimed to fix every possible `URL` context |
-| `database` | **Context-dependent; targeted fix verified only in the realistic sentence** | Bare and short-context forms are unreliable in every direct form tested. The all-Urdu respelling `ڈیٹا بیس` collides with the existing Urdu word for "twenty" (بیس) and is inconsistent. The mixed respelling `ڈیٹا` (Urdu) + `base` (Latin, left unchanged) produces the correct pronunciation in the realistic full-sentence case (the original "technical" corpus item) but not in the bare/short forms. **Not fixed everywhere** — verified only in the demonstrated realistic case |
+| `database` | ⚠️ **SUPERSEDED by §9c — this row's conclusion was drawn from n=1 and is wrong** | What was recorded here: bare/short forms unreliable; all-Urdu `ڈیٹا بیس` collides with بیس ("twenty"); mixed `ڈیٹا` + Latin `base` "produces the correct pronunciation in the realistic full-sentence case". Blind repeat sampling later scored that mixed form at **7/12** — a coin flip, not a fix — and it shipped for a day on the strength of this single listen. The verified answer is `ڈیٹا بےس` (bari ye), **11/12**. See §9b for why every n=1 verdict in this document is suspect |
 
 **No broad English-transliteration system is being introduced.** office/check/GitHub already work as
 plain Latin text; URL and database needed a small, specific respelling each, found and verified
@@ -442,8 +442,8 @@ them:
 
 1. Digit/date expansion (`eval/urdu_numerals.py`)
 2. `URL` → `یو آر ایل`, where the demonstrated busy-sentence context requires it
-3. `database` → `ڈیٹا` + Latin `base` (mixed script), where the demonstrated realistic-sentence context
-   requires it
+3. ~~`database` → `ڈیٹا` + Latin `base` (mixed script)~~ — **superseded, see §9c.** This is the entry
+   that shipped on one listen and later measured 7/12. The verified answer is `ڈیٹا بےس`.
 
 Before any production integration, an open design question remains: do these belong in one general
 normalization layer, or a small targeted pronunciation lexicon (closer to what the evidence actually
@@ -775,3 +775,61 @@ not have worked reliably even in principle.
    the editable-text design over any silent transform.
 4. **Seeding is worth considering separately** — it would make experiments reproducible, but it also
    freezes one draw, so it must not be added *just* to make this table look stable.
+
+### 9c. `database` settled by blind repeat sampling — and the lexicon's scaling problem
+
+Two blind rounds (`eval/run_loanword_reliability.py`), owner-rated, labels hidden, order shuffled:
+
+| spelling | round 1 (n=4) | round 2 (n=8) | total |
+|---|---|---|---|
+| `URL` verbatim | 0/4 | — | **0/4** |
+| **`یو آر ایل`** (shipped, unchanged) | 4/4 | — | **4/4** |
+| `database` verbatim | 0/4 | 0/4 | **0/8** |
+| **`ڈیٹا بےس`** (bari ye) | 3/4 | 8/8 | **11/12** ✅ |
+| `ڈیٹا base` (shipped until 2026-08-16) | 2/4 | 5/8 | **7/12** |
+| `ڈیٹا bays` | 1/4 | 3/8 | **4/12** |
+| `ڈیٹا bayss`, `dayta base` | 0/4 | — | **0/4** |
+
+`_LOANWORD_LEXICON["database"]` is now `ڈیٹا بےس`. The verbatim controls scoring **zero** are what
+justify having entries at all; the round-2 anchor (verbatim again 0/4) confirms the owner's criteria
+did not drift between sessions.
+
+**The result that should change how these are chosen:** `ڈیٹا bays` produced the single best-sounding
+clip of the entire experiment — the owner's note was *"most accurate for a native Urdu speaker"* — and
+scored **4/12**. Selecting a spelling by its best clip, which is what §5c effectively did, would have
+shipped the second-worst candidate. Best-draw and most-reliable are different questions, and only the
+second one is the product's.
+
+Note also that the winner is **11/12, not 12/12**. Per §9b there is no spelling that always works,
+so "regenerate" is a real remedy for users rather than a shrug.
+
+### 9d. Open design problem: the lexicon is hardcoded and does not scale
+
+`_LOANWORD_LEXICON` is a module-level dict of two entries. A word that is not in it is passed through
+verbatim, and adding one costs the owner roughly a dozen blind listens. That is affordable for two
+words and not affordable as the general answer to "what happens when a new loanword appears".
+
+What is *not* the answer:
+
+- **A general English→Urdu respeller.** It would have to know which words *these particular weights*
+  mispronounce — a property of the model, not of English — so it would guess, and it would damage
+  the words that already work (`office`, `check`, `GitHub`, `late`, `backup`, `server`, `restart`).
+- **ASR round-trip detection.** Tempting, but §9's screen showed Whisper transcribes Latin
+  code-switch words phonetically into Urdu script regardless of whether they were pronounced well —
+  `owner_05_github` scored 0.448 in *both* arms. The detector is blind to precisely the failure it
+  would need to catch.
+
+The two candidates worth pursuing, in order:
+
+1. **Measure the failure rate first.** Nobody knows how often this actually bites. The expanded
+   45-item corpus contains ~20 items carrying Latin islands; synthesizing and blind-rating those
+   gives a rate. If it is two words in twenty, a short shipped default list plus the editable
+   Composer text box is a complete answer and anything more is over-engineering.
+2. **If the rate is material: a user-editable pronunciation dictionary.** Move the mapping out of a
+   module constant into per-user data with a small settings UI, and demote the hardcoded dict to
+   *shipped defaults*. This scales because the person who cares about a word is the one who fixes it,
+   and they only need it to work for themselves — no owner listening session per word. It also fits
+   the existing architecture unchanged: still a pure text transform in `domain/urdu_text.py`, still
+   applied inside `resolve()`, still no model.
+
+**Not decided here.** Step 1 is cheap and should precede step 2.

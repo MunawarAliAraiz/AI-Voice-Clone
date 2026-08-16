@@ -125,13 +125,38 @@ def _expand_numbers(text: str) -> str:
 
 # ── Loanwords: exactly 2 verified entries, see module docstring ─────────────
 #
-# docs/URDU_BAKEOFF_RESULTS.md SS5d: `ڈیٹا بیس` (all-Urdu) was REJECTED for
-# "database" -- بیس collides with the Urdu word for "twenty" and the model
-# read it that way in 2 of 3 tested contexts. The mixed form keeps "base" in
-# Latin, matching how office/check/GitHub already render correctly untouched.
+# Both entries are now backed by BLIND REPEAT SAMPLING, not a single listen
+# (docs/URDU_BAKEOFF_RESULTS.md SS9b/SS9c, `eval/run_loanword_reliability.py`).
+# That method exists because synthesis is unseeded: `OmniVoiceBackend.synth()`
+# sets no seed, so a loanword's pronunciation is a random variable and any n=1
+# verdict is a coin flip. The owner demonstrated this by rating one
+# byte-identical sentence wrong and then correct an hour apart.
+#
+# Measured, owner-rated, blind, over two rounds (round 1 n=4, round 2 n=8):
+#
+#     URL       verbatim      0/4     یو آر ایل   4/4
+#     database  verbatim      0/4     ڈیٹا بےس   11/12
+#                                     ڈیٹا base   7/12
+#                                     ڈیٹا bays   4/12
+#
+# Both verbatim forms score ZERO, which is what justifies having entries here
+# at all rather than leaving the text alone.
+#
+# `ڈیٹا بےس` uses bari ye (U+06D2) for the /eɪ/. The earlier all-Urdu attempt
+# `ڈیٹا بیس` was rejected because بیس is also the Urdu word for "twenty"; bari
+# ye avoids that reading. `ڈیٹا base` -- which shipped until 2026-08-16 and was
+# recorded as "verified" on one listen -- is a genuine coin flip at 7/12: Latin
+# `base` standing alone after Urdu text is often read as "boss". Note it is
+# only correct as the TAIL of the Latin token `database`, so the model reads a
+# Latin token as a whole rather than letter by letter.
+#
+# `ڈیٹا bays` is kept here as a warning: it produced the single best-sounding
+# clip of the whole experiment ("most accurate for a native Urdu speaker") and
+# still scored 4/12. Picking a spelling by its best clip would have shipped the
+# second-worst one.
 _LOANWORD_LEXICON: dict[str, str] = {
     "URL": "یو آر ایل",
-    "database": "ڈیٹا base",
+    "database": "ڈیٹا بےس",
 }
 
 _LOANWORD_PATTERN = re.compile(

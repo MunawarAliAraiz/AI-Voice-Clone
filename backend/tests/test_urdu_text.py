@@ -50,15 +50,35 @@ def test_loanword_lexicon_respells_url() -> None:
     assert applied == (TextNormalization.LOANWORD_LEXICON,)
 
 
-def test_loanword_lexicon_respells_database_leaving_base_latin() -> None:
-    # docs/URDU_BAKEOFF_RESULTS.md SS5d: the all-Urdu "ڈیٹا بیس" was rejected
-    # (بیس collides with the Urdu word for "twenty"). The mixed form keeps
-    # "base" in Latin, matching office/check/GitHub which already work as-is.
+def test_loanword_lexicon_respells_database_with_bari_ye() -> None:
+    # docs/URDU_BAKEOFF_RESULTS.md SS9c. Chosen by blind repeat sampling, not
+    # one listen: `ڈیٹا بےس` scored 11/12 against the previously-shipped
+    # `ڈیٹا base` at 7/12 and verbatim `database` at 0/4.
+    #
+    # Bari ye (U+06D2) carries the /eɪ/. The earlier all-Urdu `ڈیٹا بیس` was
+    # rejected because بیس is also the Urdu word for "twenty"; `ڈیٹا base` was
+    # rejected because a Latin `base` standing alone after Urdu text is often
+    # read as "boss".
     text, applied = apply_text_normalizations(
         "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,)
     )
-    assert text == "ہمیں ڈیٹا base چاہیے۔"
+    assert text == "ہمیں ڈیٹا بےس چاہیے۔"
     assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+def test_loanword_lexicon_no_longer_emits_the_ambiguous_forms() -> None:
+    """
+    Regression guard for the two rejected spellings.
+
+    Both were plausible enough to ship once -- `ڈیٹا base` actually did, on a
+    single listen recorded as "verified" -- so this pins the distinction rather
+    than trusting the entry not to drift back.
+    """
+    text, _ = apply_text_normalizations(
+        "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,)
+    )
+    assert "base" not in text, "Latin `base` alone is read as 'boss'"
+    assert "بیس" not in text, "بیس is also the Urdu word for 'twenty'"
 
 
 def test_loanword_lexicon_is_word_boundary_aware() -> None:
@@ -85,7 +105,7 @@ def test_both_normalizations_compose() -> None:
         "ہمیں database کا 3 بار backup چاہیے۔",
         (TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON),
     )
-    assert text == "ہمیں ڈیٹا base کا تین بار backup چاہیے۔"
+    assert text == "ہمیں ڈیٹا بےس کا تین بار backup چاہیے۔"
     assert set(applied) == {TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON}
 
 
