@@ -1170,3 +1170,121 @@ The remaining weakness is code-switch preservation at 0.848 — Ministral still 
 words to Urdu script. §11d is exactly the open question about whether that is a defect or an
 improvement, and §9e's measured 17.2% loanword mispronunciation rate is the reason it might be the
 latter. The ear decides that too.
+
+---
+
+## 14. A3 run 2 (Ministral) and the frontier-model survey `[LISTEN]` `[BENCH]`
+
+### 14a. Run 2 of the gate — the owner's per-item notes
+
+§13 said the gate had to be re-run rather than inherit §12's answer. It was: same harness, same
+production normalization, `_A2_ARM = strict_few_shot`, output at `eval/results/a3_ministral/`.
+Eight of ten items carry over from run 1; `technical` and `colloquial` are exemplars of this arm and
+were replaced by its two **highest-CER** items (`cs_06_interview` 0.340, `abbreviations` 0.281).
+
+The owner listened and reported ten defects. **Nine are text errors by Ministral, one is OmniVoice.**
+
+| # / item | reported | Ministral wrote | gold | class |
+|---|---|---|---|---|
+| 1 `owner_01_sick` | yaar → aray | ارے | یار | substitution |
+| 1 `owner_01_sick` | tabiyat → tabaat | **طباعت** (*printing*) | طبیعت (*health*) | **homophone, meaning changed** |
+| 3 `owner_03_deadline` | kar lena → karna | کرنا | کر لینا | compound verb dropped |
+| 5 `owner_05_github` | kar lena → karna | کرنا | کر لینا | same, repeated |
+| 6 `cs_06_interview` | Kal → Call | **کال** (*call*) | کل (*tomorrow*) | **homophone** |
+| 7 `abbreviations` | baray mehrbani | بارے مہربانی | براہ کرم | malformed (برائے expected) |
+| 7 `abbreviations` | bhej → bhj | **بجھ** (*extinguish*) | بھیج (*send*) | **homophone** |
+| 8 `long_multiclause` | Kal → Call | **کال** | کل | **homophone, repeated** |
+| 9 `conv_01_greeting` | Assalam → Islam | اسلام علیکم | السلام علیکم | dropped ال |
+| 10 `cs_04_laptop` | Mera → May ra | **میںرا** | میرا | token corruption |
+
+Two of the owner's notes were adjudicated *against* the complaint, and both matter:
+
+- **"meeting also converted" (#8) is not Ministral's doing** — gold writes میٹنگ too. Converting
+  *meeting* is the corpus's own convention.
+- **"Ram → Raam" (#10) is not Ministral either** — both columns keep `RAM` in Latin, so this is
+  OmniVoice reading a loanword. It is already a known §9e failure; the owner flagged `RAM` twice in
+  the blind loanword round as well. **This one belongs to the pronunciation dictionary.**
+
+`owner_04_late` carries the same `yaar → ارے` substitution as item 1 and was *not* flagged — the
+unseeded-synthesis pattern of §9b showing up in judgement rather than in audio.
+
+### 14b. The metrics failed a third time, and this is now a law of this project
+
+Items **3, 5, 8 and 9 all scored `contract_ok=True` with CER between 0.020 and 0.077** — the best
+numbers on the page. Every one of them contains an error the owner caught by ear. Item 9's CER is
+0.020 and it says *Islam* instead of *peace be upon you*.
+
+That is the third independent demonstration, after A0's ASR screen and §10's contract metric passing
+a mangled `owner_01_sick`. **Text metrics in this project can only fail a candidate, never approve
+one.** No exception has yet been found; stop looking for one.
+
+### 14c. Why the errors are the expensive kind
+
+کال/کل, طباعت/طبیعت, بجھ/بھیج are not garbled output. They are correctly-spelled, valid Urdu words
+that mean something else — *call* for *tomorrow*, *printing* for *health*, *extinguish* for *send*.
+Spotting them requires reading the Urdu carefully, which is most of the cost of typing it. The
+plan's gating question was **"would editing A be less work than typing B yourself?"**, and a
+substitution class that is invisible at a glance is the worst possible answer to it, independent of
+what percentage of sentences are clean.
+
+### 14d. The survey: what is actually above Ministral, and why none of it ran
+
+From [UrduMMLU](https://arxiv.org/html/2606.07167v1)'s Table 4, Urdu-prompt accuracy:
+
+| model | params | Urdu acc | licence | fits 24 GB? |
+|---|---|---|---|---|
+| DeepSeek-V4-Flash | large MoE | 81.4% | MIT | no |
+| Gemma-4-31B-IT | 31B dense | 76.4% | **Apache 2.0** | 4-bit ≈19 GB — too tight |
+| LLaMA-4-Maverick-17B-128E | 400B MoE | 75.8% | Llama 4 (bespoke) | no |
+| Qwen3.6-35B-A3B | 35B/3B MoE | 75.5% | Apache 2.0 | 4-bit ≈18.5 GB — too tight |
+| Gemma-4-26B-A4B-IT | 25B/3.8B MoE | 70.2% | **Apache 2.0** | 4-bit ≈14 GB ✅ — **attempted** |
+| Qwen3.6-27B | 27B dense | 69.7% | Apache 2.0 | 4-bit ≈17 GB — tight |
+| **Ministral-3-8B** | 8B | **57.0%** | Apache 2.0 | ✅ bf16 — what §13 measured |
+| Gemma-2-9B-IT | 9B | 56.8% | Gemma terms | ✅ |
+| Qwen3-8B | 8B | 49.0% | Apache 2.0 | ✅ |
+
+**Ministral is the ceiling of its weight class** — it tops everything ≤25B, so §13's 74% is what 8B
+can do, and the 57 → 70/76 gap is real unexploited headroom.
+
+**Gemma 4 is genuinely Apache 2.0.** Verified at `ai.google.dev/gemma/docs/gemma_4_license`
+directly, not from the HF card, per rule 6. This is a change from Gemma 1–3's bespoke terms. A
+separate Prohibited Use Policy applies, but it governs content, not the weights.
+
+**The wall is VRAM, not licences.** The A5000 has 23.56 GiB total and **5.23 GiB is held by an idle
+`voxcpm` worker (pid 3240) belonging to the owner's running backend**, leaving 18.1 GiB. Every model
+above Ministral needs ≥14 GiB at 4-bit plus KV cache. Killing that worker out from under the
+scheduler is **not** an option — golden rule 3 puts eviction inside `_ensure_ready()` under the
+GPU semaphore, and an external `kill` leaves the scheduler believing it still owns a worker.
+
+### 14e. Two probe bugs found on the way, both of the silent-wrong-number kind
+
+Neither would have crashed. Both would have produced a plausible score for something other than the
+model under test.
+
+1. **`dtype=torch.bfloat16` forced over a pre-quantized checkpoint** either errors or dequantizes
+   into VRAM the card does not have. `dtype` is now set only when the config carries no
+   `quantization_config`.
+2. **`caching_allocator_warmup` sizes its reservation from the *unquantized* parameter count.** For
+   a 26B model whose 4-bit weights are ~14 GiB it tried to reserve **22.36 GiB** and raised
+   `OutOfMemoryError` on a card with room for the real weights. It is a pure allocator optimisation,
+   so it is neutralised on the quantized path only — every unquantized result recorded so far is
+   bit-for-bit unaffected.
+
+And one that is not ours to fix, recorded because it nearly produced a **garbage benchmark**:
+
+3. **`cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` does not load correctly under transformers 5.15.0.** The
+   load report lists every
+   `model.language_model.layers.{0..29}.experts.{0..127}.{gate,up,down}_proj.weight_packed` as
+   `UNEXPECTED` and `experts.gate_up_proj` / `experts.down_proj` as `MISSING` — *"newly initialized
+   because missing from the checkpoint"*. The checkpoint stores experts per-expert; this
+   transformers version wants them fused. **Had VRAM been sufficient, the probe would have completed
+   and reported a score for a model with randomly-initialised MoE experts.** A second OOM, later in
+   loading, is the only reason it did not. Treat a transformers LOAD REPORT with `MISSING` weights as
+   a hard failure in any future bake-off, never as a warning.
+
+Also worth knowing for anyone repointing `PROBE_MODEL_ID`: Qwen3.6 and its descendants **think by
+default**, emitting `<think>…</think>` ahead of the answer, which `parse_transliteration` would have
+scored as the answer. The probe now passes `enable_thinking=False` to templates that declare it
+(detected in the template text, not by model name), raises the budget to 512 tokens, and strips a
+**closed** think block. An **unclosed** one is deliberately left in place: it means generation ran
+out mid-reasoning with no answer at all, which is a genuine unparseable and must score as one.
