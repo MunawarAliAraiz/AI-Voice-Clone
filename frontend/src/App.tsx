@@ -88,10 +88,14 @@ export default function App() {
 
   const onJobSettled = useCallback(
     (job: JobStatusResponse) => {
+      // Named, because several can be in flight at once now — "Generation
+      // complete" tells you nothing about WHICH one finished.
+      const name = job.title || job.input_text?.slice(0, 40) || null;
       if (job.status === 'succeeded') {
-        addToast('success', 'Generation complete.');
+        addToast('success', name ? `“${name}” is ready.` : 'Generation complete.');
       } else if (job.status === 'failed') {
-        addToast('error', job.error?.detail ?? 'Generation failed.');
+        const why = job.error?.detail ?? 'Generation failed.';
+        addToast('error', name ? `“${name}” failed — ${why}` : why);
       }
       // 'cancelled' gets no toast — the user just clicked Cancel, they know.
     },

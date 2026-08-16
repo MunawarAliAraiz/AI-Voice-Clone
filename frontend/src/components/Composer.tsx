@@ -252,6 +252,21 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
     return () => window.clearTimeout(h);
   }, [text, language]);
 
+  // Debounced title suggestion. Same shape as script detection and the
+  // direction preview: fires when typing settles, never on every keystroke.
+  // Deliberately background — nothing waits on it, and if it never lands
+  // `generate()` falls back to the text. Only runs while the field is empty,
+  // so it cannot fight the user for the input they are editing.
+  useEffect(() => {
+    const t = text.trim();
+    if (!t || title.trim()) return;
+    const h = window.setTimeout(() => void fillTitleIfEmpty(t), 1200);
+    return () => window.clearTimeout(h);
+    // `title` is read inside fillTitleIfEmpty's own guard; depending on it here
+    // would restart the timer on every character the user types INTO the title.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, language]);
+
   // Debounced direction analysis — same pattern as script detection, but only
   // while the "Direction (preview)" disclosure is open, so the preview call
   // doesn't fire on every keystroke for a panel nobody is looking at. A
@@ -375,22 +390,13 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
     setErr(null);
     const editedSegments = Object.values(directionEdits);
 
-    // Name it if it has no name. Awaited, but the button is NOT gated on the
-    // analyzer being available: a failure here falls back to the first few
-    // words and the job still runs. Golden rules 1 and 5 govern audio and
-    // routing — a label on a list row is neither.
-    let finalTitle = title.trim();
-    if (!finalTitle) {
-      setTitling(true);
-      try {
-        finalTitle = (await api.suggestTitle(text.trim(), language)).title;
-        setTitle(finalTitle);
-      } catch {
-        finalTitle = fallbackTitle(text);
-      } finally {
-        setTitling(false);
-      }
-    }
+    // NEVER await the analyzer here. It loads a ~6 GB model, so awaiting it
+    // froze the button for as long as that took — the exact stall this whole
+    // change set exists to remove. The field is normally already filled by the
+    // debounced suggestion below or by the direction preview; if it is not,
+    // the text-derived name is used immediately and the job goes to the queue
+    // now. A label is not worth making someone wait for.
+    const finalTitle = title.trim() || fallbackTitle(text);
 
     try {
       const newJob = await generateMutation.mutateAsync({
@@ -439,7 +445,10 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
   // `jobs` table is the queue and the backend already admits several at once
   // (admission_limit=8), so gating on `!isTerminal(job.status)` made the
   // frontend the only thing serialising the user's work.
-  const busy = generateMutation.isPending || titling;
+  // ONLY the enqueue POST. Not the job (the queue runs several at once), and
+  // not the title suggestion (it is background work that must never gate a
+  // generation).
+  const busy = generateMutation.isPending;
   // Text-editor tools. `copied` is a transient confirmation rather than a
   // toast: the feedback belongs on the button you just pressed, and a toast
   // for "copied" is noise next to a toast for "generation failed".
