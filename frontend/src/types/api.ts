@@ -332,6 +332,56 @@ export interface SystemStatus {
   fake_runtime_enabled: boolean;
 }
 
+/**
+ * One pronunciation-dictionary entry: a word OmniVoice says wrong, and the
+ * respelling to synthesize instead.
+ *
+ * `key_text` may be in EITHER script — Latin for an English loanword sitting
+ * inside Urdu ("database"), Perso-Arabic for a word that arrives already
+ * converted ("میٹنگ", read as "mating"). Matching is case-insensitive, so
+ * "Database" and "database" are the same entry.
+ */
+export interface PronunciationItem {
+  id: number;
+  key_text: string;
+  replacement: string;
+  language: string;
+  /**
+   * Disabling is not the same as deleting. A disabled entry whose key matches
+   * a SHIPPED default suppresses that default — it is the only way to switch a
+   * built-in off. Deleting the row restores the default instead.
+   */
+  is_enabled: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PronunciationList {
+  items: PronunciationItem[];
+  total: number;
+}
+
+export interface PronunciationCreate {
+  key_text: string;
+  replacement: string;
+  language?: string;
+  is_enabled?: boolean;
+  notes?: string | null;
+}
+
+/**
+ * Partial update. An omitted field is left alone, so `notes` is cleared by
+ * sending `""` rather than `null` — same convention as the backend.
+ */
+export interface PronunciationUpdate {
+  key_text?: string;
+  replacement?: string;
+  language?: string;
+  is_enabled?: boolean;
+  notes?: string | null;
+}
+
 /** RFC 9457 problem+json error body. */
 export interface ProblemJson {
   type: string;

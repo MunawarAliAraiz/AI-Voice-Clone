@@ -24,7 +24,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
-from .api.routers import direction, health, history, jobs, media, models, system, tts, voice
+from .api.routers import (
+    direction,
+    health,
+    history,
+    jobs,
+    media,
+    models,
+    pronunciations,
+    system,
+    tts,
+    voice,
+)
 from .config import Settings, get_settings
 from .db import Database
 from .inference.catalog import CATALOG
@@ -150,6 +161,7 @@ def create_app(
     app.include_router(jobs.router, prefix="/api")
     app.include_router(media.router, prefix="/api")
     app.include_router(history.router, prefix="/api")
+    app.include_router(pronunciations.router, prefix="/api")
     _assert_no_duplicate_routes(app)
 
     # Middleware order is load-bearing. add_middleware makes the LAST-added the

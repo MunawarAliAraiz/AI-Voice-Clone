@@ -153,6 +153,40 @@ class HistoryNotFoundError(AppError):
         super().__init__(f"Generation {history_id} does not exist.", history_id=history_id)
 
 
+class PronunciationNotFoundError(AppError):
+    code = "PRONUNCIATION_NOT_FOUND"
+    http_status = 404
+    title = "Dictionary entry not found"
+
+    def __init__(self, entry_id: int) -> None:
+        super().__init__(
+            f"Pronunciation entry {entry_id} does not exist.", entry_id=entry_id
+        )
+
+
+class PronunciationConflictError(AppError):
+    """
+    A dictionary entry already exists for this word in this language.
+
+    Carries the existing entry's id as an extension member so the client can
+    offer "edit the one you already have" instead of only reporting a clash —
+    a user re-adding `database` almost always means they forgot, not that they
+    want a second row that could never win the match anyway.
+    """
+
+    code = "PRONUNCIATION_CONFLICT"
+    http_status = 409
+    title = "Word already in the dictionary"
+
+    def __init__(self, key_text: str, language: str, existing_id: int | None = None) -> None:
+        super().__init__(
+            f"{key_text!r} already has a pronunciation entry for language "
+            f"{language!r}. Matching is case-insensitive, so a different "
+            f"capitalisation is the same entry.",
+            key_text=key_text, language=language, existing_id=existing_id,
+        )
+
+
 class ModelNotFoundError(AppError):
     code = "MODEL_NOT_FOUND"
     http_status = 404
