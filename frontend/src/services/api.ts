@@ -14,6 +14,7 @@ import type {
   PronunciationList,
   PronunciationUpdate,
   ScriptDetectResponse,
+  TitleResponse,
   SystemStatus,
   TTSGenerateRequest,
   VoiceProfile,
@@ -181,6 +182,19 @@ export const api = {
     }),
   deleteHistory: (id: number) =>
     request<void>(`/api/history/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Short label for a generation. Synchronous, not a job — the client needs it
+   * before it can enqueue. Never throws the caller into a dead end: the server
+   * falls back to the text and says `source: "text"` when the analyzer is
+   * unavailable.
+   */
+  suggestTitle: (text: string, language: string) =>
+    request<TitleResponse>('/api/text/title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    }),
 
   // pronunciation dictionary
   //

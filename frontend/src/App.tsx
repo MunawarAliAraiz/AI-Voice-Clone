@@ -1,10 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from './services/api';
+import { fmtDuration } from './lib/format';
 import type { JobStatusResponse } from './types/api';
 import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
+import { ActiveJobRow } from './components/ActiveJobRow';
 import { PronunciationPanel } from './components/PronunciationPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
@@ -47,10 +49,25 @@ export default function App() {
   const jobsQ = useJobsList(1, PAGE_SIZE);
   const cancelJob = useCancelJobMutation();
 
-  // Only jobs with NO history row. A succeeded job already appears below as a
-  // history item, so including it here would render every clip twice.
-  const activeJobs = (jobsQ.data?.items ?? []).filter((j) => j.status !== 'succeeded');
-  const recentCount = (historyQ.data?.total ?? 0) + activeJobs.length;
+  // RECENT shows every job with no history row — queued, running, failed and
+  // cancelled — because a failure is exactly what history structurally cannot
+  // show and is worth keeping visible. A succeeded job is excluded: it already
+  // appears as a history item, and both would list every clip twice.
+  const recentJobs = (jobsQ.data?.items ?? []).filter((j) => j.status !== 'succeeded');
+
+  // STUDIO's strip is narrower on purpose: only work actually in flight. A
+  // terminal job is not "in progress", and filtering on `!== 'succeeded'` here
+  // pinned every past failure under that heading permanently.
+  const inFlightJobs = recentJobs.filter(
+    (j) => j.status === 'queued' || j.status === 'running',
+  );
+  const recentCount = (historyQ.data?.total ?? 0) + recentJobs.length;
+
+  // MAX, not sum. `estimate.py` already folds queue wait into each job's
+  // `eta_sec`, so the last job's estimate already counts the ones ahead of it —
+  // adding them would count the same wait once per job.
+  const etas = inFlightJobs.map((j) => j.eta_sec).filter((e): e is number => e != null);
+  const batchEtaSec = etas.length > 0 ? Math.max(...etas) : null;
   const invalidateVoices = useInvalidateVoices();
   const invalidateHistory = useInvalidateHistory();
 
@@ -171,6 +188,33 @@ export default function App() {
                 onJobSettled={onJobSettled}
                 onOpenRecent={() => setActiveTab('recent')}
               />
+              {/* Generate no longer blocks, so several clips can be in flight
+                  at once and the Composer's single result card cannot show
+                  them. This strip is where "did my last three go through" is
+                  answered without leaving Studio. */}
+              {inFlightJobs.length > 0 && (
+                <section className="card" aria-labelledby="inflight-h">
+                  <header className="card-head">
+                    <h2 id="inflight-h">
+                      In progress
+                      <span className="count">{inFlightJobs.length}</span>
+                    </h2>
+                    {batchEtaSec != null && (
+                      <span className="muted">~{fmtDuration(batchEtaSec)} left</span>
+                    )}
+                  </header>
+                  <ul className="hist">
+                    {inFlightJobs.map((job) => (
+                      <ActiveJobRow
+                        key={job.id}
+                        job={job}
+                        onCancel={() => cancelJob.mutate(job.id)}
+                        cancelling={cancelJob.isPending && cancelJob.variables === job.id}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
             </div>
           </>
         )}
@@ -187,7 +231,7 @@ export default function App() {
             hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
             onLoadMore={loadMore}
             onChanged={invalidateHistory}
-            activeJobs={activeJobs}
+            activeJobs={recentJobs}
             onCancelJob={(id) => cancelJob.mutate(id)}
             cancellingJobId={cancelJob.isPending ? (cancelJob.variables ?? null) : null}
           />

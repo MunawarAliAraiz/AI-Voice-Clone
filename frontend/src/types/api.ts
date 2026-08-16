@@ -111,6 +111,8 @@ export interface DirectionPlanIn {
 
 export interface TTSGenerateRequest {
   text: string;
+  /** Optional. A generation without one is shown by its text. */
+  title?: string | null;
   profile_id: number;
   language: string;
   model_id?: string | null;
@@ -216,6 +218,7 @@ export interface HistoryItem {
   id: number;
   profile_id: number;
   profile_name: string | null;
+  title: GenerationTitle;
   input_text: string;
   language: string;
   audio_url: string;
@@ -264,6 +267,9 @@ export interface AnalyzeLlmRow {
  */
 export interface AnalyzeLlmResult {
   rows: AnalyzeLlmRow[];
+  /** Produced in the SAME generation as the rows, so one AI-suggest press
+   *  yields both prosody and a title — no second model round-trip. */
+  title: string;
   gen_time_sec: number;
   load_time_sec: number;
 }
@@ -284,6 +290,9 @@ export interface JobStatusResponse {
   profile_id: number | null;
   profile_name: string | null;
   input_text: string | null;
+  /** Carried from the job's stored params, so a QUEUED job already has it —
+   *  before any history row exists. */
+  title: GenerationTitle;
   /** Never absent from 'queued' onward for kinds that route through the audio
    *  catalog (currently only 'synthesize') — routing is pure and already ran.
    *  `null` for kinds that never touch `resolve()`/the audio catalog at all
@@ -341,6 +350,20 @@ export interface SystemStatus {
  * converted ("میٹنگ", read as "mating"). Matching is case-insensitive, so
  * "Database" and "database" are the same entry.
  */
+/**
+ * Short human label for a generation, 2-3 words. Produced by the analyzer in
+ * the SAME response as its prosody rows, and editable before generating.
+ * `null` on every generation made before titles existed.
+ */
+export type GenerationTitle = string | null;
+
+export interface TitleResponse {
+  title: string;
+  /** `"text"` means the analyzer was unavailable and this is the first few
+   *  words instead — surfaced rather than hidden. */
+  source: 'analyzer' | 'text';
+}
+
 export interface PronunciationItem {
   id: number;
   key_text: string;

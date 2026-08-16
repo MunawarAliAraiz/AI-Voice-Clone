@@ -54,6 +54,11 @@ function modelSuffix(m: { experimental: boolean; commercial_use: boolean }): str
   return tags.length ? ` (${tags.join(', ')})` : '';
 }
 
+/** Mirrors the server's own fallback, for when even the request fails. */
+function fallbackTitle(text: string): string {
+  return text.trim().split(/\s+/).slice(0, 4).join(' ');
+}
+
 export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
@@ -112,6 +117,11 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
   // anymore" apart from "the same plan was refetched" (e.g. re-opening the
   // disclosure), which should NOT throw away what the user just customized.
   const lastSegSignature = useRef<string | null>(null);
+
+  // Short label for Recent. Filled by the analyzer (same response as the
+  // prosody rows) or by the user; never blocks Generate.
+  const [title, setTitle] = useState('');
+  const [titling, setTitling] = useState(false);
 
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
@@ -314,6 +324,11 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
 
     if (llmJob.status === 'succeeded') {
       const result = llmJob.result;
+      // The title rides in the same response as the rows. Only fill an EMPTY
+      // field — the user's own wording always wins over a later suggestion.
+      if (result && 'title' in result && typeof result.title === 'string') {
+        setTitle((current) => current.trim() || result.title);
+      }
       if (result && 'rows' in result && direction) {
         for (const row of result.rows) {
           const seg = direction.plan.segments.find((s) => s.index === row.index);
@@ -353,8 +368,27 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
     if (!text.trim()) return setErr('Type something to say.');
     setErr(null);
     const editedSegments = Object.values(directionEdits);
+
+    // Name it if it has no name. Awaited, but the button is NOT gated on the
+    // analyzer being available: a failure here falls back to the first few
+    // words and the job still runs. Golden rules 1 and 5 govern audio and
+    // routing — a label on a list row is neither.
+    let finalTitle = title.trim();
+    if (!finalTitle) {
+      setTitling(true);
+      try {
+        finalTitle = (await api.suggestTitle(text.trim(), language)).title;
+        setTitle(finalTitle);
+      } catch {
+        finalTitle = fallbackTitle(text);
+      } finally {
+        setTitling(false);
+      }
+    }
+
     try {
       const newJob = await generateMutation.mutateAsync({
+        title: finalTitle || null,
         profile_id: profileId,
         language,
         model_id: modelId,
@@ -395,7 +429,11 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
 
   const langs = languages.length ? languages : [];
   const rtl = detect?.is_rtl ?? false;
-  const busy = generateMutation.isPending || (job != null && !isTerminal(job.status));
+  // Only the enqueue POST blocks the button. A running job must NOT: the
+  // `jobs` table is the queue and the backend already admits several at once
+  // (admission_limit=8), so gating on `!isTerminal(job.status)` made the
+  // frontend the only thing serialising the user's work.
+  const busy = generateMutation.isPending || titling;
   // Text-editor tools. `copied` is a transient confirmation rather than a
   // toast: the feedback belongs on the button you just pressed, and a toast
   // for "copied" is noise next to a toast for "generation failed".
@@ -439,6 +477,19 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
     <section className="card composer" aria-labelledby="composer-h">
       <header className="card-head">
         <h2 id="composer-h">Generate speech</h2>
+      </header>
+
+      <div className="editor-bar">
+        <label className="field editor-title">
+          <span className="field-label">Title</span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={titling ? 'Naming…' : 'Auto-named when you generate'}
+            maxLength={60}
+            aria-label="Generation title"
+          />
+        </label>
         <div className="composer-tools">
           {text.length > 0 && <span className="count">{text.length} / 5000</span>}
           <button
@@ -474,7 +525,7 @@ export function Composer({ voices, languages, onJobSettled, onOpenRecent }: Prop
             <IconTrash size={13} />
           </button>
         </div>
-      </header>
+      </div>
 
       {clipboardError && (
         <div className="inline-error" role="alert">

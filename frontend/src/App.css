@@ -1537,3 +1537,44 @@ textarea {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
+
+/* ── Title above the text, in Recent and the in-progress strip ─────────────── */
+
+.h-titled {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The title is the scannable line and the text is context beneath it — the
+   reverse of the pre-title layout, where an RTL wall of Urdu was the heading.
+   No `dir` here: a title is short and the browser's own bidi handling is
+   correct for it, while the text below keeps its explicit direction. */
+.h-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.h-titled .h-text {
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+/* The Composer's title input sits beside the tool row above the textarea. */
+.editor-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.editor-title {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
