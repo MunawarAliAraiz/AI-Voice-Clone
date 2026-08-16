@@ -64,9 +64,14 @@ rate: one of {_VALID_RATES} (speaking speed)
 Use "neutral"/"medium"/"medium"/"normal" when nothing in the text signals otherwise \
 — never guess dramatically to seem clever."""
 
-#: Probe default; generous enough for a full sentence list's worth of JSON
-#: rows without giving the model room to ramble past the array.
-_DEFAULT_MAX_NEW_TOKENS = 300
+#: Sized for the rows alone when it was the probe's default. Adding the title
+#: pushed a real three-sentence Urdu request to within ONE TOKEN of the limit
+#: — the model emitted the whole object and got cut off before its closing
+#: brace, which then read as a JSON syntax error rather than as truncation.
+#: Raised with room to spare: the ceiling exists to stop a model rambling past
+#: the object, and it does that job just as well at 900 as at 300, while 300
+#: was also quietly failing legitimate responses.
+_DEFAULT_MAX_NEW_TOKENS = 900
 
 
 def _build_prompt(sentences: list[str]) -> str:
@@ -108,6 +113,48 @@ def _snippet(raw: str) -> str:
     return repr(raw if len(raw) <= _SNIPPET_CHARS else raw[:_SNIPPET_CHARS] + "…[truncated]")
 
 
+def _matching_brace(raw: str, start: int) -> int | None:
+    """
+    Index of the `}` that closes the `{` at `start`, or None if it never
+    closes.
+
+    Replaces an `rfind("}")` that produced a genuinely misleading failure in
+    production. Given a response whose only flaw was a missing final brace,
+    `rfind` landed on the last ROW's closing brace, silently discarding the
+    `]` as well — so a truncation of one character was reported as
+    `Expecting ',' delimiter: line 6 column 93`, pointing at valid text in
+    the middle of an array. Depth-matching cannot make that mistake: either
+    the object closes and the slice is exactly it, or it does not and the
+    caller says "unterminated".
+
+    Quote-aware, because a `}` inside a string value is not structure. Titles
+    are model-written free text and this analyzer's are frequently Urdu, so
+    braces and escapes inside them are not hypothetical.
+    """
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(raw)):
+        ch = raw[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
 def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[str, Any]]]:
     """
     Parse+validate exactly what the probe's `validate_response` reported as
@@ -118,9 +165,18 @@ def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[s
     dominates, so asking for both in one generation is the difference between
     one worker round-trip and two.
     """
-    start, end = raw.find("{"), raw.rfind("}")
-    if start == -1 or end == -1:
+    start = raw.find("{")
+    if start == -1:
         raise RuntimeError(f"no JSON object found in analyzer response: {raw!r}")
+    end = _matching_brace(raw, start)
+    if end is None:
+        # Genuinely unterminated. Say that plainly instead of letting the
+        # parser report a confusing column number inside a slice the caller
+        # never sees — this is what a too-small `max_new_tokens` looks like.
+        raise RuntimeError(
+            f"analyzer response object is unterminated (likely truncated by "
+            f"max_new_tokens); model returned {_snippet(raw)}"
+        )
     try:
         payload = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as exc:
