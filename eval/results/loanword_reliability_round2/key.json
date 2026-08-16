@@ -1,0 +1,231 @@
+{
+  "note": "Blind key. The listening page never shows this.",
+  "round": "2",
+  "shuffle_seed": 20260816,
+  "plan": [
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_verbatim_s2.wav",
+      "clip_no": 1
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 6,
+      "wav": "db_bays_s6.wav",
+      "clip_no": 2
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_bari_ye_s4.wav",
+      "clip_no": 3
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_bays_s1.wav",
+      "clip_no": 4
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_shipping_s2.wav",
+      "clip_no": 5
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 5,
+      "wav": "db_bari_ye_s5.wav",
+      "clip_no": 6
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_verbatim_s3.wav",
+      "clip_no": 7
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_bari_ye_s1.wav",
+      "clip_no": 8
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_bays_s3.wav",
+      "clip_no": 9
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_shipping_s1.wav",
+      "clip_no": 10
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_shipping_s4.wav",
+      "clip_no": 11
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 6,
+      "wav": "db_bari_ye_s6.wav",
+      "clip_no": 12
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 7,
+      "wav": "db_shipping_s7.wav",
+      "clip_no": 13
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 8,
+      "wav": "db_bari_ye_s8.wav",
+      "clip_no": 14
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 8,
+      "wav": "db_bays_s8.wav",
+      "clip_no": 15
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_bari_ye_s2.wav",
+      "clip_no": 16
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 7,
+      "wav": "db_bari_ye_s7.wav",
+      "clip_no": 17
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_bays_s4.wav",
+      "clip_no": 18
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 5,
+      "wav": "db_shipping_s5.wav",
+      "clip_no": 19
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 6,
+      "wav": "db_shipping_s6.wav",
+      "clip_no": 20
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 5,
+      "wav": "db_bays_s5.wav",
+      "clip_no": 21
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 8,
+      "wav": "db_shipping_s8.wav",
+      "clip_no": 22
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 7,
+      "wav": "db_bays_s7.wav",
+      "clip_no": 23
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_verbatim_s4.wav",
+      "clip_no": 24
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_bari_ye_s3.wav",
+      "clip_no": 25
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_shipping_s3.wav",
+      "clip_no": 26
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_bays_s2.wav",
+      "clip_no": 27
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_verbatim_s1.wav",
+      "clip_no": 28
+    }
+  ]
+}
