@@ -369,21 +369,45 @@ def main() -> int:
     # MULTIMODAL config, so AutoModelForCausalLM refuses them outright even
     # though the text path is exactly what this probe uses. Fall back to the
     # image-text auto class rather than excluding those families.
+    # A pre-quantized checkpoint (AWQ/GPTQ/bnb) carries its own dtype in
+    # `quantization_config`, and forcing bfloat16 over it either errors or
+    # silently dequantizes into VRAM this card does not have. Only the
+    # unquantized case gets an explicit dtype.
+    from transformers import AutoConfig
+
+    _cfg = AutoConfig.from_pretrained(MODEL_ID)
+    is_quantized = getattr(_cfg, "quantization_config", None) is not None
+    load_kwargs: dict[str, Any] = {"device_map": "cuda"}
+    if is_quantized:
+        print(f"  (pre-quantized checkpoint: "
+              f"{_cfg.quantization_config.get('quant_method', '?')}; dtype left to the config)")
+    else:
+        load_kwargs["dtype"] = torch.bfloat16
+
     try:
-        model = AutoModelForCausalLM.from_pretrained(
-            MODEL_ID, dtype=torch.bfloat16, device_map="cuda"
-        )
+        model = AutoModelForCausalLM.from_pretrained(MODEL_ID, **load_kwargs)
     except ValueError as exc:
         if "Unrecognized configuration class" not in str(exc):
             raise
         from transformers import AutoModelForImageTextToText
 
         print(f"  (multimodal config; loading via AutoModelForImageTextToText)")
-        model = AutoModelForImageTextToText.from_pretrained(
-            MODEL_ID, dtype=torch.bfloat16, device_map="cuda"
-        )
+        model = AutoModelForImageTextToText.from_pretrained(MODEL_ID, **load_kwargs)
     load_time_sec = time.time() - t0
     print(f"Loaded in {load_time_sec:.1f}s")
+
+    # Qwen3 and its descendants emit a <think>...</think> block BY DEFAULT.
+    # Left on, every response is reasoning followed by the answer, and
+    # `parse_transliteration` scores the reasoning -- a silent
+    # everything-is-unparseable run rather than a crash. The switch lives in
+    # the chat template, so it is only passed to templates that declare it,
+    # and the generation budget is raised in case a template ignores us.
+    template = getattr(tokenizer, "chat_template", "") or ""
+    thinking_model = "enable_thinking" in template
+    template_kwargs: dict[str, Any] = {"enable_thinking": False} if thinking_model else {}
+    max_new_tokens = 512 if thinking_model else 256
+    if thinking_model:
+        print("  (thinking model; enable_thinking=False, <think> blocks stripped)")
 
     results: list[ItemResult] = []
     for case in cases:
@@ -392,15 +416,22 @@ def main() -> int:
             {"role": "user", "content": build_prompt(case.source_roman)},
         ]
         inputs = tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, return_tensors="pt", return_dict=True
+            messages, add_generation_prompt=True, return_tensors="pt",
+            return_dict=True, **template_kwargs,
         ).to(model.device)
 
         t1 = time.time()
-        out = model.generate(**inputs, max_new_tokens=256, do_sample=False)
+        out = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
         gen_sec = time.time() - t1
         raw = tokenizer.decode(
             out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
         )
+        # A CLOSED <think> block means the switch was ignored but the answer is
+        # still there, so take it. An UNCLOSED one means generation ran out of
+        # budget mid-reasoning and there is no answer at all -- that is a real
+        # failure and is left in `raw` to be scored as unparseable.
+        if "</think>" in raw:
+            raw = raw.split("</think>", 1)[1]
 
         row = ItemResult(
             item_id=case.item_id, category=case.category, variant=case.variant,
