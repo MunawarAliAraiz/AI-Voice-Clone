@@ -172,6 +172,7 @@ def _score(arg: str) -> None:
 
     total_clips = len(plan)
     total_words = sum(len(r["latin_words"]) for r in plan)
+    distinct = {w for r in plan for w in r["latin_words"]}
     bad_clips = {c for c, _ in failures}
     bad_words = Counter(w for _, w in failures)
 
@@ -179,19 +180,30 @@ def _score(arg: str) -> None:
           f"({len(bad_clips) / total_clips:.1%})")
     print(f"word instances  : {len(failures)}/{total_words} mispronounced "
           f"({len(failures) / total_words:.1%})")
+    print(f"distinct words  : {len(bad_words)}/{len(distinct)} affected "
+          f"({len(bad_words) / len(distinct):.1%})  <- one lexicon entry each")
     print()
-    if bad_words:
-        print("words that failed (count over both takes):")
-        for word, n in bad_words.most_common():
-            # A word failing once of two takes is the unseeded coin flip, not a
-            # reliably-broken word -- worth distinguishing before anyone adds it
-            # to a lexicon on the strength of one bad clip.
-            occurrences = sum(
-                r["latin_words"].count(word) for r in plan
-            )
-            print(f"  {word:<16} {n}/{occurrences}")
-    else:
+    if not bad_words:
         print("no failures reported.")
+        return
+
+    # A word failing every take is systematically wrong and a lexicon entry can
+    # fix it. A word failing some takes is the unseeded coin flip of §9b, and no
+    # spelling choice will fully fix it -- the two need different responses, so
+    # they are never pooled into one number here.
+    always, sometimes = [], []
+    for word, n in bad_words.most_common():
+        occurrences = sum(r["latin_words"].count(word) for r in plan)
+        (always if n == occurrences else sometimes).append((word, n, occurrences))
+
+    if always:
+        print(f"ALWAYS wrong ({len(always)}) -- deterministic, a lexicon entry fixes these:")
+        for word, n, occ in always:
+            print(f"  {word:<16} {n}/{occ}")
+    if sometimes:
+        print(f"\nSOMETIMES wrong ({len(sometimes)}) -- unseeded variance, not a spelling problem:")
+        for word, n, occ in sometimes:
+            print(f"  {word:<16} {n}/{occ}")
 
 
 def main() -> None:

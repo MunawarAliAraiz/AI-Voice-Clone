@@ -833,3 +833,53 @@ The two candidates worth pursuing, in order:
    applied inside `resolve()`, still no model.
 
 **Not decided here.** Step 1 is cheap and should precede step 2.
+
+### 9e. The loanword failure rate, measured — and what it settles
+
+§9d's open question, answered. 20 Latin-island corpus items × 2 takes, through the **real production
+normalization path** (so `database` was already the corrected `ڈیٹا بےس` and `URL` already
+`یو آر ایل` — both drop out of the count, making this the *residual* rate for words the lexicon does
+not cover). Driver `eval/run_loanword_rate.py`, owner-rated.
+
+| | |
+|---|---|
+| clips containing at least one bad word | **13/40 (32.5%)** |
+| word instances mispronounced | **20/116 (17.2%)** |
+| distinct words affected | **11/54 (20.4%)** — one lexicon entry each |
+
+**Not the "2 in 20" that would have made a dictionary over-engineering.** One in three generations
+carries a mispronounced English word.
+
+The split between deterministic and stochastic failures is what makes this actionable:
+
+| | words |
+|---|---|
+| **Always wrong** (2/2 takes) — a spelling fixes these | `message`, `RAM`, `WhatsApp`, `interview`, `asap`, `reply`, `plz`, `API`, `cache` |
+| **Sometimes wrong** (1/2 takes) — §9b's unseeded variance, no spelling will fix it | `wait`, `screenshot` |
+
+**Nine of the eleven fail every time.** That is the encouraging half of a discouraging number: these
+are systematic, not luck, so a respelling can genuinely fix them and a user who adds an entry gets a
+durable result rather than a better coin. The owner's note on `interview` — *"the T is pronounced like
+an Arab would"* — is diagnostic of the whole class: the model applies Arabic phonology to Latin
+tokens, so `ٹ` (retroflex) is realised as `ت` (dental). That is a phoneme-mapping failure with an
+obvious respelling remedy (`انٹرویو`), not a mystery.
+
+Note what the failures are *not*: they are not rare or exotic words. `message`, `reply`, `API`,
+`WhatsApp`, `interview` are among the most common English words in Pakistani everyday and workplace
+speech. The lexicon cannot be a curiosity shelf.
+
+**Decision: build the user-editable pronunciation dictionary** (§9d's option 2). At 20% of distinct
+words, the hardcoded-list-plus-owner-listening approach would require the owner to work through
+roughly one word in five of all English vocabulary, at a dozen blind listens each. That does not
+finish. Moving the mapping into per-user data with the hardcoded dict demoted to *shipped defaults*
+scales because the person who wants a word fixed is the one who fixes it, and it only has to satisfy
+them. Architecturally nothing else changes: still a pure text transform in `domain/urdu_text.py`,
+still applied inside `resolve()`, still no model, still no `TransformKind`.
+
+Two caveats to carry into that build:
+
+- The 2 stochastic words mean a dictionary **cannot promise correctness**, only improvement. Users
+  will still hit a bad draw, so "regenerate" must be a visible remedy (§9b).
+- Seeding these numbers is one rater, one reference voice, one corpus, n=2. It is firmly enough to
+  decide *build vs don't build*; it is not a per-word verdict, and no word above should be given a
+  shipped default spelling without the §9c blind-repeat treatment.
