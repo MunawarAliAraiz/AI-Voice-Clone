@@ -87,6 +87,24 @@ API key pasted into Settings, and it is the first thing to do.
    §15b showed the corpus gold is itself inconsistent in places — it converts `office`/`file`/`meeting`
    to Urdu script while the contract says to keep English in Latin.
 
+**Three findings from the 2026-08-17 analyzer debugging, all verified on the pod:**
+
+- **`AnalyzerScheduler` must hold one lock across the whole `classify()`, including the wire call.**
+  `worker_client.py`'s docstring states the precondition — it needs no locking of its own *because*
+  the scheduler holds the slot — and `AnalyzerScheduler` was releasing at start+load. Two concurrent
+  callers then wrote two frames onto one stdin; `WorkerProcess.call` caught it by request id and
+  killed the worker, so every collision cost a ~30 s reload the next collision destroyed. Latent
+  until the debounced title suggestion became a second caller.
+- **Qwen2.5-3B ends this prompt's response one `}` short.** It closes the rows array and stops.
+  **Byte-identical at `max_new_tokens` 300 and 900 under greedy decoding**, so it is choosing to
+  stop, not being cut off — don't "fix" it by raising the ceiling again. `_scan_object` appends
+  closers only for brackets it watched open; a genuinely incomplete response still fails, and
+  everything still goes through the same strict validation.
+- **The direction preview makes zero Qwen calls.** `routers/direction.py`'s preview is the pure
+  heuristic `analyze()`. Only the "AI suggest" path calls the LLM, and that one *does* carry the
+  title in the same response as the rows. So a title alongside the preview is necessarily a
+  separate call — there is no model response to ride along in.
+
 **Two live findings that change how all future evaluation is done here:**
 
 - **Synthesis is unseeded** (§9b). `OmniVoiceBackend.synth()` sets no seed, so a word's pronunciation
