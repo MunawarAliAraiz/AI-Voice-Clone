@@ -21,12 +21,37 @@ memory that presents as a random illegal-access crash.
 
 If you find yourself adding a second place that evicts, stop: the invariant is
 gone and so is the guarantee.
+
+AMENDED 2026-08-17 — ONE second eviction call site, and the reasoning
+--------------------------------------------------------------------
+`exclusive_gpu()` evicts, and it is not `_ensure_ready`. That is a real
+amendment to the paragraph above, made deliberately rather than by accident,
+so read this before adding a third.
+
+What the invariant actually buys is in the sentence "unload-during-inference
+is UNREPRESENTABLE, rather than merely guarded by a lock someone can forget to
+take." That property is untouched: `exclusive_gpu` holds `self._slot` across
+its entire body, and evicts through the same `_evict` behind the same
+`_slot_held` assertion. No inference can be in flight while it runs, because
+inference needs the slot it is holding. The two-call-site version of the rule
+is weaker than the one-call-site version only in that it is one more place to
+read — not in what it permits.
+
+What forced it: Phase B's transliterator is Gemma-4-31B at ~19 GB against a
+24 GB card, and it can never be co-resident with the audio models. It needs
+the GPU emptied, and `_make_room_for` cannot express "empty it" — it evicts
+until a spec fits a budget that is deliberately sized for co-residency
+(16 GB), so a 19 GB spec fails its first check outright. The alternative was
+to special-case the budget arithmetic for one model, which hides the
+exception inside the sizing logic every other model depends on. A named
+method that says what it does is the more honest place for it.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -40,6 +65,8 @@ from ..exceptions import (
 from .catalog import ModelCatalog
 from .protocol import ModelStatus, SynthRequest, SynthResult, WireOp, WorkerHandle
 from .spec import ModelSpec, ModelState, RuntimeKind
+
+logger = logging.getLogger("app.inference.scheduler")
 
 __all__ = ["SchedulerConfig", "InferenceScheduler"]
 
@@ -243,6 +270,56 @@ class InferenceScheduler:
         spec = self._require(model_id)
         async with self._hold_slot():
             await self._ensure_ready(spec)
+
+    @contextlib.asynccontextmanager
+    async def exclusive_gpu(self, reason: str):
+        """
+        Hold the GPU slot and hand back an EMPTY GPU, for one non-audio model
+        too large to coexist with the audio ones.
+
+        Built for exactly one caller: `TransliteratorScheduler`. Gemma-4-31B
+        is ~19 GB at 4-bit against a 24 GB card, and VoxCPM (7.3 GB) plus
+        OmniVoice (4.7 GB) are both warmed at startup. There is no arrangement
+        in which they are simultaneously resident, so "make room" here means
+        "make ALL the room" — this evicts every worker rather than the LRU few
+        `_make_room_for` would.
+
+        WHY THIS IS NOT A SECOND WAY TO BREAK GOLDEN RULE 3
+        ---------------------------------------------------
+        Rule 3 says eviction happens only inside `_ensure_ready`, only under
+        the slot. This is a second CALL SITE, and that is a real amendment —
+        recorded in CLAUDE.md rather than smuggled in here. What the rule
+        exists to guarantee is untouched: the point is that unloading a model
+        while it is being inferred on must be UNREPRESENTABLE, and it still
+        is, because this holds the same semaphore for the entire window and
+        goes through the same `_evict` with the same assertion. Nothing new
+        can evict; one more thing can ask the existing evictor to.
+
+        Why not let `AnalyzerScheduler`'s pattern handle it: that one spawns
+        its worker outside this scheduler entirely and gets away with it only
+        because Qwen2.5-3B's ~6 GB fits in the slack. Doing that at 19 GB is
+        precisely the two-schedulers-unaware-of-each-other failure that
+        `analyzer_scheduler.py`'s own docstring warns about.
+
+        The cost is honest and belongs to the caller: audio models come back
+        COLD afterwards, so the next generation pays a full load. That is the
+        price of the load-convert-unload shape, not a bug in it.
+        """
+        async with self._hold_slot():
+            evicted = [str(r) for r in self._workers]
+            logger.info(
+                "exclusive GPU requested (%s); evicting %d worker(s): %s",
+                reason, len(evicted), ", ".join(evicted) or "none",
+            )
+            for runtime in list(self._workers):
+                await self._evict(runtime)
+            try:
+                yield
+            finally:
+                # Nothing to restore. Audio workers reload lazily through
+                # `_ensure_ready`'s COLD path on the next request, which is
+                # the same path a fresh process takes.
+                logger.info("exclusive GPU released (%s)", reason)
 
     async def shutdown(self) -> None:
         """Kill every worker. Idempotent. Called from the app lifespan."""

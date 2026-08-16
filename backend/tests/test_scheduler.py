@@ -87,6 +87,72 @@ async def test_no_unload_during_inference(tmp_path: Path) -> None:
         assert worker.max_concurrent <= 1, "two requests held the GPU at once"
 
 
+async def test_exclusive_gpu_empties_the_gpu_and_never_overlaps_a_synth(
+    tmp_path: Path,
+) -> None:
+    """
+    Phase B's transliterator needs the whole card (~19 GB Gemma vs a 24 GB
+    GPU), so `exclusive_gpu()` evicts EVERY worker rather than the LRU few
+    `_make_room_for` would.
+
+    This is the second eviction call site in the codebase and the amendment
+    to the module docstring's invariant, so the property that matters is
+    asserted directly: it holds the same slot, therefore no synthesis can be
+    in flight while it evicts, therefore nothing is unloaded mid-inference.
+    """
+    sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.02)
+
+    inside_exclusive = False
+    saw_synth_during_exclusive = False
+
+    async def hammer() -> None:
+        nonlocal saw_synth_during_exclusive
+        for model in ("a", "b", "c", "a", "b"):
+            await sched.synthesize(_req(model, tmp_path))
+            if inside_exclusive:
+                saw_synth_during_exclusive = True
+
+    async def take_the_gpu() -> None:
+        nonlocal inside_exclusive
+        await asyncio.sleep(0.03)  # let some synthesis get going first
+        async with sched.exclusive_gpu("transliterate"):
+            inside_exclusive = True
+            assert sched._workers == {}, "exclusive_gpu left a worker resident"
+            await asyncio.sleep(0.05)
+            inside_exclusive = False
+
+    await asyncio.gather(hammer(), take_the_gpu())
+
+    assert not saw_synth_during_exclusive, "a synthesis completed while the GPU was exclusive"
+    for worker in made.values():
+        assert not worker.unload_during_synth, f"{worker.runtime} evicted mid-inference"
+        assert worker.max_concurrent <= 1, "two requests held the GPU at once"
+
+
+async def test_synthesis_recovers_after_exclusive_gpu(tmp_path: Path) -> None:
+    """
+    Eviction is the whole point, so the audio models come back COLD. That is
+    the documented price of load-convert-unload, not a broken scheduler —
+    the next request must still succeed, paying a fresh load.
+    """
+    sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.001)
+    await sched.synthesize(_req("a", tmp_path))
+    first_worker = made[RuntimeKind.F5]
+
+    async with sched.exclusive_gpu("transliterate"):
+        assert sched._workers == {}
+
+    await sched.synthesize(_req("a", tmp_path))
+
+    # `made` is keyed by runtime, so the replacement overwrote the original
+    # entry — identity is what proves a fresh worker was spawned, not a load
+    # count that the overwrite discarded.
+    second_worker = made[RuntimeKind.F5]
+    assert second_worker is not first_worker, "no new worker was spawned after eviction"
+    assert second_worker.load_calls == 1, "the fresh worker did not load the model"
+    assert first_worker.kill_calls >= 1, "the evicted worker was never killed"
+
+
 async def test_no_double_load(tmp_path: Path) -> None:
     """10 concurrent requests for one model must load it exactly once."""
     sched, made = _make_scheduler(load_delay_sec=0.02, synth_delay_sec=0.001)
