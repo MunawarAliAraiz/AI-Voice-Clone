@@ -23,7 +23,7 @@ It provisions everything, then starts the backend and ngrok and polls until `/ap
 there is no second step. It ends by printing your API key and a status block:
 
 ```
-== 13. current status ==
+== 20. current status ==
    backend:  UP   (127.0.0.1:8000)
    ngrok:    UP   https://<your-name>.ngrok-free.dev
    public:   OK   https://<your-name>.ngrok-free.dev/api/health -> 200
@@ -58,10 +58,31 @@ under.
 
 That's it for a fresh pod. Piping the script in over `"bash -s" <` isn't backgrounded, so every line
 it prints streams to your terminal live as it runs — `uv sync`, the torch install, the weight
-download, the test run — nothing extra needed to watch it. It takes a few minutes (mostly downloading
-the VoxCPM 2 weights, ~7 GB) and ends by printing **your `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` in
-full**, plus the exact command to start serving. Copy the key into the frontend's settings gear, run
-the command, and the backend is up.
+download, the test run — nothing extra needed to watch it. On a cold `/workspace` it takes **15–30
+minutes** (~15 GB of weights across four model sets), and ends by printing **your `VCS_API_KEY` and
+`VCS_MEDIA_TOKEN_SECRET` in full**, plus the exact command to start serving. Copy the key into the
+frontend's settings gear, run the command, and the backend is up.
+
+> **The streaming form dies with your SSH connection.** That is the cost of watching it live: the
+> bootstrap is a child of the SSH session, so a dropped connection — `client_loop: send disconnect:
+> Connection reset`, a closed laptop, flaky wifi — kills it partway through, mid-`pip install`.
+> Observed on a real run that died at step 6 of 20. Re-running is safe (every step is idempotent),
+> but on a slow link, or if you want to walk away, run it **detached on the pod** instead so only
+> your *view* of it can disconnect:
+>
+> ```bash
+> # copy it over, then run it under tmux on the pod
+> ssh root@<HOST> -p <PORT> "cat > /workspace/pod-bootstrap.sh" < scripts/pod-bootstrap.sh
+> ssh root@<HOST> -p <PORT> "tmux new-session -d -s bootstrap \
+>   'START=1 NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<domain> FRONTEND_URL=<url> \
+>    bash /workspace/pod-bootstrap.sh 2>&1 | tee /workspace/bootstrap.log'"
+>
+> # then watch from anywhere, reconnect-safe:
+> ssh root@<HOST> -p <PORT> "tail -f /workspace/bootstrap.log"
+> ```
+>
+> `grep '^== ' /workspace/bootstrap.log | tail -5` gives you just the step headers if you only want
+> to know how far along it is.
 
 `-i ~/.ssh/id_ed25519` is only needed if you're not relying on an ssh-agent to offer the key
 automatically. On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` instead of Git Bash's `ssh` if
@@ -89,14 +110,27 @@ special access. A classic PAT with just the `repo` scope is enough.
 - Clones the repo to `/workspace/AI-Voice-Clone` (or pulls, if it's already there from a previous
   session on this same pod).
 - Installs `uv` and `ffmpeg` if missing.
-- Builds two separate Python environments — this is a structural requirement of the project, not
-  incidental: `import torch` must never be reachable from the API process, so the GPU model runs in a
+- Builds **six** separate Python environments — this is a structural requirement of the project, not
+  incidental: `import torch` must never be reachable from the API process, so each GPU model runs in a
   **separate interpreter** the API talks to over a wire protocol. `uv sync` builds the API's env (no
-  torch); a second `uv venv` builds the VoxCPM 2 runtime env, pinned to the **cu128** torch build —
-  a plain `pip install voxcpm` pulls a cu130 wheel whose CUDA runtime is newer than the RunPod driver,
-  which makes `torch.cuda.is_available()` silently `False` and every generation quietly falls back to
-  CPU and times out.
-- Downloads the VoxCPM 2 weights (~7 GB, pinned revision) into the HF cache on `/workspace`.
+  torch); then one `uv venv` per runtime, each pinned to the **cu128** torch build — a plain
+  `pip install voxcpm` pulls a cu130 wheel whose CUDA runtime is newer than the RunPod driver, which
+  makes `torch.cuda.is_available()` silently `False` and every generation quietly falls back to CPU
+  and times out.
+
+  | venv | For | Needed because |
+  |---|---|---|
+  | `.venv` | the API itself | no torch, by design |
+  | `.venv-voxcpm` | `voxcpm2`, `voxcpm2_urdu_arabic` | English + Roman Urdu — the default route |
+  | `.venv-omnivoice` | `omnivoice_urdu` | Perso-Arabic Urdu; verified, picked by name |
+  | `.venv-chatterbox` | `chatterbox_ml_v3` | not routable — kept warm for future work |
+  | `.venv-qwen` | Speech Direction's LLM analyzer | the "Let AI suggest emotion/tone" button |
+  | `.venv-eval` | `eval/` harness | Whisper CER + ECAPA cosine; never the API |
+
+- Downloads every pinned weight set into the HF cache on `/workspace`: VoxCPM 2 (~7 GB), Chatterbox,
+  OmniVoice (~1.2 GB), and Qwen2.5-3B (~6 GB). **Budget ~80 GB of volume** — a fully bootstrapped pod
+  measured 76 GB. Note `df` lies about this mount (it reports the whole MooseFS cluster); use
+  `du -sh /workspace`.
 - Generates `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` **once** into `/workspace/vcs-secrets.env`
   (mode `600`) and reuses that file on every later run, so the values are stable across pod restarts.
   See [Generating and reusing secrets](#generating-and-reusing-secrets) for why stability matters.
@@ -504,5 +538,18 @@ PY
 
 ## Notes
 
-- **Native Urdu script (اردو).** Not routable in the default deployment — the app returns a 422
-  rather than mis-rendering it. Use Roman Urdu ("aap kaise hain"). See the README for why.
+- **Native Urdu script (اردو) works — but you must pick the model by name.** Choose **OmniVoice
+  (Urdu)** in the Composer's Model dropdown (it's pre-selected when the language is Urdu). Its
+  `(ur, Perso-Arabic)` cell is `verified=True` as of 2026-08-15, and it was the best pronunciation
+  result of the whole Urdu bake-off (5.0/5). Digits and a couple of English loanwords are normalized
+  to spoken Urdu first — `2026` is read "دو ہزار چھبیس", not digit-by-digit.
+
+  Leaving the picker on **Auto** still returns a 422 for Perso-Arabic Urdu, and that is deliberate,
+  not a gap: OmniVoice's weights are CC-BY-NC, so `ModelCatalog.candidates()` excludes it from
+  auto-routing and from fallback suggestions. Only an explicit, named request reaches a
+  non-commercial model — see golden rule 6 in `CLAUDE.md`.
+
+  Roman Urdu ("aap kaise hain") routes automatically to VoxCPM 2 and needs no picking. Roman Urdu
+  → OmniVoice is **not** available: it would need a Roman→Perso-Arabic transliteration step, and four
+  separate probes (two target scripts × two model sizes) all missed their accuracy gate. See
+  `docs/URDU_BAKEOFF_RESULTS.md` §8–§8c.
