@@ -11,37 +11,55 @@ project lost a day of planning because the only copy lived on a pod that was ter
 **Live pod:** see `.claude/remote.local.md`. Bootstrapped clean, all six venvs, `.venv-qwen`
 provisioned by the script for the first time (that gap is fixed).
 
-**The headline: the Roman-Urdu → Perso-Arabic feature FAILED its listening gate on Qwen, and a
-better-licensed candidate has since appeared.** Phase A ran end to end and returned four independent
-negatives (A0, A2, A4, A3) — [URDU_BAKEOFF_RESULTS.md §9–§12](URDU_BAKEOFF_RESULTS.md) has the
-reasoning per dead end. Phase B was never started; that was the plan's explicit gate. Don't reopen it
-by re-running the *Qwen* probes: four arms across two model sizes are measured and §10a shows prompt
-engineering is not the lever. **But §13 (2026-08-16) re-ran A2 unchanged on
-`mistralai/Ministral-3-8B-Instruct-2512` (Apache 2.0) and got 74% contract-clean at CER 0.0777,
-against Qwen's 46% / 0.27 — 82% on the trusted original-13 items, and conversion completeness 1.0000
-on three of four arms.** That is a different class of result, not an increment, so §12's closure
-reads as a verdict on Qwen rather than on the idea. It does **not** reverse A3: no one has listened
-to Ministral's output yet, and text metrics have twice failed to see what the ear caught (A0's ASR
-screen, §10's contract metric on `owner_01_sick`). **Re-running A3 on Ministral is a live option;
-the owner chose to weigh it against the dictionary rather than automatically taking it.**
-`eval/run_a3_full_chain.py` needs only `_A2_MANIFEST`/`_A2_ARM` repointed at
-`eval/results/roman_arabic_probe_mistralai_ministral_3_8b_instruct_2512/manifest.json`,
-arm `strict_few_shot`.
+**The headline: the Roman-Urdu → Perso-Arabic feature PASSED its listening gate on 2026-08-16,
+on the third model tried. Phase B is unblocked.** A3 ran three times against the same harness:
+Qwen2.5-7B → *"not usable"*; Ministral-3-8B → ten reported defects; **Gemma-4-31B at 4-bit →
+*"perfect with the current data… it's best"***. Reasoning per run:
+[URDU_BAKEOFF_RESULTS.md §9–§15](URDU_BAKEOFF_RESULTS.md).
+
+Runs 2 and 3 scored the **same contract rate to within one point** and landed on opposite sides of
+the gate. Treat that as settled: **the text metrics can only fail a candidate, never approve one**,
+and every candidate goes through a listen. Prompt engineering is also not a lever — Gemma's four
+arms are within noise of each other because it already holds the constraints, inverting §10a where
+Qwen could not hold them at all.
+
+**Two constraints Phase B must design around before writing code:**
+1. **Gemma-4-31B is ~19 GB resident** (4-bit, 78.4 s cold load) against a 24 GB card with
+   `budget_mb = 16000`. It never needs to be co-resident with OmniVoice — convert, unload, user
+   edits, Generate — but a second scheduler that can demand 19 GB while sitting outside the main
+   scheduler's GPU-slot semaphore is exactly what golden rule 3 exists to prevent. `AnalyzerScheduler`
+   gets away with it only because Qwen2.5-3B's ~6 GB fits in the slack. **Ministral is the named
+   fallback, but run 2 is the measured record of how it sounds and it did not pass — do not
+   substitute on VRAM grounds without re-running A3 on the substitute.**
+2. **The one remaining defect is dictionary work with a new requirement.** میٹنگ is read as
+   *mating*; gold writes میٹنگ too, so it is not the model's doing. The text arrives already in
+   Perso-Arabic, so `_LOANWORD_LEXICON`'s **Latin-only keys never match** — entries must be keyable
+   on either script. Any candidate respelling goes through §9b blind repeat sampling first;
+   `database` needed twelve samples per candidate and its best-sounding clip scored 4/12.
 
 **What a fresh session should do first:**
 
-1. **Build the user-editable pronunciation dictionary.** This is now the highest-value Urdu work and
-   it is unblocked. §9e measured that **17.2% of English loanword instances** (11 of 54 distinct
-   words, 32.5% of generations) are mispronounced by OmniVoice — and 9 of the 11 fail *every* time,
-   so a respelling genuinely fixes them. It was deferred pending A3; A3's failure removed the reason
-   (§12c). Design notes and constraints are on the task and in §9d.
-2. **Two one-click owner actions** that unblock other people's work:
-   - post `docs/outreach/mavkif-licence-request.md` — the only cheap thing that could reopen the
-     Roman-Urdu feature, since `Mavkif/m2m100_rup_rur_to_ur` is Char-BLEU 97.44 versus the 46% Qwen
-     baseline A3 rejected;
-   - accept the licence at huggingface.co/ai4bharat/IndicF5 to unblock bake-off arms H/I/J.
-3. **Native review of the 32 new corpus gold strings** (`_meta.authoring_rule_EXCEPTION_phase_a_items`).
+1. **Design Phase B, starting with the VRAM question above.** The plan
+   (`~/.claude/plans/yes-i-d-refine-your-quiet-blossom.md`, mirrored in ROADMAP) has the full
+   backend/frontend shape — `TransliteratorScheduler` mirroring `AnalyzerScheduler`,
+   `JobKind.TRANSLITERATE`, `POST /api/text/transliterate`, an editable instruction with a
+   server-side validator the user cannot disable, and a Composer button gated on a *generic*
+   condition (selected model claims this language in a script other than the one detected).
+   **`resolve()` and `TransformKind` are not touched** — the output is editable text, not a routing
+   transform. What the plan does NOT yet answer is constraint 1: how a 19 GB transliterator
+   coexists with the GPU-slot semaphore.
+2. **Build the user-editable pronunciation dictionary.** §9e measured that **17.2% of English
+   loanword instances** (11 of 54 distinct words, 32.5% of generations) are mispronounced by
+   OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely fixes them. The gate
+   pass adds میٹنگ→*mating* and with it the either-script keying requirement (constraint 2).
+   Design notes in §9d/§15d.
+3. **One one-click owner action:** accept the licence at huggingface.co/ai4bharat/IndicF5 to unblock
+   bake-off arms H/I/J. (`docs/outreach/mavkif-licence-request.md` is now **moot** — it existed only
+   to reopen a feature that has since passed its gate on Gemma-4-31B. Don't post it.)
+4. **Native review of the 32 new corpus gold strings** (`_meta.authoring_rule_EXCEPTION_phase_a_items`).
    They were drafted by Claude, and any number scored against them is provisional until reviewed.
+   §15b showed the corpus gold is itself inconsistent in places — it converts `office`/`file`/`meeting`
+   to Urdu script while the contract says to keep English in Latin.
 
 **Two live findings that change how all future evaluation is done here:**
 
@@ -50,9 +68,11 @@ arm `strict_few_shot`.
   produced two opposite owner verdicts on one byte-identical sentence an hour apart, and it explains
   `late` passing, failing, then passing across three listens. Sample repeatedly and listen blind;
   `eval/run_loanword_reliability.py` is the pattern.
-- **Numeric screens can only fail something, never approve it.** A0's ASR screen looked encouraging
-  and the owner heard a plain English accent; §10's contract metric passed `owner_01_sick`, whose
-  Urdu is mangled. Both are recorded in place.
+- **Numeric screens can only fail something, never approve it.** Four demonstrations now: A0's ASR
+  screen looked encouraging while the owner heard a plain English accent; §10's contract metric
+  passed `owner_01_sick`, whose Urdu is mangled; §14b's four best-scoring items (CER 0.020–0.077,
+  contract OK) each contained an error caught by ear; and §15a's runs 2 and 3 scored the same
+  contract rate to within a point while landing on opposite sides of the gate.
 
 Historical detail on how the current state came to be follows.
 

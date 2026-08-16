@@ -1288,3 +1288,104 @@ scored as the answer. The probe now passes `enable_thinking=False` to templates 
 (detected in the template text, not by model name), raises the budget to 512 tokens, and strips a
 **closed** think block. An **unclosed** one is deliberately left in place: it means generation ran
 out mid-reasoning with no answer at all, which is a genuine unparseable and must score as one.
+
+---
+
+## 15. A3 run 3 — **the gate PASSED.** `[LISTEN]`
+
+Owner's verdict on `eval/results/a3_gemma31b/listen.html`:
+
+> *"I just read the transcript of gemma and it's perfect with the current data. Just a pronunciation
+> of meeting is not correct… But it's best."*
+
+**This is the first pass A3 has ever returned**, and it closes a run of four negatives (A0, A2, A4,
+A3-run-1) plus a partial (A3-run-2). §12's closure is now formally superseded: it was a verdict on
+Qwen2.5-7B, §14 showed it did not generalise to Ministral, and this shows it does not generalise to
+Gemma-4-31B either.
+
+**Phase B is unblocked.** The plan's explicit gate — *"Phase B is not started until A3 demonstrates
+consistently useful OmniVoice pronunciation"* — is satisfied.
+
+### 15a. The three runs, same ten sentences for runs 1 and 3
+
+| run | model | licence | contract | CER | owner's verdict |
+|---|---|---|---|---|---|
+| 1 | Qwen2.5-7B-Instruct | Apache 2.0 | 18/45 (40%) | 0.3061 | ❌ *"not usable"* |
+| 2 | Ministral-3-8B-Instruct-2512 | Apache 2.0 | 29/39 (74%) | 0.0777 | ⚠️ ten defects, nine of them text |
+| **3** | **Gemma-4-31B-it (bnb 4-bit)** | **Apache 2.0** | **33/45 (73%)** | **0.0414** | ✅ **"perfect with the current data"** |
+
+Note that runs 2 and 3 have **the same contract rate to within one point** while landing on opposite
+sides of the gate. The metric could not distinguish "ten meaning-changing errors" from "perfect".
+CER halved and *that* tracked the verdict — but only in hindsight, which is not a usable rule.
+**The fourth demonstration that these metrics can only fail, never approve.**
+
+### 15b. Every defect from run 2, fixed
+
+Checked item by item against the owner's own notes, not against a score:
+
+| run 2 defect | Ministral | Gemma-4-31B |
+|---|---|---|
+| yaar → aray | ارے | **یار** ✅ |
+| tabiyat → tabaat | طباعت (*printing*) | **طبیعت** (*health*) ✅ |
+| kar lena → karna (×2) | کرنا | **کر لینا** ✅ |
+| Kal → Call (×2) | کال (*call*) | **کل** (*tomorrow*) ✅ |
+| baraye meherbani | بارے مہربانی | **برائے مہربانی** ✅ |
+| bhej dein → bhj dein | بجھ (*extinguish*) | **بھیج** (*send*) ✅ |
+| Assalam → Islam | اسلام علیکم | **السلام و علیکم** ✅ |
+| Mera → May ra | میںرا | **میرا** ✅ |
+
+The homophone class — valid Urdu words meaning something else — is **gone**, which is what §14c
+identified as the class that made editing as expensive as typing.
+
+### 15c. Prompting is not the lever, in either direction
+
+Gemma's four arms are within noise: contract 30–33/45, CER 0.041–0.049, **0 unparseable in all
+four**. The strict prompt and six exemplars bought essentially nothing.
+
+That is the *inverse* of §10a's finding, and the pair is the useful result:
+
+- On **Qwen**, prompting bought nothing because the model **could not hold** the constraints.
+- On **Gemma**, prompting buys nothing because the model **already holds** them.
+
+Between those two states there is no amount of prompt engineering that substitutes for capability.
+`strict_zero_shot` is still the production arm — same score, and it is the prompt that states the
+contract, so the instruction the user can edit in Phase B matches what was measured.
+
+### 15d. The one remaining defect: `meeting` → "mating"
+
+The owner's single complaint is a **pronunciation** issue, not a conversion one:
+<span dir="rtl">میٹنگ</span> is read by OmniVoice as *mating* rather than *meeting*. Gemma wrote
+<span dir="rtl">میٹنگ</span>, which is also exactly what the corpus **gold** writes — so column B has
+the identical defect and this is not attributable to the model at all.
+
+**It is dictionary work, and it extends the dictionary's requirements in a way `database` did not.**
+`_LOANWORD_LEXICON` currently maps a **Latin** key to an Urdu respelling (`database` →
+<span dir="rtl">ڈیٹا بےس</span>). Here the text already arrives in Perso-Arabic, so a Latin key never
+matches. **Dictionary entries must therefore be keyable on either script**, and the design in #103
+has to account for that from the start rather than bolting it on.
+
+Candidate respellings must go through §9b's blind repeat sampling before any is committed —
+synthesis is unseeded, `database` needed twelve samples per candidate to separate 11/12 from 7/12,
+and the single best-*sounding* clip there scored 4/12.
+
+### 15e. The production problem this creates: 19 GB of transliterator
+
+Gemma-4-31B at 4-bit is **~19 GB resident**. The card is 24 GB with `budget_mb = 16000` and
+`max_workers = 2` sized for OmniVoice plus one other runtime. The winning model does not fit
+alongside the TTS engine it feeds.
+
+This is not fatal — the transliterator is a **pre-TTS step**, so it never needs to be co-resident:
+convert → unload → user edits → Generate. `AnalyzerScheduler`'s idle-unload timer is the existing
+precedent. But two facts have to be designed for rather than discovered:
+
+- **78.4 s cold load.** Acceptable behind the job queue (202 + poll), not acceptable synchronously.
+- **Two independent schedulers both allocating VRAM.** `AnalyzerScheduler` already sits outside the
+  main scheduler's semaphore, and Qwen2.5-3B's ~6 GB fits inside the slack. 19 GB does not. Golden
+  rule 3 puts eviction inside `_ensure_ready()` under the GPU-slot semaphore, and a second scheduler
+  that can demand 19 GB without participating in it is exactly the unrepresentable-state guarantee
+  that rule was written to protect. **Resolve this in the Phase B design, not in the implementation.**
+
+Ministral-3-8B is the fallback the owner already named, and it is genuinely cheaper — but run 2 is
+the measured record of what its output sounds like, and it was not passed. A 4-bit Ministral would
+be cheaper still and worse. **Do not substitute it for Gemma on VRAM grounds without re-running A3
+on the substitute**; that is the whole discipline of this phase.
