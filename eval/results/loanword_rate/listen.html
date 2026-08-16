@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loanword failure rate</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto;
+       padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.warn { background:#1d2230; border-left:3px solid #6c8cff; padding:.8rem 1rem;
+        border-radius:4px; }
+.row { margin:.8rem 0; padding:.7rem .9rem; background:#161922; border-radius:6px; }
+.head { display:flex; align-items:baseline; gap:.8rem; margin-bottom:.35rem; }
+.no { font-variant-numeric: tabular-nums; font-weight:700; color:#e6b86c;
+      min-width:2.2rem; font-size:1.05rem; }
+.words { font-weight:600; color:#8fd3a6; }
+.id { margin-left:auto; font-size:.78rem; color:#6f7a8a; }
+.txt { font-size:1.05rem; margin:.3rem 0; color:#c9cfda; }
+audio { width:100%; margin-top:.3rem; }
+code { background:#1d2230; padding:.1rem .3rem; border-radius:3px; }
+</style></head>
+<body>
+<h1>How often is an English loanword mispronounced?</h1>
+<p class="warn">This decides whether the hardcoded <code>_LOANWORD_LEXICON</code> needs to become a
+user-editable dictionary, or whether the shipped defaults plus the editable text box are already
+enough. <b>40 clips, 116 word instances</b>, every item run through the real
+production path (numbers + lexicon, so <code>database</code> is already the corrected
+<code>ڈیٹا بےس</code>). Each item appears twice because synthesis is unseeded and one clip is a draw.</p>
+<p><b>What to do:</b> the green words are the ones to judge — ignore the rest of the sentence.
+Most should be fine. <b>Send me only the failures</b>, as <code>clip:word</code> pairs —
+e.g. <code>3:office, 11:RAM, 11:CV</code>. If a clip is entirely fine, skip it.</p>
+
+  <div class="row">
+    <div class="head"><span class="no">1</span>
+      <span class="words">office · late</span>
+      <span class="id">owner_04_late</span></div>
+    <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+    <audio controls src="owner_04_late_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">2</span>
+      <span class="words">office · late</span>
+      <span class="id">owner_04_late (2nd take)</span></div>
+    <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+    <audio controls src="owner_04_late_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">3</span>
+      <span class="words">GitHub · pull · request · create · review</span>
+      <span class="id">owner_05_github</span></div>
+    <div class="txt" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+    <audio controls src="owner_05_github_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">4</span>
+      <span class="words">GitHub · pull · request · create · review</span>
+      <span class="id">owner_05_github (2nd take)</span></div>
+    <div class="txt" dir="rtl">میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔</div>
+    <audio controls src="owner_05_github_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">5</span>
+      <span class="words">PDF</span>
+      <span class="id">abbreviations</span></div>
+    <div class="txt" dir="rtl">براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔</div>
+    <audio controls src="abbreviations_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">6</span>
+      <span class="words">PDF</span>
+      <span class="id">abbreviations (2nd take)</span></div>
+    <div class="txt" dir="rtl">براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔</div>
+    <audio controls src="abbreviations_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">7</span>
+      <span class="words">backup · server · restart</span>
+      <span class="id">technical</span></div>
+    <div class="txt" dir="rtl">ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+    <audio controls src="technical_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">8</span>
+      <span class="words">backup · server · restart</span>
+      <span class="id">technical (2nd take)</span></div>
+    <div class="txt" dir="rtl">ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+    <audio controls src="technical_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">9</span>
+      <span class="words">call</span>
+      <span class="id">conv_02_plans</span></div>
+    <div class="txt" dir="rtl">چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔</div>
+    <audio controls src="conv_02_plans_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">10</span>
+      <span class="words">call</span>
+      <span class="id">conv_02_plans (2nd take)</span></div>
+    <div class="txt" dir="rtl">چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔</div>
+    <audio controls src="conv_02_plans_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">11</span>
+      <span class="words">message</span>
+      <span class="id">conv_05_apology</span></div>
+    <div class="txt" dir="rtl">معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔</div>
+    <audio controls src="conv_05_apology_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">12</span>
+      <span class="words">message</span>
+      <span class="id">conv_05_apology (2nd take)</span></div>
+    <div class="txt" dir="rtl">معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔</div>
+    <audio controls src="conv_05_apology_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">13</span>
+      <span class="words">staging · deploy · production · wait</span>
+      <span class="id">cs_01_deploy</span></div>
+    <div class="txt" dir="rtl">میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔</div>
+    <audio controls src="cs_01_deploy_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">14</span>
+      <span class="words">staging · deploy · production · wait</span>
+      <span class="id">cs_01_deploy (2nd take)</span></div>
+    <div class="txt" dir="rtl">میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔</div>
+    <audio controls src="cs_01_deploy_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">15</span>
+      <span class="words">client · meeting · reschedule · Friday</span>
+      <span class="id">cs_02_meeting</span></div>
+    <div class="txt" dir="rtl">client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔</div>
+    <audio controls src="cs_02_meeting_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">16</span>
+      <span class="words">client · meeting · reschedule · Friday</span>
+      <span class="id">cs_02_meeting (2nd take)</span></div>
+    <div class="txt" dir="rtl">client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔</div>
+    <audio controls src="cs_02_meeting_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">17</span>
+      <span class="words">bug · production · log · check</span>
+      <span class="id">cs_03_bug</span></div>
+    <div class="txt" dir="rtl">یہ bug production میں آ رہا ہے، log check کرو پہلے۔</div>
+    <audio controls src="cs_03_bug_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">18</span>
+      <span class="words">bug · production · log · check</span>
+      <span class="id">cs_03_bug (2nd take)</span></div>
+    <div class="txt" dir="rtl">یہ bug production میں آ رہا ہے، log check کرو پہلے۔</div>
+    <audio controls src="cs_03_bug_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">19</span>
+      <span class="words">laptop · slow · RAM · upgrade</span>
+      <span class="id">cs_04_laptop</span></div>
+    <div class="txt" dir="rtl">میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔</div>
+    <audio controls src="cs_04_laptop_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">20</span>
+      <span class="words">laptop · slow · RAM · upgrade</span>
+      <span class="id">cs_04_laptop (2nd take)</span></div>
+    <div class="txt" dir="rtl">میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔</div>
+    <audio controls src="cs_04_laptop_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">21</span>
+      <span class="words">WhatsApp · screenshot</span>
+      <span class="id">cs_05_whatsapp</span></div>
+    <div class="txt" dir="rtl">میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔</div>
+    <audio controls src="cs_05_whatsapp_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">22</span>
+      <span class="words">WhatsApp · screenshot</span>
+      <span class="id">cs_05_whatsapp (2nd take)</span></div>
+    <div class="txt" dir="rtl">میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔</div>
+    <audio controls src="cs_05_whatsapp_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">23</span>
+      <span class="words">interview · CV · update</span>
+      <span class="id">cs_06_interview</span></div>
+    <div class="txt" dir="rtl">کل interview ہے، میں نے اپنا CV update کر لیا ہے۔</div>
+    <audio controls src="cs_06_interview_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">24</span>
+      <span class="words">interview · CV · update</span>
+      <span class="id">cs_06_interview (2nd take)</span></div>
+    <div class="txt" dir="rtl">کل interview ہے، میں نے اپنا CV update کر لیا ہے۔</div>
+    <audio controls src="cs_06_interview_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">25</span>
+      <span class="words">Aga · Khan · Hospital · appointment</span>
+      <span class="id">name_03_institution</span></div>
+    <div class="txt" dir="rtl">ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔</div>
+    <audio controls src="name_03_institution_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">26</span>
+      <span class="words">Aga · Khan · Hospital · appointment</span>
+      <span class="id">name_03_institution (2nd take)</span></div>
+    <div class="txt" dir="rtl">ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔</div>
+    <audio controls src="name_03_institution_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">27</span>
+      <span class="words">meeting · please</span>
+      <span class="id">numd_01_time</span></div>
+    <div class="txt" dir="rtl">meeting صبح نو بجے ہے، please دس منٹ پہلے آ جانا۔</div>
+    <audio controls src="numd_01_time_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">28</span>
+      <span class="words">meeting · please</span>
+      <span class="id">numd_01_time (2nd take)</span></div>
+    <div class="txt" dir="rtl">meeting صبح نو بجے ہے، please دس منٹ پہلے آ جانا۔</div>
+    <audio controls src="numd_01_time_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">29</span>
+      <span class="words">discount</span>
+      <span class="id">numd_02_price</span></div>
+    <div class="txt" dir="rtl">اس کی قیمت دو ہزار پانچ سو روپے ہے، discount کے بعد دو ہزار ہو جائے گی۔</div>
+    <audio controls src="numd_02_price_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">30</span>
+      <span class="words">discount</span>
+      <span class="id">numd_02_price (2nd take)</span></div>
+    <div class="txt" dir="rtl">اس کی قیمت دو ہزار پانچ سو روپے ہے، discount کے بعد دو ہزار ہو جائے گی۔</div>
+    <audio controls src="numd_02_price_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">31</span>
+      <span class="words">save</span>
+      <span class="id">numd_04_phone</span></div>
+    <div class="txt" dir="rtl">میرا نمبر تین سو بارہ لاکھ چونتیس ہزار پانچ سو سڑسٹھ ہے، save کر لو۔</div>
+    <audio controls src="numd_04_phone_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">32</span>
+      <span class="words">save</span>
+      <span class="id">numd_04_phone (2nd take)</span></div>
+    <div class="txt" dir="rtl">میرا نمبر تین سو بارہ لاکھ چونتیس ہزار پانچ سو سڑسٹھ ہے، save کر لو۔</div>
+    <audio controls src="numd_04_phone_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">33</span>
+      <span class="words">time · market</span>
+      <span class="id">messy_02_runon</span></div>
+    <div class="txt" dir="rtl">میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا</div>
+    <audio controls src="messy_02_runon_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">34</span>
+      <span class="words">time · market</span>
+      <span class="id">messy_02_runon (2nd take)</span></div>
+    <div class="txt" dir="rtl">میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا</div>
+    <audio controls src="messy_02_runon_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">35</span>
+      <span class="words">asap · reply · plz · boss · urgent</span>
+      <span class="id">messy_03_abbrev</span></div>
+    <div class="txt" dir="rtl">asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے</div>
+    <audio controls src="messy_03_abbrev_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">36</span>
+      <span class="words">asap · reply · plz · boss · urgent</span>
+      <span class="id">messy_03_abbrev (2nd take)</span></div>
+    <div class="txt" dir="rtl">asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے</div>
+    <audio controls src="messy_03_abbrev_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">37</span>
+      <span class="words">API · response · slow · cache · enable</span>
+      <span class="id">tech_01_api</span></div>
+    <div class="txt" dir="rtl">API کا response slow ہے، cache enable کرنا پڑے گا۔</div>
+    <audio controls src="tech_01_api_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">38</span>
+      <span class="words">API · response · slow · cache · enable</span>
+      <span class="id">tech_01_api (2nd take)</span></div>
+    <div class="txt" dir="rtl">API کا response slow ہے، cache enable کرنا پڑے گا۔</div>
+    <audio controls src="tech_01_api_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">39</span>
+      <span class="words">git · pull · merge · conflict</span>
+      <span class="id">tech_02_git</span></div>
+    <div class="txt" dir="rtl">git pull کرنے کے بعد merge conflict آ گیا ہے۔</div>
+    <audio controls src="tech_02_git_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="head"><span class="no">40</span>
+      <span class="words">git · pull · merge · conflict</span>
+      <span class="id">tech_02_git (2nd take)</span></div>
+    <div class="txt" dir="rtl">git pull کرنے کے بعد merge conflict آ گیا ہے۔</div>
+    <audio controls src="tech_02_git_s2.wav"></audio>
+  </div>
+</body></html>
