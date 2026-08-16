@@ -17,6 +17,7 @@ import contextlib
 import logging
 import os
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -48,6 +49,59 @@ if TYPE_CHECKING:
 __all__ = ["create_app"]
 
 logger = logging.getLogger(__name__)
+
+
+#: Short and boring on purpose: this is thrown away, and a long one would hold
+#: startup open for no benefit.
+_WARM_SYNTH_TEXT = "سلام، یہ ایک آواز کی جانچ ہے۔"
+
+
+async def _warm_synth(app: FastAPI, settings: Settings, model_id: str) -> None:
+    """
+    One throwaway synthesis, immediately deleted.
+
+    Loading weights is not enough for OmniVoice: it lazily loads an embedded
+    Whisper sub-model on the FIRST `synth()` call when no `ref_text` is given
+    (measured in the Phase 1 pod smoke test), so without this the first real
+    generation still stalls for tens of seconds.
+
+    Golden rule 1 is not in play — this audio goes to a temp file, is deleted in
+    a `finally`, and never reaches a user, a `generation_history` row or a
+    `jobs` row.
+
+    A synthesis needs a reference clip and a warm-up cannot invent one, so with
+    no voice profiles this logs and returns rather than guessing.
+    """
+    from .inference.protocol import SynthRequest
+
+    profiles = await app.state.db.list_profiles()
+    if not profiles:
+        logger.info(
+            "skipping warm synth for %r: no voice profiles to use as a reference", model_id
+        )
+        return
+
+    out_path = Path(settings.data_dir) / "tmp" / f"warm-{model_id}.wav"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        await app.state.scheduler.synthesize(
+            SynthRequest(
+                model_id=model_id,
+                text=_WARM_SYNTH_TEXT,
+                reference_audio=Path(profiles[0]["audio_path"]),
+                output_path=out_path,
+                reference_text=profiles[0]["transcript"],
+                sample_rate=settings.default_sample_rate,
+            )
+        )
+        logger.info("warm synth for %r done; first real generation will be fast", model_id)
+    except Exception:
+        # Never fatal. A model that cannot warm-synth still works on a real
+        # request, which is where that error belongs.
+        logger.exception("warm synth for %r failed; continuing", model_id)
+    finally:
+        with contextlib.suppress(OSError):
+            out_path.unlink(missing_ok=True)
 
 
 def create_app(
@@ -101,16 +155,24 @@ def create_app(
         # Stashed on app.state (not just a local) so tests can await it directly
         # instead of racing the event loop to observe it having run.
         warm_task: asyncio.Task[None] | None = None
-        if settings.warm_on_startup:
-            model_id = settings.warm_on_startup
+        if settings.warm_model_ids:
+            model_ids = settings.warm_model_ids
 
             async def _warm() -> None:
-                try:
-                    await app.state.scheduler.warm(model_id)
-                except Exception:
-                    logger.exception(
-                        "startup warm of %r failed; will retry on first request", model_id
-                    )
+                # Sequential, not gathered: `warm()` takes the scheduler's GPU
+                # slot, so concurrent warms would serialize anyway — and in
+                # order means a failure names the model that failed.
+                for model_id in model_ids:
+                    try:
+                        await app.state.scheduler.warm(model_id)
+                    except Exception:
+                        logger.exception(
+                            "startup warm of %r failed; will retry on first request",
+                            model_id,
+                        )
+                        continue
+                    if settings.warm_synth_on_startup:
+                        await _warm_synth(app, settings, model_id)
 
             warm_task = asyncio.create_task(_warm())
             app.state.warm_task = warm_task

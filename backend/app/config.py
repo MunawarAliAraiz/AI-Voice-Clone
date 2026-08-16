@@ -85,7 +85,25 @@ class Settings(BaseSettings):
     #: /generate doesn't pay the ~20-60s cold-load cost. Fired in the background
     #: from the lifespan — startup and /api/health return immediately either way,
     #: this only changes how soon a worker happens to already be resident.
+    #: COMMA-SEPARATED. A single id still works, so no existing deployment
+    #: breaks; `voxcpm2,omnivoice_urdu` warms both. VoxCPM2 7300 MB +
+    #: OmniVoice 4700 MB = 12 GB, inside `budget_mb = 16000` with
+    #: `max_workers = 2`, so both stay resident rather than evicting each other.
     warm_on_startup: str | None = None
+
+    #: After a model's weights load, run ONE short synthesis and delete the
+    #: output. This exists because OmniVoice lazily loads an embedded Whisper
+    #: sub-model on its FIRST `synth()` call when no `ref_text` is given
+    #: (measured in the Phase 1 pod smoke test), so warming weights alone still
+    #: leaves the first real generation paying tens of seconds. Needs a voice
+    #: profile to use as the reference; skipped with a log line when there are
+    #: none, because a warm-up cannot invent one.
+    warm_synth_on_startup: bool = True
+
+    @property
+    def warm_model_ids(self) -> tuple[str, ...]:
+        raw = self.warm_on_startup or ""
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
 
     max_upload_mb: int = 50
     default_sample_rate: int = 44_100

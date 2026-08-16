@@ -384,7 +384,15 @@ set -euo pipefail
 set -a; source /workspace/vcs-secrets.env; set +a
 export HF_HOME=/workspace/hf-cache
 export VCS_CORS_ORIGINS='["${CORS_ORIGIN}"]'
-export VCS_WARM_ON_STARTUP=voxcpm2
+# Comma-separated. Both fit: VoxCPM2 7300 MB + OmniVoice 4700 MB = 12 GB,
+# inside budget_mb=16000 with max_workers=2, so they do not evict each other.
+# Warming OmniVoice matters most — it was always the cold one, and its first
+# generation paid ~160 s. VCS_WARM_SYNTH_ON_STARTUP defaults to true and runs
+# one throwaway synthesis per model, because OmniVoice lazily loads an embedded
+# Whisper sub-model on its FIRST synth() call; loading weights alone does not
+# remove that stall. It needs a voice profile as a reference and skips with a
+# log line when there are none.
+export VCS_WARM_ON_STARTUP=voxcpm2,omnivoice_urdu
 export VCS_VOXCPM_PYTHON=${VOX_VENV}/bin/python
 # Chatterbox is not yet routable (LanguageSupport cells unverified — Phase
 # 4c), but pointing this at the venv now means routing needs no redeploy the
