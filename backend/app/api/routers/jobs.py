@@ -95,6 +95,13 @@ def _input_text(job: JobRecord) -> str | None:
     return str(text) if text else None
 
 
+def _title(job: JobRecord) -> str | None:
+    """Same source as `_input_text`. A job enqueued before titles existed has
+    no key here and reads as None, which is what the UI expects."""
+    title = job.params.get("title")
+    return str(title) if title else None
+
+
 async def _queue_position_and_eta(
     job: JobRecord, db: Database, scheduler: SchedulerProtocol
 ) -> tuple[int | None, float | None]:
@@ -136,6 +143,7 @@ def _build_list_item(
         profile_id=job.profile_id,
         profile_name=profile_name,
         input_text=_input_text(job),
+        title=_title(job),
         route=route,
         result=_result_or_none(job, route, settings),
         error=_error_or_none(job),
@@ -171,6 +179,7 @@ async def build_job_status_response(
         profile_id=job.profile_id,
         profile_name=profile["name"] if profile else None,
         input_text=_input_text(job),
+        title=_title(job),
         route=route,
         position=position,
         eta_sec=eta_sec,

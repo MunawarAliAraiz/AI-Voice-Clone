@@ -38,6 +38,9 @@ class JobStatusResponse(BaseModel):
     #: The pre-transform text the user typed, read straight from the job's
     #: stored params (set once at enqueue) — no extra query needed for it.
     input_text: str | None = None
+    #: Same source as `input_text`, so a QUEUED job already has its title —
+    #: before any generation_history row exists to carry it.
+    title: str | None = None
 
     #: Never absent, from 'queued' onward, for job kinds that route through
     #: the audio catalog (currently only 'synthesize'). Routing (`resolve()`)

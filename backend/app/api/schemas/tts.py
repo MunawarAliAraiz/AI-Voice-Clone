@@ -152,6 +152,10 @@ class TTSGenerateRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     text: str = Field(..., min_length=1, max_length=5000, examples=["السلام علیکم، آپ کیسے ہیں؟"])
+    #: Short human label for the Recent list. Optional: a generation without
+    #: one is displayed by its text, exactly as every row written before this
+    #: field existed still is.
+    title: str | None = Field(None, max_length=60, examples=["Office message"])
     profile_id: int = Field(..., examples=[1])
     language: str = Field(
         ...,

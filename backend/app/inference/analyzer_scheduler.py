@@ -183,6 +183,7 @@ class AnalyzerScheduler:
         result = response.result
         return AnalyzeResult(
             rows=tuple(result.get("rows") or ()),
+            title=str(result.get("title") or ""),
             gen_time_sec=float(result.get("gen_time_sec", 0.0)),
             load_time_sec=load_time_sec,
         )

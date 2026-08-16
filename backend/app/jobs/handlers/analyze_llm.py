@@ -58,6 +58,10 @@ async def run_analyze_llm(ctx: JobContext, job: JobRecord) -> JobOutcome:
     return JobOutcome(
         result={
             "rows": list(result.rows),
+            # Produced by the SAME generation as the rows, so the Composer gets
+            # a title from the AI-suggest press it already made rather than
+            # paying a second ~6 GB model round-trip on Generate.
+            "title": result.title,
             "gen_time_sec": result.gen_time_sec,
             "load_time_sec": result.load_time_sec,
         }

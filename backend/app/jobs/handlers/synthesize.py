@@ -56,6 +56,10 @@ class SynthesizeParams(BaseModel):
     text: str
     #: Pre-transform text, for the generation_history row.
     input_text: str
+    #: Short human label. Optional and defaulted rather than required, because
+    #: a job row written by an older build has no `title` key and must still
+    #: decode — the same reason `segments` is optional above.
+    title: str | None = None
     language: str
     reference_audio: str
     reference_text: str | None = None
@@ -126,6 +130,7 @@ async def run_synthesize(ctx: JobContext, job: JobRecord) -> JobOutcome:
         source_script=str(route.get("source_script", "unknown")),
         route_rationale=str(route.get("rationale", "")),
         resolved_text=params.text,
+        title=params.title,
     )
 
     # Golden rule 1: fake audio is never silent about being fake. The old

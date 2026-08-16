@@ -183,6 +183,9 @@ class AnalyzeResult:
     """
 
     rows: tuple[dict[str, Any], ...]
+    #: 2-3 word label for the whole passage, produced in the SAME generation as
+    #: the rows. Empty only when there were no sentences to classify.
+    title: str
     gen_time_sec: float
     #: Seconds spent loading, if this request paid a cold start. Zero once
     #: the worker's checkpoint is already resident.

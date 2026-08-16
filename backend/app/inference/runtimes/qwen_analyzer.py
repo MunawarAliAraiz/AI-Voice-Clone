@@ -47,8 +47,14 @@ _VALID_RATES = tuple(r.value for r in Rate)
 _SYSTEM_PROMPT = f"""You are a speech-direction classifier for a text-to-speech system. \
 For each numbered sentence, classify how it should be SPOKEN (not what it means literally).
 
-Return ONLY a JSON array, one object per sentence, in order, no other text:
-[{{"index": 0, "emotion": "...", "intensity": "...", "energy": "...", "rate": "..."}}, ...]
+Also give the whole passage a SHORT TITLE: 2-3 words naming what it is about. \
+No punctuation, no quotes, no trailing period. Same language as the text.
+
+Return ONLY a JSON object, no other text:
+{{"title": "...", "rows": [{{"index": 0, "emotion": "...", \
+"intensity": "...", "energy": "...", "rate": "..."}}, ...]}}
+
+One row per sentence, in order.
 
 emotion: one of {_VALID_EMOTIONS}
 intensity: one of {_VALID_LEVELS} (how strongly the emotion is expressed)
@@ -68,21 +74,55 @@ def _build_prompt(sentences: list[str]) -> str:
     return f"Sentences:\n{numbered}"
 
 
-def _parse_and_validate(raw: str, expected_count: int) -> list[dict[str, Any]]:
+#: A title is a label, not a sentence. Anything longer is the model narrating.
+_MAX_TITLE_WORDS = 5
+_MAX_TITLE_CHARS = 60
+
+
+def _validate_title(value: Any) -> str:
+    """
+    Strict, same as the rows: a bad title raises rather than being trimmed into
+    shape. The CALLER decides what to do about a missing title (the API falls
+    back to the input text) — silently repairing it here would hide that a
+    prompt or a model change had broken this path.
+    """
+    if not isinstance(value, str):
+        raise RuntimeError(f"analyzer title is not a string: {value!r}")
+    title = " ".join(value.split())
+    if not title:
+        raise RuntimeError("analyzer title is empty")
+    if len(title) > _MAX_TITLE_CHARS:
+        raise RuntimeError(f"analyzer title is {len(title)} chars, max {_MAX_TITLE_CHARS}")
+    if len(title.split(" ")) > _MAX_TITLE_WORDS:
+        raise RuntimeError(f"analyzer title has more than {_MAX_TITLE_WORDS} words: {title!r}")
+    return title
+
+
+def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[str, Any]]]:
     """
     Parse+validate exactly what the probe's `validate_response` reported as
     `problems` — except here a problem is fatal, not a line in a report.
+
+    Returns `(title, rows)`. The title rides along in the SAME response as the
+    rows rather than costing a second call: this model is ~6 GB and its load
+    dominates, so asking for both in one generation is the difference between
+    one worker round-trip and two.
     """
-    start, end = raw.find("["), raw.rfind("]")
+    start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end == -1:
-        raise RuntimeError(f"no JSON array found in analyzer response: {raw!r}")
+        raise RuntimeError(f"no JSON object found in analyzer response: {raw!r}")
     try:
-        rows = json.loads(raw[start : end + 1])
+        payload = json.loads(raw[start : end + 1])
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"analyzer response JSON parse failed: {exc}") from exc
 
+    if not isinstance(payload, dict):
+        raise RuntimeError("analyzer response is not a JSON object")
+    title = _validate_title(payload.get("title"))
+    rows = payload.get("rows")
+
     if not isinstance(rows, list):
-        raise RuntimeError("analyzer response is not a JSON array")
+        raise RuntimeError("analyzer response 'rows' is not a JSON array")
     if len(rows) != expected_count:
         raise RuntimeError(
             f"analyzer response has {len(rows)} rows, expected {expected_count}"
@@ -101,7 +141,7 @@ def _parse_and_validate(raw: str, expected_count: int) -> list[dict[str, Any]]:
                 raise RuntimeError(
                     f"analyzer response row {i}: {field}={row.get(field)!r} not in {valid}"
                 )
-    return rows
+    return title, rows
 
 
 class QwenAnalyzerBackend:
@@ -141,7 +181,7 @@ class QwenAnalyzerBackend:
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("classify called before load")
         if not sentences:
-            return {"rows": [], "gen_time_sec": 0.0}
+            return {"title": "", "rows": [], "gen_time_sec": 0.0}
 
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -165,8 +205,8 @@ class QwenAnalyzerBackend:
             out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
         )
 
-        rows = _parse_and_validate(response, len(sentences))
-        return {"rows": rows, "gen_time_sec": gen_sec}
+        title, rows = _parse_and_validate(response, len(sentences))
+        return {"title": title, "rows": rows, "gen_time_sec": gen_sec}
 
     def unload(self) -> None:
         self._model = None

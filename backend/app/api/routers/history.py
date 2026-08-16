@@ -39,7 +39,7 @@ def _item(
     )
     return HistoryItem(
         id=row["id"], profile_id=row["profile_id"], profile_name=profile_name,
-        input_text=row["input_text"], language=row["language"],
+        title=row["title"], input_text=row["input_text"], language=row["language"],
         audio_url=make_media_url(
             f"history/{row['id']}", settings.media_token_secret, settings.media_token_ttl_sec
         ),

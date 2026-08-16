@@ -21,6 +21,9 @@ class HistoryItem(BaseModel):
     id: int
     profile_id: int
     profile_name: str | None = None
+    #: None for every generation made before titles existed, and for any made
+    #: without one — the UI falls back to the text.
+    title: str | None = None
     input_text: str
     language: str
     #: Signed, expiring URL. Regenerated per response — never stored, never

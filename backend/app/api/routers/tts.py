@@ -222,6 +222,7 @@ async def generate(
         params={
             "text": plan.resolved_text,
             "input_text": body.text,
+            "title": (body.title or "").strip() or None,
             "language": body.language,
             "reference_audio": str(profile["audio_path"]),
             "reference_text": profile["transcript"] if spec.needs_reference_text else None,
