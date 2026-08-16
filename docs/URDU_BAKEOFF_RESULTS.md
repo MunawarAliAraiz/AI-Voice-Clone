@@ -678,3 +678,60 @@ Roman Urdu → OmniVoice stays unbuilt.
 # on the pod, in .venv-qwen
 PROBE_MODEL_ID=Qwen/Qwen2.5-7B-Instruct .venv-qwen/bin/python eval/run_roman_arabic_probe.py
 ```
+
+---
+
+## 9. Phase A0 — does OmniVoice read Roman Urdu unaided? `[LISTEN]` **No.**
+
+The cheapest test that could have made the whole Roman→Perso-Arabic conversion feature unnecessary.
+`OMNIVOICE_URDU` only *declares* `(ur, ARABIC)`, but nothing had ever fed it Latin — and VoxCPM2
+renders Roman Urdu fine, so it was worth ten minutes before building a pipeline.
+
+Eight corpus items, each synthesized twice from one loaded checkpoint against the owner reference:
+column **A** from `roman`, column **B** from `perso_arabic` (the *ceiling* — the best any conversion
+could deliver). `resolve()` was deliberately bypassed, since routing correctly refuses `(ur, LATIN)`
+against an `(ur, ARABIC)` spec and that refusal was the thing under question. Items were chosen with
+no bare digits so the absent number normalization could not confound the pair.
+Driver `eval/run_a0_roman_direct.py`, clips + page at `eval/results/a0_roman_direct/`.
+
+**ASR screen** (`eval/score_a0_roman_direct.py`, both arms scored against `perso_arabic` per the
+corpus's `cer_reference_rule`):
+
+| | mean CER | mean speaker cosine |
+|---|---|---|
+| A — Roman fed directly | 0.2016 | 0.7171 |
+| B — Perso-Arabic gold | 0.1188 | 0.7326 |
+
+The screen looked *encouraging*: the Roman arm is plainly not gibberish. Whisper recovered
+near-correct Urdu from it (`owner_02_file` 0.042, `owner_03_deadline` 0.077), and the two worst
+items — `owner_05_github` at 0.448 in **both** columns — are a Whisper artifact, since it transcribes
+Latin code-switch words phonetically into Urdu script regardless of arm.
+
+**The owner's listen overruled it: "Column A is English-accented."** The model is reading Roman Urdu
+as *English orthography*, producing Urdu words in an English accent. CER cannot see this at all — the
+words are right, so edit distance is small, while the thing the product is for is wrong. This is the
+same lesson as the harness docstring's 2026-08-04 case (cosine 0.686 + "sounds Hindi"), landing a
+second time on a different metric.
+
+**A0 fails ⇒ the conversion pipeline is justified.** Phase A continues to A1/A2/A3. No `(ur, LATIN)`
+cell is added to `omnivoice_urdu`.
+
+### 9a. What the same listen turned up about column B — `late` and `database`
+
+The owner also reported that **column B**, the supposed ceiling, mispronounces `late` and `database`.
+Two different things:
+
+- **`database` — an artifact of how A0 was run, not a production defect.** Feeding text verbatim also
+  bypassed `domain/urdu_text.py`'s loanword lexicon, so column B heard raw `database`, which
+  production never sends — it sends `ڈیٹا base`, the mixed respelling §5c verified on this exact
+  sentence. A0's own control was therefore weaker than production. Worth stating plainly: the ceiling
+  measured in §9 is a *floor* on the real ceiling.
+- **`late` — real, and a regression against a recorded result.** It is absent from
+  `_LOANWORD_LEXICON`, and §5b recorded it as passing (`owner_04_late` ✅, "code-switched
+  'office'/'late' both landed"). A word that passed one listen and failed the next is exactly what
+  §2's caveats warn about, now demonstrated within this project's own records rather than in the
+  abstract.
+
+`eval/run_loanword_late_check.py` puts both, plus `office` as a control, in front of the owner:
+`late` as Latin / `لیٹ` / `لیٹھ`, `database` as verbatim / production / all-Urdu. **Pending the
+owner's listen** — nothing enters `_LOANWORD_LEXICON` on a hunch, per its docstring.
