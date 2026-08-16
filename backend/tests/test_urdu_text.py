@@ -188,3 +188,16 @@ def test_empty_lexicon_is_a_pass_through_not_a_crash() -> None:
     )
     assert text == "ہمیں database چاہیے۔"
     assert applied == ()
+
+
+def test_shipped_defaults_include_the_perso_arabic_meeting_entry() -> None:
+    """
+    The first default keyed in Perso-Arabic — proving the either-script path is
+    live in production, not merely supported by the code.
+    """
+    text, applied = apply_text_normalizations(
+        "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+    )
+    assert text == "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)

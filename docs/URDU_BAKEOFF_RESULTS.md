@@ -1389,3 +1389,42 @@ Ministral-3-8B is the fallback the owner already named, and it is genuinely chea
 the measured record of what its output sounds like, and it was not passed. A 4-bit Ministral would
 be cheaper still and worse. **Do not substitute it for Gemma on VRAM grounds without re-running A3
 on the substitute**; that is the whole discipline of this phase.
+
+### 15f. `meeting` measured — and the either-script premise confirmed
+
+`eval/run_meeting_respell.py`, 8 spellings × 4 generations, blind, one carrier
+sentence (the clause the defect was heard in). Owner-rated:
+
+| spelling | correct |
+|---|---|
+| <span dir="rtl">میٹنگ</span> — **what shipped, and what gold writes** | **2/4** |
+| <span dir="rtl">می ٹنگ</span> — split at the word break | 3/4 |
+| `meeting` — Latin, as `cs_02_meeting`'s gold does it | 4/4 |
+| <span dir="rtl">مِیٹنگ</span> · <span dir="rtl">میٹِنگ</span> · <span dir="rtl">مِیٹِنگ</span> · <span dir="rtl">میٹینگ</span> · <span dir="rtl">مِٹنگ</span> | **4/4** each |
+
+**Two findings, and the first one is the one that mattered.**
+
+1. **Respelling a word that is already Perso-Arabic does change how OmniVoice
+   reads it.** Every prior lexicon entry keyed on a Latin word, so nothing had
+   ever established that the mechanism works in the other direction. It does —
+   which is what makes an either-script dictionary a viable design rather than
+   a hopeful one. Had this come back negative, #103 would have needed a
+   different mechanism entirely.
+2. **The broken spelling scores 2/4, not 0/4.** It is an *intermittent* defect,
+   which is exactly why it survived A2's metrics, three A3 runs, and every
+   read-through of the text, and surfaced only when the owner happened to hear
+   the bad half. Compare `database` and `URL`, both of which were 0/4 verbatim.
+   A defect that is right half the time is strictly harder to find than one
+   that is always wrong, and nothing in the numeric harness can see it.
+
+Five candidates tie at 4/4 and n=4 cannot separate them. <span dir="rtl">مِیٹِنگ</span>
+ships, chosen on a **non-acoustic** tie-break: it adds only diacritics to the
+standard skeleton, so the text a user sees in the Composer still reads as
+<span dir="rtl">میٹنگ</span>, whereas the alternatives change letters or word
+boundaries and look wrong on the page. **Deliberately not resolved with another
+sampling round** — the owner's point stands that choosing a respelling by hand
+is precisely the work the user-editable dictionary exists to hand back to them.
+It is a default, not a verdict.
+
+This is also the first shipped entry keyed in Perso-Arabic, so the either-script
+path is exercised in production rather than only in tests.

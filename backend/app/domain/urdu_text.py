@@ -167,10 +167,41 @@ def _expand_numbers(text: str) -> str:
 # clip of the whole experiment ("most accurate for a native Urdu speaker") and
 # still scored 4/12. Picking a spelling by its best clip would have shipped the
 # second-worst one.
+# `میٹنگ` is the FIRST Perso-Arabic key, added 2026-08-16 after A3 passed. It
+# is also the first entry whose defect the corpus GOLD shares -- gold spells it
+# میٹنگ too, so this is not a transliteration artefact and no choice of model
+# would have removed it.
+#
+# Blind, n=4 per spelling, one carrier sentence (`eval/run_meeting_respell.py`,
+# owner-rated):
+#
+#     میٹنگ   (in use)   2/4    <- the defect, and INTERMITTENT
+#     می ٹنگ  (split)    3/4
+#     meeting (Latin)    4/4
+#     مِیٹنگ             4/4
+#     میٹِنگ             4/4
+#     مِیٹِنگ            4/4    <- shipped
+#     میٹینگ             4/4
+#     مِٹنگ              4/4
+#
+# Two things this measured that no amount of reading the text could have:
+# respelling a word that is ALREADY Perso-Arabic does change how OmniVoice
+# reads it (the whole premise of an either-script dictionary), and the broken
+# spelling is right half the time rather than never -- which is why it survived
+# every previous review and surfaced only on one listen.
+#
+# Five candidates tie at 4/4 and n=4 cannot separate them. `مِیٹِنگ` is chosen
+# on a non-acoustic tie-break: it adds only DIACRITICS to the standard
+# skeleton, so the text a user sees in the Composer still reads as میٹنگ. The
+# alternatives change letters or word boundaries and look wrong on the page.
+# Deliberately NOT resolved with another sampling round -- that is a value the
+# user's own dictionary lets them override by ear, and picking it for them is
+# the work the dictionary exists to avoid.
 DEFAULT_LOANWORD_LEXICON: Mapping[str, str] = MappingProxyType(
     {
         "URL": "یو آر ایل",
         "database": "ڈیٹا بےس",
+        "میٹنگ": "مِیٹِنگ",
     }
 )
 
