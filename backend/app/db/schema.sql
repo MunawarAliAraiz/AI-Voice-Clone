@@ -237,3 +237,61 @@ CREATE INDEX IF NOT EXISTS idx_jobs_queued
 -- "Show everything queued for this voice."
 CREATE INDEX IF NOT EXISTS idx_jobs_profile
     ON jobs (profile_id);
+
+
+-- ── Pronunciation dictionary: the user's own respellings ─────────────────────
+--
+-- OmniVoice mispronounces some words, and the fix is to rewrite the text before
+-- synthesis. `domain/urdu_text.py`'s DEFAULT_LOANWORD_LEXICON holds the handful
+-- verified by ear by the maintainer; this table holds the user's own, which the
+-- maintainer cannot verify and should not try to.
+--
+-- Rows are DATA for the pure `apply_text_normalizations()`, which takes the
+-- lexicon as an argument. Nothing in `domain/` reads this table — golden rule 4
+-- keeps routing pure, and a pure function may receive data but not fetch it.
+-- The enqueue path loads these rows and passes them down.
+--
+-- Same no-migration constraint as `jobs` above: CREATE TABLE IF NOT EXISTS means
+-- an existing table keeps its shape forever, so every column this will
+-- foreseeably need exists now. `language` and `notes` are here for that reason
+-- rather than because anything reads them yet.
+
+CREATE TABLE IF NOT EXISTS pronunciation_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    -- The word as the user types it, in EITHER script. Latin for an English
+    -- loanword sitting inside Urdu ('database'); Perso-Arabic for a word the
+    -- transliterator already converted ('میٹنگ', which OmniVoice reads as
+    -- "mating"). A Latin-only key could not reach the second case at all.
+    key_text        TEXT    NOT NULL,
+    -- What to synthesize instead. Used verbatim: no case is carried over,
+    -- because the replacement is usually Perso-Arabic, which has none.
+    replacement     TEXT    NOT NULL,
+
+    -- Which language's text this applies to. Only 'ur' is used today; the
+    -- column exists because it cannot be added later.
+    language        TEXT    NOT NULL DEFAULT 'ur',
+
+    -- Lets a user switch an entry off without losing what they wrote — and,
+    -- when key_text matches a shipped default, SUPPRESSES that default. That
+    -- is the only way to turn off a built-in entry, so this is load-bearing,
+    -- not a convenience.
+    is_enabled      INTEGER NOT NULL DEFAULT 1,
+
+    -- Free text, e.g. "was read as 'mating'". Never interpreted.
+    notes           TEXT,
+
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+
+    -- COLLATE NOCASE mirrors the matcher, which is case-insensitive so a user
+    -- writes an entry once and then types whatever case they like. SQLite's
+    -- NOCASE folds ASCII A-Z only, which is exactly the range where case
+    -- exists here: Perso-Arabic is caseless, so there is no divergence between
+    -- this constraint and Python's `str.casefold()` for any realistic entry.
+    UNIQUE (language, key_text COLLATE NOCASE)
+);
+
+-- Every synthesis loads this user's enabled entries for one language.
+CREATE INDEX IF NOT EXISTS idx_pronunciation_lookup
+    ON pronunciation_entries (language, is_enabled);

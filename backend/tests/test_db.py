@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sqlite3
+
+import pytest
+
 from app.db import Database
 
 
@@ -54,5 +58,103 @@ async def test_generation_records_route_and_cascades() -> None:
         # ON DELETE CASCADE: removing the profile removes its generations.
         await db.delete_profile(p["id"])
         assert await db.count_generations() == 0
+    finally:
+        await db.close()
+
+
+# ── pronunciation dictionary ─────────────────────────────────────────────────
+
+
+async def test_pronunciation_crud() -> None:
+    db = await _db()
+    try:
+        e = await db.create_pronunciation(
+            key_text="database", replacement="ڈیٹا بےس", notes="read as data-boss"
+        )
+        assert e["id"] and e["language"] == "ur" and e["is_enabled"] == 1
+        assert e["notes"] == "read as data-boss"
+
+        assert (await db.get_pronunciation(e["id"]))["replacement"] == "ڈیٹا بےس"
+        assert len(await db.list_pronunciations()) == 1
+
+        updated = await db.update_pronunciation(e["id"], replacement="ڈیٹا بیس")
+        assert updated is not None and updated["replacement"] == "ڈیٹا بیس"
+        assert updated["key_text"] == "database", "an unsupplied field must not change"
+
+        assert await db.delete_pronunciation(e["id"]) is True
+        assert await db.get_pronunciation(e["id"]) is None
+        assert await db.delete_pronunciation(e["id"]) is False
+    finally:
+        await db.close()
+
+
+async def test_pronunciation_keys_may_be_perso_arabic() -> None:
+    """A3's میٹنگ case — the key arrives already converted, not as Latin."""
+    db = await _db()
+    try:
+        e = await db.create_pronunciation(key_text="میٹنگ", replacement="مِیٹِنگ")
+        assert (await db.find_pronunciation(key_text="میٹنگ", language="ur"))["id"] == e["id"]
+    finally:
+        await db.close()
+
+
+async def test_pronunciation_key_is_unique_per_language_case_insensitively() -> None:
+    """
+    Mirrors the matcher, which is case-insensitive. Two rows differing only in
+    case would make which one applies depend on alternation order.
+    """
+    db = await _db()
+    try:
+        await db.create_pronunciation(key_text="database", replacement="ڈیٹا بےس")
+        with pytest.raises(sqlite3.IntegrityError):
+            await db.create_pronunciation(key_text="DataBase", replacement="something")
+
+        # Same key, different language, is a different entry.
+        other = await db.create_pronunciation(
+            key_text="database", replacement="day-ta-base", language="en"
+        )
+        assert other["id"]
+    finally:
+        await db.close()
+
+
+async def test_find_pronunciation_is_case_insensitive() -> None:
+    db = await _db()
+    try:
+        await db.create_pronunciation(key_text="database", replacement="ڈیٹا بےس")
+        assert await db.find_pronunciation(key_text="DATABASE", language="ur") is not None
+        assert await db.find_pronunciation(key_text="database", language="en") is None
+    finally:
+        await db.close()
+
+
+async def test_list_pronunciations_filters() -> None:
+    db = await _db()
+    try:
+        await db.create_pronunciation(key_text="database", replacement="ڈیٹا بےس")
+        off = await db.create_pronunciation(
+            key_text="URL", replacement="یو آر ایل", is_enabled=False
+        )
+        await db.create_pronunciation(
+            key_text="schedule", replacement="sked-yool", language="en"
+        )
+
+        assert len(await db.list_pronunciations()) == 3
+        assert len(await db.list_pronunciations(language="ur")) == 2
+        assert len(await db.list_pronunciations(language="ur", enabled_only=True)) == 1
+
+        # The settings UI must still see a disabled row — it is the only way to
+        # switch it back on.
+        assert off["id"] in {r["id"] for r in await db.list_pronunciations(language="ur")}
+    finally:
+        await db.close()
+
+
+async def test_list_pronunciations_is_newest_first() -> None:
+    db = await _db()
+    try:
+        await db.create_pronunciation(key_text="database", replacement="a")
+        second = await db.create_pronunciation(key_text="URL", replacement="b")
+        assert (await db.list_pronunciations())[0]["id"] == second["id"]
     finally:
         await db.close()

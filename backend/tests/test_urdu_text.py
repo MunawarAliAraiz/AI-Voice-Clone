@@ -9,7 +9,12 @@ actually heard, not a re-derivation.
 
 from __future__ import annotations
 
-from app.domain.urdu_text import TextNormalization, apply_text_normalizations
+from app.domain.urdu_text import (
+    DEFAULT_LOANWORD_LEXICON,
+    TextNormalization,
+    apply_text_normalizations,
+    effective_lexicon,
+)
 
 
 def test_expand_numbers_matches_eval_verified_values() -> None:
@@ -200,4 +205,66 @@ def test_shipped_defaults_include_the_perso_arabic_meeting_entry() -> None:
         (TextNormalization.LOANWORD_LEXICON,),
     )
     assert text == "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+# ── effective_lexicon: merging the user's rows over the shipped defaults ─────
+
+
+def _row(key: str, replacement: str, enabled: bool = True) -> dict[str, object]:
+    return {"key_text": key, "replacement": replacement, "is_enabled": enabled}
+
+
+def test_effective_lexicon_with_no_entries_is_the_defaults() -> None:
+    assert effective_lexicon([]) == dict(DEFAULT_LOANWORD_LEXICON)
+
+
+def test_user_entry_with_a_new_key_is_added() -> None:
+    lexicon = effective_lexicon([_row("schedule", "سکیجول")])
+    assert lexicon["schedule"] == "سکیجول"
+    assert lexicon["database"] == "ڈیٹا بےس", "defaults must survive alongside"
+
+
+def test_user_entry_overrides_a_shipped_default() -> None:
+    """The user has heard both spellings; the maintainer has heard neither."""
+    lexicon = effective_lexicon([_row("database", "ڈیٹا bays")])
+    assert lexicon["database"] == "ڈیٹا bays"
+
+
+def test_user_override_of_a_default_is_case_insensitive() -> None:
+    """
+    Otherwise `Database` would sit BESIDE the shipped `database` and which one
+    applied would come down to alternation order.
+    """
+    lexicon = effective_lexicon([_row("DataBase", "ڈیٹا bays")])
+    assert lexicon.get("database") is None
+    assert lexicon["DataBase"] == "ڈیٹا bays"
+
+
+def test_disabled_user_entry_suppresses_the_matching_default() -> None:
+    """The only way to switch off a built-in entry — hence disabled rows must
+    reach this function rather than being filtered out by the caller."""
+    lexicon = effective_lexicon([_row("database", "anything", enabled=False)])
+    assert "database" not in lexicon
+    assert lexicon["URL"] == "یو آر ایل", "other defaults are unaffected"
+
+
+def test_disabled_user_entry_with_a_new_key_is_simply_absent() -> None:
+    lexicon = effective_lexicon([_row("schedule", "سکیجول", enabled=False)])
+    assert "schedule" not in lexicon
+    assert lexicon == dict(DEFAULT_LOANWORD_LEXICON)
+
+
+def test_effective_lexicon_can_suppress_the_perso_arabic_default() -> None:
+    """میٹنگ ships as a default; a user who prefers the plain spelling turns it off."""
+    lexicon = effective_lexicon([_row("میٹنگ", "", enabled=False)])
+    assert "میٹنگ" not in lexicon
+
+
+def test_effective_lexicon_result_drives_the_matcher_end_to_end() -> None:
+    lexicon = effective_lexicon([_row("میٹنگ", "می ٹنگ")])
+    text, applied = apply_text_normalizations(
+        "کہ میٹنگ ملتوی ہو گئی ہے۔", (TextNormalization.LOANWORD_LEXICON,), lexicon
+    )
+    assert text == "کہ می ٹنگ ملتوی ہو گئی ہے۔"
     assert applied == (TextNormalization.LOANWORD_LEXICON,)

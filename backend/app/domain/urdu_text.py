@@ -35,15 +35,18 @@ argument rather than reading this module's table.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from enum import StrEnum
 from functools import lru_cache
 from types import MappingProxyType
+from typing import Any, Protocol
 
 __all__ = [
     "DEFAULT_LOANWORD_LEXICON",
+    "LexiconEntry",
     "TextNormalization",
     "apply_text_normalizations",
+    "effective_lexicon",
 ]
 
 
@@ -254,6 +257,61 @@ _APPLIERS: dict[TextNormalization, Callable[[str, Mapping[str, str]], str]] = {
     TextNormalization.NUMBERS: lambda text, _lexicon: _expand_numbers(text),
     TextNormalization.LOANWORD_LEXICON: _respell_loanwords,
 }
+
+
+class LexiconEntry(Protocol):
+    """
+    The shape `effective_lexicon` needs from a `pronunciation_entries` row.
+
+    A Protocol rather than an import, because `domain/` must not depend on
+    `db/` — an `aiosqlite.Row` satisfies this structurally, and so does a plain
+    object in a test.
+    """
+
+    @property
+    def key_text(self) -> str: ...
+    @property
+    def replacement(self) -> str: ...
+    @property
+    def is_enabled(self) -> bool: ...
+
+
+def effective_lexicon(
+    entries: Iterable[Mapping[str, Any]],
+    defaults: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
+) -> dict[str, str]:
+    """
+    Merge a user's dictionary rows over the shipped defaults.
+
+    Three behaviours, in this order of precedence:
+
+    1. A user entry with a NEW key adds it.
+    2. A user entry whose key matches a default REPLACES it. The user has heard
+       both their own text and the shipped spelling; the maintainer has heard
+       neither.
+    3. A **disabled** user entry whose key matches a default SUPPRESSES it.
+       This is the only way to switch off a built-in entry, and it is why
+       disabled rows cannot simply be filtered out before getting here.
+
+    Matching is case-insensitive to mirror the matcher, so a user entry for
+    `Database` overrides the shipped `database` rather than sitting beside it
+    and losing a coin flip on alternation order.
+
+    Pure, and takes rows rather than fetching them — same reasoning as
+    `apply_text_normalizations`. Golden rule 4.
+    """
+    folded_defaults = {key.casefold(): (key, value) for key, value in defaults.items()}
+    merged: dict[str, str] = dict(defaults)
+
+    for entry in entries:
+        key = str(entry["key_text"])
+        shadowed = folded_defaults.get(key.casefold())
+        if shadowed is not None:
+            merged.pop(shadowed[0], None)
+        if entry["is_enabled"]:
+            merged[key] = str(entry["replacement"])
+
+    return merged
 
 
 def apply_text_normalizations(

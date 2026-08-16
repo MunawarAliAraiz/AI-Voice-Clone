@@ -461,3 +461,109 @@ class Database:
             )
             await self._c.commit()
             return cur.rowcount
+
+    # ── pronunciation dictionary ─────────────────────────────────────────────
+    #
+    # These return ROWS, not a lexicon. Merging the user's entries over the
+    # shipped defaults is policy, and policy lives in `domain/urdu_text.py`'s
+    # pure `effective_lexicon()` where it can be tested without a database.
+
+    async def list_pronunciations(
+        self, *, language: str | None = None, enabled_only: bool = False
+    ) -> list[aiosqlite.Row]:
+        """
+        Newest first, so the settings list shows what was just added at the top.
+
+        `enabled_only` is for the synthesis path, which wants only rows that
+        actually apply. The settings UI wants everything, disabled included —
+        an entry the user switched off must still be visible to switch back on.
+        """
+        # Static SQL with the filters expressed as parameters, rather than a
+        # WHERE clause assembled in Python. Both filters are internal, so an
+        # assembled clause would also be safe, but this one cannot drift into
+        # being unsafe later and needs no `noqa` to say so.
+        cur = await self._c.execute(
+            """SELECT * FROM pronunciation_entries
+                WHERE (? IS NULL OR language = ?)
+                  AND (? = 0 OR is_enabled = 1)
+                ORDER BY id DESC""",
+            (language, language, int(enabled_only)),
+        )
+        return list(await cur.fetchall())
+
+    async def get_pronunciation(self, entry_id: int) -> aiosqlite.Row | None:
+        cur = await self._c.execute(
+            "SELECT * FROM pronunciation_entries WHERE id = ?", (entry_id,)
+        )
+        return await cur.fetchone()
+
+    async def find_pronunciation(self, *, key_text: str, language: str) -> aiosqlite.Row | None:
+        """
+        Case-insensitive lookup by key, matching the UNIQUE constraint.
+
+        Exists so the API can answer "this word already has an entry" with the
+        conflicting row rather than only a constraint violation — a user who
+        re-adds `database` should be shown what they already wrote.
+        """
+        cur = await self._c.execute(
+            """SELECT * FROM pronunciation_entries
+                WHERE language = ? AND key_text = ? COLLATE NOCASE""",
+            (language, key_text),
+        )
+        return await cur.fetchone()
+
+    async def create_pronunciation(
+        self, *, key_text: str, replacement: str, language: str = "ur",
+        is_enabled: bool = True, notes: str | None = None,
+    ) -> aiosqlite.Row:
+        """
+        Raises `sqlite3.IntegrityError` on a duplicate key for the language.
+        Deliberately not caught here: the access layer reports what the database
+        said, and the API layer decides that this means 409.
+        """
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """INSERT INTO pronunciation_entries
+                   (key_text, replacement, language, is_enabled, notes)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (key_text, replacement, language, int(is_enabled), notes),
+            )
+            await self._c.commit()
+            new_id = int(cur.lastrowid)
+        row = await self.get_pronunciation(new_id)
+        assert row is not None
+        return row
+
+    async def update_pronunciation(
+        self, entry_id: int, **fields: Any
+    ) -> aiosqlite.Row | None:
+        """
+        Partial update. `None` for a field means "not supplied", so an entry's
+        `notes` cannot be cleared by passing None — pass "" instead. Returns
+        None when the row does not exist.
+        """
+        allowed = {"key_text", "replacement", "language", "is_enabled", "notes"}
+        sets = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if "is_enabled" in sets:
+            sets["is_enabled"] = int(sets["is_enabled"])
+        if not sets:
+            return await self.get_pronunciation(entry_id)
+        # `cols` is built only from the `allowed` whitelist above — never from
+        # user input — so the interpolation is safe; values stay parameterized.
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        async with self._write_lock:
+            await self._c.execute(
+                f"UPDATE pronunciation_entries SET {cols},"  # noqa: S608
+                " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+                (*sets.values(), entry_id),
+            )
+            await self._c.commit()
+        return await self.get_pronunciation(entry_id)
+
+    async def delete_pronunciation(self, entry_id: int) -> bool:
+        async with self._write_lock:
+            cur = await self._c.execute(
+                "DELETE FROM pronunciation_entries WHERE id = ?", (entry_id,)
+            )
+            await self._c.commit()
+            return cur.rowcount > 0
