@@ -12,6 +12,22 @@ correct in this exact sentence; it does not survive re-listen. Same pattern as
 `late` in §5b — a recorded pass that fails when heard again — which is the
 second instance in two days and the reason a pass is never trusted here.
 
+DECOMPOSITION (owner, same listen -- the single most useful thing said about
+this word so far). The failures are not whole-word failures; each form gets
+exactly one half right:
+
+    form            "data"                  "base"
+    ڈیٹا base       correct                 wrong ("boss")
+    ڈیٹا بیس        correct                 wrong ("bes")
+    database        wrong ("da-ta")         correct
+
+Two facts fall out. `ڈیٹا` reliably produces "data". And `base` is pronounced
+correctly *only as the tail of the Latin token `database`* -- standing alone
+as a Latin word after Urdu text it becomes "boss", which means the model's
+reading of a Latin token depends on the whole token, not on its letters. So
+the naive composition (`ڈیٹا` + Latin `base`) is exactly the shipping form
+that fails, and the fix has to attack one half without breaking the other.
+
 The failures are informative rather than random, and the variants below are
 chosen against them:
 
@@ -81,6 +97,22 @@ _CASES: list[tuple[str, str, str, str]] = [
     ("database", "v10_daata", "`ڈاٹا بیس` — the other common Urdu spelling of 'data'",
      _SENT.format("ڈاٹا بیس")),
 
+    # -- Second wave, driven by the owner's per-half breakdown (see the
+    # DECOMPOSITION note in the module docstring). ڈیٹا reliably says "data",
+    # and "base" only reads correctly INSIDE the Latin token `database` --
+    # standing alone as Latin it becomes "boss". These attack one half at a
+    # time with the spelling already shown to work for that half.
+    ("database", "v11_daytabase", "`daytabase` — one Latin token (keeps the 'base' that works), 'data' half respelled",
+     _SENT.format("daytabase")),
+    ("database", "v12_daytabays", "`daytabays` — same idea, 'base' half also spelled for English orthography",
+     _SENT.format("daytabays")),
+    ("database", "v13_urdu_bays", "`ڈیٹا bays` — keeps the ڈیٹا that works, avoids the Latin `base`→'boss' trap",
+     _SENT.format("ڈیٹا bays")),
+    ("database", "v14_urdu_bayss", "`ڈیٹا bayss` — as above, doubled s to force the unvoiced ending",
+     _SENT.format("ڈیٹا bayss")),
+    ("database", "v15_dayta_base", "`dayta base` — two Latin tokens, both halves respelled",
+     _SENT.format("dayta base")),
+
     # -- control: the OTHER lexicon entry, verified by the same §5c listen.
     ("url", "latin", "`URL` — Latin, verbatim",
      "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔"),
@@ -89,10 +121,12 @@ _CASES: list[tuple[str, str, str, str]] = [
 ]
 
 _BLURB = {
-    "database": "All three forms tried so far are rejected. Pick whichever of these says "
-                "<b>DAY-ta-bayss</b>. If none does, say so — the honest answer may be that "
-                "OmniVoice cannot say this word, and the entry should be removed rather than "
-                "left shipping a wrong one.",
+    "database": "You found that each rejected form got exactly one half right: <code>ڈیٹا</code> "
+                "says <b>data</b> correctly, and <b>base</b> is only correct as the tail of the "
+                "Latin token <code>database</code> — alone it becomes \"boss\". <b>v11–v15</b> are "
+                "built from that. Pick whichever says <b>DAY-ta-bayss</b>; if none does, say so — "
+                "the honest answer may be that OmniVoice cannot say this word, and the entry "
+                "should be removed rather than left shipping a wrong one.",
     "url": "<b>Control, and the important one.</b> This is the only other entry in the "
            "lexicon, verified by the same listen that just failed for <code>database</code>. "
            "If <code>یو آر ایل</code> is also wrong, the per-word lexicon idea is what is "
