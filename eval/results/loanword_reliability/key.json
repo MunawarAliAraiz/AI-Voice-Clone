@@ -1,0 +1,263 @@
+{
+  "note": "Blind key. The listening page never shows this.",
+  "samples_per_variant": 4,
+  "shuffle_seed": 20260816,
+  "plan": [
+    {
+      "variant": "url_verbatim",
+      "desc": "URL (Latin, verbatim) — control",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "sample": 3,
+      "wav": "url_verbatim_s3.wav",
+      "clip_no": 1
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_bari_ye_s1.wav",
+      "clip_no": 2
+    },
+    {
+      "variant": "db_bayss",
+      "desc": "ڈیٹا bayss",
+      "text": "ہمیں ڈیٹا bayss کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_bayss_s2.wav",
+      "clip_no": 3
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_verbatim_s2.wav",
+      "clip_no": 4
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_bays_s2.wav",
+      "clip_no": 5
+    },
+    {
+      "variant": "db_bayss",
+      "desc": "ڈیٹا bayss",
+      "text": "ہمیں ڈیٹا bayss کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_bayss_s3.wav",
+      "clip_no": 6
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_shipping_s4.wav",
+      "clip_no": 7
+    },
+    {
+      "variant": "db_dayta_base",
+      "desc": "dayta base",
+      "text": "ہمیں dayta base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_dayta_base_s1.wav",
+      "clip_no": 8
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_shipping_s2.wav",
+      "clip_no": 9
+    },
+    {
+      "variant": "db_bayss",
+      "desc": "ڈیٹا bayss",
+      "text": "ہمیں ڈیٹا bayss کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_bayss_s4.wav",
+      "clip_no": 10
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_shipping_s3.wav",
+      "clip_no": 11
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_verbatim_s3.wav",
+      "clip_no": 12
+    },
+    {
+      "variant": "db_bayss",
+      "desc": "ڈیٹا bayss",
+      "text": "ہمیں ڈیٹا bayss کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_bayss_s1.wav",
+      "clip_no": 13
+    },
+    {
+      "variant": "url_verbatim",
+      "desc": "URL (Latin, verbatim) — control",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "sample": 2,
+      "wav": "url_verbatim_s2.wav",
+      "clip_no": 14
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_verbatim_s4.wav",
+      "clip_no": 15
+    },
+    {
+      "variant": "db_dayta_base",
+      "desc": "dayta base",
+      "text": "ہمیں dayta base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_dayta_base_s2.wav",
+      "clip_no": 16
+    },
+    {
+      "variant": "url_shipping",
+      "desc": "یو آر ایل — SHIPPING TODAY",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "sample": 1,
+      "wav": "url_shipping_s1.wav",
+      "clip_no": 17
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_bari_ye_s3.wav",
+      "clip_no": 18
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_bays_s4.wav",
+      "clip_no": 19
+    },
+    {
+      "variant": "url_shipping",
+      "desc": "یو آر ایل — SHIPPING TODAY",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "sample": 2,
+      "wav": "url_shipping_s2.wav",
+      "clip_no": 20
+    },
+    {
+      "variant": "db_shipping",
+      "desc": "ڈیٹا base — SHIPPING TODAY; rated wrong once, correct once",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_shipping_s1.wav",
+      "clip_no": 21
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_bays_s1.wav",
+      "clip_no": 22
+    },
+    {
+      "variant": "db_dayta_base",
+      "desc": "dayta base",
+      "text": "ہمیں dayta base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_dayta_base_s3.wav",
+      "clip_no": 23
+    },
+    {
+      "variant": "url_shipping",
+      "desc": "یو آر ایل — SHIPPING TODAY",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "sample": 4,
+      "wav": "url_shipping_s4.wav",
+      "clip_no": 24
+    },
+    {
+      "variant": "db_dayta_base",
+      "desc": "dayta base",
+      "text": "ہمیں dayta base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_dayta_base_s4.wav",
+      "clip_no": 25
+    },
+    {
+      "variant": "db_verbatim",
+      "desc": "database (Latin, verbatim) — the do-nothing control",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 1,
+      "wav": "db_verbatim_s1.wav",
+      "clip_no": 26
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 2,
+      "wav": "db_bari_ye_s2.wav",
+      "clip_no": 27
+    },
+    {
+      "variant": "db_bays",
+      "desc": "ڈیٹا bays",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 3,
+      "wav": "db_bays_s3.wav",
+      "clip_no": 28
+    },
+    {
+      "variant": "url_verbatim",
+      "desc": "URL (Latin, verbatim) — control",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "sample": 4,
+      "wav": "url_verbatim_s4.wav",
+      "clip_no": 29
+    },
+    {
+      "variant": "url_verbatim",
+      "desc": "URL (Latin, verbatim) — control",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "sample": 1,
+      "wav": "url_verbatim_s1.wav",
+      "clip_no": 30
+    },
+    {
+      "variant": "db_bari_ye",
+      "desc": "ڈیٹا بےس",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "sample": 4,
+      "wav": "db_bari_ye_s4.wav",
+      "clip_no": 31
+    },
+    {
+      "variant": "url_shipping",
+      "desc": "یو آر ایل — SHIPPING TODAY",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "sample": 3,
+      "wav": "url_shipping_s3.wav",
+      "clip_no": 32
+    }
+  ]
+}
