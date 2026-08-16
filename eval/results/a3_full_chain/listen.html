@@ -19,6 +19,8 @@ h1 { font-size: 1.3rem; }
 .pass { color:#8fd3a6; font-weight:600; }
 .fail { color:#e0846c; font-weight:600; }
 .cer { color:#6f7a8a; margin-left:.5rem; }
+.caveat { background:#2a1d1d; border-left:3px solid #e0846c; padding:.9rem 1.1rem;
+          border-radius:4px; font-size:.95rem; }
 audio { width:100%; margin-top:.3rem; }
 </style></head>
 <body>
@@ -31,6 +33,15 @@ building even at 46%. If you'd rather just type Urdu, it isn't, and Phase B shou
 labelled, so you can hear whether a "failed" conversion is actually unusable or merely imperfect.
 That distinction is the whole decision. Both columns go through the same production normalization
 (numbers spelled out, loanword lexicon applied), so this is what the app would really send.</p>
+<p class="caveat"><b>"contract OK" does not mean "the Urdu is correct."</b> It means only that no
+English word was translated away and no Urdu was left sitting in Latin letters. It says nothing
+about whether the Urdu that came out is the right Urdu. <b><code>owner_01_sick</code>, the very
+first item below, is the proof</b>: it is badged contract OK, and its output mangles
+<i>aaj</i> into <span dir="rtl">امیدوار رہا کہ</span> and leaks a Devanagari
+<span dir="rtl">हे</span>. Its CER of 0.406 is the number that caught it. Across the whole arm the
+two metrics do agree &mdash; contract-passing items have a median CER of 0.188 against 0.324 for
+failures, and this is the only contract-pass above 0.30 &mdash; so treat the badge and the CER
+together, and your ear over both.</p>
 
   <div class="item">
     <div class="meta"><b>owner_01_sick</b> <span class="pass">A2: contract OK</span>
