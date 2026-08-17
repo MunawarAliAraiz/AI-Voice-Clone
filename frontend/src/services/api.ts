@@ -14,9 +14,10 @@ import type {
   PronunciationList,
   PronunciationUpdate,
   ScriptDetectResponse,
-  TitleResponse,
   SystemStatus,
   TTSGenerateRequest,
+  TitleResponse,
+  TranscriptResponse,
   VoiceProfile,
   VoiceProfileList,
 } from '../types/api';
@@ -197,6 +198,18 @@ export const api = {
    * falls back to the text and says `source: "text"` when the analyzer is
    * unavailable.
    */
+  /**
+   * Import a YouTube caption track. The URL is validated SERVER-SIDE by
+   * `domain/youtube.parse_video_id` — the SSRF guard lives there, in one
+   * tested place, and is deliberately not duplicated as a weaker regex here.
+   */
+  fetchTranscript: (url: string, language?: string) =>
+    request<TranscriptResponse>('/api/transcript/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, language: language || null }),
+    }),
+
   suggestTitle: (text: string, language: string) =>
     request<TitleResponse>('/api/text/title', {
       method: 'POST',

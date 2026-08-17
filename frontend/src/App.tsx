@@ -8,6 +8,7 @@ import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ActiveJobRow } from './components/ActiveJobRow';
 import { PronunciationPanel } from './components/PronunciationPanel';
+import { TranscriptPanel } from './components/TranscriptPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
 import {
@@ -19,7 +20,7 @@ import {
   useLanguages,
   useVoices,
 } from './hooks/queries';
-import { IconAlert, IconFileAudio, IconHistory, IconMic, IconSettings, IconX } from './components/icons';
+import { IconAlert, IconDownload, IconFileAudio, IconHistory, IconMic, IconSettings, IconX } from './components/icons';
 import './App.css';
 
 // 477 lines behind a tab most sessions never open — split out of the main bundle.
@@ -28,10 +29,11 @@ const AudioEditorTab = lazy(() =>
 );
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'recent' | 'pronunciation' | 'editor';
+type Tab = 'studio' | 'recent' | 'import' | 'pronunciation' | 'editor';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
   { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
+  { id: 'import', label: 'Import', icon: <IconDownload size={14} /> },
   { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
   { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
 ];
@@ -40,6 +42,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('studio');
   const [pageCount, setPageCount] = useState(1);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  // Text handed from the Import tab to the Composer. A monotonic token rather
+  // than the bare string, so sending the SAME chunk twice still lands — see
+  // Composer's `pendingText` prop.
+  const [pendingText, setPendingText] = useState<{ text: string; token: number } | null>(null);
+  const pendingToken = useRef(0);
   const toastId = useRef(0);
   const queryClient = useQueryClient();
 
@@ -156,6 +163,12 @@ export default function App() {
     [addToast]
   );
 
+  const sendToEditor = useCallback((text: string) => {
+    pendingToken.current += 1;
+    setPendingText({ text, token: pendingToken.current });
+    setActiveTab('studio');
+  }, []);
+
   // API key changed: every prior response may have been scoped to different
   // credentials (or none). Nothing short of a full invalidation is safe.
   const onApiKeySaved = useCallback(() => {
@@ -254,6 +267,7 @@ export default function App() {
                 languages={languagesQ.data?.languages ?? []}
                 onJobQueued={onJobQueued}
                 onOpenRecent={() => setActiveTab('recent')}
+                pendingText={pendingText}
               />
               {/* Generate no longer blocks, so several clips can be in flight
                   at once and the Composer's single result card cannot show
@@ -303,6 +317,7 @@ export default function App() {
             cancellingJobId={cancelJob.isPending ? (cancelJob.variables ?? null) : null}
           />
         )}
+        {activeTab === 'import' && <TranscriptPanel onSendToEditor={sendToEditor} />}
         {activeTab === 'pronunciation' && <PronunciationPanel />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>

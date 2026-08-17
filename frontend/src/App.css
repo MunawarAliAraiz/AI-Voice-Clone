@@ -1675,3 +1675,104 @@ textarea {
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* ── YouTube transcript import ───────────────────────────────────────────── */
+.transcript-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  align-items: end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .transcript-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+.transcript-form .field { margin-bottom: 0; }
+
+.transcript-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin-bottom: var(--space-3);
+}
+
+.transcript-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* Read-only on purpose: the editable copy lives in the Composer, and two
+   editable copies of the same text is how they drift apart. */
+.transcript-text {
+  background: var(--panel-inset);
+  margin-bottom: var(--space-4);
+}
+
+.transcript-h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.transcript-chunks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.transcript-chunk {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--panel-raised);
+}
+
+.chunk-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.chunk-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chunk-text {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text);
+  /* Long RTL/LTR runs must not push the buttons out of the card. */
+  overflow-wrap: anywhere;
+}
+
+.chunk-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

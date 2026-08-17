@@ -39,6 +39,14 @@ interface Props {
   onJobQueued?: (job: JobStatusResponse) => void;
   /** Switches to the Recent tab. Undefined hides the pointer entirely. */
   onOpenRecent?: () => void;
+  /**
+   * Text pushed in from another tab (the transcript importer).
+   *
+   * A TOKEN accompanies it rather than the effect keying on the string: sending
+   * the SAME chunk twice is a real thing to want, and a string-keyed effect
+   * would silently ignore the second send because nothing changed.
+   */
+  pendingText?: { text: string; token: number } | null;
 }
 
 /**
@@ -60,7 +68,7 @@ function fallbackTitle(text: string): string {
   return text.trim().split(/\s+/).slice(0, 4).join(' ');
 }
 
-export function Composer({ voices, languages, onJobQueued, onOpenRecent }: Props) {
+export function Composer({ voices, languages, onJobQueued, onOpenRecent, pendingText }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -177,6 +185,19 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent }: Props
       setModelId(null);
     }
   }, [language, modelsData]);
+
+  // Accept text pushed in from the transcript importer. Keyed on the token, so
+  // re-sending the same chunk works; `setText` replaces rather than appends,
+  // because "send to editor" means this text, not this text added to whatever
+  // was there.
+  const lastPendingToken = useRef(0);
+  useEffect(() => {
+    if (!pendingText || pendingText.token === lastPendingToken.current) return;
+    lastPendingToken.current = pendingText.token;
+    setText(pendingText.text);
+    setTitle('');
+    setTitleSuggestion(null);
+  }, [pendingText]);
 
   // Refresh voices/history once per job, the turn it first becomes terminal.
   //

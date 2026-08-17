@@ -421,3 +421,36 @@ export interface ProblemJson {
   code: string;
   [k: string]: unknown;
 }
+
+/* ── YouTube transcript import ────────────────────────────────────────────── */
+
+export interface TranscriptTrack {
+  language: string;
+  name: string | null;
+  /** Auto-generated captions are markedly worse in Urdu and Hindi. Surfaced so
+   *  the UI can say so rather than passing a machine guess off as authored. */
+  is_auto_generated: boolean;
+}
+
+export interface TranscriptChunk {
+  index: number;
+  text: string;
+  /** False means the chunk was cut at a clause or word boundary because a
+   *  sentence would not fit — where a join artifact will be audible. */
+  ends_on_sentence: boolean;
+}
+
+export interface TranscriptResponse {
+  video_id: string;
+  title: string | null;
+  duration_sec: number | null;
+  available_tracks: TranscriptTrack[];
+  chosen_track: TranscriptTrack;
+  text: string;
+  /** `latin` | `arabic` | `devanagari` | ... — the same detector routing uses. */
+  script: string;
+  /** True when NOTHING in the catalog renders this script (Devanagari). Decided
+   *  server-side so the UI never encodes routing rules. */
+  needs_transliteration: boolean;
+  chunks: TranscriptChunk[];
+}
