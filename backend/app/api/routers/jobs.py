@@ -142,6 +142,7 @@ def _build_list_item(
         kind=job.kind.value,
         status=job.status.value,
         profile_id=job.profile_id,
+        retry_of_job_id=job.retry_of_job_id,
         profile_name=profile_name,
         input_text=_input_text(job),
         title=_title(job),
@@ -179,6 +180,7 @@ async def build_job_status_response(
         status=job.status.value,
         profile_id=job.profile_id,
         profile_name=profile["name"] if profile else None,
+        retry_of_job_id=job.retry_of_job_id,
         input_text=_input_text(job),
         title=_title(job),
         route=route,
@@ -279,6 +281,12 @@ async def retry_job(
         params=params,
         route=original.route,
         profile_id=original.profile_id,
+        # The link back. Without it the original row keeps offering "Try
+        # again" after it has already been retried, and four clicks produce
+        # four identical queued jobs with nothing to say they are the same
+        # attempt. The new row stays a NEW row (see above) -- this records
+        # what it came from, it does not resurrect anything.
+        retry_of_job_id=original.id,
     )
     return await build_job_status_response(job, db, settings, scheduler, response)
 

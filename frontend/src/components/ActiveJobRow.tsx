@@ -23,12 +23,17 @@ function ActiveJobRowImpl({
   cancelling,
   onRetry,
   retrying,
+  alreadyRetried = false,
 }: {
   job: JobStatusResponse;
   onCancel?: () => void;
-  cancelling: boolean;
+  // Optional: the Failed section renders rows that can never be cancelled.
+  cancelling?: boolean;
   onRetry?: () => void;
   retrying?: boolean;
+  /** True when a retry of this job already exists. Shows what happened
+   *  instead of offering the button again. */
+  alreadyRetried?: boolean;
 }) {
   // `analyze_llm` jobs share the `jobs` table but have no route and no audio;
   // their UI lives entirely in the Composer's Advanced editor. Skip rather
@@ -89,18 +94,27 @@ function ActiveJobRowImpl({
           this existed there was nothing to click — the only way back was to
           retype the text from the row still displaying it. Offered for any
           settled non-success, since a cancelled job is just as re-runnable. */}
-      {(job.status === 'failed' || job.status === 'cancelled') && onRetry && (
-        <button
-          type="button"
-          className="btn-sm"
-          disabled={retrying}
-          onClick={onRetry}
-          title="Queue this again with exactly the same text, voice and model"
-        >
-          {retrying ? <IconSpinner size={13} /> : <IconReset size={13} />}
-          {retrying ? 'Re-queuing…' : 'Try again'}
-        </button>
-      )}
+      {(job.status === 'failed' || job.status === 'cancelled') &&
+        onRetry &&
+        (alreadyRetried ? (
+          /* ALREADY RETRIED. The retry is a NEW row (the endpoint keeps
+             history truthful rather than resurrecting this one), so without
+             saying so here the button stays live on a failure that has
+             already been re-queued — and four clicks produced four identical
+             jobs with nothing to connect them. */
+          <span className="muted">Retried — see In progress</span>
+        ) : (
+          <button
+            type="button"
+            className="btn-sm"
+            disabled={retrying}
+            onClick={onRetry}
+            title="Queue this again with exactly the same text, voice and model"
+          >
+            {retrying ? <IconSpinner size={13} /> : <IconReset size={13} />}
+            {retrying ? 'Re-queuing…' : 'Try again'}
+          </button>
+        ))}
     </li>
   );
 }
@@ -129,6 +143,7 @@ function StatusChip({ status }: { status: JobStatusResponse['status'] }) {
 export const ActiveJobRow = memo(ActiveJobRowImpl, (a, b) =>
   a.cancelling === b.cancelling &&
   a.retrying === b.retrying &&
+  a.alreadyRetried === b.alreadyRetried &&
   a.job.id === b.job.id &&
   a.job.status === b.job.status &&
   a.job.title === b.job.title &&

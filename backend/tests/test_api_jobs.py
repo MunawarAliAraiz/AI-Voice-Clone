@@ -321,3 +321,36 @@ async def test_fake_runtime_job_carries_the_header_and_flag(tmp_path: Path) -> N
     assert body.is_fake is True
     assert response.headers.get("X-Fake-Audio") == "true"
     await db.close()
+
+
+def test_a_retry_records_which_job_it_retried(tmp_path: Path) -> None:
+    """
+    The retry endpoint creates a NEW row and leaves the original visible, which
+    is right -- history stays truthful. But nothing LINKED the two, so a
+    settled row kept offering "Try again" after it had already been retried,
+    and four clicks produced four identical queued jobs with no way to tell
+    they were one attempt.
+
+    `retry_of_job_id` is that link, and it is what lets the UI show "Retried"
+    where the button was.
+    """
+    client, _sched = _client(tmp_path, FakeScheduler(synth_delay_sec=1.0))
+    with client as c:
+        pid = _enroll(c)
+        first = c.post("/api/generate", json={"profile_id": pid, "text": "a", "language": "en"})
+        second = c.post(
+            "/api/generate", json={"profile_id": pid, "text": "b", "language": "en"}
+        )
+        original = second.json()
+        assert c.delete(f"/api/jobs/{original['id']}").status_code == 204
+
+        clone = c.post(f"/api/jobs/{original['id']}/retry").json()
+        assert clone["id"] != original["id"], "a retry must be its own row"
+        assert clone["retry_of_job_id"] == original["id"]
+
+        # A first attempt retries nothing, so the original stays null -- that
+        # is how the UI tells "offer the button" from "already retried".
+        assert c.get(f"/api/jobs/{original['id']}").json()["retry_of_job_id"] is None
+
+        _poll(c, first.json()["id"])
+        _poll(c, clone["id"])

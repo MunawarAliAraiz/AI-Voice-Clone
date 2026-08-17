@@ -41,6 +41,12 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # (table, column, full DDL fragment)
     ("generation_history", "title", "title TEXT"),
     ("generation_history", "direction_segments", "direction_segments INTEGER"),
+    # Which failed job this one is a retry OF. Nullable; set only by the retry
+    # endpoint. Exists so the UI can stop offering "Try again" on a row whose
+    # retry is already queued — without it, four clicks on one failed job
+    # produced four identical queued jobs and no way to tell they were the
+    # same attempt.
+    ("jobs", "retry_of_job_id", "retry_of_job_id INTEGER"),
 )
 
 
@@ -275,12 +281,14 @@ class Database:
     async def create_job(
         self, *, kind: str, params_json: str, route_json: str | None,
         profile_id: int | None, priority: int = 0,
+        retry_of_job_id: int | None = None,
     ) -> aiosqlite.Row:
         async with self._write_lock:
             cur = await self._c.execute(
-                """INSERT INTO jobs (kind, params_json, route_json, profile_id, priority)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (kind, params_json, route_json, profile_id, priority),
+                """INSERT INTO jobs
+                     (kind, params_json, route_json, profile_id, priority, retry_of_job_id)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (kind, params_json, route_json, profile_id, priority, retry_of_job_id),
             )
             await self._c.commit()
             new_id = cur.lastrowid

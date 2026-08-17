@@ -51,6 +51,13 @@ class JobStatusResponse(BaseModel):
     #: Direction analyzer is not audio and is not a routable `ModelSpec`).
     route: RouteInfo | None = None
 
+    #: The failed job this one retries. `None` for a first attempt.
+    #:
+    #: Surfaced so the client can tell that a failed row has ALREADY been
+    #: retried and stop offering the button — four clicks on one failure
+    #: otherwise produce four identical queued jobs.
+    retry_of_job_id: int | None = None
+
     #: 0-indexed jobs strictly ahead of this one in its kind's queue (a
     #: running job, if any, counts as 1). Populated only while status is
     #: 'queued'.

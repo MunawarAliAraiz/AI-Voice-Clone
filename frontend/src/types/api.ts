@@ -307,6 +307,9 @@ export interface JobStatusResponse {
    *  audio and is not a routable ModelSpec). */
   route: RouteInfo | null;
   /** 0-indexed jobs strictly ahead of this one. Only set while 'queued'. */
+  /** The failed job this one retries. `null` for a first attempt. Lets the UI
+   *  stop offering "Try again" on a row whose retry already exists. */
+  retry_of_job_id: number | null;
   position: number | null;
   /** Seconds. A UI estimate, not a promise. Set while 'queued' or 'running'. */
   eta_sec: number | null;

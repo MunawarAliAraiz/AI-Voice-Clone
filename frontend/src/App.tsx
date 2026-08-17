@@ -68,6 +68,25 @@ export default function App() {
   const inFlightJobs = recentJobs.filter(
     (j) => j.status === 'queued' || j.status === 'running',
   );
+  // FAILED IS ITS OWN SECTION, not a tail on "In progress". A failed job is
+  // not in progress -- the Studio strip was already fixed for exactly this
+  // (see above) and the Recent tab kept the bug: every past failure sat under
+  // that heading permanently, next to jobs that really were running.
+  //
+  // The lifecycle the three sections describe: Try again moves a row from
+  // Failed into In progress; it lands in Generated (the day groups below) or
+  // back in Failed.
+  const failedJobs = recentJobs.filter(
+    (j) => j.status === 'failed' || j.status === 'cancelled',
+  );
+  //: Failed jobs whose retry ALREADY EXISTS, by the id they retried. Without
+  //: this a failed row keeps its button after being retried, and four clicks
+  //: produce four identical queued jobs.
+  const retriedJobIds = new Set(
+    (jobsQ.data?.items ?? [])
+      .map((j) => j.retry_of_job_id)
+      .filter((id): id is number => id != null),
+  );
   const recentCount = (historyQ.data?.total ?? 0) + recentJobs.length;
 
   // MAX, not sum. `estimate.py` already folds queue wait into each job's
@@ -312,7 +331,9 @@ export default function App() {
             hasMore={(historyQ.data?.items.length ?? 0) < (historyQ.data?.total ?? 0)}
             onLoadMore={loadMore}
             onChanged={invalidateHistory}
-            activeJobs={recentJobs}
+            activeJobs={inFlightJobs}
+            failedJobs={failedJobs}
+            retriedJobIds={retriedJobIds}
             onCancelJob={(id) => cancelJob.mutate(id)}
             cancellingJobId={cancelJob.isPending ? (cancelJob.variables ?? null) : null}
           />

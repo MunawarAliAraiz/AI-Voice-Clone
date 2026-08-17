@@ -230,6 +230,7 @@ class JobRunner:
         route: dict[str, Any] | None,
         profile_id: int | None,
         priority: int = 0,
+        retry_of_job_id: int | None = None,
     ) -> JobRecord:
         """
         Write the job row and return it, still 'queued'. Backpressure is queue
@@ -252,6 +253,7 @@ class JobRunner:
             route_json=json.dumps(route) if route is not None else None,
             profile_id=profile_id,
             priority=priority,
+            retry_of_job_id=retry_of_job_id,
         )
         self._pending[kind] = self._pending.get(kind, 0) + 1
         self._idle[kind].clear()

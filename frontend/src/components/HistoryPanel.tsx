@@ -48,6 +48,13 @@ interface Props {
    * Succeeded jobs must not be passed: they already appear as history rows.
    */
   activeJobs?: JobStatusResponse[];
+  /** Failed and cancelled jobs. THEIR OWN SECTION — a failed job is not in
+   *  progress, and listing it under that heading is what made every past
+   *  failure look like current work. */
+  failedJobs?: JobStatusResponse[];
+  /** Ids of failed jobs whose retry already exists. Those rows show what
+   *  happened instead of offering the button a second time. */
+  retriedJobIds?: Set<number>;
   onCancelJob?: (id: number) => void;
   cancellingJobId?: number | null;
 }
@@ -57,7 +64,8 @@ const GROUPS: DayBucket[] = ['Today', 'Yesterday', 'Earlier'];
 
 export function HistoryPanel({
   items, total, loading, hasMore, onLoadMore, onChanged,
-  activeJobs = [], onCancelJob, cancellingJobId = null,
+  activeJobs = [], failedJobs = [], retriedJobIds = new Set(),
+  onCancelJob, cancellingJobId = null,
 }: Props) {
   const retryJob = useRetryJobMutation();
   const [query, setQuery] = useState('');
@@ -308,6 +316,31 @@ export function HistoryPanel({
                 job={job}
                 onCancel={onCancelJob ? () => onCancelJob(job.id) : undefined}
                 cancelling={cancellingJobId === job.id}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* SEPARATE, because a failed job is not in progress. The three sections
+          describe the lifecycle: Try again moves a row from here into "In
+          progress", and it lands in the day groups below (succeeded) or back
+          here. A row whose retry already exists says so instead of offering
+          the button again — that is what turned one failure into four
+          identical queued jobs. */}
+      {failedJobs.length > 0 && (
+        <div className="hist-group" key="failed">
+          <div className="group-label">
+            <span>Failed</span>
+            <span className="rule" />
+            <span className="group-count">{failedJobs.length}</span>
+          </div>
+          <ul className="hist">
+            {failedJobs.map((job) => (
+              <ActiveJobRow
+                key={job.id}
+                job={job}
+                alreadyRetried={retriedJobIds.has(job.id)}
                 onRetry={() => retryJob.mutate(job.id)}
                 retrying={retryJob.isPending && retryJob.variables === job.id}
               />

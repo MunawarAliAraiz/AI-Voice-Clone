@@ -135,6 +135,14 @@ class JobRecord:
     started_at: str | None
     finished_at: str | None
     updated_at: str
+    #: The failed job this one retries, if any. `None` for a first attempt.
+    #:
+    #: LAST, and defaulted, deliberately: `JobRecord` is constructed positionally
+    #: in a dozen tests, and a required field in the middle breaks all of them
+    #: for a value none of them care about. A row that predates the column is
+    #: not a retry of anything, so `None` is the honest default rather than a
+    #: placeholder.
+    retry_of_job_id: int | None = None
 
 
 def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
@@ -164,6 +172,13 @@ def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
         error=error,
         profile_id=row["profile_id"],
         priority=row["priority"],
+        # `.keys()` guard: a row read from a database that predates the column
+        # has no such key, and `_ADDED_COLUMNS` only fixes it at the next
+        # connect(). Defaulting to None is correct — an old row is by
+        # definition not a retry of anything.
+        retry_of_job_id=(
+            row["retry_of_job_id"] if "retry_of_job_id" in row.keys() else None
+        ),
         cancel_requested=bool(row["cancel_requested"]),
         attempt=row["attempt"],
         queued_at=row["queued_at"],
