@@ -6,10 +6,83 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ Start here (state as of 2026-08-17)
+## ⚡ Start here (state as of 2026-08-17, end of day)
 
-**Live pod:** see `.claude/remote.local.md`. Bootstrapped clean, all six venvs, `.venv-qwen`
-provisioned by the script for the first time (that gap is fixed).
+> **If you read only one section, read this one.** Everything below it is history explaining how
+> the current state came to be.
+
+**Branch:** `feature/roman-urdu-phase-a`. Push to the **`fork`** remote, not `origin`.
+
+**Live pod:** `.claude/remote.local.md` (gitignored). A NEW pod was created 2026-08-17 and is
+**mid-bootstrap** — RTX A5000 24 GB, `/workspace` empty at start. Two things about it:
+- The first bootstrap **died on `uv`'s 30 s HTTP timeout**; this pod's network is slow. It was
+  restarted with `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600`, which fixed it. Use those.
+- **The secrets did NOT survive the old pod.** `/workspace/vcs-secrets.env` is gone, so
+  `VCS_API_KEY` / `VCS_MEDIA_TOKEN_SECRET` must be recreated by the owner before the frontend can
+  talk to it. Every request 401s until then.
+- `scripts/pod-bootstrap.sh` fetches **`main`** — re-checkout the feature branch afterwards.
+
+### What is DONE and what is only WRITTEN
+
+| | State |
+|---|---|
+| Pronunciation dictionary (table, CRUD, tab, search) | ✅ shipped, browser-verified |
+| Generation titles, non-blocking Generate, retry button, merged Recent/History | ✅ shipped, browser-verified |
+| Clause/sentence/paragraph breaks (Urdu `،`, newlines) | ✅ shipped, tested |
+| YouTube transcript import — backend + Import tab | ✅ built & unit-tested, **never clicked in a browser** |
+| Phase B: `exclusive_gpu`, validator, Gemma runtime, `TransliteratorScheduler` | ⚠️ **written, wired to NOTHING** |
+| Phase B: endpoint, `JobKind.TRANSLITERATE`, handler, config, UI | ❌ not started |
+| Devanagari → Perso-Arabic | ❌ not started, and **ungated** — see below |
+
+### The next three things, in order
+
+1. **Wire Phase B.** `runtimes/gemma_transliterator.py`, `transliterator_scheduler.py` and
+   `domain/transliterate.py` all exist and nothing calls them. Needs: `JobKind.TRANSLITERATE` + a
+   handler (follow `handlers/analyze_llm.py`, the precedent for a non-audio job with `route=None`),
+   `POST /api/text/transliterate`, `Settings.gemma_transliterator_python`
+   (`VCS_GEMMA_TRANSLITERATOR_PYTHON`, already added to `config.py`) kept **out** of
+   `interpreters()`, lifespan wiring in `main.py`, and a `.venv-gemma` in `pod-bootstrap.sh`.
+   It must be a JOB, not a synchronous endpoint: a conversion takes the whole GPU for ~78 s.
+2. **Devanagari as a source script**, for the Hindi-transcript path. Prompt + exemplars in the
+   Gemma runtime, and `validate_transliteration`'s echo check currently only recognises a LATIN
+   echo. **This has no listening gate yet and must not be presented as working until it passes
+   one** — R4b measured the reverse hop compounding errors badly (مجھے → "majhay" → मझे).
+3. **The Roman-draft decision** (below) — the owner has not chosen yet.
+
+### Open design question the owner is deciding
+
+The owner proposed: type/import **Roman Urdu**, keep it as the readable editable draft, convert to
+Perso-Arabic for OmniVoice (which has no `(ur, LATIN)` cell, and where VoxCPM2's direct Roman
+rendering is the A0 finding the owner heard as an English accent).
+
+Storing both is free — `generation_history.resolved_text` already exists for exactly this ("the
+post-transform string the model actually received") and is simply **not exposed** in `HistoryItem`
+or `frontend/src/types/api.ts`. The real cost is **staleness**: edit the Roman after converting and
+the Perso-Arabic is stale, and silently synthesizing either one is golden rule 5's family.
+
+Three options were put to the owner; **the recommendation is the third**:
+
+| Approach | Edit in | Cost |
+|---|---|---|
+| Roman is truth, re-convert every edit | Roman | ~78 s Gemma load *per edit round* |
+| Convert once, then edit the Perso-Arabic | Perso-Arabic | none, but harder to read |
+| **Both kept; editing Roman marks Urdu stale and BLOCKS Generate** | Roman | re-convert before generating |
+
+Intended workflow under the third: edit in Roman until happy → convert once → review → generate.
+Conversion is the last step before generating, not the first.
+
+### Hindi: the fact that governs the whole transcript feature
+
+**No model here renders Hindi, and that is deliberate.** `hi` is not a `LanguageCode`
+(`domain/language.py`), no catalog spec declares a Devanagari cell (`f5_indic` was removed), and
+`domain/routing.py` raises `NoRouteError` for `(ur, DEVANAGARI)` with a comment saying accepting it
+"would quietly make the language field meaningless". OmniVoice claims only `(ur, ARABIC)`;
+VoxCPM2 claims `(en, LATIN)` and `(ur, LATIN)`.
+
+Hindi therefore exists here as a **source format only, never a target language** — a Devanagari
+transcript is text OmniVoice could speak *if it were Perso-Arabic*, which is what the transliterator
+is for. `POST /api/transcript/fetch` already returns `needs_transliteration`, computed server-side
+from the catalog so the UI never encodes routing rules.
 
 **The headline: the Roman-Urdu → Perso-Arabic feature PASSED its listening gate on 2026-08-16,
 on the third model tried. Phase B is unblocked.** A3 ran three times against the same harness:
@@ -61,15 +134,22 @@ API key pasted into Settings, and it is the first thing to do.
    shows both models warmed *and* synthesized. Everything above is verified by tests and a local
    build only.
 
-1. **Design Phase B, starting with the VRAM question above.** The plan
-   (`~/.claude/plans/yes-i-d-refine-your-quiet-blossom.md`, mirrored in ROADMAP) has the full
-   backend/frontend shape — `TransliteratorScheduler` mirroring `AnalyzerScheduler`,
-   `JobKind.TRANSLITERATE`, `POST /api/text/transliterate`, an editable instruction with a
-   server-side validator the user cannot disable, and a Composer button gated on a *generic*
-   condition (selected model claims this language in a script other than the one detected).
-   **`resolve()` and `TransformKind` are not touched** — the output is editable text, not a routing
-   transform. What the plan does NOT yet answer is constraint 1: how a 19 GB transliterator
-   coexists with the GPU-slot semaphore.
+1. ~~**Design Phase B, starting with the VRAM question above.**~~ **The VRAM question is ANSWERED
+   and the answer is built** (2026-08-17): `InferenceScheduler.exclusive_gpu(reason)` holds the
+   main GPU slot and evicts EVERY worker, so Gemma gets an empty card and no synthesis can run
+   while it is resident. `TransliteratorScheduler` owns nothing between calls — spawn, LOAD,
+   TRANSLITERATE, kill, every time — because at ~19 GB it is resident or the audio models are,
+   never both. `_make_room_for` could not express this: it evicts until a spec fits a budget
+   deliberately sized for co-residency (16 GB), so a 19 GB spec fails its first check.
+
+   **This is a SECOND EVICTION CALL SITE, an explicit amendment to golden rule 3**, argued in
+   `scheduler.py`'s module docstring rather than left to be discovered. The property the rule buys
+   — unload-during-inference being unrepresentable — is intact: the same semaphore is held across
+   the whole body and eviction still goes through the same `_evict` behind the same assertion.
+   `tests/test_scheduler.py` asserts both that the card is emptied and that no synthesis completes
+   during the window.
+
+   What is NOT built is everything that would let a user reach it — see "The next three things".
 2. ~~**Build the user-editable pronunciation dictionary.**~~ **Built.** §9e's measurement is why it
    exists — **17.2% of English loanword instances** (11 of 54 distinct words, 32.5% of generations)
    are mispronounced by OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely

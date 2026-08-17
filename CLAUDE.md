@@ -9,6 +9,11 @@ The rewrite is complete and validated end-to-end on GPU with real cloned audio. 
 **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before changing anything in
 `backend/app/inference/`, `backend/app/domain/`, or the engine layer. This file is the operational summary.
 
+**Transcript import + the Hindi question:** **[docs/TRANSCRIPT_IMPORT.md](docs/TRANSCRIPT_IMPORT.md)** —
+YouTube caption import, the SSRF guard that governs it, and why **Hindi is a source format here and
+never a target language**. Read it before touching `domain/youtube.py`,
+`api/routers/transcript.py`, or anything that wants to make Devanagari routable.
+
 **What's currently in flight, and what's next:** **[docs/ROADMAP.md](docs/ROADMAP.md)** —
 phase-by-phase status (done / in progress / designed-not-built), including the async job queue,
 the Recent tab, mobile/perf fixes, and the deferred Speech Direction / client-side-extraction /
@@ -37,8 +42,14 @@ code, including the CPML-licensed `xtts_v2.py`, which rule 6 forbids reintroduci
    whitespace** — the legacy engines import torch *inside functions*, so an anchored `grep "^import torch"`
    reports them clean while the invariant is broken:
    `grep -rnE "^[[:space:]]*(import torch|from torch)" backend/app/`
-3. **Eviction only inside `_ensure_ready()`, only while holding the GPU-slot semaphore.** This makes
-   unload-during-inference unrepresentable rather than merely guarded. Don't add an eviction path elsewhere.
+3. **Eviction only while holding the GPU-slot semaphore.** This makes unload-during-inference
+   unrepresentable rather than merely guarded. **Amended 2026-08-17:** there are now exactly TWO
+   eviction call sites — `_ensure_ready()` and `InferenceScheduler.exclusive_gpu()`, the latter
+   added because Phase B's Gemma-4-31B is ~19 GB against a 24 GB card and needs the whole thing.
+   Both hold the same semaphore and both go through the same `_evict` behind the same assertion, so
+   what the rule buys is intact; the reasoning is in `scheduler.py`'s module docstring. **Do not add
+   a third** — and note the original wording ("only inside `_ensure_ready`") is what makes this an
+   amendment worth arguing rather than a detail.
 4. **Routing (`resolve()`) is pure.** No I/O, no `is_loaded`. Routing that consults load state is what caused
    rule 1's bug. Routing decides what *should* run; the scheduler makes it so.
 5. **No silent fallback.** Unroutable request → `NoRouteError` → 422 listing what *would* work. Every response
@@ -178,12 +189,21 @@ what needs them:
 | `.venv-omnivoice` | `omnivoice_urdu` — Perso-Arabic Urdu, verified, picked by name | `VCS_OMNIVOICE_PYTHON` |
 | `.venv-chatterbox` | `chatterbox_ml_v3` — **not routable** (failed its identity listen, Phase 4c) | `VCS_CHATTERBOX_PYTHON` |
 | `.venv-qwen` | Speech Direction's LLM analyzer — *not* an audio runtime, see below | `VCS_QWEN_ANALYZER_PYTHON` |
+| `.venv-gemma` | Phase B's Roman/Devanagari → Perso-Arabic transliterator — **not yet provisioned by the script** | `VCS_GEMMA_TRANSLITERATOR_PYTHON` |
 | `.venv-eval` | `eval/` harness only (Whisper CER, ECAPA cosine) — never the API | — |
 
 The Qwen analyzer is deliberately **not** a `RuntimeKind` and not in `Settings.interpreters()`: it
 classifies text and must stay unreachable from `resolve()`. `AnalyzerScheduler` reads its own setting.
 Forgetting `VCS_QWEN_ANALYZER_PYTHON` doesn't break generation — it breaks only the "Let AI suggest
 emotion/tone" button, with a clear error naming the variable.
+
+**The Gemma transliterator follows the same rule for the same reason**, but is shaped differently:
+it converts text and must stay unreachable from `resolve()`, so it is not a `RuntimeKind` either —
+yet at ~19 GB it cannot linger the way the 6 GB analyzer does. `TransliteratorScheduler` owns
+nothing between calls: it takes `InferenceScheduler.exclusive_gpu()`, spawns, loads, converts, and
+kills the worker, every time. Audio models come back COLD afterwards; that is the price of the
+shape, not a defect. **None of it is reachable from the API yet** — see
+[docs/HANDOFF.md](docs/HANDOFF.md)'s "next three things".
 
 Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
 
@@ -260,4 +280,17 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   extend this one into one. Older comments in `schema.sql` claiming there is no migration mechanism at
   all predate this and have been corrected; the pod's database holds the owner's real voices and history,
   so a column added only to `schema.sql` reaches a fresh install and silently misses production.
+- **A newline is a paragraph break with the longest pause; a comma is a 60 ms breath.**
+  `domain/direction_analyze._split_units` splits at three levels — clause (`,` and the ARABIC COMMA
+  `،` U+060C, a *different codepoint* that nothing had ever handled), sentence, and paragraph.
+  Newlines are split off **before** `split_sentences`, because that function calls
+  `normalize_whitespace` (`" ".join(text.split())`) and destroys them. Two consequences worth
+  knowing: prosody (emotion, rate) is scored on the **sentence**, not the clause — scoring a lone
+  clause makes `_determine_rate`'s clause-density rule permanently unreachable — and anything that
+  *builds* text (e.g. `domain/youtube.cues_to_text`) must not emit newlines it does not mean, since
+  each one is now ~380 ms of real silence.
+- **Never fetch a user-supplied URL.** `domain/youtube.parse_video_id` extracts an 11-character
+  video id from a `urlsplit`-checked hostname and callers build their own request from that id.
+  A regex over the whole URL is not sufficient — it accepts `youtube.com.evil.test` and
+  `www.youtube.com@evil.test`. Tests assert not just the 422 but that **no fetch happened**.
 - No `.catch(() => {})`. Ever.
