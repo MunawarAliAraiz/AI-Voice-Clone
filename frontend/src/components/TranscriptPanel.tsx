@@ -17,7 +17,7 @@
  * sentence will not fit — chunks that were cut that way are BADGED, because
  * that is exactly where a join artifact becomes audible.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../services/api';
 import type { TranscriptResponse } from '../types/api';
 import { IconAlert, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
@@ -47,6 +47,29 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   const [target, setTarget] = useState<Target>('roman');
   const conversion = useScriptConversion();
   const system = useSystemStatus();
+  //: Which CHUNK indexes the running conversion covers, in submission order.
+  //:
+  //: Required because a result item's `index` is its position IN THE BATCH,
+  //: not in the transcript. Converting part 8 on its own returns index 0, and
+  //: without this map that result would be written onto part 1 — a silent
+  //: wrong-answer bug, since both are plausible Roman Urdu and nothing would
+  //: look broken.
+  const [batchIndexes, setBatchIndexes] = useState<number[]>([]);
+
+  const startConversion = (indexes: number[]) => {
+    if (!data) return;
+    // Filtered, not asserted: an index with no chunk would otherwise send
+    // `undefined` to the server as a chunk, and the batch positions would then
+    // no longer line up with `batchIndexes` — which is exactly the misalignment
+    // this whole mechanism exists to prevent.
+    const present = indexes.filter((i) => data.chunks[i] !== undefined);
+    if (!present.length) return;
+    setBatchIndexes(present);
+    conversion.start(
+      present.map((i) => data.chunks[i]!.text),
+      target,
+    );
+  };
 
   // `null` while loading rather than `true`: offering a feature and then
   // failing is worse than a control that appears a moment late.
@@ -65,18 +88,36 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   // Converted chunks, by input index. The original list is NEVER mutated: a
   // conversion is a suggestion, and the source has to stay visible beside it
   // for anyone to judge whether it is right.
-  const converted = useMemo(() => {
-    const byIndex = new Map<number, string>();
-    for (const item of conversion.ok) {
-      if (item.text) byIndex.set(item.index, item.text);
-    }
-    return byIndex;
-  }, [conversion.ok]);
+  //: Accumulated across conversions, not replaced by each one — converting
+  //: part 8 alone must not erase parts 1-7 that were converted earlier.
+  const [converted, setConverted] = useState<Map<number, string>>(new Map());
+  const [rejectedIndexes, setRejectedIndexes] = useState<Map<number, string>>(new Map());
 
-  const rejectedIndexes = useMemo(
-    () => new Map(conversion.rejected.map((i) => [i.index, i.detail ?? 'Rejected'])),
-    [conversion.rejected],
-  );
+  useEffect(() => {
+    if (!conversion.result) return;
+    setConverted((prev) => {
+      const next = new Map(prev);
+      for (const item of conversion.ok) {
+        const chunkIndex = batchIndexes[item.index];
+        if (chunkIndex !== undefined && item.text) next.set(chunkIndex, item.text);
+      }
+      return next;
+    });
+    setRejectedIndexes((prev) => {
+      const next = new Map(prev);
+      // A re-run that now SUCCEEDS must clear its old rejection, or the part
+      // would show a converted body under a stale error.
+      for (const item of conversion.ok) {
+        const chunkIndex = batchIndexes[item.index];
+        if (chunkIndex !== undefined) next.delete(chunkIndex);
+      }
+      for (const item of conversion.rejected) {
+        const chunkIndex = batchIndexes[item.index];
+        if (chunkIndex !== undefined) next.set(chunkIndex, item.detail ?? 'Rejected');
+      }
+      return next;
+    });
+  }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
 
   async function fetchTranscript(e: React.FormEvent) {
     e.preventDefault();
@@ -84,6 +125,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     setError(null);
     try {
       conversion.reset();
+      setConverted(new Map());
+      setRejectedIndexes(new Map());
+      setBatchIndexes([]);
       setData(await api.fetchTranscript(url.trim(), language || undefined));
     } catch (err) {
       setData(null);
@@ -223,7 +267,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   type="button"
                   className="btn"
                   disabled={conversion.running || canConvert === false || canConvert === null}
-                  onClick={() => conversion.start(data.chunks.map((c) => c.text), target)}
+                  onClick={() => startConversion(data.chunks.map((_, i) => i))}
                   title={canConvert === false ? (cannotConvertReason ?? '') : undefined}
                 >
                   {conversion.running ? <IconSpinner size={14} /> : null}
@@ -255,18 +299,21 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   <IconAlert size={14} /> {conversion.error}
                 </div>
               )}
-              {conversion.result && (
+              {/* Counts the WHOLE transcript, not the last batch. With
+                  per-part conversion the two diverge immediately: converting
+                  one part would otherwise report "1 of 1 converted" while 22
+                  parts sat untouched. */}
+              {converted.size + rejectedIndexes.size > 0 && !conversion.running && (
                 <div className="convert-summary" role="status">
-                  Converted {conversion.result.ok_count} of{' '}
-                  {conversion.result.ok_count + conversion.result.rejected_count} parts to{' '}
-                  {conversion.result.target_script === 'roman' ? 'Roman Urdu' : 'Urdu script'}
-                  {conversion.result.rejected_count > 0 && (
+                  {converted.size} of {data.chunks.length} parts converted to{' '}
+                  {target === 'roman' ? 'Roman Urdu' : 'Urdu script'}
+                  {rejectedIndexes.size > 0 && (
                     <>
-                      {' '}— <strong>{conversion.result.rejected_count} could not be
-                      converted</strong> and are marked below. Read every part before you
-                      generate from it.
+                      {' '}— <strong>{rejectedIndexes.size} could not be converted</strong> and
+                      are marked below; use each one's Convert button to retry
                     </>
                   )}
+                  . Read every part before you generate from it.
                 </div>
               )}
             </div>
@@ -357,6 +404,28 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   </p>
                 )}
                 <div className="chunk-actions">
+                  {/* PER PART, because converting 23 to re-check one is absurd
+                      -- and because a part the validator rejected needs a
+                      retry that does not redo the 22 that were fine. Same
+                      target as the panel picker: two parts of one transcript
+                      in different scripts would be unusable. */}
+                  {offerConversion && canConvert && (
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      onClick={() => startConversion([chunk.index])}
+                      disabled={conversion.running}
+                      title={
+                        converted.has(chunk.index)
+                          ? 'Convert this part again'
+                          : `Convert only this part to ${
+                              target === 'roman' ? 'Roman Urdu' : 'Urdu script'
+                            }`
+                      }
+                    >
+                      {converted.has(chunk.index) ? 'Convert again' : 'Convert'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="btn-sm"

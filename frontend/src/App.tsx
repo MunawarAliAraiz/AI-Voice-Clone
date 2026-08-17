@@ -317,7 +317,16 @@ export default function App() {
             cancellingJobId={cancelJob.isPending ? (cancelJob.variables ?? null) : null}
           />
         )}
-        {activeTab === 'import' && <TranscriptPanel onSendToEditor={sendToEditor} />}
+        {/* HIDDEN, NOT UNMOUNTED — same rule as the Studio panel above, for a
+            worse version of the same reason. Unmounting discarded the fetched
+            transcript AND the id of an in-flight conversion job, so glancing at
+            another tab mid-convert lost a 23-part result the GPU was still
+            producing. The job itself survived on the server; only the client
+            forgot it was waiting, which is the most annoying possible way to
+            lose work. */}
+        <div className="tab-panel" hidden={activeTab !== 'import'}>
+          <TranscriptPanel onSendToEditor={sendToEditor} />
+        </div>
         {activeTab === 'pronunciation' && <PronunciationPanel />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>

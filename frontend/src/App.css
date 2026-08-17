@@ -238,9 +238,16 @@ input::placeholder, textarea::placeholder {
 }
 
 /* The global input rule above (width, padding, border, background) is meant
-   for text-like fields. Range and checkbox inputs have their own native box
-   model — inheriting that rule boxes a thin slider track in visible padding
-   and border, and stretches checkboxes to full width. */
+   for text-like fields. Range, checkbox and radio inputs have their own native
+   box model — inheriting that rule boxes a thin slider track in visible padding
+   and border, and stretches checkboxes and radios to full width.
+
+   RADIO WAS MISSING FROM THIS LIST until the script-conversion picker became
+   the first radio in the app. The result was not subtle: each radio expanded
+   to 100% of its option card, pushing the label text out past the card's
+   border entirely. The bug was in this rule, not in the new component, which
+   is why the fix is here — the next radio anywhere would have broken the same
+   way. */
 input[type='range'] {
   width: 100%;
   padding: 0;
@@ -251,7 +258,8 @@ input[type='range'] {
   cursor: pointer;
 }
 
-input[type='checkbox'] {
+input[type='checkbox'],
+input[type='radio'] {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -1839,9 +1847,9 @@ textarea {
 }
 
 .convert-option input {
-  flex: none;
+  /* Sizing and appearance come from the global input[type='radio'] rule.
+     Only the alignment is this component's business. */
   margin-top: 2px;
-  accent-color: var(--accent);
 }
 
 .convert-option span {
