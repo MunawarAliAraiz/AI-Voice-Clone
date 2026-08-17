@@ -74,22 +74,31 @@ logger = logging.getLogger("app.inference.transliterator_scheduler")
 
 #: Not a `ModelSpec` / `CATALOG` entry on purpose — see the module docstring.
 GEMMA_TRANSLITERATOR_MODEL_ID = "gemma-4-31b-it-transliterator"
-#: The 4-bit checkpoint A3 run 3 actually passed on. The unquantized weights
-#: do not fit this card at all, so this is not an optimisation — it is the
-#: only form of the model that has ever run here.
-#: NOTE THE CAPITAL B. `google/gemma-4-31b-it` is a 307 redirect to this;
-#: using the lowercase form works but resolves through a redirect on every
-#: cold load, and a pinned revision against a redirecting id is a worse thing
-#: to debug than a corrected id.
-GEMMA_TRANSLITERATOR_HF_REPO = "google/gemma-4-31B-it"
-#: ACTUALLY PINNED (golden rule 7), resolved 2026-08-17 from
-#: `https://huggingface.co/api/models/google/gemma-4-31b-it` -> `sha`.
+
+#: **THE 4-BIT REPO, AND IT MUST BE THIS ONE.** `unsloth/…-unsloth-bnb-4bit` is
+#: the checkpoint A3 run 3 passed on (`eval/run_a3_full_chain.py` names it), and
+#: the only form of this model that has ever run here.
 #:
-#: This said `"main"` until then, under a comment claiming it was pinned —
-#: which is precisely the supply-chain hole rule 7 exists to close, and worse
-#: than an honest `"main"` because the comment stopped anyone looking. The
-#: repo is NOT gated, so no token is needed.
-GEMMA_TRANSLITERATOR_HF_REVISION = "842da3794eaa0b77d5f08bae87a17459d91ff475"
+#: This said `google/gemma-4-31B-it` — Google's full-precision release — for
+#: most of a day, and it was wrong three times over. It downloads **59 GB**
+#: rather than 19. It is not the checkpoint the gate was run against, so using
+#: it would have quietly invalidated the one listening gate this feature has.
+#: And it could not have loaded anyway: `GemmaTransliteratorBackend.load()`
+#: takes its `dtype=torch.bfloat16` branch when a checkpoint carries no
+#: `quantization_config`, which for 31B parameters is ~62 GB of VRAM — over the
+#: A40 it was downloaded onto, and nearly triple the 24 GB card this is
+#: designed for.
+#:
+#: The error was made while FIXING a golden-rule-7 violation: the revision was
+#: the literal string `"main"` under a comment claiming it was pinned, and the
+#: fix resolved a real sha — for the wrong repository. Pinning the wrong thing
+#: precisely is not compliance with rule 7. Check the repo id against
+#: `eval/`'s driver, not just the revision against the API.
+GEMMA_TRANSLITERATOR_HF_REPO = "unsloth/gemma-4-31B-it-unsloth-bnb-4bit"
+#: Pinned per golden rule 7; resolved 2026-08-17 from
+#: `https://huggingface.co/api/models/unsloth/gemma-4-31B-it-unsloth-bnb-4bit`
+#: -> `sha`. Not gated, so no token is needed.
+GEMMA_TRANSLITERATOR_HF_REVISION = "8e256fc6d63003fc0ca8c91b976e6dcc38433385"
 
 _WORKER_RUNTIME = "gemma_transliterator"
 #: 78.4 s measured cold on the pod, but that assumes warm HF cache and no

@@ -263,15 +263,21 @@ echo "   torch CUDA visible:"
 "$GEMMA_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
 
 echo "== 13c. Gemma weights (pinned revision, ~19GB 4-bit, cached on /workspace) =="
-# Pinned per golden rule 7. Must match GEMMA_TRANSLITERATOR_HF_REVISION in
-# backend/app/inference/transliterator_scheduler.py -- bump one, bump both.
-# NOTE THE CAPITAL B in the repo id: the lowercase form is a 307 redirect.
-# This repo is NOT gated, so no HF token is needed.
-GEMMA_REV="842da3794eaa0b77d5f08bae87a17459d91ff475"
-"$GEMMA_VENV/bin/python" - "$GEMMA_REV" <<'GEMMAPY' 2>&1 | tail -2
+# Pinned per golden rule 7. Must match GEMMA_TRANSLITERATOR_HF_REPO *and*
+# _REVISION in backend/app/inference/transliterator_scheduler.py -- bump one,
+# bump both, and check the REPO not just the revision.
+#
+# THE unsloth 4-BIT REPO, NOT google/gemma-4-31B-it. That mistake was made once:
+# Google's full-precision release is 59GB rather than 19, is not the checkpoint
+# A3 run 3 passed on, and cannot load on this card at all (no quantization_config
+# means the backend takes its bfloat16 branch: ~62GB of VRAM for 31B params).
+# Not gated, so no HF token is needed.
+GEMMA_REPO="unsloth/gemma-4-31B-it-unsloth-bnb-4bit"
+GEMMA_REV="8e256fc6d63003fc0ca8c91b976e6dcc38433385"
+"$GEMMA_VENV/bin/python" - "$GEMMA_REPO" "$GEMMA_REV" <<'GEMMAPY' 2>&1 | tail -2
 import sys
 from huggingface_hub import snapshot_download
-p = snapshot_download("google/gemma-4-31B-it", revision=sys.argv[1])
+p = snapshot_download(sys.argv[1], revision=sys.argv[2])
 print("   weights at", p)
 GEMMAPY
 
