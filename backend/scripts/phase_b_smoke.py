@@ -12,17 +12,19 @@ smoke test; VRAM is read from `nvidia-smi`, not `torch.cuda`):
 WHAT THIS IS ACTUALLY TESTING, AND WHY IT IS NOT `convert()` ALONE
 -------------------------------------------------------------------
 That Gemma produces Urdu is the easy half and a probe could show it. The claims
-that have never been checked are about the SCHEDULER:
+that matter are about the SCHEDULER, and **every one of them inverted on
+2026-08-17** when the first run of this script killed the load-convert-unload
+design. It used to assert the card was emptied and the VRAM returned; it now
+asserts the opposite, because that is what the measurements bought:
 
-  1. `exclusive_gpu` really empties the card. An audio worker is warmed FIRST,
-     on purpose — a conversion run on an already-idle GPU proves nothing about
-     eviction, and eviction is the amendment to golden rule 3 that Phase B is
-     built on.
-  2. The Gemma worker is really KILLED. `TransliteratorScheduler` owns nothing
-     between calls; if the VRAM does not come back, every subsequent generation
-     OOMs and there is no idle timer to clean it up.
-  3. The audio model comes back COLD afterwards and still synthesizes. That is
-     the documented price of the design, and a price nobody has yet paid.
+  1. Gemma and the audio models CO-RESIDE. An audio worker is warmed first, on
+     purpose — a conversion on an idle GPU would prove nothing either way.
+  2. The audio worker SURVIVES the conversion. Under the old design it was
+     evicted and the next generation paid a 176 s reload; `reserve_slot` holds
+     the slot and evicts nothing.
+  3. The SECOND conversion onward costs only generation. That is the whole
+     10-20 s target: 2.7-5.1 s of work against a 150-330 s load that now
+     happens once.
 
 VRAM IS READ VIA NVML (`nvidia-smi`), NEVER `total - memory_allocated()`.
 The latter sees only the calling process, and would report the card empty while
@@ -30,9 +32,11 @@ a worker subprocess holds 18 GB of it — which is the whole thing being measure
 here.
 
 THE CARD THIS RUNS ON IS PROBABLY NOT THE CARD THIS IS FOR. The design target
-is **24 GB**. On anything larger, a peak that fits is an UPPER BOUND, not a
-pass — so the peak is printed against 24576 MiB explicitly and the verdict says
-so.
+moved from 24 GB to ~32 GB on 2026-08-17, because co-residency is what buys the
+10-20 s conversion and 24 GB cannot hold Gemma and the audio models together.
+On anything larger than the target, a peak that fits is an UPPER BOUND rather
+than a demonstration — so the peak is printed against the target explicitly and
+the verdict says which it is.
 """
 
 from __future__ import annotations
@@ -56,8 +60,10 @@ from app.inference.transliterator_scheduler import (
     TransliteratorScheduler,
 )
 
-#: The card the budget was sized for, regardless of what is actually installed.
-DESIGN_TARGET_MIB = 24576
+#: The card this is designed for, regardless of what is actually installed.
+#: 32 GB since 2026-08-17: Gemma 19.2 + VoxCPM 5.4 + OmniVoice 4.7 ~= 29.3 GB
+#: plus headroom, all resident. See `app/inference/capacity.py`.
+DESIGN_TARGET_MIB = 32768
 
 WARM_MODEL = os.environ.get("VCS_SMOKE_WARM_MODEL", "voxcpm2")
 
@@ -150,7 +156,21 @@ async def main() -> int:
         if warm_mib - baseline < 1000:
             failures.append("warming the audio model did not visibly allocate VRAM")
 
+        # Warm Gemma explicitly, as the app lifespan now does, so the loop
+        # below measures conversions rather than one conversion plus a load.
+        t0 = time.time()
+        load_sec = await transliterator.warm()
+        gemma_mib = used_mib()
+        print(f"[2] after warming Gemma: {gemma_mib} MiB "
+              f"(+{gemma_mib - warm_mib}, {time.time() - t0:.0f}s, load {load_sec:.0f}s)")
+        if gemma_mib < warm_mib:
+            failures.append(
+                "warming Gemma REDUCED total VRAM — the audio model was evicted, "
+                "which reserve_slot must never do"
+            )
+
         peaks: list[int] = []
+        walls: list[float] = []
         for source, target, text in CASES:
             print(f"\n--- {source} -> {target} ---")
             print(f"    in : {text}")
@@ -167,6 +187,7 @@ async def main() -> int:
             elapsed = time.time() - t0
             after = used_mib()
             peaks.append(sampler.peak)
+            walls.append(elapsed)
             print(f"    out: {result.text}")
             print(f"    load {result.load_time_sec:.1f}s | gen {result.gen_time_sec:.1f}s "
                   f"| wall {elapsed:.0f}s")
@@ -174,12 +195,18 @@ async def main() -> int:
 
             if not result.text.strip():
                 failures.append(f"{source}->{target}: empty output")
-            # (2) The worker must be GONE. Back near where the audio model left
-            # it, not merely lower than the peak.
-            if after > warm_mib + 2000:
+            # Gemma must STILL BE THERE. The inverted assertion: this used to
+            # fail if VRAM had not been released, and now fails if it has.
+            if after < warm_mib:
                 failures.append(
-                    f"{source}->{target}: {after} MiB still held after the "
-                    f"conversion (audio-warm level was {warm_mib})"
+                    f"{source}->{target}: VRAM fell to {after} MiB — something "
+                    f"was evicted (audio alone was {warm_mib})"
+                )
+            # And every conversion after the first must be GENERATION ONLY.
+            if len(walls) > 1 and elapsed > 30:
+                failures.append(
+                    f"{source}->{target}: took {elapsed:.0f}s with the model "
+                    f"already resident — it reloaded when it should not have"
                 )
 
         # (3) Audio still works, from cold. The documented price of the design.
