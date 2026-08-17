@@ -1650,3 +1650,28 @@ textarea {
 .tab-panel[hidden] {
   display: none;
 }
+
+/* Pronunciation search. The `.search` shell itself is shared with History —
+   only the row that holds it and the Exact toggle live here. */
+.pron-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.pron-search .search { flex: 1; min-width: 0; }
+.pron-search .search input { width: 100%; }
+
+/* Not a `.field`: this label sits beside its checkbox, where `.field`'s
+   column direction would stack them. */
+.pron-exact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}

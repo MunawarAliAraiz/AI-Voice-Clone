@@ -302,12 +302,112 @@ def _emphasis_spans(text: str) -> tuple[EmphasisSpan, ...]:
     return tuple(spans)
 
 
-def _pause_after_ms(terminal: str) -> int:
+#: Commas. Latin `,` and ARABIC COMMA `،` (U+060C) — the Urdu one is a
+#: different codepoint entirely, which is why Urdu text produced no clause
+#: breaks at all before this: nothing in the pipeline had ever seen it.
+_CLAUSE_BREAKS = frozenset({",", "،"})
+
+#: A comma is a breath, not a stop. Deliberately BELOW `DEFAULT_PAUSE_MS`
+#: (120): each unit is synthesized separately and pause-joined, so this is
+#: real inserted silence, and a comma that pauses as long as a full stop is
+#: what makes synthetic speech sound like it is reading a list.
+_CLAUSE_PAUSE_MS = 60
+
+#: A newline is the one pause the author typed ON PURPOSE. Nothing else in the
+#: text carries as clear an intent, so it gets the longest pause here.
+_PARAGRAPH_PAUSE_BONUS_MS = 260
+
+
+def _pause_after_ms(terminal: str, *, kind: str = "sentence") -> int:
+    if kind == "clause":
+        return _CLAUSE_PAUSE_MS
     if terminal in ("...", "..", "…") or terminal.endswith("—"):
-        return DEFAULT_PAUSE_MS + 160
-    if any(ch in terminal for ch in "?!؟"):
-        return DEFAULT_PAUSE_MS + 60
-    return DEFAULT_PAUSE_MS
+        base = DEFAULT_PAUSE_MS + 160
+    elif any(ch in terminal for ch in "?!؟"):
+        base = DEFAULT_PAUSE_MS + 60
+    else:
+        base = DEFAULT_PAUSE_MS
+    return base + _PARAGRAPH_PAUSE_BONUS_MS if kind == "paragraph" else base
+
+
+def _split_clauses(sentence: str) -> list[str]:
+    """
+    Split one sentence at commas, keeping each comma on the clause it ends.
+
+    Digit-guarded: "1,000" and "٣،٥" are one number, not two clauses, and
+    splitting them would put silence inside a figure being read aloud.
+    """
+    clauses: list[str] = []
+    start = 0
+    for i, ch in enumerate(sentence):
+        if ch not in _CLAUSE_BREAKS:
+            continue
+        prev = sentence[i - 1] if i > 0 else ""
+        nxt = sentence[i + 1] if i + 1 < len(sentence) else ""
+        if prev.isdigit() and nxt.isdigit():
+            continue
+        chunk = sentence[start : i + 1].strip()
+        if chunk:
+            clauses.append(chunk)
+        start = i + 1
+    tail = sentence[start:].strip()
+    if tail:
+        clauses.append(tail)
+    return clauses or [sentence]
+
+
+def _split_units(text: str, script: Script) -> list[tuple[str, str, str]]:
+    """
+    Split into `(clause, kind, parent_sentence)` units, kind being
+    clause | sentence | paragraph.
+
+    The parent sentence rides along because PROSODY IS A PROPERTY OF THE
+    SENTENCE, not of the clause. `_determine_rate`'s "clause-dense reads slow"
+    rule counts separators inside its input, so scoring a lone clause would
+    make that rule permanently unreachable — every clause has zero separators
+    once they are split apart. Emotion has the same problem: "Main bohat udaas
+    hoon, aur thoda pareshan bhi" puts the SAD and ANXIOUS keywords in
+    different clauses, and the priority order between them stops meaning
+    anything if each is judged alone.
+
+    So the clause decides only WHERE THE BREATH GOES and what text is
+    synthesized; the sentence decides how it is spoken.
+
+    Three levels of break, weakest first, because they are three different
+    authorial intents and were previously all collapsed into one:
+
+      * **clause** — a comma. Short breath, no full stop.
+      * **sentence** — `.`/`۔`/`؟`/`!`, whatever `split_sentences` already
+        recognises for this script.
+      * **paragraph** — a NEWLINE, which had no effect whatsoever before this.
+        `split_sentences` calls `normalize_whitespace`, which is
+        `" ".join(text.split())`, so every newline became a space before
+        segmentation ever ran. The signal was destroyed upstream, which is why
+        no amount of tuning downstream could have produced a pause there.
+
+    Newlines are therefore split off HERE, before that call — not by widening
+    `text.py`'s terminator table, which `chunk_for_synthesis` also reads and
+    which is a frozen contract.
+    """
+    blocks = [b for b in text.split("\n") if b.strip()]
+    units: list[tuple[str, str, str]] = []
+    for block_index, block in enumerate(blocks):
+        sentences = split_sentences(block, script)
+        for sentence_index, sentence in enumerate(sentences):
+            clauses = _split_clauses(sentence)
+            last_sentence = sentence_index == len(sentences) - 1
+            for clause_index, clause in enumerate(clauses):
+                last_clause = clause_index == len(clauses) - 1
+                if not last_clause:
+                    kind = "clause"
+                elif last_sentence and block_index < len(blocks) - 1:
+                    # Ends the block AND another block follows: this is where
+                    # the author pressed Enter.
+                    kind = "paragraph"
+                else:
+                    kind = "sentence"
+                units.append((clause, kind, sentence))
+    return units
 
 
 # ── Summary dominance ────────────────────────────────────────────────────────
@@ -353,10 +453,13 @@ def analyze(text: str, language: str) -> DirectionPlan:
             summary=DirectionSummary(),
         )
 
-    sentences = split_sentences(text, script)
+    units = _split_units(text, script)
 
     segments: list[DirectedSegment] = []
-    for index, sentence in enumerate(sentences):
+    for index, (clause, kind, sentence) in enumerate(units):
+        # `terminal` and every prosody decision read the whole SENTENCE; only
+        # the rendered text, its emphasis offsets and the pause are the
+        # clause's own. See `_split_units`.
         terminal = _trailing_punct(sentence)
         emotion = _determine_emotion(sentence, terminal)
         has_intensifier = _contains_any(sentence, INTENSIFIERS)
@@ -364,14 +467,16 @@ def analyze(text: str, language: str) -> DirectionPlan:
 
         segments.append(
             DirectedSegment(
-                text=sentence,
+                text=clause,
                 index=index,
                 emotion=emotion,
                 intensity=_determine_intensity(sentence, has_intensifier, has_hedge),
                 energy=_determine_energy(sentence, emotion, has_intensifier, has_hedge),
                 rate=_determine_rate(sentence, terminal),
-                emphasis=_emphasis_spans(sentence),
-                pause_after_ms=_pause_after_ms(terminal),
+                # Offsets must index the SEGMENT's own text (half-open
+                # [start, end) into `text` above), so this one is the clause.
+                emphasis=_emphasis_spans(clause),
+                pause_after_ms=_pause_after_ms(terminal, kind=kind),
             )
         )
 
