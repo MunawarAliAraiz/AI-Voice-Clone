@@ -1911,3 +1911,13 @@ textarea {
   font-size: var(--text-sm);
   color: var(--danger);
 }
+
+/* Progress for a SINGLE part, shown on its own row. The panel-level control
+   stays idle during a per-part conversion — one spinner, on the thing the user
+   actually clicked. */
+.chunk-progress {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-sm);
+}

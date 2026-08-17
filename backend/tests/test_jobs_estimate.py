@@ -9,6 +9,7 @@ from app.domain.language import Script
 from app.inference.protocol import ModelStatus
 from app.inference.spec import LanguageSupport, License, ModelSpec, ModelState, RuntimeKind
 from app.jobs.estimate import (
+    _job_cost_seconds,
     estimate_remaining_for_running,
     estimate_synth_seconds,
     estimate_wait_seconds,
@@ -40,6 +41,18 @@ def _job(
         history_id=None, result=None, error=None, profile_id=None,
         priority=0, cancel_requested=False, attempt=0,
         queued_at="2026-01-01T00:00:00Z", started_at=started_at,
+        finished_at=None, updated_at="2026-01-01T00:00:00Z",
+    )
+
+
+def _translit_job(id_: int, texts: list[str]) -> JobRecord:
+    """A transliterate job: `texts`, and NO route (it never calls resolve())."""
+    return JobRecord(
+        id=id_, kind=JobKind.TRANSLITERATE, status=JobStatus.QUEUED,
+        params={"texts": texts, "target": "roman"}, route=None,
+        history_id=None, result=None, error=None, profile_id=None,
+        priority=0, cancel_requested=False, attempt=0,
+        queued_at="2026-01-01T00:00:00Z", started_at=None,
         finished_at=None, updated_at="2026-01-01T00:00:00Z",
     )
 
@@ -147,3 +160,37 @@ def _epoch(year: int, month: int, day: int, hour: int, minute: int, second: int)
     return datetime.datetime(
         year, month, day, hour, minute, second, tzinfo=datetime.UTC
     ).timestamp()
+
+
+def test_a_transliterate_job_is_priced_on_its_texts_not_its_missing_text() -> None:
+    """
+    `_job_text_len` read `params["text"]`, which transliterate jobs stopped
+    carrying when batching moved them to `params["texts"]`. Every one of them
+    therefore measured zero characters and got the floor ETA — a 23-part,
+    seven-minute conversion advertised as three seconds, which is worse than
+    showing no estimate at all.
+    """
+    job = _translit_job(1, ["x" * 560 for _ in range(23)])
+    seconds = _job_cost_seconds(job, {})
+
+    # 12,880 chars at the measured 0.0328 s/char ~= 422 s. The real run of this
+    # exact transcript took 420.8 s, so this is checked against a measurement
+    # rather than against itself.
+    assert 380 < seconds < 470, seconds
+
+
+def test_a_transliterate_job_is_not_priced_like_synthesis() -> None:
+    """
+    A transliterate job has no `route`, so the synthesis path would price it
+    through a model id that does not exist and land on the floor no matter how
+    large it is. KIND decides the cost model, not route.
+    """
+    small = _translit_job(1, ["x" * 100])
+    large = _translit_job(2, ["x" * 10_000])
+    assert _job_cost_seconds(large, {}) > _job_cost_seconds(small, {}) * 20
+
+
+def test_a_synthesize_job_still_uses_the_speech_model() -> None:
+    """The transliterate branch must not have changed synthesis pricing."""
+    job = _job(1, "voxcpm2", "x" * 300)
+    assert _job_cost_seconds(job, {"voxcpm2": None}) == estimate_synth_seconds(300, None)

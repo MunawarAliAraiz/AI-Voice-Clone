@@ -55,8 +55,15 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   //: wrong-answer bug, since both are plausible Roman Urdu and nothing would
   //: look broken.
   const [batchIndexes, setBatchIndexes] = useState<number[]>([]);
+  //: The target the RUNNING conversion used, which is not always the picker's
+  //: current value — a per-part button chooses its own, and the summary below
+  //: must name what actually happened rather than what is selected now.
+  const [lastTarget, setLastTarget] = useState<Target>('roman');
+  //: Which part a single-part conversion is for, so its own row can show the
+  //: progress instead of the panel-level control claiming to be busy.
+  const [busyIndex, setBusyIndex] = useState<number | null>(null);
 
-  const startConversion = (indexes: number[]) => {
+  const startConversion = (indexes: number[], to: Target = target) => {
     if (!data) return;
     // Filtered, not asserted: an index with no chunk would otherwise send
     // `undefined` to the server as a chunk, and the batch positions would then
@@ -65,9 +72,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     const present = indexes.filter((i) => data.chunks[i] !== undefined);
     if (!present.length) return;
     setBatchIndexes(present);
+    setBusyIndex(present.length === 1 ? present[0]! : null);
+    setLastTarget(to);
     conversion.start(
       present.map((i) => data.chunks[i]!.text),
-      target,
+      to,
     );
   };
 
@@ -118,6 +127,27 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       return next;
     });
   }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
+
+  //: What the spinner should have been saying all along.
+  //:
+  //: A 23-part transcript takes about seven minutes (measured: 420.8 s for
+  //: 12,839 characters), and a spinner with no number attached is
+  //: indistinguishable from a hang at that length. Worse, a per-part
+  //: conversion QUEUED behind a whole-transcript one looks identical to one
+  //: that is running — which is exactly what happened: part 1 sat at
+  //: position 1 behind a 23-part job and read as "converting the whole thing
+  //: again".
+  const progressLabel = () => {
+    if (conversion.phase === 'queued' && (conversion.queuePosition ?? 0) > 0) {
+      return `Waiting for ${conversion.queuePosition} conversion${
+        conversion.queuePosition === 1 ? '' : 's'
+      } ahead of this one…`;
+    }
+    const eta = conversion.etaSec;
+    if (eta == null) return 'Converting…';
+    if (eta < 60) return `Converting — about ${Math.max(1, Math.round(eta))}s left`;
+    return `Converting — about ${Math.round(eta / 60)} min left`;
+  };
 
   async function fetchTranscript(e: React.FormEvent) {
     e.preventDefault();
@@ -270,9 +300,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   onClick={() => startConversion(data.chunks.map((_, i) => i))}
                   title={canConvert === false ? (cannotConvertReason ?? '') : undefined}
                 >
-                  {conversion.running ? <IconSpinner size={14} /> : null}
-                  {conversion.running
-                    ? 'Converting…'
+                  {conversion.running && busyIndex === null ? <IconSpinner size={14} /> : null}
+                  {conversion.running && busyIndex === null
+                    ? progressLabel()
                     : `Convert all ${data.chunks.length} parts`}
                 </button>
                 {/* One model load for the whole transcript is the entire point
@@ -281,7 +311,13 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 <span className="muted">
                   {conversion.running
                     ? 'All parts convert in one pass — the model loads at most once.'
-                    : 'Converts every part in one pass.'}
+                    : /* The honest number, up front. ~18 s per part is measured,
+                         not guessed, and a user who knows it is seven minutes
+                         will not read the spinner as a hang. */
+                      `About ${Math.max(
+                        1,
+                        Math.round((data.text.length * 0.0328) / 60),
+                      )} min for all ${data.chunks.length} — one pass, one model load.`}
                 </span>
               </div>
 
@@ -306,7 +342,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
               {converted.size + rejectedIndexes.size > 0 && !conversion.running && (
                 <div className="convert-summary" role="status">
                   {converted.size} of {data.chunks.length} parts converted to{' '}
-                  {target === 'roman' ? 'Roman Urdu' : 'Urdu script'}
+                  {lastTarget === 'roman' ? 'Roman Urdu' : 'Urdu script'}
                   {rejectedIndexes.size > 0 && (
                     <>
                       {' '}— <strong>{rejectedIndexes.size} could not be converted</strong> and
@@ -409,22 +445,38 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                       retry that does not redo the 22 that were fine. Same
                       target as the panel picker: two parts of one transcript
                       in different scripts would be unusable. */}
+                  {/* BOTH targets per part, not just the panel's selection.
+                      The panel picker is for "do the whole thing one way"; a
+                      single part is where you want the other one — to see how a
+                      line reads in Urdu script, or to retry a rejection the
+                      other direction. Each button names its destination, so
+                      neither depends on remembering what the radio says. */}
                   {offerConversion && canConvert && (
-                    <button
-                      type="button"
-                      className="btn-sm"
-                      onClick={() => startConversion([chunk.index])}
-                      disabled={conversion.running}
-                      title={
-                        converted.has(chunk.index)
-                          ? 'Convert this part again'
-                          : `Convert only this part to ${
-                              target === 'roman' ? 'Roman Urdu' : 'Urdu script'
-                            }`
-                      }
-                    >
-                      {converted.has(chunk.index) ? 'Convert again' : 'Convert'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        onClick={() => startConversion([chunk.index], 'roman')}
+                        disabled={conversion.running}
+                        title="Convert only this part to Roman Urdu"
+                      >
+                        → Roman
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        onClick={() => startConversion([chunk.index], 'perso_arabic')}
+                        disabled={conversion.running}
+                        title="Convert only this part to Urdu script"
+                      >
+                        → Urdu script
+                      </button>
+                      {busyIndex === chunk.index && conversion.running && (
+                        <span className="muted chunk-progress">
+                          <IconSpinner size={13} /> {progressLabel()}
+                        </span>
+                      )}
+                    </>
                   )}
                   <button
                     type="button"

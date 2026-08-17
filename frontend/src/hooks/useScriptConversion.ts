@@ -38,6 +38,15 @@ export interface ScriptConversion {
   ok: TransliterateItem[];
   /** Items the validator refused. Each carries a reason and NO text. */
   rejected: TransliterateItem[];
+  /** Seconds until this job is expected to finish, from the server's own
+   *  estimate. `null` before the first poll answers. */
+  etaSec: number | null;
+  /** 0 = running now. Above 0 means it is WAITING BEHIND other jobs — the
+   *  difference a bare spinner cannot express, and the one that made a queued
+   *  per-part conversion look like a hang. */
+  queuePosition: number | null;
+  /** 'queued' while something else holds the GPU, 'running' once it is ours. */
+  phase: 'idle' | 'queued' | 'running';
   start: (texts: string[], target?: 'roman' | 'perso_arabic') => void;
   reset: () => void;
 }
@@ -85,7 +94,19 @@ export function useScriptConversion(): ScriptConversion {
     };
   }, [result]);
 
+  const phase: 'idle' | 'queued' | 'running' =
+    mutation.isPending || (jobId !== null && !data)
+      ? 'queued'
+      : data?.status === 'queued'
+        ? 'queued'
+        : data?.status === 'running'
+          ? 'running'
+          : 'idle';
+
   return {
+    etaSec: data?.eta_sec ?? null,
+    queuePosition: data?.position ?? null,
+    phase,
     running:
       mutation.isPending ||
       (jobId !== null && (!data || data.status === 'queued' || data.status === 'running')),
