@@ -135,17 +135,23 @@ class TransliteratorScheduler:
         self._lock = asyncio.Lock()
 
     async def convert(
-        self, *, text: str, instruction: str = "", source_script: str = "latin"
+        self,
+        *,
+        text: str,
+        instruction: str = "",
+        source_script: str = "latin",
+        target_script: str = "perso_arabic",
     ) -> TransliterateResult:
         """
         Convert one passage. Loads Gemma, converts, and kills the worker —
         always, including on failure.
 
-        `source_script` is `latin` (Roman Urdu) or `devanagari` (a Hindi
-        caption). It is passed through as a plain string and NOT validated
-        here: the runtime owns the prompt, so it owns which sources it knows,
-        and it falls back to Latin for anything else. A second copy of that
-        table in this process would be one more thing to keep in step.
+        The pair is `(latin, perso_arabic)` for the speech hop or
+        `(devanagari, roman)` for the transcript hop. Both are passed through as
+        plain strings and NOT validated here: the runtime owns the prompt, so it
+        owns which pairs it knows, and it falls back to the gated pair for
+        anything else. A second copy of that table in this process would be one
+        more thing to keep in step.
 
         Returns the model's RAW output. Validation lives in
         `domain/transliterate.py` and is applied by the caller, because
@@ -195,6 +201,7 @@ class TransliteratorScheduler:
                             "text": text,
                             "instruction": instruction,
                             "source_script": source_script,
+                            "target_script": target_script,
                         },
                         timeout=self._convert_timeout_sec,
                     )

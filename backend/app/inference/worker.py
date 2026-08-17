@@ -108,10 +108,11 @@ def main(runtime: str) -> int:
                 result = backend.transliterate(
                     text=payload["text"],
                     instruction=payload.get("instruction") or "",
-                    # Defaulted, not required: an older API process sending no
-                    # source_script means Roman Urdu, which is the source this
-                    # was gated on.
+                    # Defaulted, not required: an older API process sending
+                    # neither means Roman Urdu → Perso-Arabic, the one
+                    # conversion here that has passed a listening gate.
                     source_script=payload.get("source_script") or "latin",
+                    target_script=payload.get("target_script") or "perso_arabic",
                     params=payload.get("params") or {},
                 )
             elif op == WireOp.UNLOAD:

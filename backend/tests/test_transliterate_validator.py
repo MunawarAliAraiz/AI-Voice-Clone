@@ -12,8 +12,10 @@ from __future__ import annotations
 import pytest
 
 from app.domain.transliterate import (
+    TARGET_ROMAN,
     TransliterationRejected,
     source_script_of,
+    target_script_for,
     validate_transliteration,
 )
 
@@ -136,6 +138,14 @@ def test_roman_urdu_selects_the_latin_exemplars() -> None:
     assert source_script_of("Kal office mein meeting hai") == "latin"
 
 
+def test_perso_arabic_is_its_own_source_not_lumped_into_latin() -> None:
+    """It used to fall into `latin`, on the reasoning that text already in the
+    target has no business being converted. It does now: Urdu script -> Roman
+    is how an Urdu-script caption becomes editable."""
+    assert source_script_of("کل office میں meeting ہے") == "arabic"
+    assert target_script_for("arabic") == TARGET_ROMAN
+
+
 def test_plain_hindi_selects_the_devanagari_exemplars() -> None:
     assert source_script_of("मुझे समझ नहीं आ रहा कि ये कैसे हुआ।") == "devanagari"
 
@@ -193,3 +203,82 @@ def test_different_wrong_script_output_is_not_called_an_echo() -> None:
     with pytest.raises(TransliterationRejected) as exc:
         validate_transliteration("Kal meeting hai", "Tomorrow there is a meeting.")
     assert "echoed" not in exc.value.detail
+
+
+# --- the Roman target ---------------------------------------------------------
+# A different question entirely: not "is the target script present" (Roman Urdu
+# and English are both Latin, so that is unanswerable) but "is the SOURCE script
+# gone".
+
+
+def test_a_correct_devanagari_to_roman_conversion_passes() -> None:
+    check = validate_transliteration(
+        "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+        "mujhe samajh nahi aa raha ke ye kaise hua.",
+        TARGET_ROMAN,
+    )
+    assert check.residual_source_share == 0.0
+
+
+def test_the_same_output_would_be_REJECTED_for_a_perso_arabic_target() -> None:
+    """
+    The reason the validator had to become target-aware at all. Roman output
+    contains no Perso-Arabic, so the gated hop's own check fires on every
+    correct conversion of the transcript hop.
+    """
+    with pytest.raises(TransliterationRejected):
+        validate_transliteration(
+            "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+            "mujhe samajh nahi aa raha ke ye kaise hua.",
+        )
+
+
+def test_devanagari_left_in_the_output_is_rejected() -> None:
+    hindi = "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।"
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration(hindi, hindi, TARGET_ROMAN)
+    assert exc.value.reason == "not_converted"
+    assert "echoed" in exc.value.detail
+
+
+def test_urdu_script_left_in_the_output_is_rejected() -> None:
+    urdu = "کل میٹنگ ہے اور مجھے report بھی تیار کرنی ہے۔"
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration(urdu, urdu, TARGET_ROMAN)
+    assert exc.value.reason == "not_converted"
+
+
+def test_a_partly_converted_line_still_fails() -> None:
+    """Half-done is not done. The check is on RESIDUE, so leaving a clause
+    behind fails even though most of the sentence converted."""
+    with pytest.raises(TransliterationRejected):
+        validate_transliteration(
+            "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+            "mujhe samajh nahi aa raha कि ये कैसे हुआ।",
+            TARGET_ROMAN,
+        )
+
+
+def test_an_english_translation_PASSES_and_that_is_the_known_hole() -> None:
+    """
+    NOT a bug to fix — a limitation to know. Roman Urdu and English are both
+    Latin, so no threshold can separate "converted" from "translated". This
+    test exists so nobody later reads the passing check as proof the output is
+    Roman Urdu. What covers it is a human reading the draft, which is the
+    entire reason a Roman target exists.
+    """
+    check = validate_transliteration(
+        "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+        "I do not understand how this happened at all.",
+        TARGET_ROMAN,
+    )
+    assert check.residual_source_share == 0.0
+
+
+def test_a_roman_answer_is_still_caught_by_length() -> None:
+    """The one screen that does survive into this direction."""
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration(
+            "मुझे समझ नहीं आ रहा।", "acha " * 60, TARGET_ROMAN
+        )
+    assert exc.value.reason == "too_long"

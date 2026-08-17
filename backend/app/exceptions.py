@@ -543,6 +543,33 @@ class TransliterationRejectedError(AppError):
         super().__init__(detail, reason=reason)
 
 
+class UnsupportedConversionError(AppError):
+    """
+    No prompt exists for this (source, target) pair.
+
+    A 422 at ENQUEUE, deliberately, not a failed job. A conversion the
+    transliterator has no exemplars for is a bad request — the client asked for
+    something that does not exist — and finding that out forty seconds into a
+    19 GB model load would spend the whole GPU to report a typo. The pairs are
+    `domain/transliterate.SUPPORTED_PAIRS`.
+
+    Both scripts ride in the payload because "unsupported" alone does not tell
+    a caller whether they named a bad target or handed over text in an
+    unexpected script.
+    """
+
+    code = "UNSUPPORTED_CONVERSION"
+    http_status = 422
+    title = "Conversion not supported"
+
+    def __init__(self, source: str, target: str) -> None:
+        super().__init__(
+            f"Cannot convert {source} to {target}.",
+            source_script=source,
+            target_script=target,
+        )
+
+
 class InvalidVideoUrlError(AppError):
     """
     Not a YouTube video URL. Also the SSRF rejection — see

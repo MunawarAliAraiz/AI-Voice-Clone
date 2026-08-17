@@ -1,17 +1,36 @@
 """
 AI Voice Clone Studio — the 'transliterate' job handler.
 
-Roman Urdu or Devanagari → Perso-Arabic script conversion.
+Script conversion, in whichever direction the text and the caller call for.
 
-THE TWO SOURCES ARE NOT EQUALLY TRUSTED, AND THE CODE SAYS SO
----------------------------------------------------------------
-Roman Urdu is what A3 run 3 passed by ear. Devanagari is wired end to end and
-**has never passed a listening gate** — R4b measured the reverse hop
-(Perso-Arabic → Roman → Devanagari) compounding errors badly, and while the
-direct hop is a different and probably easier mapping, nothing here has
-measured it. `source_script` rides out on the result for exactly that reason:
-a conversion that came from the ungated exemplar set must be identifiable as
-one, and no UI may present it as working until the owner has listened.
+THE SOURCE IS DETECTED. THE TARGET IS CHOSEN.
+-----------------------------------------------
+    Roman Urdu   → Perso-Arabic   so OmniVoice can say it
+    Devanagari   → Roman Urdu     so the OWNER can read and edit it
+    Devanagari   → Perso-Arabic   straight to speakable, no edit step
+    Perso-Arabic → Roman Urdu     an Urdu-script caption, made editable
+
+The source comes from the text and is never taken from the request — the user
+declares the language, the code detects the script, the same rule the
+transcript endpoint follows. The target is the caller's, because "readable" and
+"speakable" are different things to want and only they know which they are
+about to do. It is resolved at ENQUEUE and read off the row here.
+
+THE FOUR ARE NOT EQUALLY TRUSTED, AND THE CODE SAYS SO
+--------------------------------------------------------
+Roman → Perso-Arabic is what A3 run 3 passed by ear. **The other three have
+never passed a listening gate**; R4b measured hop chains compounding errors,
+and the edit-then-speak route now takes two hops rather than one.
+`source_script` and `target_script` both ride out on the result for that
+reason: a conversion from an ungated pair must be identifiable as one rather
+than looking like any other successful job, and no UI may present it as working
+until the owner has listened.
+
+The validator is also weaker for a ROMAN target, structurally and unfixably —
+Roman Urdu and English are both Latin, so no check can tell a conversion from a
+translation. `domain/transliterate.MAX_RESIDUAL_SOURCE_SHARE` states exactly
+what that costs. It is covered by a person reading the draft, which is the
+whole reason a Roman target exists.
 
 WHY THIS IS A JOB AND NOT A SYNCHRONOUS ENDPOINT
 --------------------------------------------------
@@ -50,12 +69,15 @@ back, which is why `TransformKind` is untouched by this feature.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from ...domain.transliterate import (
     MAX_INPUT_CHARS,
     TransliterationRejected,
     source_script_of,
+    target_script_for,
     validate_transliteration,
 )
 from ...exceptions import TransliterationRejectedError, TransliteratorUnavailableError
@@ -77,6 +99,13 @@ class TransliterateParams(BaseModel):
     #: user who knows their dialect can improve it — which is exactly why the
     #: validator below is NOT optional.
     instruction: str = Field("", max_length=2000)
+    #: Resolved at ENQUEUE and stored on the row, never re-derived here.
+    #:
+    #: Exactly golden rule 8's argument for `route_json`: a handler that decides
+    #: again at claim time can decide differently from what the client was told,
+    #: and the client already has a 202 saying which conversion it asked for.
+    #: Optional only so a row written before this field existed still runs.
+    target: Literal["roman", "perso_arabic"] | None = None
 
 
 async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
@@ -91,21 +120,23 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
             "(set VCS_GEMMA_TRANSLITERATOR_PYTHON and provision .venv-gemma)."
         )
 
-    # Detected here, never taken from the request. Same rule as the transcript
-    # endpoint's `script` field: the user declares the LANGUAGE, the code
-    # detects the SCRIPT. A client that could name the source script could ask
-    # for the Roman exemplars over Devanagari text and get a worse conversion
-    # with nothing in the response saying so.
+    # The SOURCE is detected here and never taken from the request — the user
+    # declares the language, the code detects the script, the same rule the
+    # transcript endpoint's `script` field follows. The TARGET is the caller's
+    # choice and was settled at enqueue; falling back to the default only
+    # covers a row written before the field existed.
     source_script = source_script_of(params.text)
+    target_script = params.target or target_script_for(source_script)
 
     result = await ctx.transliterator.convert(
         text=params.text,
         instruction=params.instruction,
         source_script=source_script,
+        target_script=target_script,
     )
 
     try:
-        check = validate_transliteration(params.text, result.text)
+        check = validate_transliteration(params.text, result.text, target_script)
     except TransliterationRejected as exc:
         # FAILED, carrying the reason code. The client can then tell an echo
         # from an answer from a summary without parsing prose — and the user
@@ -116,10 +147,13 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
         result={
             "text": result.text.strip(),
             "source_text": params.text,
-            #: Reported so a reviewer can see which exemplar set produced this
-            #: — the Devanagari one has never passed a listening gate, and a
-            #: result that came from it must be identifiable as such.
+            #: Reported so a reviewer — and the UI — can see WHICH conversion
+            #: this was. The pair is the thing that was gated or not: only
+            #: latin -> perso_arabic has passed a listening gate, and a result
+            #: from the other pair must be identifiable as such rather than
+            #: looking like any other successful job.
             "source_script": source_script,
+            "target_script": target_script,
             "gen_time_sec": result.gen_time_sec,
             "load_time_sec": result.load_time_sec,
             # The validator's measurements ride along rather than being
@@ -127,5 +161,6 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
             # something passed, and a second implementation would drift.
             "arabic_share": check.arabic_share,
             "length_ratio": check.length_ratio,
+            "residual_source_share": check.residual_source_share,
         }
     )

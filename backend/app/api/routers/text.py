@@ -54,6 +54,12 @@ from fastapi import APIRouter, Depends, Request, Response
 from ...config import Settings
 from ...db import Database
 from ...domain.direction_analyze import analyze
+from ...domain.transliterate import (
+    SUPPORTED_PAIRS,
+    source_script_of,
+    target_script_for,
+)
+from ...exceptions import UnsupportedConversionError
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
 from ..deps import get_db, get_job_runner, get_scheduler, get_settings
@@ -86,7 +92,12 @@ async def transliterate(
     runner: Annotated[JobRunner, Depends(get_job_runner)],
 ) -> JobStatusResponse:
     """
-    Convert Roman Urdu into Perso-Arabic script. **202 + poll**, not synchronous.
+    Convert text between scripts. **202 + poll**, not synchronous.
+
+    The source is detected from the text; the target is `body.target`, or this
+    source's usual destination when that is omitted. An unsupported pair is
+    refused HERE, at enqueue, rather than becoming a failed job forty seconds
+    into a 19 GB model load — the request is wrong, not the conversion.
 
     THE ONE THING THAT MAKES THIS DIFFERENT FROM EVERY OTHER TEXT ENDPOINT:
     the module docstring above explains at length why a short text op should be
@@ -107,9 +118,22 @@ async def transliterate(
     `build_job_status_response`, so the client polls the existing generic
     `GET /api/jobs/{id}` with no new polling flow.
     """
+    source = source_script_of(body.text)
+    target = body.target or target_script_for(source)
+    if (source, target) not in SUPPORTED_PAIRS:
+        raise UnsupportedConversionError(source, target)
+
     job = await runner.enqueue(
         JobKind.TRANSLITERATE,
-        params={"text": body.text, "instruction": body.instruction},
+        params={
+            "text": body.text,
+            "instruction": body.instruction,
+            # Resolved once, HERE, and stored on the row. The handler must not
+            # re-derive it: same argument as golden rule 8's "route is resolved
+            # at enqueue" -- a job that decides what it is at claim time can
+            # decide differently than what the client was told.
+            "target": target,
+        },
         route=None,
         profile_id=None,
     )

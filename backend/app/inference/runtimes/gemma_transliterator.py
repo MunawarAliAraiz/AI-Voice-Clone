@@ -1,9 +1,35 @@
 """
-AI Voice Clone Studio — Gemma-4-31B → Perso-Arabic transliterator.
+AI Voice Clone Studio — Gemma-4-31B script converter.
 
-Source scripts: **Latin (Roman Urdu)** and **Devanagari (Hindi captions)**.
-Target is always Perso-Arabic, because that is the only Urdu script any model
-here renders. Devanagari is a SOURCE FORMAT and never a target language — see
+FOUR CONVERSIONS, AND THEY EXIST FOR TWO DIFFERENT REASONS
+-----------------------------------------------------------
+    Roman Urdu → Perso-Arabic   TO SPEAK IT. OmniVoice declares no `(ur, LATIN)`
+                                cell, so this is what makes Roman Urdu
+                                speakable at all. **Gated 2026-08-16.**
+    Devanagari → Roman Urdu     TO READ IT. YouTube writes Urdu videos' captions
+                                in Devanagari, and Roman is what the owner can
+                                comfortably edit.
+    Devanagari → Perso-Arabic   TO SPEAK IT, in one hop, when the caption is
+                                good enough that nobody wants to edit it.
+    Perso-Arabic → Roman Urdu   TO READ IT, for the rare video whose captions
+                                arrive in Urdu script.
+
+The last three are ungated.
+
+WHICH ONE RUNS IS NOT THIS MODULE'S DECISION. The source is detected from the
+text and the target is the caller's preference — "readable" and "speakable" are
+different things to want, and only the person about to do something with the
+text knows which. `domain/transliterate.py` owns both; this file owns the
+prompt each pair needs.
+
+The edit-then-speak route therefore costs TWO Gemma loads (Devanagari → Roman →
+*edits* → Perso-Arabic), and R4b measured hop chains compounding errors. That
+cost buys one thing: the correction step lands in the script the owner can
+actually read. The one-hop route is there for when they would rather not pay
+it.
+
+Devanagari is a SOURCE FORMAT and never a target — nothing here converts *into*
+it, and `routing.py` still refuses to render it. See
 `docs/TRANSCRIPT_IMPORT.md`.
 
 Torch lives here (allowed: under `inference/runtimes/`). Same load/act/unload
@@ -43,37 +69,52 @@ import contextlib
 import time
 from typing import Any
 
-__all__ = ["GemmaTransliteratorBackend", "SOURCE_LATIN", "SOURCE_DEVANAGARI"]
+__all__ = [
+    "GemmaTransliteratorBackend",
+    "SOURCE_LATIN",
+    "SOURCE_DEVANAGARI",
+    "SOURCE_ARABIC",
+    "TARGET_PERSO_ARABIC",
+    "TARGET_ROMAN",
+]
 
-#: Source scripts, as the plain strings `domain.language.Script` already uses
-#: for its values. Plain strings, not that enum, because this module runs in a
-#: SEPARATE VENV: importing from `domain/` would drag pydantic and the config
-#: stack into every runtime environment to carry two constants.
+#: Scripts, as the plain strings `domain.language.Script` already uses for its
+#: values. Plain strings, not that enum, because this module runs in a SEPARATE
+#: VENV: importing from `domain/` would drag pydantic and the config stack into
+#: every runtime environment to carry four constants.
 SOURCE_LATIN = "latin"
 SOURCE_DEVANAGARI = "devanagari"
+SOURCE_ARABIC = "arabic"
 
-#: What the source script is called in the prompt and in the turn prefix. The
-#: prefix matters as much as the header: the exemplars below are formatted with
-#: it, so a mismatch would show the model six `Roman:` turns and then ask it a
-#: `Hindi:` question.
-_SOURCE_NAMES = {
+TARGET_PERSO_ARABIC = "perso_arabic"
+TARGET_ROMAN = "roman"
+
+#: How each script is named in the prompt header and, separately, as the turn
+#: prefix. The prefix matters as much as the header: the exemplars are formatted
+#: with it, so a mismatch would show the model six `Roman:` turns and then ask
+#: it a `Hindi:` question.
+_SCRIPT_NAMES = {
     SOURCE_LATIN: ("Roman Urdu", "Roman"),
     SOURCE_DEVANAGARI: ("Hindi written in Devanagari script", "Hindi"),
+    SOURCE_ARABIC: ("Urdu written in Perso-Arabic script", "Urdu"),
+    TARGET_PERSO_ARABIC: ("Perso-Arabic Urdu script", "Urdu"),
+    TARGET_ROMAN: ("Roman Urdu (Urdu written in Latin letters)", "Roman"),
 }
 
-#: The strict prompt, stated as numbered non-negotiables rather than prose.
-#: `{source}` is the only thing that varies by source script — every rule below
-#: is about the TARGET and the words, which do not change.
-_SYSTEM_PROMPT = """You convert {source} into Perso-Arabic Urdu script. \
-You change the SCRIPT ONLY. You never change the words.
-
-Rules, in order of importance:
-
-1. Write Urdu words in Perso-Arabic script. Every Urdu word must be converted -- \
-never leave part of the sentence in the script it came in.
+#: Rules 3-5 are the same in every direction and are the reason the prompt is
+#: shared rather than duplicated: they are about the WORDS, which do not change,
+#: not about either script. Rules 1 and 2 name a target, so they vary.
+#:
+#: `{wrong_office}` is rule 2's counter-example, and it has to vary because a
+#: literal one leaks a script. The Perso-Arabic "دفتر" sat in EVERY prompt,
+#: including the ones whose target is Roman — a rule against translating,
+#: illustrated in the script that direction must not produce. Caught by a test
+#: asserting no prompt shows a script its conversion is not about, which is
+#: exactly the class of error a prompt cannot report itself.
+_SHARED_RULES = """\
 2. English words stay EXACTLY as they are, in Latin letters, character for character. \
-Do not translate them. Do not convert them to Urdu script. Do not change their capitalisation. \
-"office" stays "office", never "دفتر". "GitHub" stays "GitHub", never "github".
+Do not translate them. Do not change their capitalisation. "office" stays "office", \
+never "{wrong_office}". "GitHub" stays "GitHub", never "github".
 3. Do not translate, explain, summarise, correct, or improve anything. The output must be the \
 same sentence the user wrote, in a different script.
 4. Keep the user's own wording, tone and word order, including informal or misspelled words. \
@@ -82,6 +123,45 @@ Do not add or remove punctuation the user did not write.
 written in Latin are English -- leave them.
 
 Output the converted sentence and nothing else. No preamble, no notes, no quotation marks."""
+
+#: Rule 2's counter-example, per target: the wrong thing to do with "office".
+#: Always written in the TARGET script, because the point of the example is
+#: "you converted a word you should have left alone", and an example in some
+#: third script demonstrates a different mistake than the one being forbidden.
+_WRONG_OFFICE = {
+    TARGET_PERSO_ARABIC: "دفتر",
+    TARGET_ROMAN: "daftar",
+}
+
+#: Rule 1, per target. The Perso-Arabic wording is verbatim from the arm A3 run
+#: 3 passed on; do not reword it to match the Roman one's style.
+_RULE_ONE = {
+    TARGET_PERSO_ARABIC: (
+        "1. Write Urdu words in Perso-Arabic script. Every Urdu word must be converted -- "
+        "never leave part of the sentence in the script it came in."
+    ),
+    # Two extra clauses the Perso-Arabic rule does not need. "Spell them the way
+    # Urdu speakers text" is the whole point of this direction — the output is
+    # read and edited by a person, so ALA-LC scholarly transliteration would be
+    # a worse answer than everyday chat spelling even though it is more
+    # principled. And Roman Urdu has no single correct spelling, which the model
+    # must be told or it will hedge.
+    TARGET_ROMAN: (
+        "1. Write Urdu words in Latin letters, spelled the way Urdu speakers actually text -- "
+        "\"mujhe\", \"kaise\", \"nahi\". Not a scholarly transliteration: no diacritics, no "
+        "macrons, no special characters. Every Urdu word must be converted -- never leave part "
+        "of the sentence in the script it came in."
+    ),
+}
+
+#: The strict prompt, stated as numbered non-negotiables rather than prose.
+_SYSTEM_PROMPT = """You convert {source} into {target}. \
+You change the SCRIPT ONLY. You never change the words.
+
+Rules, in order of importance:
+
+{rule_one}
+{shared_rules}"""
 
 #: The six exemplars of the `strict_few_shot` arm, chosen to demonstrate the
 #: contract's HARD cases rather than more of the same:
@@ -117,80 +197,114 @@ _LATIN_EXEMPLARS: tuple[tuple[str, str], ...] = (
     ),
 )
 
-#: The Devanagari set, derived from the Latin one rather than written fresh —
-#: **the Urdu side of all six is byte-identical to the pairs above.**
+#: Devanagari, taken from the same six sentences.
 #:
-#: That is deliberate, and it is a safety property, not a shortcut. Those Urdu
-#: strings are the ones A3 run 3 actually passed on by ear. Authoring six NEW
-#: gold Urdu strings would put unreviewed Urdu into the prompt itself, where an
-#: error does not merely score badly — it teaches the model the error. (The
-#: corpus already carries an open task for native-speaker review of gold
-#: strings written this way.) Writing a Devanagari *input* for a known-good
-#: Urdu *output* is the far weaker claim, and the only one worth making
-#: without a native speaker.
+#: **NOTHING NEW WAS AUTHORED FOR EITHER DEVANAGARI SET.** The pairs below are
+#: assembled from three columns of the same six sentences — Devanagari input
+#: written here, Roman and Urdu outputs lifted verbatim from `_LATIN_EXEMPLARS`
+#: above, which are the strings A3 run 3 passed on by ear.
+#:
+#: That is a safety property, not a shortcut. Authoring six new gold strings
+#: would put unreviewed text into the PROMPT, where an error does not merely
+#: score badly — it teaches the model the error. (The corpus already carries an
+#: open task for native-speaker review of gold strings written that way.)
+#: Writing a Devanagari *input* for a known-good output is the far weaker
+#: claim, and the only one worth making without a native speaker.
 #:
 #: Five of the six hard cases carry over unchanged. The sixth does not: SMS
-#: orthography with dropped vowels ("Mjhe smjh nhi") has no Devanagari
-#: equivalent, so that slot instead demonstrates the DANDA — `।` U+0964, which
-#: has no counterpart in the target and must become `۔`. Its Urdu output is
-#: still the same string.
-#:
-#: WHAT THIS SET DELIBERATELY DOES NOT DECIDE: what to do with an English
-#: loanword already spelled in Devanagari (मीटिंग for "meeting"). Auto-generated
-#: Hindi captions are full of them, and the Latin contract's rule 2 has nothing
-#: to say about it — there are no Latin letters to preserve. Converting it to
-#: میٹنگ and leaving it as मीटिंग are both defensible, and *nothing here has
-#: measured which one OmniVoice says better*. Adding an exemplar would be
-#: inventing that answer, so there is none: the listening gate decides it, and
-#: until then the model is unguided on exactly one case, which is an honest
-#: gap rather than a guess.
-_DEVANAGARI_EXEMPLARS: tuple[tuple[str, str], ...] = (
-    (
-        "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
-        "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
-    ),
-    (
-        "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
-        "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
-    ),
-    (
-        "Client के साथ meeting reschedule हो गई है, अब Friday को है।",
-        "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
-    ),
-    (
-        "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
-        "مجھے سمجھ نہیں آ رہا کہ یہ کیسے ہوا۔",
-    ),
-    (
-        "asap reply करना plz, boss ने बोला है कि urgent है",
-        "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
-    ),
-    (
-        "डॉ. सईद ने Aga Khan Hospital में appointment दे दी है।",
-        "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
-    ),
+#: orthography with dropped vowels ("Mjhe smjh nhi") has no Devanagari form, so
+#: that slot demonstrates the DANDA instead — `।` U+0964, which has no
+#: counterpart in either target.
+_DEVANAGARI_SOURCES: tuple[str, ...] = (
+    "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
+    "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
+    "Client के साथ meeting reschedule हो गई है, अब Friday को है।",
+    "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+    "asap reply करना plz, boss ने बोला है कि urgent है",
+    "डॉ. सईद ने Aga Khan Hospital में appointment दे दी है।",
 )
 
-_EXEMPLARS = {
-    SOURCE_LATIN: _LATIN_EXEMPLARS,
-    SOURCE_DEVANAGARI: _DEVANAGARI_EXEMPLARS,
+#: Devanagari → Perso-Arabic. Wired, but **not the transcript path** — the
+#: transcript path goes via Roman so the owner can edit it. Kept because it is
+#: the one-hop route for anyone who does not want to edit, and because deleting
+#: it would not simplify anything: both sets come from the same six sentences.
+_DEVANAGARI_TO_URDU: tuple[tuple[str, str], ...] = tuple(
+    zip(_DEVANAGARI_SOURCES, [urdu for _, urdu in _LATIN_EXEMPLARS], strict=True)
+)
+
+#: Devanagari → Roman Urdu. **This is the transcript hop.** Its outputs are the
+#: INPUT side of `_LATIN_EXEMPLARS` — the corpus's own Roman Urdu, which is both
+#: reviewed and exactly the spelling style rule 1 asks for. So this set
+#: demonstrates the house style rather than asserting one.
+#:
+#: WHAT NEITHER DEVANAGARI SET DECIDES: an English loanword already spelled in
+#: Devanagari (मीटिंग for "meeting"). Auto-generated Hindi captions are full of
+#: them and rule 2 has nothing to say — there are no Latin letters to preserve.
+#: Writing "meeting" and writing "miting" are both defensible and *nothing here
+#: has measured which one a reader prefers or which one survives the second hop
+#: better*. An exemplar would be inventing the answer, so there is none.
+_DEVANAGARI_TO_ROMAN: tuple[tuple[str, str], ...] = tuple(
+    zip(_DEVANAGARI_SOURCES, [roman for roman, _ in _LATIN_EXEMPLARS], strict=True)
+)
+
+#: Perso-Arabic → Roman Urdu, which is `_LATIN_EXEMPLARS` READ BACKWARDS. Not a
+#: trick: the corpus pairs each Roman sentence with its gold Urdu, and which
+#: column is the input is the only thing that differs between the two
+#: directions. Nothing new is authored, and the two directions cannot drift
+#: apart because they are the same six sentences.
+#:
+#: For the rare YouTube video whose captions come in Urdu script rather than
+#: Devanagari — the owner has not found one, but the transcript panel would
+#: otherwise offer nothing at all for it.
+_URDU_TO_ROMAN: tuple[tuple[str, str], ...] = tuple(
+    (urdu, roman) for roman, urdu in _LATIN_EXEMPLARS
+)
+
+#: Keyed on the PAIR, not on the source. The conversion IS the pair — Devanagari
+#: means something different depending on where it is going, and a table keyed
+#: on source alone could not express that.
+_EXEMPLARS: dict[tuple[str, str], tuple[tuple[str, str], ...]] = {
+    (SOURCE_LATIN, TARGET_PERSO_ARABIC): _LATIN_EXEMPLARS,
+    (SOURCE_DEVANAGARI, TARGET_ROMAN): _DEVANAGARI_TO_ROMAN,
+    (SOURCE_DEVANAGARI, TARGET_PERSO_ARABIC): _DEVANAGARI_TO_URDU,
+    (SOURCE_ARABIC, TARGET_ROMAN): _URDU_TO_ROMAN,
 }
+
+#: The pair used when an unrecognised one is asked for. Roman Urdu →
+#: Perso-Arabic is the only conversion here that has passed a listening gate,
+#: so it is what an unexpected value degrades to.
+_DEFAULT_PAIR = (SOURCE_LATIN, TARGET_PERSO_ARABIC)
+
+
+def _resolve_pair(source_script: str, target_script: str) -> tuple[str, str]:
+    """
+    The (source, target) pair to actually run, falling back rather than raising.
+
+    Falling back because the caller detected the source from the TEXT: an
+    unexpected value means something like MIXED, and refusing outright would
+    turn a merely-unusual input into a failed job. `(latin, perso_arabic)` is
+    the gated conversion, so that is where it degrades to.
+
+    `(latin, roman)` is deliberately absent: converting Roman Urdu to Roman
+    Urdu is a no-op, and it falls back rather than being special-cased,
+    because the validator would reject the identical output as an echo anyway.
+    """
+    pair = (source_script, target_script)
+    return pair if pair in _EXEMPLARS else _DEFAULT_PAIR
 
 
 def build_system_prompt(
-    extra_instruction: str = "", source_script: str = SOURCE_LATIN
+    extra_instruction: str = "",
+    source_script: str = SOURCE_LATIN,
+    target_script: str = TARGET_PERSO_ARABIC,
 ) -> str:
     """
     The gate-passing prompt, optionally with the user's own instruction
     appended.
 
-    `source_script` selects the header wording, the turn prefix and the
-    exemplar set together — they are one decision, not three, because a prompt
-    that says "Hindi" over six `Roman:` examples is worse than either.
-
-    An unknown script falls back to Latin rather than raising. The caller has
-    already detected the script from the text, so an unexpected value means
-    something like MIXED — and Roman Urdu is the source this was gated on.
+    The pair selects the header wording, both turn prefixes and the exemplar
+    set together — they are one decision, not four, because a prompt that says
+    "Hindi" over six `Roman:` examples is worse than either half alone.
 
     The extra instruction goes LAST and is framed as a preference, so it cannot
     quietly displace rule 3 ("do not translate, explain, summarise") — that
@@ -199,10 +313,22 @@ def build_system_prompt(
     `domain/transliterate.py` is the actual enforcement; this is only about not
     inviting the failure.
     """
-    source_name, prefix = _SOURCE_NAMES.get(source_script, _SOURCE_NAMES[SOURCE_LATIN])
-    exemplars = _EXEMPLARS.get(source_script, _LATIN_EXEMPLARS)
-    block = "\n\n".join(f"{prefix}: {src}\nUrdu: {urdu}" for src, urdu in exemplars)
-    prompt = f"{_SYSTEM_PROMPT.format(source=source_name)}\n\nExamples:\n{block}"
+    source, target = _resolve_pair(source_script, target_script)
+    source_name, source_prefix = _SCRIPT_NAMES[source]
+    target_name, target_prefix = _SCRIPT_NAMES[target]
+    block = "\n\n".join(
+        f"{source_prefix}: {src}\n{target_prefix}: {out}"
+        for src, out in _EXEMPLARS[(source, target)]
+    )
+    prompt = (
+        _SYSTEM_PROMPT.format(
+            source=source_name,
+            target=target_name,
+            rule_one=_RULE_ONE[target],
+            shared_rules=_SHARED_RULES.format(wrong_office=_WRONG_OFFICE[target]),
+        )
+        + f"\n\nExamples:\n{block}"
+    )
     if extra_instruction.strip():
         prompt += (
             "\n\nThe user has also asked for the following. Follow it only where it does "
@@ -293,6 +419,7 @@ class GemmaTransliteratorBackend:
         text: str,
         instruction: str = "",
         source_script: str = SOURCE_LATIN,
+        target_script: str = TARGET_PERSO_ARABIC,
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
@@ -305,15 +432,19 @@ class GemmaTransliteratorBackend:
         if not source:
             return {"text": "", "gen_time_sec": 0.0}
 
-        # The user turn's prefix must be the same one the exemplars were
-        # formatted with, so it comes from the same table rather than a literal.
-        _, prefix = _SOURCE_NAMES.get(source_script, _SOURCE_NAMES[SOURCE_LATIN])
+        # The user turn's two prefixes must be the ones the exemplars were
+        # formatted with, so they come from the same resolution rather than
+        # literals — including the FALLBACK, which is why `_resolve_pair` runs
+        # here too instead of the raw arguments being trusted.
+        pair = _resolve_pair(source_script, target_script)
+        _, source_prefix = _SCRIPT_NAMES[pair[0]]
+        _, target_prefix = _SCRIPT_NAMES[pair[1]]
         messages = [
             {
                 "role": "system",
-                "content": build_system_prompt(instruction, source_script),
+                "content": build_system_prompt(instruction, *pair),
             },
-            {"role": "user", "content": f"{prefix}: {source}\nUrdu:"},
+            {"role": "user", "content": f"{source_prefix}: {source}\n{target_prefix}:"},
         ]
         # return_dict=True explicitly — without it, on this transformers
         # version the return shape is not interchangeable with what

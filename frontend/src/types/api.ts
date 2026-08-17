@@ -440,6 +440,41 @@ export interface TranscriptChunk {
   ends_on_sentence: boolean;
 }
 
+/** Body for `POST /api/text/transliterate` (202 + poll on `GET /api/jobs/{id}`).
+ *
+ *  There is no `source` field on purpose. The user declares the LANGUAGE, the
+ *  server detects the SCRIPT — the same rule the whole app runs on, and why
+ *  Roman Urdu and English can share the Latin alphabet without being
+ *  confusable. The TARGET is ours to choose because "readable" and "speakable"
+ *  are different things to want. */
+export interface TransliterateRequest {
+  text: string;
+  instruction?: string;
+  /** Omit to get this source's usual destination: Roman Urdu → Perso-Arabic
+   *  (to speak it), Devanagari or Perso-Arabic → Roman (to read and edit it). */
+  target?: 'roman' | 'perso_arabic';
+}
+
+/** The `result` of a succeeded TRANSLITERATE job. */
+export interface TransliterateResult {
+  text: string;
+  source_text: string;
+  /** `latin` | `devanagari` | `arabic`, detected from the text. */
+  source_script: string;
+  /** `perso_arabic` | `roman`. **Only `latin` → `perso_arabic` has passed a
+   *  listening gate** — a result from any other pair must not be presented as
+   *  a verified conversion. */
+  target_script: string;
+  gen_time_sec: number;
+  load_time_sec: number;
+  arabic_share: number;
+  length_ratio: number;
+  /** Share of the output still in the SOURCE script. The Roman target's gate,
+   *  because Roman Urdu and English are both Latin and no check can tell them
+   *  apart — see the backend's MAX_RESIDUAL_SOURCE_SHARE. */
+  residual_source_share: number;
+}
+
 export interface TranscriptResponse {
   video_id: string;
   title: string | null;

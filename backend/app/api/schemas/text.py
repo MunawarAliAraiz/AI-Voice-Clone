@@ -43,3 +43,12 @@ class TransliterateRequest(BaseModel):
     #: validator (`domain/transliterate.py`) is not optional and cannot be
     #: turned off from here.
     instruction: str = Field("", max_length=2000)
+    #: Where to convert TO — `roman` or `perso_arabic`. `None` means "whatever
+    #: this source usually goes to" (`domain/transliterate.DEFAULT_TARGETS`).
+    #:
+    #: The TARGET is the caller's, the SOURCE is not. That asymmetry is the
+    #: point: the source is a fact about the text and is detected server-side,
+    #: while "readable" versus "speakable" is a preference about what the
+    #: caller is about to do, and only they know it. A Devanagari transcript
+    #: legitimately goes either way.
+    target: Literal["roman", "perso_arabic"] | None = None

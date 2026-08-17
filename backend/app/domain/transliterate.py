@@ -1,6 +1,32 @@
 """
-Roman Urdu → Perso-Arabic conversion: the contract, and the validator that
-enforces it.
+Script conversion: the contract, and the validator that enforces it.
+
+Four conversions. Exactly one of them has passed a listening gate:
+
+    latin      → perso_arabic   the SPEECH hop. GATED 2026-08-16.
+    devanagari → roman          a Hindi-script transcript, made editable
+    devanagari → perso_arabic   the same transcript, straight to speakable
+    arabic     → roman          Urdu script, made editable
+
+The last three are ungated. `latin → roman` is absent because it is a no-op,
+and nothing converts INTO Devanagari — it is a source format only.
+
+WHO PICKS THE TARGET
+---------------------
+The caller does, for a Devanagari source: the owner may want the transcript
+readable (roman) or immediately speakable (perso_arabic), and that is a
+preference about what they are about to do, not a fact about the text. What is
+NOT the caller's is the SOURCE — that is detected here, because the user
+declares the language and the code detects the script.
+
+ENGLISH IS THE CASE THIS MODULE CANNOT SEE
+--------------------------------------------
+An English transcript needs no conversion at all, and nothing here can tell it
+from Roman Urdu — both are Latin, this project's oldest documented trap. So
+"don't offer conversion for English" is necessarily a decision made where the
+language is *known* (the Composer's language field, the transcript panel's
+detected script), never here. A caller that asks anyway gets a real conversion
+of English into Urdu script, and that is a caller bug this cannot catch.
 
 Pure. No I/O, no torch, no model — this module decides what a *valid*
 conversion looks like, and `inference/transliterator_scheduler.py` decides how
@@ -25,6 +51,13 @@ A validator cannot catch a wrong word. It can catch the output not being a
 transliteration at all, which is the failure mode an editable instruction
 introduces and the one the user cannot be expected to police.
 
+AND IT CATCHES LESS ON THE ROMAN SIDE
+--------------------------------------
+Everything above assumes the target script is recognisable. For the transcript
+hop it is not — Roman Urdu and English are both Latin. See
+`MAX_RESIDUAL_SOURCE_SHARE` for what that costs and why the answer is a
+product decision (a human reads the Roman draft) rather than a threshold.
+
 WHAT THIS DELIBERATELY DOES NOT DO
 -----------------------------------
 It does not score quality, and it must never be mistaken for the gate.
@@ -42,9 +75,19 @@ __all__ = [
     "TransliterationRejected",
     "MAX_INPUT_CHARS",
     "MIN_DEVANAGARI_SHARE",
+    "MAX_RESIDUAL_SOURCE_SHARE",
+    "TARGET_PERSO_ARABIC",
+    "TARGET_ROMAN",
+    "SUPPORTED_PAIRS",
+    "DEFAULT_TARGETS",
     "source_script_of",
+    "target_script_for",
     "validate_transliteration",
 ]
+
+#: The targets, matching `runtimes/gemma_transliterator.py`'s constants.
+TARGET_PERSO_ARABIC = "perso_arabic"
+TARGET_ROMAN = "roman"
 
 #: Ceiling on what may be sent for conversion. Not a safety rule — a latency
 #: one. Gemma-4-31B holds the GPU exclusively for the whole conversion (see
@@ -84,6 +127,29 @@ MAX_LENGTH_RATIO = 2.5
 #: rejects the very code-switching the prompt asks for.
 MIN_ARABIC_SHARE = 0.05
 
+#: The Roman target's check, and it is the MIRROR of MIN_ARABIC_SHARE rather
+#: than an analogue of it — because it cannot be an analogue.
+#:
+#: For a Perso-Arabic target, "did a conversion happen" is answerable by looking
+#: for the target script, because the target script is unmistakable. For a Roman
+#: target it is not: **Roman Urdu and English are both Latin**, which is this
+#: project's oldest documented trap. "Aap kaise hain" and "How are you" are
+#: indistinguishable to any script test, so no threshold on Latin can separate a
+#: correct conversion from an English translation.
+#:
+#: So this asks the only question that IS answerable: is the SOURCE script gone?
+#: A Devanagari echo has ~1.0 Devanagari; a real conversion has ~0.0. Same
+#: "some versus none" gap, measured from the other end.
+#:
+#: WHAT THIS CANNOT CATCH, STATED PLAINLY: a translation into English. It passes
+#: every check here — right script, right length, source script absent. The
+#: validator is structurally weaker for this direction and no threshold fixes
+#: it. What covers it instead is the product: the Roman output exists precisely
+#: so a person reads and edits it before anything is generated from it. That is
+#: an argument about where the human sits in the loop, not a claim that the
+#: check is as strong as the other one.
+MAX_RESIDUAL_SOURCE_SHARE = 0.05
+
 #: Any real Devanagari at all means the Devanagari exemplars are the right ones.
 #:
 #: NOT a dominance test, and that is the point. `detect_script` returns MIXED
@@ -101,24 +167,93 @@ MIN_ARABIC_SHARE = 0.05
 MIN_DEVANAGARI_SHARE = 0.05
 
 
-def source_script_of(text: str) -> str:
+def _share(text: str, ranges: tuple[tuple[str, str], ...]) -> float:
     """
-    Which exemplar set the transliterator should use for `text`.
+    Share of *letters* falling in any of `ranges`.
 
-    Returns `devanagari` or `latin`, as the plain strings the wire protocol and
-    `runtimes/gemma_transliterator.py` use. Pure, so the decision is testable
-    without a GPU — and server-side, so a client never has to encode it.
-
-    Everything that is not Devanagari is `latin`, including Perso-Arabic. Text
-    that is already in the target script has no business being converted, and
-    the caller rejecting it is a clearer failure than this returning a third
-    value nothing downstream knows.
+    Letters only: counting digits, spaces and punctuation would let a mostly
+    numeric line pass or fail on its formatting rather than its script.
     """
     letters = [c for c in text if c.isalpha()]
     if not letters:
-        return "latin"
-    devanagari = sum(1 for c in letters if "ऀ" <= c <= "ॿ")
-    return "devanagari" if devanagari / len(letters) >= MIN_DEVANAGARI_SHARE else "latin"
+        return 0.0
+    hits = sum(1 for c in letters if any(lo <= c <= hi for lo, hi in ranges))
+    return hits / len(letters)
+
+
+_ARABIC_RANGES = (("؀", "ۿ"), ("ݐ", "ݿ"))
+_DEVANAGARI_RANGES = (("ऀ", "ॿ"),)
+
+#: Source script → the ranges that mean "this was NOT converted", for a target
+#: whose own script cannot be recognised. Latin is absent because no conversion
+#: leaves text in Latin as a failure: `(latin, perso_arabic)` is judged by
+#: `MIN_ARABIC_SHARE` instead, and there is no `(latin, roman)`.
+_RESIDUAL_RANGES = {
+    "devanagari": _DEVANAGARI_RANGES,
+    "arabic": _ARABIC_RANGES,
+}
+
+
+def _arabic_share(text: str) -> float:
+    return _share(text, _ARABIC_RANGES)
+
+
+def source_script_of(text: str) -> str:
+    """
+    Which script `text` is written in, for the purpose of converting it.
+
+    Returns `devanagari`, `arabic` or `latin` — the plain strings the wire
+    protocol and `runtimes/gemma_transliterator.py` use. Pure, so the decision
+    is testable without a GPU; server-side, so a client never has to encode it.
+
+    Presence, not dominance, and it is checked in that order: Devanagari first,
+    then Perso-Arabic, then Latin as the remainder. `detect_script` would return
+    MIXED for the ordinary shape of either a Hindi or an Urdu caption carrying
+    English words, and MIXED answers a different question than this one. What is
+    being asked here is "which exemplar set has anything to SAY about this
+    input", and a set has nothing to say about a script it never demonstrates.
+    """
+    if _share(text, _DEVANAGARI_RANGES) >= MIN_DEVANAGARI_SHARE:
+        return "devanagari"
+    if _share(text, _ARABIC_RANGES) >= MIN_ARABIC_SHARE:
+        return "arabic"
+    return "latin"
+
+
+#: Every conversion the transliterator knows, as `(source, target)`.
+#:
+#: Absent on purpose:
+#:   `(latin, roman)`        a no-op.
+#:   `(arabic, perso_arabic)` a no-op.
+#:   anything `→ devanagari`  Devanagari is a SOURCE FORMAT here, never a
+#:                            target — the whole reason `hi` is not a
+#:                            `LanguageCode` and `routing.py` refuses to render
+#:                            it. Adding it would reopen that by the back door.
+SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset({
+    ("latin", TARGET_PERSO_ARABIC),
+    ("devanagari", TARGET_ROMAN),
+    ("devanagari", TARGET_PERSO_ARABIC),
+    ("arabic", TARGET_ROMAN),
+})
+
+#: Where each source goes when the caller expresses no preference.
+#:
+#: A DEFAULT, not a rule — for a Devanagari transcript the owner genuinely
+#: chooses, because "readable" and "speakable" are different things to want and
+#: only they know which they are about to do. Roman is the default there
+#: because the transcript path exists to be EDITED; a caption YouTube's ASR
+#: guessed at is a draft, and converting a draft straight to speech skips the
+#: step the feature was asked for.
+DEFAULT_TARGETS: dict[str, str] = {
+    "latin": TARGET_PERSO_ARABIC,
+    "devanagari": TARGET_ROMAN,
+    "arabic": TARGET_ROMAN,
+}
+
+
+def target_script_for(source_script: str) -> str:
+    """The default target for `source_script`. See `DEFAULT_TARGETS`."""
+    return DEFAULT_TARGETS.get(source_script, TARGET_PERSO_ARABIC)
 
 
 class TransliterationRejected(Exception):
@@ -138,27 +273,43 @@ class TransliterationRejected(Exception):
 
 @dataclass(frozen=True, slots=True)
 class TransliterationCheck:
-    """What the validator measured. Returned so the API can surface it."""
+    """
+    What the validator measured. Returned so the API can surface it.
+
+    `arabic_share` is measured for BOTH targets even though only one is judged
+    on it — for a Roman target it is diagnostic rather than a gate, and a
+    reviewer looking at a bad conversion wants the number either way.
+    """
 
     arabic_share: float
     length_ratio: float
+    #: Share of the output still in the SOURCE script. The Roman target's gate;
+    #: recorded for the Perso-Arabic target too, where it is diagnostic.
+    residual_source_share: float = 0.0
 
 
-def _arabic_share(text: str) -> float:
+def _reject_script(text: str, source: str, reason: str, wrong_script_detail: str) -> None:
     """
-    Share of *letters* that are Perso-Arabic.
+    Raise the script failure, naming the likeliest cause.
 
-    Letters only: counting digits, spaces and punctuation would let a mostly
-    numeric line pass or fail on its formatting rather than its script.
+    An echo and prose want different messages because the user's next move
+    differs: an echo means the instruction was ignored outright, prose means it
+    was obeyed as the wrong instruction. Equality alone IS the echo — no script
+    test. Requiring `Script.LATIN` (as this once did) made a Devanagari echo
+    report as "replied in the wrong script": true, and it sends the user to fix
+    the wrong thing.
     """
-    letters = [c for c in text if c.isalpha()]
-    if not letters:
-        return 0.0
-    arabic = sum(1 for c in letters if "؀" <= c <= "ۿ" or "ݐ" <= c <= "ݿ")
-    return arabic / len(letters)
+    raise TransliterationRejected(
+        reason,
+        "The model echoed your text back instead of converting it."
+        if text == source.strip()
+        else wrong_script_detail,
+    )
 
 
-def validate_transliteration(source: str, output: str) -> TransliterationCheck:
+def validate_transliteration(
+    source: str, output: str, target: str = TARGET_PERSO_ARABIC
+) -> TransliterationCheck:
     """
     Accept `output` as a transliteration of `source`, or raise.
 
@@ -166,14 +317,17 @@ def validate_transliteration(source: str, output: str) -> TransliterationCheck:
 
     1. Non-empty. A model that returned nothing is a failure, not an empty
        transliteration.
-    2. Predominantly Perso-Arabic. Catches "I cannot help with that", a model
-       that echoed the Roman input back unchanged, and an English translation.
+    2. The script check — **and it is a different question per target.**
+       Perso-Arabic: is the target script PRESENT? Roman: is the source script
+       GONE? See `MAX_RESIDUAL_SOURCE_SHARE` for why the Roman one cannot be
+       phrased the first way, and for exactly what it therefore cannot catch.
     3. Length in band. Catches an answer, a summary, or a commentary — all of
        which miss by multiples.
 
     The source is only ever measured, never trusted as correct: this says
-    nothing about whether the conversion is *right*, which is what the
-    editable output field and the human reading it are for.
+    nothing about whether the conversion is *right*, which is what the editable
+    output field and the human reading it are for. That is doubly true for the
+    Roman target, where check 2 is genuinely weaker.
     """
     text = output.strip()
     if not text:
@@ -181,25 +335,20 @@ def validate_transliteration(source: str, output: str) -> TransliterationCheck:
             "empty", "The model returned nothing. Try again, or simplify the text."
         )
 
-    share = _arabic_share(text)
-    if share < MIN_ARABIC_SHARE:
-        # Distinguish the single most likely cause, because the fix differs:
-        # an echo means the instruction was ignored, prose means it was
-        # answered.
-        #
-        # Equality alone IS the echo — no script test. This used to also
-        # require Script.LATIN, which silently made a DEVANAGARI echo report
-        # as "replied in the wrong script": true, but it sends the user to fix
-        # the wrong thing. The condition was redundant even for Latin: text
-        # identical to a source that reached this branch cannot be
-        # Perso-Arabic, because Perso-Arabic input would have scored well above
-        # MIN_ARABIC_SHARE and never got here.
-        echoed = text == source.strip()
-        raise TransliterationRejected(
-            "not_urdu_script",
-            "The model echoed your text back instead of converting it."
-            if echoed
-            else "The model replied in the wrong script instead of converting your text.",
+    arabic = _arabic_share(text)
+    residual = _share(text, _RESIDUAL_RANGES.get(source_script_of(source), ()))
+
+    if target == TARGET_ROMAN:
+        if residual > MAX_RESIDUAL_SOURCE_SHARE:
+            _reject_script(
+                text, source, "not_converted",
+                "The model left your text in its original script instead of "
+                "writing it in Latin letters.",
+            )
+    elif arabic < MIN_ARABIC_SHARE:
+        _reject_script(
+            text, source, "not_urdu_script",
+            "The model replied in the wrong script instead of converting your text.",
         )
 
     src = source.strip()
@@ -217,4 +366,6 @@ def validate_transliteration(source: str, output: str) -> TransliterationCheck:
             "it may have answered it rather than converting it.",
         )
 
-    return TransliterationCheck(arabic_share=share, length_ratio=ratio)
+    return TransliterationCheck(
+        arabic_share=arabic, length_ratio=ratio, residual_source_share=residual
+    )
