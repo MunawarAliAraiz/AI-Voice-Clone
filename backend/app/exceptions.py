@@ -590,6 +590,28 @@ class TranscriptUnavailableError(AppError):
     title = "No transcript available"
 
 
+class TranscriptToolMissingError(AppError):
+    """
+    `yt-dlp` is not installed in the API environment.
+
+    ITS OWN CLASS BECAUSE THE ALTERNATIVE ACTIVELY MISLEADS. This used to fall
+    into `TranscriptFetchFailedError`'s broad `except Exception`, which told the
+    user "could not reach YouTube — on a datacenter connection this is usually
+    rate limiting, try again shortly." Every clause of that was wrong: the pod
+    reached youtube.com fine (HTTP 200), nothing was rate limited, and trying
+    again shortly could never have worked. A wrong cause is worse than an
+    unknown one — it sends someone to wait instead of to `uv sync`.
+
+    503, not 502: nothing upstream failed. This deployment is missing a
+    dependency, which is the same shape as a transliterator with no
+    `.venv-gemma` and is reported the same way.
+    """
+
+    code = "TRANSCRIPT_TOOL_MISSING"
+    http_status = 503
+    title = "Transcript import is not set up"
+
+
 class TranscriptFetchFailedError(AppError):
     """
     YouTube could not be reached, or refused.

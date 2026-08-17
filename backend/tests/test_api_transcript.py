@@ -360,3 +360,38 @@ def test_chunks_respect_the_configured_size(
     assert len(chunks) > 1
     assert all(len(ch["text"]) <= 200 for ch in chunks)
     assert [ch["index"] for ch in chunks] == list(range(len(chunks)))
+
+
+def test_a_missing_yt_dlp_does_not_masquerade_as_rate_limiting(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """
+    The pod's API venv predated `yt-dlp` being added to pyproject.toml, and the
+    broad `except Exception` below the fetch reported that ImportError as
+    "could not reach YouTube — on a datacenter connection this is usually rate
+    limiting, try again shortly."
+
+    Every clause of that was wrong. The box was reaching youtube.com with a 200,
+    nothing was rate limited, and waiting could never have fixed it. A WRONG
+    cause is worse than an unknown one: it sends someone to wait instead of to
+    `uv sync`. So the ImportError gets its own clause ABOVE the broad one, its
+    own code, and a message naming the actual fix.
+    """
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        raise ModuleNotFoundError("No module named 'yt_dlp'")
+
+    monkeypatch.setattr("app.api.routers.transcript._fetch_info", _boom)
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/transcript/fetch",
+            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+
+    assert r.status_code == 503, r.text
+    body = r.json()
+    assert body["code"] == "TRANSCRIPT_TOOL_MISSING"
+    assert "yt-dlp" in body["detail"]
+    assert "uv sync" in body["detail"], "the message must name the fix"
+    # The specific regression: it must NOT blame the network.
+    assert "rate limit" not in body["detail"].lower()
+    assert "try again" not in body["detail"].lower()

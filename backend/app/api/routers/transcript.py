@@ -40,6 +40,7 @@ from ...domain.youtube import InvalidVideoUrl, cues_to_text, parse_json3, parse_
 from ...exceptions import (
     InvalidVideoUrlError,
     TranscriptFetchFailedError,
+    TranscriptToolMissingError,
     TranscriptUnavailableError,
 )
 from ...inference.catalog import ModelCatalog
@@ -202,6 +203,18 @@ async def fetch_transcript(
 
     try:
         info = await run_in_threadpool(_fetch_info, video_id, settings.transcript_timeout_sec)
+    except ImportError as exc:
+        # BEFORE the broad clause below, and that order is the whole point. A
+        # missing dependency is not an upstream failure, and reporting it as one
+        # told the user to wait for rate limiting to clear on a box that was
+        # reaching YouTube perfectly well. Caught on the pod, whose API venv
+        # predated `yt-dlp` being added to pyproject.toml.
+        logger.exception("yt-dlp is not importable")
+        raise TranscriptToolMissingError(
+            "Transcript import needs yt-dlp, which is not installed in this "
+            "server's API environment. Run `uv sync` in backend/ and restart. "
+            "Nothing else on the server is affected."
+        ) from exc
     except Exception as exc:
         # Deliberately broad: yt-dlp raises a family of its own exception types
         # plus whatever the network layer produces, and every one of them means
