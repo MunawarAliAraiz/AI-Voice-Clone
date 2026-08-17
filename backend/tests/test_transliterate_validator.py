@@ -13,6 +13,7 @@ import pytest
 
 from app.domain.transliterate import (
     TransliterationRejected,
+    source_script_of,
     validate_transliteration,
 )
 
@@ -124,3 +125,71 @@ def test_the_validator_does_not_claim_the_conversion_is_correct() -> None:
     """
     check = validate_transliteration("Kal meeting hai", "کال میٹنگ ہے")
     assert check.arabic_share > 0.9
+
+
+# --- source-script selection ------------------------------------------------
+# Which exemplar set the prompt gets. Pure, so it is settled here rather than
+# on a GPU.
+
+
+def test_roman_urdu_selects_the_latin_exemplars() -> None:
+    assert source_script_of("Kal office mein meeting hai") == "latin"
+
+
+def test_plain_hindi_selects_the_devanagari_exemplars() -> None:
+    assert source_script_of("मुझे समझ नहीं आ रहा कि ये कैसे हुआ।") == "devanagari"
+
+
+def test_a_code_switched_hindi_caption_is_still_devanagari() -> None:
+    """
+    THE CASE `detect_script` GETS WRONG FOR THIS PURPOSE. A Hindi caption
+    carrying English words can fail the dominance threshold and come back
+    MIXED — which would fall back to Latin and show the model six `Roman:`
+    examples for text it cannot read as Roman. Presence decides here, not
+    dominance.
+    """
+    text = "Client के साथ meeting reschedule हो गई है, अब Friday को है।"
+    assert source_script_of(text) == "devanagari"
+
+
+def test_one_stray_devanagari_character_does_not_swing_roman_urdu() -> None:
+    """The floor's whole job. Otherwise a single quoted glyph rewrites the
+    entire prompt for a sentence that is plainly Roman Urdu."""
+    text = "Mujhe nahi pata ke क ka matlab kya hai in this whole long sentence"
+    assert source_script_of(text) == "latin"
+
+
+def test_text_with_no_letters_falls_back_to_latin() -> None:
+    assert source_script_of("123 — !!") == "latin"
+
+
+# --- the echo check, both scripts -------------------------------------------
+
+
+def test_a_devanagari_echo_is_reported_as_an_echo_not_a_wrong_script() -> None:
+    """
+    The bug this replaced: the echo branch required Script.LATIN, so a model
+    that handed a Hindi caption straight back was told it "replied in the
+    wrong script". True, and useless — it sends the user to fix the
+    instruction's wording when the instruction was ignored outright.
+    """
+    hindi = "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।"
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration(hindi, hindi)
+    assert exc.value.reason == "not_urdu_script"
+    assert "echoed" in exc.value.detail
+
+
+def test_a_latin_echo_still_reports_as_an_echo() -> None:
+    roman = "Kal office mein meeting hai"
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration(roman, roman)
+    assert "echoed" in exc.value.detail
+
+
+def test_different_wrong_script_output_is_not_called_an_echo() -> None:
+    """An answer in the wrong script is a different failure from a refusal to
+    act, and the message has to keep them apart."""
+    with pytest.raises(TransliterationRejected) as exc:
+        validate_transliteration("Kal meeting hai", "Tomorrow there is a meeting.")
+    assert "echoed" not in exc.value.detail

@@ -1,7 +1,17 @@
 """
 AI Voice Clone Studio — the 'transliterate' job handler.
 
-Roman Urdu (and, once gated, Devanagari) → Perso-Arabic script conversion.
+Roman Urdu or Devanagari → Perso-Arabic script conversion.
+
+THE TWO SOURCES ARE NOT EQUALLY TRUSTED, AND THE CODE SAYS SO
+---------------------------------------------------------------
+Roman Urdu is what A3 run 3 passed by ear. Devanagari is wired end to end and
+**has never passed a listening gate** — R4b measured the reverse hop
+(Perso-Arabic → Roman → Devanagari) compounding errors badly, and while the
+direct hop is a different and probably easier mapping, nothing here has
+measured it. `source_script` rides out on the result for exactly that reason:
+a conversion that came from the ungated exemplar set must be identifiable as
+one, and no UI may present it as working until the owner has listened.
 
 WHY THIS IS A JOB AND NOT A SYNCHRONOUS ENDPOINT
 --------------------------------------------------
@@ -45,6 +55,7 @@ from pydantic import BaseModel, Field
 from ...domain.transliterate import (
     MAX_INPUT_CHARS,
     TransliterationRejected,
+    source_script_of,
     validate_transliteration,
 )
 from ...exceptions import TransliterationRejectedError, TransliteratorUnavailableError
@@ -80,8 +91,17 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
             "(set VCS_GEMMA_TRANSLITERATOR_PYTHON and provision .venv-gemma)."
         )
 
+    # Detected here, never taken from the request. Same rule as the transcript
+    # endpoint's `script` field: the user declares the LANGUAGE, the code
+    # detects the SCRIPT. A client that could name the source script could ask
+    # for the Roman exemplars over Devanagari text and get a worse conversion
+    # with nothing in the response saying so.
+    source_script = source_script_of(params.text)
+
     result = await ctx.transliterator.convert(
-        text=params.text, instruction=params.instruction
+        text=params.text,
+        instruction=params.instruction,
+        source_script=source_script,
     )
 
     try:
@@ -96,6 +116,10 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
         result={
             "text": result.text.strip(),
             "source_text": params.text,
+            #: Reported so a reviewer can see which exemplar set produced this
+            #: — the Devanagari one has never passed a listening gate, and a
+            #: result that came from it must be identifiable as such.
+            "source_script": source_script,
             "gen_time_sec": result.gen_time_sec,
             "load_time_sec": result.load_time_sec,
             # The validator's measurements ride along rather than being

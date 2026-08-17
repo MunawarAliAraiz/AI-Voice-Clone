@@ -134,10 +134,18 @@ class TransliteratorScheduler:
         #: rather than start a second 19 GB download into the same card.
         self._lock = asyncio.Lock()
 
-    async def convert(self, *, text: str, instruction: str = "") -> TransliterateResult:
+    async def convert(
+        self, *, text: str, instruction: str = "", source_script: str = "latin"
+    ) -> TransliterateResult:
         """
         Convert one passage. Loads Gemma, converts, and kills the worker —
         always, including on failure.
+
+        `source_script` is `latin` (Roman Urdu) or `devanagari` (a Hindi
+        caption). It is passed through as a plain string and NOT validated
+        here: the runtime owns the prompt, so it owns which sources it knows,
+        and it falls back to Latin for anything else. A second copy of that
+        table in this process would be one more thing to keep in step.
 
         Returns the model's RAW output. Validation lives in
         `domain/transliterate.py` and is applied by the caller, because
@@ -183,7 +191,11 @@ class TransliteratorScheduler:
 
                     response = await worker.call(
                         WireOp.TRANSLITERATE,
-                        {"text": text, "instruction": instruction},
+                        {
+                            "text": text,
+                            "instruction": instruction,
+                            "source_script": source_script,
+                        },
                         timeout=self._convert_timeout_sec,
                     )
                     if not response.ok:

@@ -38,11 +38,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .language import Script, detect_script
-
 __all__ = [
     "TransliterationRejected",
     "MAX_INPUT_CHARS",
+    "MIN_DEVANAGARI_SHARE",
+    "source_script_of",
     "validate_transliteration",
 ]
 
@@ -83,6 +83,42 @@ MAX_LENGTH_RATIO = 2.5
 #: "some" and "none", so that is where the threshold goes; anything higher
 #: rejects the very code-switching the prompt asks for.
 MIN_ARABIC_SHARE = 0.05
+
+#: Any real Devanagari at all means the Devanagari exemplars are the right ones.
+#:
+#: NOT a dominance test, and that is the point. `detect_script` returns MIXED
+#: when no single script clears its threshold, which is the ordinary shape of a
+#: Hindi caption carrying English words — and MIXED would fall back to Latin,
+#: showing the model six `Roman:` examples for text it cannot read as Roman.
+#: The question here is not "which script wins", it is "which exemplar set has
+#: anything to say about this input", and the Latin set has nothing to say
+#: about Devanagari. So presence decides, not dominance.
+#:
+#: The floor exists only to ignore a stray character — one Devanagari glyph
+#: quoted inside Roman Urdu should not swing the whole prompt. Same 5% and same
+#: reasoning as MIN_ARABIC_SHARE above: the gap being measured is between
+#: "some" and "none".
+MIN_DEVANAGARI_SHARE = 0.05
+
+
+def source_script_of(text: str) -> str:
+    """
+    Which exemplar set the transliterator should use for `text`.
+
+    Returns `devanagari` or `latin`, as the plain strings the wire protocol and
+    `runtimes/gemma_transliterator.py` use. Pure, so the decision is testable
+    without a GPU — and server-side, so a client never has to encode it.
+
+    Everything that is not Devanagari is `latin`, including Perso-Arabic. Text
+    that is already in the target script has no business being converted, and
+    the caller rejecting it is a clearer failure than this returning a third
+    value nothing downstream knows.
+    """
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return "latin"
+    devanagari = sum(1 for c in letters if "ऀ" <= c <= "ॿ")
+    return "devanagari" if devanagari / len(letters) >= MIN_DEVANAGARI_SHARE else "latin"
 
 
 class TransliterationRejected(Exception):
@@ -150,7 +186,15 @@ def validate_transliteration(source: str, output: str) -> TransliterationCheck:
         # Distinguish the single most likely cause, because the fix differs:
         # an echo means the instruction was ignored, prose means it was
         # answered.
-        echoed = detect_script(text)[0] is Script.LATIN and text == source.strip()
+        #
+        # Equality alone IS the echo — no script test. This used to also
+        # require Script.LATIN, which silently made a DEVANAGARI echo report
+        # as "replied in the wrong script": true, but it sends the user to fix
+        # the wrong thing. The condition was redundant even for Latin: text
+        # identical to a source that reached this branch cannot be
+        # Perso-Arabic, because Perso-Arabic input would have scored well above
+        # MIN_ARABIC_SHARE and never got here.
+        echoed = text == source.strip()
         raise TransliterationRejected(
             "not_urdu_script",
             "The model echoed your text back instead of converting it."

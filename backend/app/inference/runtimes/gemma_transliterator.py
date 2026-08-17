@@ -1,5 +1,10 @@
 """
-AI Voice Clone Studio — Gemma-4-31B Roman Urdu → Perso-Arabic transliterator.
+AI Voice Clone Studio — Gemma-4-31B → Perso-Arabic transliterator.
+
+Source scripts: **Latin (Roman Urdu)** and **Devanagari (Hindi captions)**.
+Target is always Perso-Arabic, because that is the only Urdu script any model
+here renders. Devanagari is a SOURCE FORMAT and never a target language — see
+`docs/TRANSCRIPT_IMPORT.md`.
 
 Torch lives here (allowed: under `inference/runtimes/`). Same load/act/unload
 shape as the audio runtimes and `qwen_analyzer.py`, minus `synth` — there is
@@ -38,16 +43,34 @@ import contextlib
 import time
 from typing import Any
 
-__all__ = ["GemmaTransliteratorBackend"]
+__all__ = ["GemmaTransliteratorBackend", "SOURCE_LATIN", "SOURCE_DEVANAGARI"]
+
+#: Source scripts, as the plain strings `domain.language.Script` already uses
+#: for its values. Plain strings, not that enum, because this module runs in a
+#: SEPARATE VENV: importing from `domain/` would drag pydantic and the config
+#: stack into every runtime environment to carry two constants.
+SOURCE_LATIN = "latin"
+SOURCE_DEVANAGARI = "devanagari"
+
+#: What the source script is called in the prompt and in the turn prefix. The
+#: prefix matters as much as the header: the exemplars below are formatted with
+#: it, so a mismatch would show the model six `Roman:` turns and then ask it a
+#: `Hindi:` question.
+_SOURCE_NAMES = {
+    SOURCE_LATIN: ("Roman Urdu", "Roman"),
+    SOURCE_DEVANAGARI: ("Hindi written in Devanagari script", "Hindi"),
+}
 
 #: The strict prompt, stated as numbered non-negotiables rather than prose.
-_SYSTEM_PROMPT = """You convert Roman Urdu into Perso-Arabic Urdu script. \
+#: `{source}` is the only thing that varies by source script — every rule below
+#: is about the TARGET and the words, which do not change.
+_SYSTEM_PROMPT = """You convert {source} into Perso-Arabic Urdu script. \
 You change the SCRIPT ONLY. You never change the words.
 
 Rules, in order of importance:
 
 1. Write Urdu words in Perso-Arabic script. Every Urdu word must be converted -- \
-never leave part of the sentence in Latin letters.
+never leave part of the sentence in the script it came in.
 2. English words stay EXACTLY as they are, in Latin letters, character for character. \
 Do not translate them. Do not convert them to Urdu script. Do not change their capitalisation. \
 "office" stays "office", never "دفتر". "GitHub" stays "GitHub", never "github".
@@ -67,7 +90,7 @@ Output the converted sentence and nothing else. No preamble, no notes, no quotat
 #:   script from token 1); SMS orthography with dropped vowels; chat
 #:   abbreviations surviving verbatim; and the mixed decision — a person's
 #:   name converts while an institution's name stays Latin, in one sentence.
-_EXEMPLARS: tuple[tuple[str, str], ...] = (
+_LATIN_EXEMPLARS: tuple[tuple[str, str], ...] = (
     (
         "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
         "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
@@ -94,20 +117,92 @@ _EXEMPLARS: tuple[tuple[str, str], ...] = (
     ),
 )
 
+#: The Devanagari set, derived from the Latin one rather than written fresh —
+#: **the Urdu side of all six is byte-identical to the pairs above.**
+#:
+#: That is deliberate, and it is a safety property, not a shortcut. Those Urdu
+#: strings are the ones A3 run 3 actually passed on by ear. Authoring six NEW
+#: gold Urdu strings would put unreviewed Urdu into the prompt itself, where an
+#: error does not merely score badly — it teaches the model the error. (The
+#: corpus already carries an open task for native-speaker review of gold
+#: strings written this way.) Writing a Devanagari *input* for a known-good
+#: Urdu *output* is the far weaker claim, and the only one worth making
+#: without a native speaker.
+#:
+#: Five of the six hard cases carry over unchanged. The sixth does not: SMS
+#: orthography with dropped vowels ("Mjhe smjh nhi") has no Devanagari
+#: equivalent, so that slot instead demonstrates the DANDA — `।` U+0964, which
+#: has no counterpart in the target and must become `۔`. Its Urdu output is
+#: still the same string.
+#:
+#: WHAT THIS SET DELIBERATELY DOES NOT DECIDE: what to do with an English
+#: loanword already spelled in Devanagari (मीटिंग for "meeting"). Auto-generated
+#: Hindi captions are full of them, and the Latin contract's rule 2 has nothing
+#: to say about it — there are no Latin letters to preserve. Converting it to
+#: میٹنگ and leaving it as मीटिंग are both defensible, and *nothing here has
+#: measured which one OmniVoice says better*. Adding an exemplar would be
+#: inventing that answer, so there is none: the listening gate decides it, and
+#: until then the model is unguided on exactly one case, which is an honest
+#: gap rather than a guess.
+_DEVANAGARI_EXEMPLARS: tuple[tuple[str, str], ...] = (
+    (
+        "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।",
+        "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+    ),
+    (
+        "अरे यार छोड़ो ना, कोई बात नहीं, अगली दफ़ा देख लेंगे।",
+        "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+    ),
+    (
+        "Client के साथ meeting reschedule हो गई है, अब Friday को है।",
+        "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+    ),
+    (
+        "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।",
+        "مجھے سمجھ نہیں آ رہا کہ یہ کیسے ہوا۔",
+    ),
+    (
+        "asap reply करना plz, boss ने बोला है कि urgent है",
+        "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+    ),
+    (
+        "डॉ. सईद ने Aga Khan Hospital में appointment दे दी है।",
+        "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+    ),
+)
 
-def build_system_prompt(extra_instruction: str = "") -> str:
+_EXEMPLARS = {
+    SOURCE_LATIN: _LATIN_EXEMPLARS,
+    SOURCE_DEVANAGARI: _DEVANAGARI_EXEMPLARS,
+}
+
+
+def build_system_prompt(
+    extra_instruction: str = "", source_script: str = SOURCE_LATIN
+) -> str:
     """
     The gate-passing prompt, optionally with the user's own instruction
     appended.
 
-    The addition goes LAST and is framed as a preference, so it cannot quietly
-    displace rule 3 ("do not translate, explain, summarise") — that rule is
-    what stands between this feature and a model that answers the text instead
-    of converting it. The server-side validator in `domain/transliterate.py`
-    is the actual enforcement; this is only about not inviting the failure.
+    `source_script` selects the header wording, the turn prefix and the
+    exemplar set together — they are one decision, not three, because a prompt
+    that says "Hindi" over six `Roman:` examples is worse than either.
+
+    An unknown script falls back to Latin rather than raising. The caller has
+    already detected the script from the text, so an unexpected value means
+    something like MIXED — and Roman Urdu is the source this was gated on.
+
+    The extra instruction goes LAST and is framed as a preference, so it cannot
+    quietly displace rule 3 ("do not translate, explain, summarise") — that
+    rule is what stands between this feature and a model that answers the text
+    instead of converting it. The server-side validator in
+    `domain/transliterate.py` is the actual enforcement; this is only about not
+    inviting the failure.
     """
-    block = "\n\n".join(f"Roman: {roman}\nUrdu: {urdu}" for roman, urdu in _EXEMPLARS)
-    prompt = f"{_SYSTEM_PROMPT}\n\nExamples:\n{block}"
+    source_name, prefix = _SOURCE_NAMES.get(source_script, _SOURCE_NAMES[SOURCE_LATIN])
+    exemplars = _EXEMPLARS.get(source_script, _LATIN_EXEMPLARS)
+    block = "\n\n".join(f"{prefix}: {src}\nUrdu: {urdu}" for src, urdu in exemplars)
+    prompt = f"{_SYSTEM_PROMPT.format(source=source_name)}\n\nExamples:\n{block}"
     if extra_instruction.strip():
         prompt += (
             "\n\nThe user has also asked for the following. Follow it only where it does "
@@ -193,7 +288,12 @@ class GemmaTransliteratorBackend:
         return time.time() - t0
 
     def transliterate(
-        self, *, text: str, instruction: str = "", params: dict[str, Any] | None = None
+        self,
+        *,
+        text: str,
+        instruction: str = "",
+        source_script: str = SOURCE_LATIN,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Convert one passage. Returns the raw string — validation is the API
@@ -205,9 +305,15 @@ class GemmaTransliteratorBackend:
         if not source:
             return {"text": "", "gen_time_sec": 0.0}
 
+        # The user turn's prefix must be the same one the exemplars were
+        # formatted with, so it comes from the same table rather than a literal.
+        _, prefix = _SOURCE_NAMES.get(source_script, _SOURCE_NAMES[SOURCE_LATIN])
         messages = [
-            {"role": "system", "content": build_system_prompt(instruction)},
-            {"role": "user", "content": f"Roman: {source}\nUrdu:"},
+            {
+                "role": "system",
+                "content": build_system_prompt(instruction, source_script),
+            },
+            {"role": "user", "content": f"{prefix}: {source}\nUrdu:"},
         ]
         # return_dict=True explicitly — without it, on this transformers
         # version the return shape is not interchangeable with what

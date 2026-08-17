@@ -32,8 +32,12 @@ class _FakeTransliterator:
         self._error = error
         self.calls: list[dict[str, Any]] = []
 
-    async def convert(self, *, text: str, instruction: str = "") -> TransliterateResult:
-        self.calls.append({"text": text, "instruction": instruction})
+    async def convert(
+        self, *, text: str, instruction: str = "", source_script: str = "latin"
+    ) -> TransliterateResult:
+        self.calls.append(
+            {"text": text, "instruction": instruction, "source_script": source_script}
+        )
         if self._error is not None:
             raise self._error
         return TransliterateResult(text=self._text, gen_time_sec=1.0, load_time_sec=78.4)
@@ -162,3 +166,52 @@ def test_text_over_the_ceiling_is_rejected_before_the_gpu_is_touched(
         r = c.post("/api/text/transliterate", json={"text": "a" * 5000})
     assert r.status_code == 422
     assert fake.calls == []
+
+
+_HINDI = "मुझे समझ नहीं आ रहा कि ये कैसे हुआ।"
+
+
+def test_a_devanagari_source_is_detected_and_passed_to_the_scheduler(
+    tmp_path: Path,
+) -> None:
+    """
+    The exemplar set is chosen from the TEXT, not from the request. A Hindi
+    caption converted against the Roman exemplars would be a worse conversion
+    with nothing in the response saying so.
+    """
+    client, fake = _client(tmp_path)
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"text": _HINDI})
+        assert r.status_code == 202
+        done = _poll(c, r.json()["id"])
+    assert done["status"] == "succeeded"
+    assert fake.calls[0]["source_script"] == "devanagari"
+    assert done["result"]["source_script"] == "devanagari"
+
+
+def test_roman_urdu_still_reports_the_latin_source(tmp_path: Path) -> None:
+    client, fake = _client(tmp_path)
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"text": _ROMAN})
+        done = _poll(c, r.json()["id"])
+    assert done["status"] == "succeeded"
+    assert fake.calls[0]["source_script"] == "latin"
+    assert done["result"]["source_script"] == "latin"
+
+
+def test_the_client_cannot_choose_the_source_script(tmp_path: Path) -> None:
+    """
+    An extra `source_script` in the body is ignored, not honoured. The user
+    declares the language; the code detects the script — the same rule the
+    whole project runs on, and the reason Roman Urdu and English can share the
+    Latin alphabet without being confusable.
+    """
+    client, fake = _client(tmp_path)
+    with client as c:
+        r = c.post(
+            "/api/text/transliterate",
+            json={"text": _HINDI, "source_script": "latin"},
+        )
+        assert r.status_code == 202
+        _poll(c, r.json()["id"])
+    assert fake.calls[0]["source_script"] == "devanagari"
