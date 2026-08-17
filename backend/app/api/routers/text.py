@@ -18,10 +18,11 @@ string the client needs before it can enqueue the thing it actually came for.
 
 WHY `/transliterate` IS NOT
 ---------------------------
-It runs inside `InferenceScheduler.exclusive_gpu()`: every audio worker is
-evicted and the GPU slot is held across a ~78 s Gemma load plus generation.
-That is not a request; it is a queue item that stalls every other generation
-while it runs. See its own docstring below.
+Because of the COLD case, which is the one that decides. Resident, a conversion
+is ~5 s; from cold it is 150-330 s while ~19 GB of weights load, and the load
+holds the audio scheduler's GPU slot so nothing else generates meanwhile. A
+request that is usually fast and occasionally five minutes is a job, not an
+endpoint — and a batch of transcript chunks is unambiguously one.
 
 WHY IT CALLS `classify()` RATHER THAN A TITLE-ONLY OP
 -----------------------------------------------------
@@ -59,7 +60,7 @@ from ...domain.transliterate import (
     source_script_of,
     target_script_for,
 )
-from ...exceptions import UnsupportedConversionError
+from ...exceptions import TransliteratorUnavailableError, UnsupportedConversionError
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
 from ..deps import get_db, get_job_runner, get_scheduler, get_settings
@@ -85,6 +86,7 @@ def fallback_title(text: str) -> str:
 @router.post("/transliterate", response_model=JobStatusResponse, status_code=202)
 async def transliterate(
     body: TransliterateRequest,
+    request: Request,
     response: Response,
     db: Annotated[Database, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
@@ -100,13 +102,11 @@ async def transliterate(
     into a 19 GB model load — the request is wrong, not the conversion.
 
     THE ONE THING THAT MAKES THIS DIFFERENT FROM EVERY OTHER TEXT ENDPOINT:
-    the module docstring above explains at length why a short text op should be
-    synchronous, and every word of it still holds — for operations that do not
-    touch the GPU. This one takes the WHOLE GPU. `TransliteratorScheduler`
-    runs inside `InferenceScheduler.exclusive_gpu()`, which evicts every audio
-    worker and holds the GPU slot across a ~78 s model load plus generation.
-    Blocking a request for that long, while stalling every other generation on
-    the box, is exactly what the job queue exists for.
+    the module docstring above explains why a short text op should be
+    synchronous, and every word of it holds for operations that never touch the
+    GPU. This one does. Gemma is resident, so the usual cost is ~5 s — but a
+    COLD load is 150-330 s during which it holds the audio scheduler's slot,
+    and that is what the job queue exists for.
 
     `route=None`, like `ANALYZE_LLM`: this never calls `resolve()` and the
     transliterator is not in the audio catalog. Its output is editable text a
@@ -118,6 +118,16 @@ async def transliterate(
     `build_job_status_response`, so the client polls the existing generic
     `GET /api/jobs/{id}` with no new polling flow.
     """
+    # Refused HERE when the server has no transliterator, rather than enqueued
+    # and failed later. The reason is a deployment fact known at startup, so
+    # making the user wait in a queue to be told the feature does not exist
+    # here would be a worse version of the same answer.
+    if getattr(request.app.state, "transliterator", None) is None:
+        raise TransliteratorUnavailableError(
+            getattr(request.app.state, "transliterator_reason", None)
+            or "Script conversion is not available on this server."
+        )
+
     source = source_script_of(body.text)
     target = body.target or target_script_for(source)
     if (source, target) not in SUPPORTED_PAIRS:

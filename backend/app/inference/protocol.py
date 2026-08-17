@@ -212,7 +212,7 @@ class TransliterateResult:
     text: str
     gen_time_sec: float
     #: Seconds spent loading. Never zero in practice for this runtime — it is
-    #: loaded and unloaded per request by design (`exclusive_gpu`), because it
+    #: resident with an idle timer since 2026-08-17, because it
     #: cannot stay resident alongside the audio models.
     load_time_sec: float = 0.0
 

@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     #: docstring for why this exists (the audio scheduler's `budget_mb` is
     #: sized assuming only audio models are resident).
     qwen_analyzer_idle_unload_sec: float = 300.0
+    #: What the analyzer occupies while resident, for `check_capacity`'s
+    #: arithmetic. Qwen2.5-3B, ~6 GB. Sits OUTSIDE `budget_mb` because it is
+    #: not a `RuntimeKind` — a routing decision with a VRAM consequence that
+    #: went unaccounted until the transliterator forced the sums to be written
+    #: down.
+    qwen_analyzer_reserve_mb: int = 6000
     #: Interpreter for the Gemma transliterator worker. Same reasoning as the
     #: analyzer above and the same deliberate omission from `interpreters()`:
     #: converting Roman/Devanagari text to Perso-Arabic is not audio, and
@@ -86,6 +92,18 @@ class Settings(BaseSettings):
     #: action fails with a clear error naming this variable; it never breaks
     #: generation.
     gemma_transliterator_python: str = ""
+    #: What Gemma occupies while resident. **MEASURED, not estimated**:
+    #: `scripts/phase_b_smoke.py` recorded a 19221 MiB peak across four
+    #: conversions on an A40. `check_capacity` adds this to `budget_mb` and the
+    #: analyzer's reserve; when the total exceeds the card, script conversion
+    #: is DISABLED WITH A REASON and everything else still runs.
+    gemma_transliterator_reserve_mb: int = 19500
+    #: Seconds of no conversions before the ~19 GB worker is killed.
+    #:
+    #: 30 minutes against the analyzer's 5, and the ratio is a measurement:
+    #: that one reloads in seconds, this one in 150-330 s. Reclaiming VRAM
+    #: should not cost five minutes to undo because somebody paused to read.
+    gemma_transliterator_idle_unload_sec: float = 1800.0
 
     #: Chunk sizing for an imported transcript.
     #:

@@ -52,7 +52,9 @@ class _FakeTransliterator:
 def _client(tmp_path: Path, transliterator: Any | None = None):
     app = create_app(scheduler=FakeScheduler(), settings=Settings(data_dir=tmp_path))
     fake = transliterator if transliterator is not None else _FakeTransliterator()
-    # Injected before startup so the lifespan does not build a real one.
+    # Injected before startup so the lifespan does not build a real one — and
+    # `owns_transliterator` stays false, so the app does not shut down a double
+    # it did not create. Same rule as the injected scheduler and db.
     app.state.transliterator = fake
     return TestClient(app), fake
 
@@ -139,21 +141,46 @@ def test_a_correct_conversion_carries_the_validator_measurements(tmp_path: Path)
     assert done["result"]["load_time_sec"] == 78.4
 
 
-def test_no_transliterator_configured_fails_naming_the_setting(tmp_path: Path) -> None:
+def test_no_transliterator_is_refused_at_the_door_with_a_reason(tmp_path: Path) -> None:
     """
-    A deployment with no `.venv-gemma` must still run every other job kind.
-    The failure names the env var, because the fix is a deployment change and
-    a bare "unavailable" sends someone to look at the model instead.
+    A deployment with no transliterator must still run every other job kind —
+    and must SAY WHY rather than accepting a job that will fail.
+
+    503 at enqueue, not a queued-then-failed job: whether this server has a
+    transliterator is a deployment fact settled at startup, so making the user
+    wait in a queue to be told the feature does not exist here is a worse
+    version of the same answer. The reason comes from `app.state` verbatim, so
+    the UI can render exactly what the server decided.
     """
     app = create_app(scheduler=FakeScheduler(), settings=Settings(data_dir=tmp_path))
     app.state.transliterator = None
+    app.state.transliterator_reason = "needs about 27548 MiB and this GPU has 24576 MiB"
     with TestClient(app) as c:
         r = c.post("/api/text/transliterate", json={"text": _ROMAN})
-        assert r.status_code == 202
-        done = _poll(c, r.json()["id"])
-    assert done["status"] == "failed"
-    assert done["error"]["code"] == "TRANSLITERATOR_UNAVAILABLE"
-    assert "VCS_GEMMA_TRANSLITERATOR_PYTHON" in done["error"]["detail"]
+    assert r.status_code == 503
+    assert r.json()["code"] == "TRANSLITERATOR_UNAVAILABLE"
+    assert "24576 MiB" in r.json()["detail"], "the VRAM reason must reach the user"
+
+
+def test_the_system_endpoint_reports_why_conversion_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    """Where the UI learns to grey the button out, and what to say next to it."""
+    app = create_app(scheduler=FakeScheduler(), settings=Settings(data_dir=tmp_path))
+    app.state.transliterator = None
+    app.state.transliterator_reason = "not enough GPU memory on this card"
+    with TestClient(app) as c:
+        body = c.get("/api/system").json()
+    assert body["script_conversion"]["available"] is False
+    assert body["script_conversion"]["reason"] == "not enough GPU memory on this card"
+
+
+def test_the_system_endpoint_reports_conversion_as_available(tmp_path: Path) -> None:
+    client, _ = _client(tmp_path)
+    with client as c:
+        body = c.get("/api/system").json()
+    assert body["script_conversion"]["available"] is True
+    assert body["script_conversion"]["reason"] is None
 
 
 def test_empty_text_is_rejected_at_the_schema(tmp_path: Path) -> None:

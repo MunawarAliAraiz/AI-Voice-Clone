@@ -89,10 +89,10 @@ __all__ = [
 TARGET_PERSO_ARABIC = "perso_arabic"
 TARGET_ROMAN = "roman"
 
-#: Ceiling on what may be sent for conversion. Not a safety rule — a latency
-#: one. Gemma-4-31B holds the GPU exclusively for the whole conversion (see
-#: `InferenceScheduler.exclusive_gpu`), so a very long input blocks every
-#: generation on the box, not just this request.
+#: Ceiling on what may be sent PER CHUNK. Not a safety rule — a latency one.
+#: Generation measured 2.7-5.1 s for a sentence and scales with length, and a
+#: batch runs its chunks in sequence against one residency, so an oversized
+#: single chunk is the thing that makes a batch unpredictable.
 MAX_INPUT_CHARS = 2000
 
 #: A transliteration preserves roughly one sound per sound, so its length

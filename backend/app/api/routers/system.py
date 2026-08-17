@@ -11,13 +11,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from ...config import Settings
 from ...inference.protocol import SchedulerProtocol
 from ...inference.spec import ModelState
 from ..deps import get_scheduler, get_settings
-from ..schemas.system import GPUInfo, SystemStatus
+from ..schemas.system import FeatureAvailability, GPUInfo, SystemStatus
 
 router = APIRouter(tags=["system"])
 
@@ -53,6 +53,7 @@ def _gpu_info() -> GPUInfo:
 
 @router.get("/system", response_model=SystemStatus)
 async def system_status(
+    request: Request,
     scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SystemStatus:
@@ -68,4 +69,11 @@ async def system_status(
         resident_models=resident,
         workers_alive=len(live_runtimes),
         fake_runtime_enabled=settings.allow_fake_runtime,
+        # Read off app.state rather than recomputed: the lifespan already
+        # decided, and deciding twice is how the API and the thing it
+        # describes drift apart.
+        script_conversion=FeatureAvailability(
+            available=getattr(request.app.state, "transliterator", None) is not None,
+            reason=getattr(request.app.state, "transliterator_reason", None),
+        ),
     )

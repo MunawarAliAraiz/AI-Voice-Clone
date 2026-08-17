@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-__all__ = ["GPUInfo", "SystemStatus", "HealthResponse"]
+__all__ = ["GPUInfo", "FeatureAvailability", "SystemStatus", "HealthResponse"]
 
 
 class GPUInfo(BaseModel):
@@ -33,6 +33,23 @@ class GPUInfo(BaseModel):
     temperature_c: int | None = None
 
 
+class FeatureAvailability(BaseModel):
+    """
+    Whether an optional feature can run here, and if not, WHY IN WORDS.
+
+    `reason` is written for the person looking at a disabled button, not for a
+    log. A feature that is merely missing with no explanation is the same
+    usability failure as a silent fallback is a correctness one: the user
+    cannot tell "this server can't" from "this is broken", and the two have
+    completely different next steps.
+    """
+
+    available: bool
+    #: `None` when available. A full sentence otherwise — what is needed, what
+    #: exists, and what would change it.
+    reason: str | None = None
+
+
 class SystemStatus(BaseModel):
     """Health and capacity."""
 
@@ -49,6 +66,12 @@ class SystemStatus(BaseModel):
     #: True when the fake runtime is enabled. Surfaced so the UI can show a loud
     #: banner: audio produced in this mode is NOT a clone.
     fake_runtime_enabled: bool = False
+    #: Roman/Devanagari/Perso-Arabic script conversion. Optional because it
+    #: holds ~19 GB resident, which not every card has — the app runs fine
+    #: without it and says so rather than failing to start.
+    script_conversion: FeatureAvailability = Field(
+        default_factory=lambda: FeatureAvailability(available=False)
+    )
 
 
 class HealthResponse(BaseModel):

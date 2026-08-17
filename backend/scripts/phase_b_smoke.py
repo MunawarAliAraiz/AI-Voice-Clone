@@ -46,11 +46,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.config import Settings  # noqa: E402
-from app.inference.catalog import CATALOG  # noqa: E402
-from app.inference.factory import make_worker_factory  # noqa: E402
-from app.inference.scheduler import InferenceScheduler, SchedulerConfig  # noqa: E402
-from app.inference.transliterator_scheduler import (  # noqa: E402
+from app.config import Settings
+from app.inference.catalog import CATALOG
+from app.inference.factory import make_worker_factory
+from app.inference.scheduler import InferenceScheduler, SchedulerConfig
+from app.inference.transliterator_scheduler import (
     GEMMA_TRANSLITERATOR_HF_REPO,
     GEMMA_TRANSLITERATOR_HF_REVISION,
     TransliteratorScheduler,
@@ -72,21 +72,27 @@ CASES = [
 ]
 
 
-def used_mib() -> int:
-    """Whole-card usage, across every process. See the module docstring."""
+def _query(field: str) -> int:
+    """
+    One `nvidia-smi` field, as an int.
+
+    Resolved from PATH deliberately — the driver installs it and its location
+    varies by image, so an absolute path would be the fragile choice here.
+    """
     out = subprocess.run(
-        ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+        ["nvidia-smi", f"--query-gpu={field}", "--format=csv,noheader,nounits"],  # noqa: S607
         capture_output=True, text=True, check=True,
     )
     return int(out.stdout.strip().splitlines()[0])
+
+
+def used_mib() -> int:
+    """Whole-card usage, across every process. See the module docstring."""
+    return _query("memory.used")
 
 
 def total_mib() -> int:
-    out = subprocess.run(
-        ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
-        capture_output=True, text=True, check=True,
-    )
-    return int(out.stdout.strip().splitlines()[0])
+    return _query("memory.total")
 
 
 class Sampler:

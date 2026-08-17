@@ -87,70 +87,72 @@ async def test_no_unload_during_inference(tmp_path: Path) -> None:
         assert worker.max_concurrent <= 1, "two requests held the GPU at once"
 
 
-async def test_exclusive_gpu_empties_the_gpu_and_never_overlaps_a_synth(
+async def test_reserve_slot_blocks_synthesis_and_evicts_NOTHING(
     tmp_path: Path,
 ) -> None:
     """
-    Phase B's transliterator needs the whole card (~19 GB Gemma vs a 24 GB
-    GPU), so `exclusive_gpu()` evicts EVERY worker rather than the LRU few
-    `_make_room_for` would.
+    `reserve_slot` is what replaced `exclusive_gpu`, and the two assertions
+    below are the whole difference.
 
-    This is the second eviction call site in the codebase and the amendment
-    to the module docstring's invariant, so the property that matters is
-    asserted directly: it holds the same slot, therefore no synthesis can be
-    in flight while it evicts, therefore nothing is unloaded mid-inference.
+    It still holds the slot, so no synthesis runs while the transliterator is
+    allocating its ~19 GB — that part is unchanged and is why loading takes the
+    slot at all. What changed is that it evicts NOTHING: at the ~32 GB design
+    target Gemma co-resides with the audio models, so throwing them out would
+    make room that already exists and cost a 176 s re-warm to reclaim it.
+
+    That withdrawal restores golden rule 3 to a single eviction call site. If
+    this test ever asserts `_workers == {}` again, the rule has a second one.
     """
     sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.02)
 
-    inside_exclusive = False
-    saw_synth_during_exclusive = False
+    inside = False
+    saw_synth_during = False
+    workers_during: dict | None = None
 
     async def hammer() -> None:
-        nonlocal saw_synth_during_exclusive
+        nonlocal saw_synth_during
         for model in ("a", "b", "c", "a", "b"):
             await sched.synthesize(_req(model, tmp_path))
-            if inside_exclusive:
-                saw_synth_during_exclusive = True
+            if inside:
+                saw_synth_during = True
 
-    async def take_the_gpu() -> None:
-        nonlocal inside_exclusive
+    async def take_the_slot() -> None:
+        nonlocal inside, workers_during
         await asyncio.sleep(0.03)  # let some synthesis get going first
-        async with sched.exclusive_gpu("transliterate"):
-            inside_exclusive = True
-            assert sched._workers == {}, "exclusive_gpu left a worker resident"
+        async with sched.reserve_slot("transliterate-load"):
+            inside = True
+            workers_during = dict(sched._workers)
             await asyncio.sleep(0.05)
-            inside_exclusive = False
+            inside = False
 
-    await asyncio.gather(hammer(), take_the_gpu())
+    await asyncio.gather(hammer(), take_the_slot())
 
-    assert not saw_synth_during_exclusive, "a synthesis completed while the GPU was exclusive"
+    assert not saw_synth_during, "a synthesis completed while the slot was reserved"
+    assert workers_during, "reserve_slot evicted workers; it must evict nothing"
     for worker in made.values():
         assert not worker.unload_during_synth, f"{worker.runtime} evicted mid-inference"
         assert worker.max_concurrent <= 1, "two requests held the GPU at once"
 
 
-async def test_synthesis_recovers_after_exclusive_gpu(tmp_path: Path) -> None:
+async def test_a_worker_stays_warm_across_reserve_slot(tmp_path: Path) -> None:
     """
-    Eviction is the whole point, so the audio models come back COLD. That is
-    the documented price of load-convert-unload, not a broken scheduler —
-    the next request must still succeed, paying a fresh load.
+    The audio model must be the SAME process afterwards.
+
+    Under the old `exclusive_gpu` it was necessarily a new one, and that cost
+    a full cold load on the next generation — measured at 176 s for VoxCPM.
+    Identity is what proves the difference, because a load COUNT would look
+    identical either way once `made` is overwritten.
     """
     sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.001)
     await sched.synthesize(_req("a", tmp_path))
     first_worker = made[RuntimeKind.F5]
 
-    async with sched.exclusive_gpu("transliterate"):
-        assert sched._workers == {}
+    async with sched.reserve_slot("transliterate-load"):
+        assert sched._workers, "the warm worker was evicted"
 
     await sched.synthesize(_req("a", tmp_path))
-
-    # `made` is keyed by runtime, so the replacement overwrote the original
-    # entry — identity is what proves a fresh worker was spawned, not a load
-    # count that the overwrite discarded.
     second_worker = made[RuntimeKind.F5]
-    assert second_worker is not first_worker, "no new worker was spawned after eviction"
-    assert second_worker.load_calls == 1, "the fresh worker did not load the model"
-    assert first_worker.kill_calls >= 1, "the evicted worker was never killed"
+    assert second_worker is first_worker, "the worker was replaced across reserve_slot"
 
 
 async def test_no_double_load(tmp_path: Path) -> None:

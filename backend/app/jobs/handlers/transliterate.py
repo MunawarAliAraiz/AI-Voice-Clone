@@ -36,11 +36,10 @@ WHY THIS IS A JOB AND NOT A SYNCHRONOUS ENDPOINT
 --------------------------------------------------
 Every other text operation here is synchronous precisely because it does not
 touch the GPU — `POST /api/text/title` says so in its own docstring. This one
-is the opposite: `TransliteratorScheduler.convert()` takes
-`InferenceScheduler.exclusive_gpu()`, which empties the card and holds the GPU
-slot for the whole of a ~78 s model load plus generation. Nothing that long,
-and nothing that blocks every other generation on the box, belongs in a
-request handler.
+does. Gemma is resident so the usual cost is ~5 s per chunk, but a COLD load is
+150-330 s and holds the audio scheduler's GPU slot throughout. An operation
+that is usually seconds and occasionally five minutes belongs in the queue, and
+a transcript's worth of chunks belongs there without argument.
 
 WHAT THIS HANDLER OWNS, AND WHAT IT REFUSES TO OWN
 ----------------------------------------------------

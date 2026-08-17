@@ -112,7 +112,7 @@ class JobRunner:
                 # concurrent classification matches that shape.
                 JobKind.ANALYZE_LLM: 1,
                 # 1, and it could not be anything else: a conversion holds the
-                # WHOLE GPU via exclusive_gpu(), so a second concurrent one
+                # audio scheduler's GPU slot while loading, so a second concurrent one
                 # would simply queue behind the first having already paid to
                 # evict every audio model.
                 JobKind.TRANSLITERATE: 1,
