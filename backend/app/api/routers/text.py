@@ -1,13 +1,27 @@
 """
-Short titles for generations.
+Text assistance: short titles, and Roman -> Perso-Arabic transliteration.
 
-WHY THIS IS SYNCHRONOUS
------------------------
+TWO ENDPOINTS, TWO SHAPES, AND THE LINE BETWEEN THEM IS THE GPU
+----------------------------------------------------------------
+`/title` is SYNCHRONOUS. `/transliterate` is a JOB (202 + poll). The
+difference is not text length or latency taste — it is that one of them takes
+the whole GPU and the other never touches it. Read both arguments before
+adding a third endpoint here.
+
+WHY `/title` IS SYNCHRONOUS
+---------------------------
 Every other model-backed operation here is a job (202 + poll) because it takes
-tens of seconds and produces audio. This produces two words. Putting it behind
-the job queue would mean a second polling flow, a second `JobKind`, and a
-`jobs` row per title — all to deliver a string the client needs before it can
-enqueue the thing it actually came for.
+tens of seconds and produces audio. This produces two words on an
+ALREADY-RESIDENT worker. Putting it behind the job queue would mean a second
+polling flow, a second `JobKind`, and a `jobs` row per title — all to deliver a
+string the client needs before it can enqueue the thing it actually came for.
+
+WHY `/transliterate` IS NOT
+---------------------------
+It runs inside `InferenceScheduler.exclusive_gpu()`: every audio worker is
+evicted and the GPU slot is held across a ~78 s Gemma load plus generation.
+That is not a request; it is a queue item that stalls every other generation
+while it runs. See its own docstring below.
 
 WHY IT CALLS `classify()` RATHER THAN A TITLE-ONLY OP
 -----------------------------------------------------
@@ -33,11 +47,19 @@ response says which path produced it rather than hiding the difference.
 from __future__ import annotations
 
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request, Response
 
+from ...config import Settings
+from ...db import Database
 from ...domain.direction_analyze import analyze
-from ..schemas.text import TitleRequest, TitleResponse
+from ...inference.protocol import SchedulerProtocol
+from ...jobs import JobKind, JobRunner
+from ..deps import get_db, get_job_runner, get_scheduler, get_settings
+from ..schemas.jobs import JobStatusResponse
+from ..schemas.text import TitleRequest, TitleResponse, TransliterateRequest
+from .jobs import build_job_status_response
 
 router = APIRouter(prefix="/text", tags=["text"])
 logger = logging.getLogger(__name__)
@@ -52,6 +74,46 @@ def fallback_title(text: str) -> str:
     """First few words, whitespace-collapsed. Never empty for non-empty text."""
     words = text.split()
     return " ".join(words[:_FALLBACK_WORDS])
+
+
+@router.post("/transliterate", response_model=JobStatusResponse, status_code=202)
+async def transliterate(
+    body: TransliterateRequest,
+    response: Response,
+    db: Annotated[Database, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
+) -> JobStatusResponse:
+    """
+    Convert Roman Urdu into Perso-Arabic script. **202 + poll**, not synchronous.
+
+    THE ONE THING THAT MAKES THIS DIFFERENT FROM EVERY OTHER TEXT ENDPOINT:
+    the module docstring above explains at length why a short text op should be
+    synchronous, and every word of it still holds — for operations that do not
+    touch the GPU. This one takes the WHOLE GPU. `TransliteratorScheduler`
+    runs inside `InferenceScheduler.exclusive_gpu()`, which evicts every audio
+    worker and holds the GPU slot across a ~78 s model load plus generation.
+    Blocking a request for that long, while stalling every other generation on
+    the box, is exactly what the job queue exists for.
+
+    `route=None`, like `ANALYZE_LLM`: this never calls `resolve()` and the
+    transliterator is not in the audio catalog. Its output is editable text a
+    human approves — `TransformKind` and `domain/routing.py` are untouched by
+    this feature, which is what keeps golden rules 4 and 5 intact while still
+    letting Roman Urdu reach OmniVoice.
+
+    The 202 body is the same shape as `POST /api/generate`'s, built by the same
+    `build_job_status_response`, so the client polls the existing generic
+    `GET /api/jobs/{id}` with no new polling flow.
+    """
+    job = await runner.enqueue(
+        JobKind.TRANSLITERATE,
+        params={"text": body.text, "instruction": body.instruction},
+        route=None,
+        profile_id=None,
+    )
+    return await build_job_status_response(job, db, settings, scheduler, response)
 
 
 @router.post("/title", response_model=TitleResponse)

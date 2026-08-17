@@ -77,9 +77,19 @@ GEMMA_TRANSLITERATOR_MODEL_ID = "gemma-4-31b-it-transliterator"
 #: The 4-bit checkpoint A3 run 3 actually passed on. The unquantized weights
 #: do not fit this card at all, so this is not an optimisation — it is the
 #: only form of the model that has ever run here.
-GEMMA_TRANSLITERATOR_HF_REPO = "google/gemma-4-31b-it"
-#: PINNED per golden rule 7. Resolved on the pod; see docs/HANDOFF.md.
-GEMMA_TRANSLITERATOR_HF_REVISION = "main"
+#: NOTE THE CAPITAL B. `google/gemma-4-31b-it` is a 307 redirect to this;
+#: using the lowercase form works but resolves through a redirect on every
+#: cold load, and a pinned revision against a redirecting id is a worse thing
+#: to debug than a corrected id.
+GEMMA_TRANSLITERATOR_HF_REPO = "google/gemma-4-31B-it"
+#: ACTUALLY PINNED (golden rule 7), resolved 2026-08-17 from
+#: `https://huggingface.co/api/models/google/gemma-4-31b-it` -> `sha`.
+#:
+#: This said `"main"` until then, under a comment claiming it was pinned —
+#: which is precisely the supply-chain hole rule 7 exists to close, and worse
+#: than an honest `"main"` because the comment stopped anyone looking. The
+#: repo is NOT gated, so no token is needed.
+GEMMA_TRANSLITERATOR_HF_REVISION = "842da3794eaa0b77d5f08bae87a17459d91ff475"
 
 _WORKER_RUNTIME = "gemma_transliterator"
 #: 78.4 s measured cold on the pod, but that assumes warm HF cache and no

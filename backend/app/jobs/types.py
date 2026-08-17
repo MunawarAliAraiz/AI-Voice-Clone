@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from ..inference.analyzer_scheduler import AnalyzerScheduler
     from ..inference.catalog import ModelCatalog
     from ..inference.protocol import SchedulerProtocol
+    from ..inference.transliterator_scheduler import TransliteratorScheduler
 
 __all__ = [
     "JobKind",
@@ -52,6 +53,14 @@ class JobKind(StrEnum):
     #: No `generation_history` row, no audio, no `route` (never touches
     #: `resolve()`/the audio catalog) — see that handler's docstring.
     ANALYZE_LLM = "analyze_llm"
+    #: Roman/Devanagari -> Perso-Arabic script conversion
+    #: (`jobs/handlers/transliterate.py`). A JOB rather than a synchronous
+    #: endpoint for one reason: it takes the WHOLE GPU exclusively for ~78 s of
+    #: model load plus generation (`TransliteratorScheduler`), so it cannot sit
+    #: in a request handler. Like ANALYZE_LLM it has no `generation_history`
+    #: row, no audio, and no `route` — its output is editable text a human
+    #: approves, never a routing transform.
+    TRANSLITERATE = "transliterate"
 
 
 class JobStatus(StrEnum):
@@ -184,6 +193,11 @@ class JobContext:
     #: audio `scheduler`, never the same object. Only `analyze_llm.py` reads
     #: this; every other handler ignores it.
     analyzer: AnalyzerScheduler
+    #: The Gemma transliterator's own scheduler. Optional because the feature
+    #: is opt-in infrastructure: a deployment with no `.venv-gemma` still runs
+    #: every other job kind, and a TRANSLITERATE job then fails with an error
+    #: naming the missing setting rather than the app refusing to start.
+    transliterator: TransliteratorScheduler | None = None
 
 
 @dataclass(frozen=True, slots=True)

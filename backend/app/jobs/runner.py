@@ -58,6 +58,7 @@ if TYPE_CHECKING:
     from ..inference.analyzer_scheduler import AnalyzerScheduler
     from ..inference.catalog import ModelCatalog
     from ..inference.protocol import SchedulerProtocol
+    from ..inference.transliterator_scheduler import TransliteratorScheduler
 
 __all__ = ["JobRunner"]
 
@@ -80,6 +81,7 @@ class JobRunner:
         settings: Settings,
         *,
         analyzer: AnalyzerScheduler | None = None,
+        transliterator: TransliteratorScheduler | None = None,
         concurrency: Mapping[JobKind, int] | None = None,
         poll_interval_sec: float = 0.25,
     ) -> None:
@@ -93,6 +95,11 @@ class JobRunner:
         #: an ANALYZE_LLM job is actually claimed with no analyzer wired in,
         #: which `main.py` never does in production.
         self._analyzer = analyzer
+        #: The Gemma transliterator's scheduler. Optional for the same reason
+        #: as the analyzer: a deployment without `.venv-gemma` runs every other
+        #: kind, and a TRANSLITERATE job claimed with none wired fails with an
+        #: error naming the setting instead of the app refusing to boot.
+        self._transliterator = transliterator
         self._poll_interval_sec = poll_interval_sec
 
         self._concurrency: dict[JobKind, int] = dict(
@@ -104,6 +111,11 @@ class JobRunner:
                 # audio scheduler's multi-model eviction problem) — a single
                 # concurrent classification matches that shape.
                 JobKind.ANALYZE_LLM: 1,
+                # 1, and it could not be anything else: a conversion holds the
+                # WHOLE GPU via exclusive_gpu(), so a second concurrent one
+                # would simply queue behind the first having already paid to
+                # evict every audio model.
+                JobKind.TRANSLITERATE: 1,
             }
         )
         #: Wakes a parked worker loop the moment `enqueue()` inserts a row of
@@ -298,6 +310,7 @@ class JobRunner:
             catalog=self._catalog,
             settings=self._settings,
             analyzer=self._analyzer,
+            transliterator=self._transliterator,
         )
         try:
             outcome = await handler(ctx, job)

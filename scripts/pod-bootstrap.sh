@@ -239,6 +239,42 @@ p = snapshot_download("Qwen/Qwen2.5-3B-Instruct", revision=sys.argv[1])
 print("   weights at", p)
 PY
 
+echo "== 13b. Gemma transliterator env (Phase B: Roman/Devanagari -> Perso-Arabic) =="
+# Deliberately NOT a RuntimeKind and NOT in Settings.interpreters(), same rule
+# as the Qwen analyzer above: this converts TEXT and must stay unreachable
+# from domain/routing.py's resolve(). TransliteratorScheduler reads its own
+# setting (VCS_GEMMA_TRANSLITERATOR_PYTHON).
+#
+# Shaped differently from the analyzer for one reason: at ~19GB 4-bit this
+# cannot be co-resident with the audio models on a 24GB card, so it is
+# load-convert-UNLOAD per call inside InferenceScheduler.exclusive_gpu().
+#
+# bitsandbytes is what makes the 4-bit load possible. The UNQUANTIZED weights
+# do not fit this card at all, so it is not an optimisation -- it is the only
+# form of the model that has ever run here (A3 run 3, the arm that passed).
+GEMMA_VENV="$REPO_DIR/backend/.venv-gemma"
+if [ ! -x "$GEMMA_VENV/bin/python" ]; then
+  uv venv "$GEMMA_VENV" --python 3.12
+fi
+# Same cu130-silent-CPU trap as every other runtime -- pin cu128.
+uv pip install --python "$GEMMA_VENV" torch --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+uv pip install --python "$GEMMA_VENV" transformers accelerate bitsandbytes 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$GEMMA_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 13c. Gemma weights (pinned revision, ~19GB 4-bit, cached on /workspace) =="
+# Pinned per golden rule 7. Must match GEMMA_TRANSLITERATOR_HF_REVISION in
+# backend/app/inference/transliterator_scheduler.py -- bump one, bump both.
+# NOTE THE CAPITAL B in the repo id: the lowercase form is a 307 redirect.
+# This repo is NOT gated, so no HF token is needed.
+GEMMA_REV="842da3794eaa0b77d5f08bae87a17459d91ff475"
+"$GEMMA_VENV/bin/python" - "$GEMMA_REV" <<'GEMMAPY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download("google/gemma-4-31B-it", revision=sys.argv[1])
+print("   weights at", p)
+GEMMAPY
+
 echo "== 14. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
 # A separate venv from every runtime, deliberately: the harness's own deps
 # (transformers, speechbrain) have no reason to co-resolve with a runtime's

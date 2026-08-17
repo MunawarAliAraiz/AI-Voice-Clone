@@ -127,6 +127,12 @@ def create_app(
         if getattr(app.state, "analyzer", None) is None:
             app.state.analyzer = _build_analyzer(settings)
             app.state.owns_analyzer = True
+        # Built unconditionally, unlike the analyzer: it holds no worker and
+        # no VRAM between calls (see TransliteratorScheduler), so constructing
+        # one costs nothing even when `.venv-gemma` was never provisioned. It
+        # then fails per-request with an error naming the setting.
+        if getattr(app.state, "transliterator", None) is None:
+            app.state.transliterator = _build_transliterator(settings, app.state.scheduler)
         if getattr(app.state, "db", None) is None:
             app.state.db = Database(settings.db_path)
             await app.state.db.connect()
@@ -140,6 +146,7 @@ def create_app(
             app.state.jobs = JobRunner(
                 app.state.db, app.state.scheduler, CATALOG, settings,
                 analyzer=app.state.analyzer,
+                transliterator=app.state.transliterator,
             )
             app.state.owns_jobs = True
         if getattr(app.state, "owns_jobs", False):
@@ -281,6 +288,26 @@ def _build_analyzer(settings: Settings) -> AnalyzerScheduler:
         env=env,
         cwd=settings.worker_cwd,
         idle_unload_sec=settings.qwen_analyzer_idle_unload_sec,
+    )
+
+
+def _build_transliterator(settings: Settings, scheduler):
+    """
+    Construct the real TransliteratorScheduler. Lazily imported, same reason as
+    `_build_scheduler`/`_build_analyzer`.
+
+    Takes the audio `scheduler` because a conversion runs inside that
+    scheduler's `exclusive_gpu()` — Gemma is ~19 GB against a 24 GB card and
+    cannot be co-resident with the audio models, so the GPU slot has to be the
+    SAME slot, not a second one that knows nothing about the first.
+    """
+    from .inference.transliterator_scheduler import TransliteratorScheduler
+
+    return TransliteratorScheduler(
+        python_executable=settings.gemma_transliterator_python,
+        inference_scheduler=scheduler,
+        env=dict(os.environ),
+        cwd=settings.worker_cwd,
     )
 
 
