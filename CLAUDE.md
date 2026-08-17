@@ -65,8 +65,14 @@ code, including the CPML-licensed `xtts_v2.py`, which rule 6 forbids reintroduci
    is the one tier stricter than that and stays fully excluded — it's why Higgs Audio v3 (Boson Research &
    Non-Commercial, stricter than CC-BY-NC) is still unintegrated despite being in the bake-off. XTTS v2 (Coqui
    CPML) and Fish Speech (research license) stay banned independently of this amendment — don't reintroduce them.
-7. **Pin every HuggingFace `revision`.** `trust_remote_code=True` on an unpinned `main` is a supply-chain hole
-   (IndicF5 needs it).
+7. **Pin every HuggingFace `revision` — and check the `repo` while you are there.**
+   `trust_remote_code=True` on an unpinned `main` is a supply-chain hole (IndicF5 needs it).
+   **Amended 2026-08-17:** a revision pinned against the *wrong repository* is worse than an honest
+   `"main"`, because a correctly-formatted sha reads as done. Phase B pinned `google/gemma-4-31B-it`
+   when the gate ran on `unsloth/gemma-4-31B-it-unsloth-bnb-4bit` — 59 GB instead of 19, not the
+   checkpoint anyone had listened to, and unloadable anyway (no `quantization_config` ⇒ the bf16
+   branch ⇒ ~62 GB of VRAM). **Verify the repo id against whatever in `eval/` actually ran it**, not
+   just the revision against the HF API.
 8. **The `jobs` table is the queue.** `POST /api/generate` enqueues a row and returns 202;
    `backend/app/inference/scheduler.py` is **never modified** for job-queue work — no FIFO object
    goes into it, ever. A `JobRunner` (`app/jobs/runner.py`) claims rows from the `jobs` table with an
