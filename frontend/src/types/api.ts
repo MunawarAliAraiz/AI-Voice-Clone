@@ -447,12 +447,32 @@ export interface TranscriptTrack {
   is_auto_generated: boolean;
 }
 
+/** One chapter of the video.
+ *
+ *  Carries the only timestamps in this response, deliberately: a chunk gets no
+ *  `start_sec`. Stamping a chapter's start on all twelve of its parts is free
+ *  and would be a precise-looking wrong number, and the honest per-part version
+ *  is not recoverable (whitespace normalization destroys the offsets). */
+export interface TranscriptChapterInfo {
+  index: number;
+  title: string;
+  start_sec: number;
+  /** Absent on description-derived chapters. Display only — boundaries are
+   *  decided by the NEXT chapter's start, never by this. */
+  end_sec: number | null;
+}
+
 export interface TranscriptChunk {
+  /** GLOBAL across the transcript, not per chapter. Safe to key conversion
+   *  results off — the server renumbers after chunking each chapter. */
   index: number;
   text: string;
   /** False means the chunk was cut at a clause or word boundary because a
    *  sentence would not fit — where a join artifact will be audible. */
   ends_on_sentence: boolean;
+  /** `null` when the video has no chapters, or for the stretch before the
+   *  first one starts. */
+  chapter_index: number | null;
 }
 
 /** Body for `POST /api/text/transliterate` (202 + poll on `GET /api/jobs/{id}`).
@@ -526,5 +546,13 @@ export interface TranscriptResponse {
   /** True when NOTHING in the catalog renders this script (Devanagari). Decided
    *  server-side so the UI never encodes routing rules. */
   needs_transliteration: boolean;
+  /** Empty when the video has no chapters — the common case, and it must stay
+   *  indistinguishable from the pre-chapters behaviour. May be `undefined`
+   *  against a pod that predates this field. */
+  chapters: TranscriptChapterInfo[];
+  /** True when the transcript hit the server ceiling and was cut. Previously
+   *  only a server-side log, so the user was handed a shortened transcript with
+   *  no indication. */
+  truncated: boolean;
   chunks: TranscriptChunk[];
 }

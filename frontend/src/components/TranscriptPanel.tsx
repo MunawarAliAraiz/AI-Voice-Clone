@@ -23,6 +23,7 @@ import type { TranscriptResponse } from '../types/api';
 import { IconAlert, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
 import { fmtDuration } from '../lib/format';
 import { useScriptConversion } from '../hooks/useScriptConversion';
+import { useTranscriptParts } from '../hooks/useTranscriptParts';
 import { useSystemStatus } from '../hooks/queries';
 
 type Target = 'roman' | 'perso_arabic';
@@ -94,38 +95,17 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   const needsConversion = data?.needs_transliteration ?? false;
   const offerConversion = data != null && (needsConversion || data.script === 'arabic');
 
-  // Converted chunks, by input index. The original list is NEVER mutated: a
-  // conversion is a suggestion, and the source has to stay visible beside it
-  // for anyone to judge whether it is right.
-  //: Accumulated across conversions, not replaced by each one — converting
-  //: part 8 alone must not erase parts 1-7 that were converted earlier.
-  const [converted, setConverted] = useState<Map<number, string>>(new Map());
-  const [rejectedIndexes, setRejectedIndexes] = useState<Map<number, string>>(new Map());
+  // ONE record per part, replacing the `converted` / `rejectedIndexes` /
+  // `busyIndex` maps that were drifting toward four parallel structures keyed
+  // by the same index. See useTranscriptParts for why, and for why `status`
+  // and `outgoing` are derived rather than stored.
+  const parts = useTranscriptParts();
 
   useEffect(() => {
     if (!conversion.result) return;
-    setConverted((prev) => {
-      const next = new Map(prev);
-      for (const item of conversion.ok) {
-        const chunkIndex = batchIndexes[item.index];
-        if (chunkIndex !== undefined && item.text) next.set(chunkIndex, item.text);
-      }
-      return next;
-    });
-    setRejectedIndexes((prev) => {
-      const next = new Map(prev);
-      // A re-run that now SUCCEEDS must clear its old rejection, or the part
-      // would show a converted body under a stale error.
-      for (const item of conversion.ok) {
-        const chunkIndex = batchIndexes[item.index];
-        if (chunkIndex !== undefined) next.delete(chunkIndex);
-      }
-      for (const item of conversion.rejected) {
-        const chunkIndex = batchIndexes[item.index];
-        if (chunkIndex !== undefined) next.set(chunkIndex, item.detail ?? 'Rejected');
-      }
-      return next;
-    });
+    parts.applyConversion(batchIndexes, conversion.ok, conversion.rejected, lastTarget);
+    // `conversion.ok` is a fresh array per result, so this fires once per job.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
 
   async function fetchTranscript(e: React.FormEvent) {
@@ -134,10 +114,10 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     setError(null);
     try {
       conversion.reset();
-      setConverted(new Map());
-      setRejectedIndexes(new Map());
       setBatchIndexes([]);
-      setData(await api.fetchTranscript(url.trim(), language || undefined));
+      const fetched = await api.fetchTranscript(url.trim(), language || undefined);
+      parts.reset(fetched.chunks);
+      setData(fetched);
     } catch (err) {
       setData(null);
       setError(err instanceof ApiError ? err.message : String(err));
@@ -322,13 +302,13 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   per-part conversion the two diverge immediately: converting
                   one part would otherwise report "1 of 1 converted" while 22
                   parts sat untouched. */}
-              {converted.size + rejectedIndexes.size > 0 && !conversion.running && (
+              {parts.convertedCount + parts.rejectedCount > 0 && !conversion.running && (
                 <div className="convert-summary" role="status">
-                  {converted.size} of {data.chunks.length} parts converted to{' '}
+                  {parts.convertedCount} of {data.chunks.length} parts converted to{' '}
                   {lastTarget === 'roman' ? 'Roman Urdu' : 'Urdu script'}
-                  {rejectedIndexes.size > 0 && (
+                  {parts.rejectedCount > 0 && (
                     <>
-                      {' '}— <strong>{rejectedIndexes.size} could not be converted</strong> and
+                      {' '}— <strong>{parts.rejectedCount} could not be converted</strong> and
                       are marked below; use each one's Convert button to retry
                     </>
                   )}
@@ -356,9 +336,13 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   // conversion has run, the original otherwise. Rejected parts
                   // are LEFT OUT rather than silently passed through in a
                   // script nothing can speak.
-                  converted.size
+                  parts.convertedCount
                     ? data.chunks
-                        .map((c) => converted.get(c.index))
+                        .map((c) =>
+                          parts.status(c.index) === 'rejected'
+                            ? undefined
+                            : parts.outgoing(c.index),
+                        )
                         .filter((t): t is string => Boolean(t))
                         // A blank line between parts: `direction_analyze`
                         // treats a newline as the longest pause there is, so
@@ -367,9 +351,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                     : data.text,
                 )
               }
-              disabled={needsConversion && converted.size === 0}
+              disabled={needsConversion && parts.convertedCount === 0}
               title={
-                needsConversion && converted.size === 0
+                needsConversion && parts.convertedCount === 0
                   ? 'Devanagari cannot be generated — convert it first'
                   : 'Put the whole transcript in the editor'
               }
@@ -409,17 +393,17 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                     something else often enough that a whole model was rejected
                     for it — so the source is what makes the suggestion
                     checkable rather than merely believable. */}
-                {converted.has(chunk.index) && (
+                {parts.get(chunk.index)?.converted != null && (
                   <p className="chunk-source" dir="auto" title="What the captions said">
                     {chunk.text}
                   </p>
                 )}
                 <p className="chunk-text" dir="auto">
-                  {converted.get(chunk.index) ?? chunk.text}
+                  {parts.outgoing(chunk.index)}
                 </p>
-                {rejectedIndexes.has(chunk.index) && (
+                {parts.get(chunk.index)?.rejection && (
                   <p className="chunk-rejected" role="status">
-                    <IconAlert size={13} /> {rejectedIndexes.get(chunk.index)}
+                    <IconAlert size={13} /> {parts.get(chunk.index)?.rejection}
                   </p>
                 )}
                 <div className="chunk-actions">
@@ -464,8 +448,8 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   <button
                     type="button"
                     className="btn-sm"
-                    onClick={() => onSendToEditor(converted.get(chunk.index) ?? chunk.text)}
-                    disabled={needsConversion && !converted.has(chunk.index)}
+                    onClick={() => onSendToEditor(parts.outgoing(chunk.index))}
+                    disabled={needsConversion && parts.status(chunk.index) === 'original'}
                   >
                     Send to editor
                   </button>
@@ -473,7 +457,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                     type="button"
                     className="btn-sm ghost"
                     onClick={() =>
-                      void copy(converted.get(chunk.index) ?? chunk.text, `c${chunk.index}`)
+                      void copy(parts.outgoing(chunk.index), `c${chunk.index}`)
                     }
                   >
                     {copied === `c${chunk.index}` ? <IconCheck size={13} /> : <IconCopy size={13} />}
