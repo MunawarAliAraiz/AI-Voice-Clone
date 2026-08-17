@@ -311,12 +311,16 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 <span className="muted">
                   {conversion.running
                     ? 'All parts convert in one pass — the model loads at most once.'
-                    : /* The honest number, up front. ~18 s per part is measured,
-                         not guessed, and a user who knows it is seven minutes
-                         will not read the spinner as a hang. */
+                    : /* The honest number, up front — a user who knows it is
+                         seven minutes will not read the spinner as a hang.
+                         MIRRORS app/jobs/estimate.py's two-term model; if that
+                         is re-solved, this must be too. Duplicated rather than
+                         fetched because it is needed BEFORE anything is
+                         enqueued, and a round-trip to price a button is worse
+                         than a constant with a pointer to its source. */
                       `About ${Math.max(
                         1,
-                        Math.round((data.text.length * 0.0328) / 60),
+                        Math.round((data.chunks.length * 7.03 + data.text.length * 0.0202) / 60),
                       )} min for all ${data.chunks.length} — one pass, one model load.`}
                 </span>
               </div>
