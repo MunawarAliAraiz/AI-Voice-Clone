@@ -10,6 +10,7 @@ import type {
   JobStatusResponse,
   PronunciationCreate,
   PronunciationUpdate,
+  TransliterateRequest,
 } from '../types/api';
 
 export const queryKeys = {
@@ -121,6 +122,39 @@ export function useAnalyzeLlmMutation() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
+  });
+}
+
+/**
+ * Enqueue a script conversion. Same shape as the two mutations above — a
+ * distinct job kind on the same `jobs` table — so the caller polls it with the
+ * existing `useJob`.
+ *
+ * A batch is ONE call on purpose: `convert_many` runs every chunk against one
+ * model residency, which from a cold start is the difference between one 19 GB
+ * load and forty-five.
+ */
+export function useTransliterateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TransliterateRequest) => api.transliterate(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+/**
+ * Server capacity and which optional features it can actually run.
+ *
+ * Polled rarely: whether this box has room for the ~19 GB transliterator is
+ * settled at startup and does not change while the app is open.
+ */
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: ['system'],
+    queryFn: api.system,
+    staleTime: 60_000,
   });
 }
 

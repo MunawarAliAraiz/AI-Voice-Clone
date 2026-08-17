@@ -18,6 +18,7 @@ import type {
   TTSGenerateRequest,
   TitleResponse,
   TranscriptResponse,
+  TransliterateRequest,
   VoiceProfile,
   VoiceProfileList,
 } from '../types/api';
@@ -208,6 +209,24 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, language: language || null }),
+    }),
+
+  /**
+   * Convert text between scripts. **202 + poll**, not synchronous — unlike
+   * `suggestTitle` below, this one touches the GPU.
+   *
+   * Send one `text` or many `texts`, never both. The server detects the SOURCE
+   * script from the text; `target` is the caller's choice and may be omitted
+   * for this source's usual destination.
+   *
+   * A 503 here means the server has no transliterator — read
+   * `SystemStatus.script_conversion.reason` and show it rather than retrying.
+   */
+  transliterate: (body: TransliterateRequest) =>
+    request<JobStatusResponse>('/api/text/transliterate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     }),
 
   suggestTitle: (text: string, language: string) =>

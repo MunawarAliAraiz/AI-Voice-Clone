@@ -1776,3 +1776,130 @@ textarea {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
+
+/* ── Script conversion (Import tab) ─────────────────────────────────────────
+   A panel rather than a lone button, because the choice it presents is between
+   two INTENTIONS — read it, or speak it — and a bare "Convert" would not say
+   which one is about to happen. */
+.convert-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.convert-why {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.convert-why svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warn);
+}
+
+.convert-target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.convert-target legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.convert-option {
+  display: flex;
+  flex: 1 1 220px;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3);
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.convert-option:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.convert-option input {
+  flex: none;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.convert-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.convert-option strong {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The trade-off, not a restatement of the label. "Urdu script" alone does not
+   tell you it skips the step you came here for. */
+.convert-option em {
+  font-size: var(--text-sm);
+  font-style: normal;
+  color: var(--muted);
+}
+
+.convert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.convert-summary {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--panel);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+/* The captions as they arrived, kept ABOVE the conversion. Three of the four
+   conversions have never passed a listening gate, and the gated one still
+   produces valid Urdu words meaning something else — so the source is what
+   makes a suggestion checkable rather than merely believable. */
+.chunk-source {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--line-strong);
+}
+
+.chunk-rejected {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}

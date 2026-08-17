@@ -12,7 +12,8 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
+import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
+import { useScriptConversion } from '../hooks/useScriptConversion';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
@@ -98,6 +99,21 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState('');
+  // The pre-conversion text, kept so Undo is possible. A conversion is a
+  // SUGGESTION, and one of the two things that makes it reviewable is being
+  // able to put it back — the other is seeing the source, which the transcript
+  // panel does and a single editor cannot.
+  const [preConvert, setPreConvert] = useState<string | null>(null);
+  const conversion = useScriptConversion();
+  const system = useSystemStatus();
+  // `false` until known: offering a control that then 503s is worse than one
+  // that appears a moment late.
+  //
+  // `script_conversion?` and not just `data?` — the frontend and backend deploy
+  // independently here (a local UI against a pod), so a server that predates
+  // this field is a real case, not a hypothetical. Without the second `?` it
+  // threw and took the whole Composer down with it.
+  const canConvert = system.data?.script_conversion?.available ?? false;
   const [err, setErr] = useState<string | null>(null);
   const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
 
@@ -264,6 +280,24 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
       }
     });
   }
+
+  // Apply a finished conversion to the editor.
+  //
+  // NOT automatic-and-silent: `preConvert` is set first so Undo works, and the
+  // banner below says which conversion ran. Three of the four have never
+  // passed a listening gate, and the gated one still produces valid Urdu words
+  // meaning something else — so this replaces the text and then asks the user
+  // to read it, rather than treating the model as correct.
+  useEffect(() => {
+    const first = conversion.ok[0]?.text;
+    if (!first) return;
+    setText((current) => {
+      if (current === first) return current;
+      setPreConvert(current);
+      return first;
+    });
+    // `conversion.ok` is a fresh array per result, so this fires once per job.
+  }, [conversion.ok]);
 
   // Debounced live script detection — powers the routability hint and dir.
   useEffect(() => {
@@ -823,9 +857,55 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
                 : (detect.hint ?? 'This text cannot be routed.')}
             </span>
           )}
+          {/* OFFERED, never applied on its own. Roman Urdu is routable — it
+              goes to VoxCPM2 — but A0 is the finding that the owner HEARD an
+              English accent from that path, which is the whole reason the
+              converter exists. So this appears whenever Urdu is being written
+              in Latin, routable or not, and says what it is for. */}
+          {canConvert && detect?.script === 'latin' && language === 'ur' && (
+            <button
+              type="button"
+              className="btn-sm ghost"
+              onClick={() => conversion.start([text.trim()], 'perso_arabic')}
+              disabled={conversion.running || !text.trim()}
+              title="Convert this Roman Urdu to Urdu script, which the Urdu voices read properly"
+            >
+              {conversion.running ? <IconSpinner size={13} /> : null}
+              {conversion.running ? 'Converting…' : 'Convert to Urdu script'}
+            </button>
+          )}
+          {preConvert !== null && (
+            <button
+              type="button"
+              className="btn-sm ghost"
+              onClick={() => {
+                setText(preConvert);
+                setPreConvert(null);
+                conversion.reset();
+              }}
+              title="Put back what you typed"
+            >
+              Undo conversion
+            </button>
+          )}
         </div>
         <kbd className="kbd">Ctrl + ↵</kbd>
       </div>
+
+      {/* The conversion happened; now READ IT. Said in the imperative because
+          the model's failure mode is a valid Urdu word that means something
+          else, which looks entirely correct in a text box. */}
+      {preConvert !== null && !conversion.running && (
+        <div className="convert-summary" role="status">
+          Converted to Urdu script. <strong>Read it before you generate</strong> — a wrong
+          word here is still a real word, so it will not look wrong.
+        </div>
+      )}
+      {conversion.error && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={13} /> {conversion.error}
+        </div>
+      )}
 
       <button
         type="button"
