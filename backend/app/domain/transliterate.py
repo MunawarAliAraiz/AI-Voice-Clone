@@ -74,6 +74,7 @@ from dataclasses import dataclass
 __all__ = [
     "TransliterationRejected",
     "MAX_INPUT_CHARS",
+    "MAX_BATCH_CHUNKS",
     "MIN_DEVANAGARI_SHARE",
     "MAX_RESIDUAL_SOURCE_SHARE",
     "TARGET_PERSO_ARABIC",
@@ -94,6 +95,15 @@ TARGET_ROMAN = "roman"
 #: batch runs its chunks in sequence against one residency, so an oversized
 #: single chunk is the thing that makes a batch unpredictable.
 MAX_INPUT_CHARS = 2000
+
+#: Chunks per batch. Bounds how long ONE job can hold the queue.
+#:
+#: 200 x 2000 chars is far more than any transcript this has seen (the owner's
+#: 104-minute podcast is ~45 chunks), and at ~3 s of generation each it is
+#: about ten minutes of GPU — long, but a single job the user chose to start
+#: rather than an unbounded one. The ceiling exists so "convert everything"
+#: cannot silently become an hour.
+MAX_BATCH_CHUNKS = 200
 
 #: A transliteration preserves roughly one sound per sound, so its length
 #: tracks the input's within a wide band. Perso-Arabic drops short vowels and

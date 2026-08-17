@@ -340,12 +340,24 @@ export interface GPUInfo {
   temperature_c: number | null;
 }
 
+/** Whether an optional feature can run here, and if not, WHY IN WORDS.
+ *  Render `reason` next to the disabled control — a feature that is merely
+ *  missing with no explanation leaves the user unable to tell "this server
+ *  can't" from "this is broken", and those have different next steps. */
+export interface FeatureAvailability {
+  available: boolean;
+  reason: string | null;
+}
+
 export interface SystemStatus {
   version: string;
   gpu: GPUInfo;
   resident_models: string[];
   workers_alive: number;
   fake_runtime_enabled: boolean;
+  /** Script conversion holds ~19 GB resident, which not every card has. The
+   *  app runs fine without it and says why rather than failing to start. */
+  script_conversion: FeatureAvailability;
 }
 
 /**
@@ -442,37 +454,57 @@ export interface TranscriptChunk {
 
 /** Body for `POST /api/text/transliterate` (202 + poll on `GET /api/jobs/{id}`).
  *
- *  There is no `source` field on purpose. The user declares the LANGUAGE, the
- *  server detects the SCRIPT — the same rule the whole app runs on, and why
- *  Roman Urdu and English can share the Latin alphabet without being
- *  confusable. The TARGET is ours to choose because "readable" and "speakable"
- *  are different things to want. */
+ *  Send `text` OR `texts`, never both. There is no `source` field on purpose:
+ *  the user declares the LANGUAGE, the server detects the SCRIPT — the same
+ *  rule the whole app runs on, and why Roman Urdu and English can share the
+ *  Latin alphabet without being confusable. The TARGET is ours to choose
+ *  because "readable" and "speakable" are different things to want. */
 export interface TransliterateRequest {
-  text: string;
+  text?: string;
+  /** Several chunks against ONE model residency. This is the shape a
+   *  transcript needs: ~45 chunks that would otherwise each pay a cold load. */
+  texts?: string[];
   instruction?: string;
-  /** Omit to get this source's usual destination: Roman Urdu → Perso-Arabic
-   *  (to speak it), Devanagari or Perso-Arabic → Roman (to read and edit it). */
+  /** Omit for this source's usual destination: Roman Urdu → Perso-Arabic (to
+   *  speak it), Devanagari or Perso-Arabic → Roman (to read and edit it). */
   target?: 'roman' | 'perso_arabic';
 }
 
-/** The `result` of a succeeded TRANSLITERATE job. */
-export interface TransliterateResult {
-  text: string;
+/** One chunk's outcome. A `rejected` item carries NO `text` — the user never
+ *  receives a string that is not a conversion of what they wrote. */
+export interface TransliterateItem {
+  index: number;
+  status: 'ok' | 'rejected';
   source_text: string;
-  /** `latin` | `devanagari` | `arabic`, detected from the text. */
+  /** Present only when `status === 'ok'`. */
+  text?: string;
+  /** Present only when `status === 'rejected'`. Stable code, so a client can
+   *  tell an echo from an answer from a summary without parsing prose. */
+  reason?: string;
+  detail?: string;
+  arabic_share?: number;
+  length_ratio?: number;
+  residual_source_share?: number;
+}
+
+/** The `result` of a succeeded TRANSLITERATE job.
+ *
+ *  Always a list, even for one passage. A job that succeeds may still contain
+ *  rejected chunks — check `rejected_count`. The job only FAILS when every
+ *  chunk was rejected. */
+export interface TransliterateResult {
+  items: TransliterateItem[];
+  ok_count: number;
+  rejected_count: number;
+  /** `latin` | `devanagari` | `arabic`, detected from the whole batch. */
   source_script: string;
   /** `perso_arabic` | `roman`. **Only `latin` → `perso_arabic` has passed a
    *  listening gate** — a result from any other pair must not be presented as
    *  a verified conversion. */
   target_script: string;
-  gen_time_sec: number;
+  /** Charged once for the batch, because the model loaded once. */
   load_time_sec: number;
-  arabic_share: number;
-  length_ratio: number;
-  /** Share of the output still in the SOURCE script. The Roman target's gate,
-   *  because Roman Urdu and English are both Latin and no check can tell them
-   *  apart — see the backend's MAX_RESIDUAL_SOURCE_SHARE. */
-  residual_source_share: number;
+  gen_time_sec: number;
 }
 
 export interface TranscriptResponse {

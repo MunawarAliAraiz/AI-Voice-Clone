@@ -128,7 +128,8 @@ async def transliterate(
             or "Script conversion is not available on this server."
         )
 
-    source = source_script_of(body.text)
+    texts = body.as_list()
+    source = source_script_of(" ".join(texts))
     target = body.target or target_script_for(source)
     if (source, target) not in SUPPORTED_PAIRS:
         raise UnsupportedConversionError(source, target)
@@ -136,7 +137,7 @@ async def transliterate(
     job = await runner.enqueue(
         JobKind.TRANSLITERATE,
         params={
-            "text": body.text,
+            "texts": texts,
             "instruction": body.instruction,
             # Resolved once, HERE, and stored on the row. The handler must not
             # re-derive it: same argument as golden rule 8's "route is resolved

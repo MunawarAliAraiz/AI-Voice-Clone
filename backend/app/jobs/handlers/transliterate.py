@@ -73,7 +73,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from ...domain.transliterate import (
-    MAX_INPUT_CHARS,
+    MAX_BATCH_CHUNKS,
     TransliterationRejected,
     source_script_of,
     target_script_for,
@@ -93,7 +93,9 @@ class TransliterateParams(BaseModel):
     loudly instead of being coerced into something plausible.
     """
 
-    text: str = Field(..., max_length=MAX_INPUT_CHARS)
+    #: Always a LIST on the row, even for a single passage. The endpoint
+    #: normalizes, so this layer never branches on which shape arrived.
+    texts: list[str] = Field(..., max_length=MAX_BATCH_CHUNKS)
     #: The user's own addition to the system prompt. Editable on purpose — a
     #: user who knows their dialect can improve it — which is exactly why the
     #: validator below is NOT optional.
@@ -121,45 +123,80 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
 
     # The SOURCE is detected here and never taken from the request — the user
     # declares the language, the code detects the script, the same rule the
-    # transcript endpoint's `script` field follows. The TARGET is the caller's
-    # choice and was settled at enqueue; falling back to the default only
-    # covers a row written before the field existed.
-    source_script = source_script_of(params.text)
+    # transcript endpoint's `script` field follows. Detected from the WHOLE
+    # batch joined, not per chunk: a transcript is one document in one script,
+    # and a short chunk that happens to be all English would otherwise pick a
+    # different exemplar set than the chunk before it.
+    source_script = source_script_of(" ".join(params.texts))
     target_script = params.target or target_script_for(source_script)
 
-    result = await ctx.transliterator.convert(
-        text=params.text,
+    results = await ctx.transliterator.convert_many(
+        texts=params.texts,
         instruction=params.instruction,
         source_script=source_script,
         target_script=target_script,
     )
 
-    try:
-        check = validate_transliteration(params.text, result.text, target_script)
-    except TransliterationRejected as exc:
-        # FAILED, carrying the reason code. The client can then tell an echo
-        # from an answer from a summary without parsing prose — and the user
-        # never receives text that is not a conversion of what they wrote.
-        raise TransliterationRejectedError(exc.detail, reason=exc.reason) from exc
-
-    return JobOutcome(
-        result={
+    items: list[dict] = []
+    rejected = 0
+    first_rejection: TransliterationRejected | None = None
+    for index, (source_text, result) in enumerate(zip(params.texts, results, strict=True)):
+        try:
+            check = validate_transliteration(source_text, result.text, target_script)
+        except TransliterationRejected as exc:
+            # NO TEXT ON A REJECTED ITEM. That is golden rule 5 at the item
+            # level: the user never receives a string that is not a conversion
+            # of what they wrote, whether it arrived alone or as chunk 37 of a
+            # transcript.
+            rejected += 1
+            first_rejection = first_rejection or exc
+            items.append({
+                "index": index,
+                "status": "rejected",
+                "source_text": source_text,
+                "reason": exc.reason,
+                "detail": exc.detail,
+            })
+            continue
+        items.append({
+            "index": index,
+            "status": "ok",
             "text": result.text.strip(),
-            "source_text": params.text,
-            #: Reported so a reviewer — and the UI — can see WHICH conversion
-            #: this was. The pair is the thing that was gated or not: only
-            #: latin -> perso_arabic has passed a listening gate, and a result
-            #: from the other pair must be identifiable as such rather than
-            #: looking like any other successful job.
-            "source_script": source_script,
-            "target_script": target_script,
-            "gen_time_sec": result.gen_time_sec,
-            "load_time_sec": result.load_time_sec,
+            "source_text": source_text,
             # The validator's measurements ride along rather than being
             # recomputed client-side: they are how a reviewer can see WHY
             # something passed, and a second implementation would drift.
             "arabic_share": check.arabic_share,
             "length_ratio": check.length_ratio,
             "residual_source_share": check.residual_source_share,
+        })
+
+    # ALL REJECTED -> the job FAILS, carrying the first reason code.
+    #
+    # This is what preserves the single-item behaviour exactly: one chunk
+    # rejected IS all chunks rejected, so a lone bad conversion still fails
+    # loudly rather than succeeding with an empty-looking result. What it adds
+    # is that chunk 37 of a transcript does not throw away the 44 that
+    # converted — those are real work the user can use, and each bad one is
+    # marked in place with its reason rather than silently dropped.
+    if rejected == len(items) and first_rejection is not None:
+        raise TransliterationRejectedError(
+            first_rejection.detail, reason=first_rejection.reason
+        )
+
+    return JobOutcome(
+        result={
+            "items": items,
+            "ok_count": len(items) - rejected,
+            "rejected_count": rejected,
+            #: Which conversion this was. The pair is the thing that was gated
+            #: or not: only latin -> perso_arabic has passed a listening gate,
+            #: and a result from another pair must be identifiable as such
+            #: rather than looking like any other successful job.
+            "source_script": source_script,
+            "target_script": target_script,
+            # Charged once, by `convert_many`, because the load happened once.
+            "load_time_sec": sum(r.load_time_sec for r in results),
+            "gen_time_sec": sum(r.gen_time_sec for r in results),
         }
     )

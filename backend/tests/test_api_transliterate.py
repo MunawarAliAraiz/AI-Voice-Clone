@@ -25,28 +25,51 @@ _URDU = "السلام علیکم، کیا حال ہے آپ کا؟"
 
 
 class _FakeTransliterator:
-    """Stands in for `TransliteratorScheduler`. Never touches a GPU."""
+    """
+    Stands in for `TransliteratorScheduler`. Never touches a GPU.
 
-    def __init__(self, text: str = _URDU, error: Exception | None = None) -> None:
+    `texts` may be a list, so a batch test can hand back a different output per
+    chunk; a single string is reused for every chunk, which is what most tests
+    want.
+    """
+
+    def __init__(
+        self,
+        text: str | list[str] = _URDU,
+        error: Exception | None = None,
+    ) -> None:
         self._text = text
         self._error = error
         self.calls: list[dict[str, Any]] = []
 
-    async def convert(
+    async def convert_many(
         self,
         *,
-        text: str,
+        texts: list[str],
         instruction: str = "",
         source_script: str = "latin",
         target_script: str = "perso_arabic",
-    ) -> TransliterateResult:
+    ) -> list[TransliterateResult]:
         self.calls.append({
-            "text": text, "instruction": instruction,
+            "texts": texts, "instruction": instruction,
             "source_script": source_script, "target_script": target_script,
         })
         if self._error is not None:
             raise self._error
-        return TransliterateResult(text=self._text, gen_time_sec=1.0, load_time_sec=78.4)
+        outs = (
+            self._text
+            if isinstance(self._text, list)
+            else [self._text] * len(texts)
+        )
+        return [
+            TransliterateResult(
+                text=out,
+                gen_time_sec=1.0,
+                # Only the first item carries the load, as the real one does.
+                load_time_sec=78.4 if i == 0 else 0.0,
+            )
+            for i, out in enumerate(outs)
+        ]
 
 
 def _client(tmp_path: Path, transliterator: Any | None = None):
@@ -79,9 +102,9 @@ def test_transliterate_enqueues_and_returns_the_converted_text(tmp_path: Path) -
 
         done = _poll(c, job["id"])
     assert done["status"] == "succeeded", done
-    assert done["result"]["text"] == _URDU
-    assert done["result"]["source_text"] == _ROMAN
-    assert fake.calls[0]["text"] == _ROMAN
+    assert done["result"]["items"][0]["text"] == _URDU
+    assert done["result"]["items"][0]["source_text"] == _ROMAN
+    assert fake.calls[0]["texts"] == [_ROMAN]
 
 
 def test_the_user_instruction_reaches_the_model(tmp_path: Path) -> None:
@@ -137,7 +160,7 @@ def test_a_correct_conversion_carries_the_validator_measurements(tmp_path: Path)
     with client as c:
         r = c.post("/api/text/transliterate", json={"text": _ROMAN})
         done = _poll(c, r.json()["id"])
-    assert done["result"]["arabic_share"] > 0.9
+    assert done["result"]["items"][0]["arabic_share"] > 0.9
     assert done["result"]["load_time_sec"] == 78.4
 
 
@@ -297,5 +320,122 @@ def test_the_client_cannot_choose_the_source_script(tmp_path: Path) -> None:
             json={"text": _HINDI, "source_script": "latin"},
         )
         assert r.status_code == 202
+        _poll(c, r.json()["id"])
+    assert fake.calls[0]["source_script"] == "devanagari"
+
+
+# --- batching -----------------------------------------------------------------
+# The reason the batch shape exists: a 90,000-character transcript is ~45
+# chunks, and from a COLD start the per-chunk endpoint would have loaded 19 GB
+# forty-five times at 150-330 s each.
+
+
+def test_a_batch_is_one_call_to_the_model(tmp_path: Path) -> None:
+    """
+    ONE `convert_many`, not N `convert`s. This is the entire optimisation:
+    the load is paid once because the scheduler is entered once.
+    """
+    client, fake = _client(tmp_path, _FakeTransliterator([_URDU, _URDU, _URDU]))
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": [_ROMAN, _ROMAN, _ROMAN]})
+        assert r.status_code == 202, r.text
+        done = _poll(c, r.json()["id"])
+    assert done["status"] == "succeeded", done
+    assert len(fake.calls) == 1, "the batch was split into separate model calls"
+    assert fake.calls[0]["texts"] == [_ROMAN, _ROMAN, _ROMAN]
+    assert done["result"]["ok_count"] == 3
+    assert [i["index"] for i in done["result"]["items"]] == [0, 1, 2]
+
+
+def test_one_bad_chunk_does_not_discard_the_good_ones(tmp_path: Path) -> None:
+    """
+    The batch's central product decision. Failing all 45 chunks because chunk 2
+    came back wrong throws away real work the user can use — but the bad one
+    must still be unmistakable, and must carry NO TEXT.
+    """
+    client, _ = _client(
+        tmp_path,
+        _FakeTransliterator([_URDU, "I cannot help with that request.", _URDU]),
+    )
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": [_ROMAN, _ROMAN, _ROMAN]})
+        done = _poll(c, r.json()["id"])
+
+    assert done["status"] == "succeeded", done
+    result = done["result"]
+    assert result["ok_count"] == 2
+    assert result["rejected_count"] == 1
+
+    bad = result["items"][1]
+    assert bad["status"] == "rejected"
+    assert bad["reason"] == "not_urdu_script"
+    assert "text" not in bad, "a rejected chunk must not carry its text"
+    assert result["items"][0]["text"] == _URDU
+    assert result["items"][2]["text"] == _URDU
+
+
+def test_every_chunk_rejected_still_FAILS_the_job(tmp_path: Path) -> None:
+    """
+    What keeps the single-item behaviour intact: one chunk rejected IS all
+    chunks rejected, so a lone bad conversion fails loudly rather than
+    succeeding with a result full of nothing.
+    """
+    client, _ = _client(tmp_path, _FakeTransliterator("I cannot help with that."))
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": [_ROMAN, _ROMAN]})
+        done = _poll(c, r.json()["id"])
+    assert done["status"] == "failed"
+    assert done["error"]["code"] == "TRANSLITERATION_REJECTED"
+    assert done["result"] is None
+
+
+def test_the_load_is_charged_once_across_a_batch(tmp_path: Path) -> None:
+    """A caller summing per-item load times would otherwise see 3x a load that
+    happened once, and conclude the batch bought nothing."""
+    client, _ = _client(tmp_path, _FakeTransliterator([_URDU, _URDU, _URDU]))
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": [_ROMAN] * 3})
+        done = _poll(c, r.json()["id"])
+    assert done["result"]["load_time_sec"] == 78.4
+
+
+def test_both_text_and_texts_is_refused(tmp_path: Path) -> None:
+    """A caller that sends both does not know which it meant, and silently
+    picking would send one to a GPU while discarding the other."""
+    client, fake = _client(tmp_path)
+    with client as c:
+        r = c.post(
+            "/api/text/transliterate", json={"text": _ROMAN, "texts": [_ROMAN]}
+        )
+    assert r.status_code == 422
+    assert fake.calls == []
+
+
+def test_neither_text_nor_texts_is_refused(tmp_path: Path) -> None:
+    client, _ = _client(tmp_path)
+    with client as c:
+        assert c.post("/api/text/transliterate", json={}).status_code == 422
+
+
+def test_an_oversized_batch_is_refused_before_the_gpu(tmp_path: Path) -> None:
+    """The ceiling exists so "convert everything" cannot silently become an
+    hour of GPU held by one job."""
+    client, fake = _client(tmp_path)
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": [_ROMAN] * 500})
+    assert r.status_code == 422
+    assert fake.calls == []
+
+
+def test_the_source_is_detected_from_the_whole_batch(tmp_path: Path) -> None:
+    """
+    Not per chunk. A transcript is one document in one script, and a short
+    chunk that happens to be all-English would otherwise pick a different
+    exemplar set than the chunk before it.
+    """
+    client, fake = _client(tmp_path, _FakeTransliterator([_ROMAN_OF_HINDI] * 2))
+    with client as c:
+        r = c.post("/api/text/transliterate", json={"texts": ["Ok fine", _HINDI]})
+        assert r.status_code == 202, r.text
         _poll(c, r.json()["id"])
     assert fake.calls[0]["source_script"] == "devanagari"
