@@ -47,6 +47,14 @@ export interface ScriptConversion {
   queuePosition: number | null;
   /** 'queued' while something else holds the GPU, 'running' once it is ours. */
   phase: 'idle' | 'queued' | 'running';
+  /** What a spinner should say instead of "Converting…".
+   *
+   *  LIVES HERE, not in a component, because both the Import tab and the
+   *  Composer show it and a second copy would drift. A bare spinner cannot
+   *  distinguish "waiting behind another job" from "working on yours", and at
+   *  these durations (~7 s per chunk, ~19 s for a 600-char part, minutes for a
+   *  transcript) an unlabelled one is indistinguishable from a hang. */
+  progressLabel: string;
   start: (texts: string[], target?: 'roman' | 'perso_arabic') => void;
   reset: () => void;
 }
@@ -103,7 +111,26 @@ export function useScriptConversion(): ScriptConversion {
           ? 'running'
           : 'idle';
 
+  const queuePosition = data?.position ?? null;
+  const etaSec = data?.eta_sec ?? null;
+
+  // Queue position first: "waiting behind 2 jobs" is a different fact from
+  // "about a minute left", and reporting only the ETA made a queued job look
+  // like a running one.
+  let progressLabel = 'Converting…';
+  if (phase === 'queued' && (queuePosition ?? 0) > 0) {
+    progressLabel = `Waiting for ${queuePosition} conversion${
+      queuePosition === 1 ? '' : 's'
+    } ahead…`;
+  } else if (etaSec != null) {
+    progressLabel =
+      etaSec < 60
+        ? `Converting — about ${Math.max(1, Math.round(etaSec))}s left`
+        : `Converting — about ${Math.round(etaSec / 60)} min left`;
+  }
+
   return {
+    progressLabel,
     etaSec: data?.eta_sec ?? null,
     queuePosition: data?.position ?? null,
     phase,

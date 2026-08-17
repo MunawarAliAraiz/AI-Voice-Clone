@@ -871,7 +871,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
               title="Convert this Roman Urdu to Urdu script, which the Urdu voices read properly"
             >
               {conversion.running ? <IconSpinner size={13} /> : null}
-              {conversion.running ? 'Converting…' : 'Convert to Urdu script'}
+              {conversion.running ? conversion.progressLabel : 'Convert to Urdu script'}
             </button>
           )}
           {preConvert !== null && (

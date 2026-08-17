@@ -128,27 +128,6 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     });
   }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
 
-  //: What the spinner should have been saying all along.
-  //:
-  //: A 23-part transcript takes about seven minutes (measured: 420.8 s for
-  //: 12,839 characters), and a spinner with no number attached is
-  //: indistinguishable from a hang at that length. Worse, a per-part
-  //: conversion QUEUED behind a whole-transcript one looks identical to one
-  //: that is running — which is exactly what happened: part 1 sat at
-  //: position 1 behind a 23-part job and read as "converting the whole thing
-  //: again".
-  const progressLabel = () => {
-    if (conversion.phase === 'queued' && (conversion.queuePosition ?? 0) > 0) {
-      return `Waiting for ${conversion.queuePosition} conversion${
-        conversion.queuePosition === 1 ? '' : 's'
-      } ahead of this one…`;
-    }
-    const eta = conversion.etaSec;
-    if (eta == null) return 'Converting…';
-    if (eta < 60) return `Converting — about ${Math.max(1, Math.round(eta))}s left`;
-    return `Converting — about ${Math.round(eta / 60)} min left`;
-  };
-
   async function fetchTranscript(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -302,7 +281,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 >
                   {conversion.running && busyIndex === null ? <IconSpinner size={14} /> : null}
                   {conversion.running && busyIndex === null
-                    ? progressLabel()
+                    ? conversion.progressLabel
                     : `Convert all ${data.chunks.length} parts`}
                 </button>
                 {/* One model load for the whole transcript is the entire point
@@ -477,7 +456,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                       </button>
                       {busyIndex === chunk.index && conversion.running && (
                         <span className="muted chunk-progress">
-                          <IconSpinner size={13} /> {progressLabel()}
+                          <IconSpinner size={13} /> {conversion.progressLabel}
                         </span>
                       )}
                     </>
