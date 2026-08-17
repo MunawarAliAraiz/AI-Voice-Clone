@@ -195,6 +195,82 @@ def test_a_region_tagged_track_matches_a_bare_language(
     assert r.json()["chosen_track"]["language"] == "ur-PK"
 
 
+def test_a_translated_track_never_beats_the_videos_own_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    REGRESSION, caught by a REAL fetch and not by this file's earlier fixtures.
+
+    A popular video carries dozens of community translations, so "the first
+    authored track" is effectively alphabetical — fetching an English lecture
+    returned its ARABIC translation. A translation is not what the speaker
+    said, which is the entire thing being handed to a voice model.
+
+    `ar` deliberately sorts before `en` here, exactly as it did on the real
+    video, so this fails if the ordering rule regresses.
+    """
+    _install_fakes(monkeypatch, info={
+        "title": "But what is a neural network?",
+        "duration": 1120.0,
+        "language": "en",
+        "subtitles": {
+            "ar": [{"ext": "json3", "url": "https://example.invalid/ar.json3"}],
+            "de": [{"ext": "json3", "url": "https://example.invalid/de.json3"}],
+            "en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}],
+        },
+    })
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/transcript/fetch",
+            json={"url": "https://youtu.be/aircAruvnKk"},
+        )
+    assert r.json()["chosen_track"]["language"] == "en"
+
+
+def test_english_wins_when_the_videos_language_is_unknown(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One step weaker than the rule above: with no `language` on the video,
+    the source track is far more often English than whichever locale sorts
+    first."""
+    _install_fakes(monkeypatch, info={
+        "title": "T",
+        "duration": 10.0,
+        "subtitles": {
+            "ar": [{"ext": "json3", "url": "https://example.invalid/ar.json3"}],
+            "en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}],
+        },
+    })
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/transcript/fetch",
+            json={"url": "https://youtu.be/dQw4w9WgXcQ"},
+        )
+    assert r.json()["chosen_track"]["language"] == "en"
+
+
+def test_an_explicit_request_still_beats_the_videos_own_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Asking for Urdu on an English video must give Urdu — the ordering rule
+    is a DEFAULT, not an override of what the caller said."""
+    _install_fakes(monkeypatch, info={
+        "title": "T",
+        "duration": 10.0,
+        "language": "en",
+        "subtitles": {
+            "en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}],
+            "ur": [{"ext": "json3", "url": "https://example.invalid/ur.json3"}],
+        },
+    })
+    with _client(tmp_path) as c:
+        r = c.post(
+            "/api/transcript/fetch",
+            json={"url": "https://youtu.be/dQw4w9WgXcQ", "language": "ur"},
+        )
+    assert r.json()["chosen_track"]["language"] == "ur"
+
+
 # ── Failure modes ────────────────────────────────────────────────────────────
 
 

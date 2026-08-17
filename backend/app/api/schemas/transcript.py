@@ -53,8 +53,18 @@ class TranscriptResponse(BaseModel):
     video_id: str
     title: str | None = None
     duration_sec: float | None = None
-    #: Every track found, so the caller can re-request a different one.
+    #: Tracks worth re-requesting — NOT every track found.
+    #:
+    #: A real video measured **4867** of them, 4837 being YouTube's machine
+    #: auto-translations into every language it supports, at **367 KB of
+    #: JSON** for a list no UI can meaningfully present. What is useful is the
+    #: authored tracks (someone wrote them) plus whichever one was chosen, so
+    #: that is what this carries. See `_selectable_tracks`.
     available_tracks: list[TranscriptTrack]
+    #: How many tracks existed before that trim, so the number is not simply
+    #: lost. A caller can still request any language by code — the list is a
+    #: convenience, not the set of what is permitted.
+    total_tracks: int
     chosen_track: TranscriptTrack
     text: str
     #: Detected script of the transcript (`latin`, `arabic`, `devanagari`, …),

@@ -444,7 +444,11 @@ export interface TranscriptResponse {
   video_id: string;
   title: string | null;
   duration_sec: number | null;
+  /** Authored tracks plus the chosen one — NOT every track. A real video had
+   *  4867, almost all machine auto-translations, at 367 KB of JSON. */
   available_tracks: TranscriptTrack[];
+  /** How many existed before that trim, so the number is not silently lost. */
+  total_tracks: number;
   chosen_track: TranscriptTrack;
   text: string;
   /** `latin` | `arabic` | `devanagari` | ... — the same detector routing uses. */

@@ -114,26 +114,77 @@ def _tracks(info: dict[str, Any]) -> list[tuple[TranscriptTrack, str]]:
     return out
 
 
+def _match(tracks: list[tuple[TranscriptTrack, str]], want: str | None):
+    """
+    First track whose language matches `want`, prefix-compared.
+
+    Prefix-matched (`ur` matches `ur-PK`) because YouTube tags regions
+    inconsistently and an exact match would miss the track plainly meant.
+    """
+    if not want:
+        return None
+    base = want.lower().split("-")[0]
+    for track, url in tracks:
+        if track.language.lower().split("-")[0] == base:
+            return track, url
+    return None
+
+
 def _choose(
-    tracks: list[tuple[TranscriptTrack, str]], preferred: str | None
+    tracks: list[tuple[TranscriptTrack, str]],
+    preferred: str | None,
+    video_language: str | None,
 ) -> tuple[TranscriptTrack, str]:
     """
-    Pick a track: the requested language if present, else the first authored
-    one, else the first of anything.
+    Pick a track, in order: what was asked for, the video's OWN language,
+    English, the first authored track, anything.
 
-    Prefix-matched (`ur` matches `ur-PK`), because YouTube's language tags
-    carry regions inconsistently and an exact match would miss the track the
-    user plainly meant.
+    THE VIDEO'S OWN LANGUAGE IS NOT A NICETY — it is the difference between a
+    transcript and a translation. A popular video carries dozens of
+    community-translated tracks, and "the first authored one" is then
+    effectively alphabetical: fetching an English lecture returned its ARABIC
+    translation, caught only by a real fetch because the unit fixture had a
+    single authored track. A translation is not what the speaker said, which
+    is the entire thing this feature exists to hand to a voice model.
+
+    English before "first authored" for the same reason, one step weaker: when
+    the original language is unknown, the source track is far more often
+    English than it is whichever locale sorts first.
     """
-    if preferred:
-        want = preferred.lower()
-        for track, url in tracks:
-            if track.language.lower().split("-")[0] == want.split("-")[0]:
-                return track, url
+    for candidate in (
+        _match(tracks, preferred),
+        _match(tracks, video_language),
+        _match(tracks, "en"),
+    ):
+        if candidate is not None:
+            return candidate
     for track, url in tracks:
         if not track.is_auto_generated:
             return track, url
     return tracks[0]
+
+
+def _selectable_tracks(
+    tracks: list[tuple[TranscriptTrack, str]], chosen: TranscriptTrack
+) -> list[TranscriptTrack]:
+    """
+    The tracks worth offering back: authored ones, plus whichever was chosen.
+
+    A real video measured 4867 tracks — 4837 of them YouTube auto-translating
+    the same source into every language it supports, totalling 367 KB of JSON
+    for a list no UI can present and nothing here reads. The authored ones are
+    the meaningful choice (a person wrote each), and the chosen track is
+    included even when auto-generated so the response never describes a
+    selection missing from its own list.
+
+    Not a hard cap: this is a CONVENIENCE list, not the set of permitted
+    values. A caller can still name any language code in the request.
+    """
+    out = [t for t, _ in tracks if not t.is_auto_generated]
+    if not any(t.language == chosen.language and t.is_auto_generated == chosen.is_auto_generated
+               for t in out):
+        out.insert(0, chosen)
+    return out
 
 
 @router.post("/fetch", response_model=TranscriptResponse)
@@ -169,7 +220,7 @@ async def fetch_transcript(
             "or pick a video that publishes a transcript."
         )
 
-    chosen, url = _choose(tracks, body.language)
+    chosen, url = _choose(tracks, body.language, (info or {}).get("language"))
 
     try:
         import httpx
@@ -218,7 +269,8 @@ async def fetch_transcript(
         video_id=video_id,
         title=(info or {}).get("title"),
         duration_sec=(info or {}).get("duration"),
-        available_tracks=[t for t, _ in tracks],
+        available_tracks=_selectable_tracks(tracks, chosen),
+        total_tracks=len(tracks),
         chosen_track=chosen,
         text=text,
         script=script.value,
