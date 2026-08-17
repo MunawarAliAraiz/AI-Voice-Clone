@@ -200,18 +200,33 @@ def create_app(
                         continue
                     if settings.warm_synth_on_startup:
                         await _warm_synth(app, settings, model_id)
-                await _warm_transliterator(app)
 
             warm_task = asyncio.create_task(_warm())
             app.state.warm_task = warm_task
 
+        # SEPARATE TASK, NOT APPENDED TO THE AUDIO WARM — and the difference is
+        # not tidiness. `warm_on_startup` is unset on a default deployment, so
+        # folding this into the block above meant Gemma silently never warmed,
+        # and every first conversion paid the full 150-330 s load. Caught on the
+        # pod: the API was up and answering with VRAM sitting at 0.
+        #
+        # They are independent concerns anyway. Audio warming is a nicety (a
+        # cold audio model costs ~20-60 s); the transliterator is the one that
+        # costs five minutes, so if anything it wants warming MORE — not only
+        # when someone happened to also list audio models.
+        translit_task: asyncio.Task[None] | None = None
+        if getattr(app.state, "transliterator", None) is not None:
+            translit_task = asyncio.create_task(_warm_transliterator(app))
+            app.state.transliterator_warm_task = translit_task
+
         try:
             yield
         finally:
-            if warm_task is not None and not warm_task.done():
-                warm_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await warm_task
+            for task in (warm_task, translit_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
             if getattr(app.state, "owns_jobs", False):
                 # Never mark in-flight rows failed here — the disk isn't
                 # trustworthy mid-shutdown. The next boot's reap_stale
