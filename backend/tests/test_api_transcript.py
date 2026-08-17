@@ -16,6 +16,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.domain.youtube import cues_to_text, parse_json3
 from app.main import create_app
 from tests.fakes import FakeScheduler
 
@@ -395,3 +396,170 @@ def test_a_missing_yt_dlp_does_not_masquerade_as_rate_limiting(
     # The specific regression: it must NOT blame the network.
     assert "rate limit" not in body["detail"].lower()
     assert "try again" not in body["detail"].lower()
+
+
+# ── Chapter-aware chunking ───────────────────────────────────────────────────
+# The cues are chunked once per chapter, so a part never straddles a topic
+# change. `_install_fakes` already lets `chapters` be just another key in the
+# fake `info` dict.
+
+
+def _chaptered_json3() -> dict[str, Any]:
+    """Two chapters' worth of cues. Cue N starts at N seconds (see `_json3`),
+    so a boundary at 2 s puts the first two cues in one chapter and the rest in
+    the next."""
+    return _json3(
+        "One two three four five six seven eight nine ten eleven twelve.",
+    )
+
+
+def test_a_video_with_no_chapters_behaves_exactly_as_before(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """
+    THE REGRESSION THAT MATTERS MOST.
+
+    Chapter grouping is an enhancement; a chapter-less video is the common case
+    and must be untouched by it. `group_cues` returns exactly one group when
+    there are no chapters, so this asserts the whole pipeline collapses back to
+    a single pass — same text, same chunks, same indexes.
+
+    Asserted for `chapters` both ABSENT and explicitly `None`, because yt-dlp
+    does both and only one of them is the obvious case.
+    """
+    results = []
+    for chapters in (None, "absent"):
+        info: dict[str, Any] = {
+            "title": "A talk", "duration": 630.0,
+            "subtitles": {"en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}]},
+        }
+        if chapters is None:
+            info["chapters"] = None
+        _install_fakes(monkeypatch, info=info)
+        with _client(tmp_path) as c:
+            body = c.post("/api/transcript/fetch", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}).json()
+        results.append(body)
+        assert body["chapters"] == []
+        assert body["truncated"] is False
+        assert all(ch["chapter_index"] is None for ch in body["chunks"])
+
+    # Both spellings of "no chapters" produce identical output.
+    assert results[0]["text"] == results[1]["text"]
+    assert results[0]["chunks"] == results[1]["chunks"]
+
+
+def test_no_chapters_adds_no_newline_of_its_own(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """
+    Guards the ~380 ms silence rule directly.
+
+    NOT "the text contains no newlines" — that was this test's first draft and
+    it was wrong. `cues_to_text` emits newlines at real sentence boundaries and
+    always has; that is the paragraph behaviour `direction_analyze` depends on.
+
+    What must not happen is the CHAPTER JOIN adding one. A topic change earns a
+    blank line; a video with no topic changes must earn nothing. Asserted as
+    byte-identity against the pure function, so it cannot pass by coincidence.
+    """
+    payload = _json3(
+        "Hello there this is the first sentence of the talk.",
+        "And here is the second one for you.",
+    )
+    _install_fakes(monkeypatch, payload=payload)
+    with _client(tmp_path) as c:
+        body = c.post(
+            "/api/transcript/fetch",
+            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        ).json()
+
+    assert body["text"] == cues_to_text(parse_json3(payload))
+
+
+def test_chunk_indexes_are_global_across_chapters(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """
+    `chunk_for_synthesis` numbers from 0 on every call, and it is now called
+    once per chapter. Without global re-numbering several parts share an index,
+    and the UI keys conversion results off it — part 8's Urdu would be written
+    onto part 1 and look completely plausible there.
+    """
+    _install_fakes(monkeypatch, info={
+        "title": "Chaptered", "duration": 60.0,
+        "chapters": [
+            {"start_time": 0, "end_time": 2, "title": "Intro"},
+            {"start_time": 2, "title": "Body"},
+        ],
+        "subtitles": {"en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}]},
+    }, payload=_chaptered_json3())
+    with _client(tmp_path, transcript_chunk_chars=40, transcript_chunk_min_chars=0) as c:
+        body = c.post("/api/transcript/fetch", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}).json()
+
+    indexes = [ch["index"] for ch in body["chunks"]]
+    assert indexes == list(range(len(indexes))), indexes
+    assert len(indexes) == len(set(indexes)), "duplicate index across chapters"
+
+
+def test_a_part_never_straddles_a_chapter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The whole point of chunking per chapter. Every part's text must be
+    contained in the text of the chapter it claims."""
+    _install_fakes(monkeypatch, info={
+        "title": "Chaptered", "duration": 60.0,
+        "chapters": [
+            {"start_time": 0, "end_time": 2, "title": "Intro"},
+            {"start_time": 2, "title": "Body"},
+        ],
+        "subtitles": {"en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}]},
+    }, payload=_chaptered_json3())
+    with _client(tmp_path, transcript_chunk_chars=40, transcript_chunk_min_chars=0) as c:
+        body = c.post("/api/transcript/fetch", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}).json()
+
+    assert len(body["chapters"]) == 2
+    assert [c["title"] for c in body["chapters"]] == ["Intro", "Body"]
+    # A chapter boundary is a paragraph break in the joined text.
+    assert "\n\n" in body["text"]
+
+    # Every chunk names a chapter that exists, and no chunk's text spans the
+    # boundary between the two chapter bodies.
+    known = {c["index"] for c in body["chapters"]}
+    for chunk in body["chunks"]:
+        assert chunk["chapter_index"] in known
+        assert "\n\n" not in chunk["text"]
+
+
+def test_a_chapter_with_no_cues_is_not_advertised(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A heading with no parts under it reads as a broken transcript rather
+    than a quiet stretch of video, so it is dropped from `chapters` too — not
+    just from the grouping."""
+    _install_fakes(monkeypatch, info={
+        "title": "Chaptered", "duration": 6000.0,
+        "chapters": [
+            {"start_time": 0, "title": "Talking"},
+            {"start_time": 5000, "title": "Silent outro"},
+        ],
+        "subtitles": {"en": [{"ext": "json3", "url": "https://example.invalid/en.json3"}]},
+    })
+    with _client(tmp_path) as c:
+        body = c.post("/api/transcript/fetch", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}).json()
+    assert [c["title"] for c in body["chapters"]] == ["Talking"]
+
+
+def test_truncation_is_reported_rather_than_only_logged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Hitting the ceiling used to be a `logger.warning` and nothing else, so
+    the user was handed a silently shortened transcript."""
+    _install_fakes(monkeypatch)
+    with _client(tmp_path, transcript_max_chars=40) as c:
+        body = c.post("/api/transcript/fetch", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}).json()
+
+    assert body["truncated"] is True
+    assert len(body["text"]) <= 40
+    # And no chunk quotes text that was cut away.
+    for chunk in body["chunks"]:
+        assert chunk["text"] in body["text"]

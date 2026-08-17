@@ -36,7 +36,15 @@ from starlette.concurrency import run_in_threadpool
 from ...config import Settings
 from ...domain.language import Script, profile_text
 from ...domain.text import chunk_for_synthesis
-from ...domain.youtube import InvalidVideoUrl, cues_to_text, parse_json3, parse_video_id
+from ...domain.youtube import (
+    InvalidVideoUrl,
+    TranscriptChapter,
+    cues_to_text,
+    group_cues,
+    parse_chapters,
+    parse_json3,
+    parse_video_id,
+)
 from ...exceptions import (
     InvalidVideoUrlError,
     TranscriptFetchFailedError,
@@ -46,6 +54,7 @@ from ...exceptions import (
 from ...inference.catalog import ModelCatalog
 from ..deps import get_catalog, get_settings
 from ..schemas.transcript import (
+    TranscriptChapterInfo,
     TranscriptChunk,
     TranscriptRequest,
     TranscriptResponse,
@@ -258,25 +267,77 @@ async def fetch_transcript(
             "with no text in it."
         )
 
-    text = cues_to_text(cues)
-    if len(text) > settings.transcript_max_chars:
-        text = text[: settings.transcript_max_chars]
+    # ── Chapters ────────────────────────────────────────────────────────────
+    # Chunk PER CHAPTER so a part never straddles one. A chapter boundary is a
+    # real content boundary — the speaker changed topic — and `chunk_for_
+    # synthesis` has no way to know that from the text alone.
+    #
+    # With no chapters `group_cues` returns exactly one group, so everything
+    # below collapses to a single pass and the output is byte-identical to the
+    # pre-chapters behaviour. That equality is a test, not a hope.
+    chapters = parse_chapters((info or {}).get("chapters"))
+    groups = group_cues(cues, chapters)
+
+    # TRUNCATE WHILE WALKING THE GROUPS, not on the joined string afterwards.
+    # Cutting the join would leave chunks quoting text that is not in `text`.
+    kept: list[tuple[TranscriptChapter | None, str]] = []
+    budget = settings.transcript_max_chars
+    truncated = False
+    for chapter, group_cue_list in groups:
+        group_text = cues_to_text(group_cue_list)
+        if not group_text:
+            continue
+        if len(group_text) > budget:
+            group_text = group_text[:budget]
+            truncated = True
+        if group_text:
+            kept.append((chapter, group_text))
+        budget -= len(group_text)
+        if budget <= 0:
+            truncated = truncated or bool(groups[len(kept):])
+            break
+    if truncated:
         logger.warning("transcript for %s truncated to the configured ceiling", video_id)
+
+    # A blank line between chapters: `direction_analyze` reads a newline as the
+    # longest pause there is, and a topic change is exactly where ~380 ms of
+    # silence belongs. ONE group means no join and therefore no newline.
+    text = "\n\n".join(group_text for _, group_text in kept)
 
     # Same detector routing uses, so what this reports and what `resolve()`
     # would decide cannot drift apart.
+    #
+    # Detected ONCE, from the whole transcript, and then handed to every
+    # per-chapter chunking call below. Detecting per chapter would let an
+    # English-heavy chapter pick a different sentence-terminator set than the
+    # chapter beside it. `jobs/handlers/transliterate.py` refuses the same
+    # thing for the same reason.
     profile = profile_text(text, "ur")
     script = profile.script
     needs_transliteration = script is Script.DEVANAGARI and not catalog.candidates(
         "hi", Script.DEVANAGARI
     )
 
-    chunks = chunk_for_synthesis(
-        text,
-        script,
-        max_chars=settings.transcript_chunk_chars,
-        min_chars=settings.transcript_chunk_min_chars,
-    )
+    # Chunk each chapter separately, then re-number GLOBALLY. `chunk_for_
+    # synthesis` numbers from 0 per call, and leaving those in place would give
+    # several parts the same index — which the UI keys conversion results off,
+    # so part 8's Urdu would land on part 1 and look entirely plausible there.
+    api_chunks: list[TranscriptChunk] = []
+    for chapter, group_text in kept:
+        for chunk in chunk_for_synthesis(
+            group_text,
+            script,
+            max_chars=settings.transcript_chunk_chars,
+            min_chars=settings.transcript_chunk_min_chars,
+        ):
+            api_chunks.append(
+                TranscriptChunk(
+                    index=len(api_chunks),
+                    text=chunk.text,
+                    ends_on_sentence=chunk.ends_on_sentence,
+                    chapter_index=chapter.index if chapter else None,
+                )
+            )
 
     return TranscriptResponse(
         video_id=video_id,
@@ -288,10 +349,16 @@ async def fetch_transcript(
         text=text,
         script=script.value,
         needs_transliteration=needs_transliteration,
-        chunks=[
-            TranscriptChunk(
-                index=c.index, text=c.text, ends_on_sentence=c.ends_on_sentence
+        chapters=[
+            TranscriptChapterInfo(
+                index=c.index, title=c.title,
+                start_sec=c.start_sec, end_sec=c.end_sec,
             )
-            for c in chunks
+            # Only the chapters that survived grouping and truncation — a
+            # heading with no parts under it reads as a broken transcript.
+            for c in chapters
+            if any(k[0] is not None and k[0].index == c.index for k in kept)
         ],
+        truncated=truncated,
+        chunks=api_chunks,
     )
