@@ -86,21 +86,59 @@ export default function App() {
     setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
 
-  const onJobSettled = useCallback(
-    (job: JobStatusResponse) => {
-      // Named, because several can be in flight at once now — "Generation
-      // complete" tells you nothing about WHICH one finished.
+  // Announce EVERY job that settles, from the polled list — not just the one
+  // the Composer happens to be tracking.
+  //
+  // The bug this fixes: `onJobSettled` fires from `Composer`'s `useJob(jobId)`,
+  // which follows only the MOST RECENT submission. Queue a second generation
+  // and the first one's failure could never reach a toast, because nothing was
+  // watching it any more. The same held for a job the server interrupted while
+  // the page was elsewhere — it went from the in-progress strip to nothing,
+  // silently, which is exactly what it looked like from the outside.
+  //
+  // Seeded on first arrival rather than starting empty: without that, opening
+  // the app would toast every historical failure still inside the retention
+  // window at once.
+  const announcedJobs = useRef<Set<number> | null>(null);
+  useEffect(() => {
+    const items = jobsQ.data?.items;
+    if (!items) return;
+
+    const terminal = items.filter(
+      (j) => j.status === 'failed' || j.status === 'cancelled' || j.status === 'succeeded',
+    );
+
+    if (announcedJobs.current === null) {
+      announcedJobs.current = new Set(terminal.map((j) => j.id));
+      return;
+    }
+
+    let anySucceeded = false;
+    for (const job of terminal) {
+      if (announcedJobs.current.has(job.id)) continue;
+      announcedJobs.current.add(job.id);
       const name = job.title || job.input_text?.slice(0, 40) || null;
       if (job.status === 'succeeded') {
+        anySucceeded = true;
         addToast('success', name ? `“${name}” is ready.` : 'Generation complete.');
       } else if (job.status === 'failed') {
-        const why = job.error?.detail ?? 'Generation failed.';
+        const why =
+          (job.error?.detail as string | undefined) ?? 'Generation failed.';
         addToast('error', name ? `“${name}” failed — ${why}` : why);
       }
-      // 'cancelled' gets no toast — the user just clicked Cancel, they know.
-    },
-    [addToast]
-  );
+      // 'cancelled' stays silent: the user clicked Cancel, they know.
+    }
+
+    // THE VANISHING GENERATION. A succeeded job is deliberately excluded from
+    // Recent because it belongs in History — but History is a SEPARATE query,
+    // and the only thing refreshing it was the Composer, for the single job it
+    // was tracking. Any other job — a retry, or the first of two queued
+    // generations — left Recent the moment it succeeded and never arrived in
+    // History, so it appeared in neither list until a reload refetched
+    // history. It was never lost; it was just briefly invisible in both
+    // places at once, which is worse.
+    if (anySucceeded) invalidateHistory();
+  }, [jobsQ.data, addToast, invalidateHistory]);
 
   // Acknowledge the enqueue immediately. Generate returns in milliseconds now,
   // so without this the only feedback for a job that takes a minute is a row
@@ -194,7 +232,16 @@ export default function App() {
         id={`panel-${activeTab}`}
         aria-labelledby={`tab-${activeTab}`}
       >
-        {activeTab === 'studio' && (
+        {/* HIDDEN, NOT UNMOUNTED. `activeTab === 'studio' && …` destroyed the
+            Composer's state every time you looked at another tab — text,
+            title, voice, model and speed all reset, so glancing at Recent
+            mid-compose lost the draft. Composer state is deliberately local
+            component state (there is no store), which makes unmounting
+            equivalent to discarding the draft.
+
+            Only this panel is kept alive: it is the one you compose in, and
+            it is cheap. The Audio Editor stays lazy and unmounted. */}
+        <div className="tab-panel" hidden={activeTab !== 'studio'}>
           <>
             <div className="col">
               <EnrollCard languages={languagesQ.data?.languages ?? []} onEnrolled={invalidateVoices} />
@@ -205,7 +252,6 @@ export default function App() {
               <Composer
                 voices={voicesQ.data?.profiles ?? []}
                 languages={languagesQ.data?.languages ?? []}
-                onJobSettled={onJobSettled}
                 onJobQueued={onJobQueued}
                 onOpenRecent={() => setActiveTab('recent')}
               />
@@ -238,7 +284,7 @@ export default function App() {
               )}
             </div>
           </>
-        )}
+        </div>
         {/* ONE list. History is the spine because it is durable; only
             unfinished jobs are overlaid, since those are the states a
             `generation_history` row cannot represent. Succeeded jobs are

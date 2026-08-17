@@ -512,6 +512,25 @@ class JobQueueFullError(AppError):
         )
 
 
+class JobNotRetryableError(AppError):
+    """
+    Retry is for jobs that are DONE and went wrong. A queued or running job is
+    not stuck, it is working — offering to duplicate it would put two
+    generations of the same text on a GPU that runs one at a time.
+    """
+
+    code = "JOB_NOT_RETRYABLE"
+    http_status = 409
+    title = "Job cannot be retried"
+
+    def __init__(self, job_id: int, status: str) -> None:
+        super().__init__(
+            f"Job {job_id} is {status!r}; only a finished job can be retried.",
+            job_id=job_id,
+            status=status,
+        )
+
+
 class JobNotCancellableError(AppError):
     code = "JOB_NOT_CANCELLABLE"
     http_status = 409

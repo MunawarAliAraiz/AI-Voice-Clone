@@ -10,7 +10,7 @@
 import { memo } from 'react';
 import type { JobStatusResponse } from '../types/api';
 import { fmtDuration, relativeTime } from '../lib/format';
-import { IconAlert, IconCheck, IconSpinner, IconX } from './icons';
+import { IconAlert, IconCheck, IconReset, IconSpinner, IconX } from './icons';
 
 /**
  * Deliberately NOT rendered for succeeded jobs — those are history rows, and
@@ -21,10 +21,14 @@ function ActiveJobRowImpl({
   job,
   onCancel,
   cancelling,
+  onRetry,
+  retrying,
 }: {
   job: JobStatusResponse;
   onCancel?: () => void;
   cancelling: boolean;
+  onRetry?: () => void;
+  retrying?: boolean;
 }) {
   // `analyze_llm` jobs share the `jobs` table but have no route and no audio;
   // their UI lives entirely in the Composer's Advanced editor. Skip rather
@@ -80,6 +84,23 @@ function ActiveJobRowImpl({
           </span>
         </div>
       )}
+
+      {/* JOB_INTERRUPTED's message literally reads "Re-submit it", and until
+          this existed there was nothing to click — the only way back was to
+          retype the text from the row still displaying it. Offered for any
+          settled non-success, since a cancelled job is just as re-runnable. */}
+      {(job.status === 'failed' || job.status === 'cancelled') && onRetry && (
+        <button
+          type="button"
+          className="btn-sm"
+          disabled={retrying}
+          onClick={onRetry}
+          title="Queue this again with exactly the same text, voice and model"
+        >
+          {retrying ? <IconSpinner size={13} /> : <IconReset size={13} />}
+          {retrying ? 'Re-queuing…' : 'Try again'}
+        </button>
+      )}
     </li>
   );
 }
@@ -107,6 +128,7 @@ function StatusChip({ status }: { status: JobStatusResponse['status'] }) {
  */
 export const ActiveJobRow = memo(ActiveJobRowImpl, (a, b) =>
   a.cancelling === b.cancelling &&
+  a.retrying === b.retrying &&
   a.job.id === b.job.id &&
   a.job.status === b.job.status &&
   a.job.title === b.job.title &&

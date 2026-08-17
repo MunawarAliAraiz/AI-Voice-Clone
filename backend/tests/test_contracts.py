@@ -599,6 +599,13 @@ def test_no_stray_modules_in_contract_packages() -> None:
         # from it (one fixed model, no VRAM-budget eviction). No torch here;
         # see analyzer_scheduler.py's module docstring.
         "analyzer_scheduler",
+        # Phase B's transliterator scheduler. Same reasoning as the analyzer's
+        # — one fixed model, not a `RuntimeKind`, unreachable from `resolve()`
+        # — but shaped differently: Gemma-4-31B is ~19 GB and cannot be
+        # co-resident with the audio models, so it borrows the main
+        # scheduler's `exclusive_gpu()` per call rather than staying warm.
+        # No torch here; the stack is in runtimes/gemma_transliterator.py.
+        "transliterator_scheduler",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected

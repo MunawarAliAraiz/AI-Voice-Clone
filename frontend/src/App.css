@@ -1634,3 +1634,19 @@ textarea {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* The Voice Studio panel is kept MOUNTED and hidden rather than unmounted, so
+   an in-progress draft survives a look at another tab. `display: contents`
+   makes the wrapper vanish from layout, leaving its `.col` children as direct
+   grid items of `<main class="grid">` exactly as before.
+
+   The `[hidden]` rule is not redundant: `display: contents` here would
+   otherwise beat the user-agent's `[hidden] { display: none }`, and the panel
+   would stay visible on every tab. */
+.tab-panel {
+  display: contents;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}

@@ -131,6 +131,91 @@ def test_cancel_queued_job_204(tmp_path: Path) -> None:
         _poll(c, first.json()["id"])
 
 
+def test_retry_reenqueues_a_cancelled_job_with_the_same_text_and_route(
+    tmp_path: Path,
+) -> None:
+    """
+    `JOB_INTERRUPTED` — what a server restart leaves behind — tells the user to
+    "Re-submit it", and there was no way to do so without retyping the text
+    from the row still displaying it.
+
+    The retry reuses the ORIGINAL route rather than calling `resolve()` again.
+    Golden rule 8 is explicit that re-resolving at claim time is rule 4's bug
+    wearing a queue, and a retry button is the same bug wearing a different
+    hat: the job would come back on a model the user was never shown.
+    """
+    client, _sched = _client(tmp_path, FakeScheduler(synth_delay_sec=1.0))
+    with client as c:
+        pid = _enroll(c)
+        first = c.post("/api/generate", json={"profile_id": pid, "text": "a", "language": "en"})
+        second = c.post(
+            "/api/generate", json={"profile_id": pid, "text": "b", "language": "en"}
+        )
+        original = second.json()
+        assert c.delete(f"/api/jobs/{original['id']}").status_code == 204
+
+        retry = c.post(f"/api/jobs/{original['id']}/retry")
+        assert retry.status_code == 202, retry.text
+        clone = retry.json()
+
+        assert clone["id"] != original["id"], "retry must be a NEW row"
+        assert clone["status"] == "queued"
+        assert clone["input_text"] == original["input_text"]
+        assert clone["route"]["model_id"] == original["route"]["model_id"]
+
+        # History stays truthful: the cancelled attempt is still cancelled.
+        assert c.get(f"/api/jobs/{original['id']}").json()["status"] == "cancelled"
+
+        _poll(c, first.json()["id"])
+        _poll(c, clone["id"])
+
+
+def test_retry_writes_to_a_fresh_output_path(tmp_path: Path) -> None:
+    """
+    The orphan rule (`app/jobs/runner.py`): no file is written whose path is
+    not already recorded on a job row. Reusing the original's path would put
+    two rows on one file — and the startup reaper may already have swept it.
+    """
+    client, _sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c)
+        first = c.post("/api/generate", json={"profile_id": pid, "text": "a", "language": "en"})
+        job_id = first.json()["id"]
+        done = _poll(c, job_id)
+        assert done["status"] == "succeeded"
+
+        retry = c.post(f"/api/jobs/{job_id}/retry")
+        assert retry.status_code == 202
+        clone = _poll(c, retry.json()["id"])
+        assert clone["status"] == "succeeded"
+        # Two successes, two distinct history rows, so two distinct files.
+        assert clone["result"]["id"] != done["result"]["id"]
+
+
+def test_retry_of_a_queued_job_is_409(tmp_path: Path) -> None:
+    """A queued job is not stuck, it is waiting. Duplicating it would put two
+    generations of the same text on a GPU that runs one at a time."""
+    client, _sched = _client(tmp_path, FakeScheduler(synth_delay_sec=1.0))
+    with client as c:
+        pid = _enroll(c)
+        first = c.post("/api/generate", json={"profile_id": pid, "text": "a", "language": "en"})
+        second = c.post("/api/generate", json={"profile_id": pid, "text": "b", "language": "en"})
+        second_id = second.json()["id"]
+
+        r = c.post(f"/api/jobs/{second_id}/retry")
+        assert r.status_code == 409
+        assert r.json()["code"] == "JOB_NOT_RETRYABLE"
+
+        c.delete(f"/api/jobs/{second_id}")
+        _poll(c, first.json()["id"])
+
+
+def test_retry_unknown_job_404(tmp_path: Path) -> None:
+    client, _sched = _client(tmp_path)
+    with client as c:
+        assert c.post("/api/jobs/99999/retry").status_code == 404
+
+
 def test_cancel_running_job_409(tmp_path: Path) -> None:
     client, _sched = _client(tmp_path, FakeScheduler(synth_delay_sec=1.0))
     with client as c:

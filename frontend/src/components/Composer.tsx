@@ -35,7 +35,6 @@ interface Props {
   voices: VoiceProfile[];
   languages: LanguageInfo[];
   /** Fires exactly once per job, the moment it first reaches a terminal status. */
-  onJobSettled?: (job: JobStatusResponse) => void;
   /** Fired the moment the queue accepts the job (202), not when it finishes. */
   onJobQueued?: (job: JobStatusResponse) => void;
   /** Switches to the Recent tab. Undefined hides the pointer entirely. */
@@ -61,7 +60,7 @@ function fallbackTitle(text: string): string {
   return text.trim().split(/\s+/).slice(0, 4).join(' ');
 }
 
-export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenRecent }: Props) {
+export function Composer({ voices, languages, onJobQueued, onOpenRecent }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -179,14 +178,17 @@ export function Composer({ voices, languages, onJobSettled, onJobQueued, onOpenR
     }
   }, [language, modelsData]);
 
-  // Fire the settle callback (toast) exactly once per job, the turn it first
-  // becomes terminal — not on every subsequent poll of the same finished job.
+  // Refresh voices/history once per job, the turn it first becomes terminal.
+  //
+  // Deliberately NO toast here any more. This effect only ever saw `jobId` —
+  // the most recent submission — so a first job's failure went unannounced the
+  // moment a second was queued. Announcing settled jobs is now driven off the
+  // polled LIST in `App.tsx`, which sees all of them.
   useEffect(() => {
     if (!job || !isTerminal(job.status) || settledJobId.current === job.id) return;
     settledJobId.current = job.id;
-    onJobSettled?.(job);
     if (job.status === 'succeeded') invalidateAfterSuccess();
-  }, [job, onJobSettled, invalidateAfterSuccess]);
+  }, [job, invalidateAfterSuccess]);
 
   // Adjust default speed when language changes (English speech defaults to 0.9x for natural pace)
   function handleLanguageChange(newLang: string) {

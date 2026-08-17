@@ -104,6 +104,12 @@ def main(runtime: str) -> int:
                     sentences=payload["sentences"],
                     params=payload.get("params") or {},
                 )
+            elif op == WireOp.TRANSLITERATE:
+                result = backend.transliterate(
+                    text=payload["text"],
+                    instruction=payload.get("instruction") or "",
+                    params=payload.get("params") or {},
+                )
             elif op == WireOp.UNLOAD:
                 backend.unload()
                 result = {}

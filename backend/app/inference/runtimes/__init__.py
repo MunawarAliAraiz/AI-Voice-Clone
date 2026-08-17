@@ -93,6 +93,10 @@ def make_backend(runtime: str) -> RuntimeBackend:
         from .qwen_analyzer import QwenAnalyzerBackend
 
         return QwenAnalyzerBackend()
+    if runtime == "gemma_transliterator":
+        from .gemma_transliterator import GemmaTransliteratorBackend
+
+        return GemmaTransliteratorBackend()
     if runtime == "fake":
         import os
 

@@ -124,6 +124,19 @@ export function useAnalyzeLlmMutation() {
   });
 }
 
+export function useRetryJobMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.retryJob(id),
+    onSuccess: (_data, id) => {
+      // Both: the original row keeps its failed status (history stays
+      // truthful) and a NEW queued row appears, so the list is what changed.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.job(id) });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
 export function useCancelJobMutation() {
   const queryClient = useQueryClient();
   return useMutation({

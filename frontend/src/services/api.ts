@@ -171,6 +171,14 @@ export const api = {
     request<JobList>(`/api/jobs?page=${page}&page_size=${pageSize}`),
   cancelJob: (id: number) => request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
 
+  /**
+   * Re-enqueue a finished job from its own stored parameters. The server
+   * reuses the ORIGINAL route rather than re-resolving it, so a retry cannot
+   * quietly come back on a different model than the one you were shown.
+   */
+  retryJob: (id: number) =>
+    request<JobStatusResponse>(`/api/jobs/${id}/retry`, { method: 'POST' }),
+
   // history
   history: (page = 1, pageSize = 50) =>
     request<HistoryList>(`/api/history?page=${page}&page_size=${pageSize}`),

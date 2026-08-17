@@ -26,6 +26,7 @@
  * the star optimistically, and always surfaces failure.
  */
 import { useMemo, useState } from 'react';
+import { useRetryJobMutation } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { HistoryItem } from '../types/api';
 import type { JobStatusResponse } from '../types/api';
@@ -58,6 +59,7 @@ export function HistoryPanel({
   items, total, loading, hasMore, onLoadMore, onChanged,
   activeJobs = [], onCancelJob, cancellingJobId = null,
 }: Props) {
+  const retryJob = useRetryJobMutation();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   /** id → optimistic favourite value, pending confirmation from the server. */
@@ -306,6 +308,8 @@ export function HistoryPanel({
                 job={job}
                 onCancel={onCancelJob ? () => onCancelJob(job.id) : undefined}
                 cancelling={cancellingJobId === job.id}
+                onRetry={() => retryJob.mutate(job.id)}
+                retrying={retryJob.isPending && retryJob.variables === job.id}
               />
             ))}
           </ul>
