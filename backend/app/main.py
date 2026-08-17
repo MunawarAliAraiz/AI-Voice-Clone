@@ -35,6 +35,7 @@ from .api.routers import (
     pronunciations,
     system,
     text,
+    transcript,
     tts,
     voice,
 )
@@ -226,6 +227,7 @@ def create_app(
     app.include_router(history.router, prefix="/api")
     app.include_router(pronunciations.router, prefix="/api")
     app.include_router(text.router, prefix="/api")
+    app.include_router(transcript.router, prefix="/api")
     _assert_no_duplicate_routes(app)
 
     # Middleware order is load-bearing. add_middleware makes the LAST-added the

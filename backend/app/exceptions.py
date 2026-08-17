@@ -512,6 +512,71 @@ class JobQueueFullError(AppError):
         )
 
 
+class TransliteratorUnavailableError(AppError):
+    """
+    The Roman/Devanagari → Perso-Arabic transliterator could not run.
+
+    Infrastructure, not output quality: no interpreter configured, the worker
+    failed to start, or it died mid-request. A model that ran and produced
+    something unusable is `TransliterationRejectedError` — the distinction
+    matters because one is "retry" and the other is "edit your text".
+    """
+
+    code = "TRANSLITERATOR_UNAVAILABLE"
+    http_status = 503
+    title = "Transliterator unavailable"
+
+
+class TransliterationRejectedError(AppError):
+    """
+    The model ran, and what came back is not a transliteration.
+
+    Carries `reason` from `domain/transliterate.py` so a client can tell an
+    echo from an answer from a summary without parsing prose.
+    """
+
+    code = "TRANSLITERATION_REJECTED"
+    http_status = 422
+    title = "Not a transliteration"
+
+    def __init__(self, detail: str, reason: str) -> None:
+        super().__init__(detail, reason=reason)
+
+
+class InvalidVideoUrlError(AppError):
+    """
+    Not a YouTube video URL. Also the SSRF rejection — see
+    `domain/youtube.parse_video_id`, which is the only thing permitted to
+    decide what gets fetched.
+    """
+
+    code = "INVALID_VIDEO_URL"
+    http_status = 422
+    title = "Invalid video URL"
+
+
+class TranscriptUnavailableError(AppError):
+    """The video exists but publishes no caption track this can use."""
+
+    code = "TRANSCRIPT_UNAVAILABLE"
+    http_status = 404
+    title = "No transcript available"
+
+
+class TranscriptFetchFailedError(AppError):
+    """
+    YouTube could not be reached, or refused.
+
+    502 rather than 500 on purpose: this is an upstream failing, and on a
+    datacenter IP (which every pod has) a refusal is the expected outcome
+    often enough that it must not read as an application bug.
+    """
+
+    code = "TRANSCRIPT_FETCH_FAILED"
+    http_status = 502
+    title = "Could not fetch the transcript"
+
+
 class JobNotRetryableError(AppError):
     """
     Retry is for jobs that are DONE and went wrong. A queued or running job is

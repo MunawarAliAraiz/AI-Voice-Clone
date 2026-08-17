@@ -78,6 +78,37 @@ class Settings(BaseSettings):
     #: docstring for why this exists (the audio scheduler's `budget_mb` is
     #: sized assuming only audio models are resident).
     qwen_analyzer_idle_unload_sec: float = 300.0
+    #: Interpreter for the Gemma transliterator worker. Same reasoning as the
+    #: analyzer above and the same deliberate omission from `interpreters()`:
+    #: converting Roman/Devanagari text to Perso-Arabic is not audio, and
+    #: `resolve()` must never be able to route a TTS request to it.
+    #: `TransliteratorScheduler` reads this directly. Unset means the Convert
+    #: action fails with a clear error naming this variable; it never breaks
+    #: generation.
+    gemma_transliterator_python: str = ""
+
+    #: Chunk sizing for an imported transcript.
+    #:
+    #: A CONFIG SETTING, NOT A PER-MODEL FIGURE, and the difference is worth
+    #: stating: `chunk_for_synthesis`'s docstring is explicit that `max_chars`
+    #: derives from a model's frame limit and must never be hardcoded in shared
+    #: code. `ModelSpec` carries no such field today and inventing one would
+    #: mean inventing numbers for four runtimes that have never been measured.
+    #: So this is a conservative default the owner can tune, and the honest
+    #: upgrade path is a measured `ModelSpec.max_chars` — not a guess dressed
+    #: up as one.
+    transcript_chunk_chars: int = 600
+    #: Floor for the FINAL chunk. `chunk_for_synthesis` uses it to avoid
+    #: emitting a two-word tail, which every one of these models renders with
+    #: audibly clipped prosody.
+    transcript_chunk_min_chars: int = 80
+    #: Hard ceiling on a fetched caption track before chunking. A three-hour
+    #: video's transcript is megabytes; refusing early beats chunking it into
+    #: thousands of pieces the UI then has to render.
+    transcript_max_chars: int = 200_000
+    #: Seconds before a caption fetch is abandoned. YouTube from a datacenter
+    #: IP either answers quickly or is throttling.
+    transcript_timeout_sec: float = 30.0
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 
