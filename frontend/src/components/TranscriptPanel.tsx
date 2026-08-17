@@ -24,6 +24,7 @@ import { IconAlert, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons
 import { fmtDuration } from '../lib/format';
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { useTranscriptParts } from '../hooks/useTranscriptParts';
+import { TranscriptPartRow } from './TranscriptPartRow';
 import { useSystemStatus } from '../hooks/queries';
 
 type Target = 'roman' | 'perso_arabic';
@@ -60,6 +61,26 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   //: current value — a per-part button chooses its own, and the summary below
   //: must name what actually happened rather than what is selected now.
   const [lastTarget, setLastTarget] = useState<Target>('roman');
+  //: Which parts are open. Controlled rather than native <details> because the
+  //: chapter jump list needs to open one programmatically, and nested native
+  //: disclosures fight that.
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  const toggleExpanded = (index: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
+
+  const toggleSelected = (index: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
   //: Which part a single-part conversion is for, so its own row can show the
   //: progress instead of the panel-level control claiming to be busy.
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
@@ -115,6 +136,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     try {
       conversion.reset();
       setBatchIndexes([]);
+      setExpanded(new Set());
+      setSelected(new Set());
+      setSelectMode(false);
       const fetched = await api.fetchTranscript(url.trim(), language || undefined);
       parts.reset(fetched.chunks);
       setData(fetched);
@@ -375,96 +399,29 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
           />
 
           <h3 className="transcript-h3">Parts</h3>
-          <ul className="transcript-chunks">
+          <ul className="parts">
             {data.chunks.map((chunk) => (
-              <li key={chunk.index} className="transcript-chunk">
-                <div className="chunk-head">
-                  <span className="chunk-index">{chunk.index + 1}</span>
-                  {!chunk.ends_on_sentence && (
-                    <span className="tag warn" title="Cut mid-sentence to fit — the join may be audible">
-                      cut mid-sentence
-                    </span>
-                  )}
-                  <span className="muted">{chunk.text.length} chars</span>
-                </div>
-                {/* The ORIGINAL stays on screen next to the conversion. Three
-                    of the four conversions have never passed a listening gate,
-                    and even the gated one produces valid Urdu words meaning
-                    something else often enough that a whole model was rejected
-                    for it — so the source is what makes the suggestion
-                    checkable rather than merely believable. */}
-                {parts.get(chunk.index)?.converted != null && (
-                  <p className="chunk-source" dir="auto" title="What the captions said">
-                    {chunk.text}
-                  </p>
-                )}
-                <p className="chunk-text" dir="auto">
-                  {parts.outgoing(chunk.index)}
-                </p>
-                {parts.get(chunk.index)?.rejection && (
-                  <p className="chunk-rejected" role="status">
-                    <IconAlert size={13} /> {parts.get(chunk.index)?.rejection}
-                  </p>
-                )}
-                <div className="chunk-actions">
-                  {/* PER PART, because converting 23 to re-check one is absurd
-                      -- and because a part the validator rejected needs a
-                      retry that does not redo the 22 that were fine. Same
-                      target as the panel picker: two parts of one transcript
-                      in different scripts would be unusable. */}
-                  {/* BOTH targets per part, not just the panel's selection.
-                      The panel picker is for "do the whole thing one way"; a
-                      single part is where you want the other one — to see how a
-                      line reads in Urdu script, or to retry a rejection the
-                      other direction. Each button names its destination, so
-                      neither depends on remembering what the radio says. */}
-                  {offerConversion && canConvert && (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-sm"
-                        onClick={() => startConversion([chunk.index], 'roman')}
-                        disabled={conversion.running}
-                        title="Convert only this part to Roman Urdu"
-                      >
-                        → Roman
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-sm"
-                        onClick={() => startConversion([chunk.index], 'perso_arabic')}
-                        disabled={conversion.running}
-                        title="Convert only this part to Urdu script"
-                      >
-                        → Urdu script
-                      </button>
-                      {busyIndex === chunk.index && conversion.running && (
-                        <span className="muted chunk-progress">
-                          <IconSpinner size={13} /> {conversion.progressLabel}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className="btn-sm"
-                    onClick={() => onSendToEditor(parts.outgoing(chunk.index))}
-                    disabled={needsConversion && parts.status(chunk.index) === 'original'}
-                  >
-                    Send to editor
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-sm ghost"
-                    onClick={() =>
-                      void copy(parts.outgoing(chunk.index), `c${chunk.index}`)
-                    }
-                  >
-                    {copied === `c${chunk.index}` ? <IconCheck size={13} /> : <IconCopy size={13} />}
-                    {copied === `c${chunk.index}` ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-              </li>
+              <TranscriptPartRow
+                key={chunk.index}
+                chunk={chunk}
+                parts={parts}
+                expanded={expanded.has(chunk.index)}
+                onToggle={() => toggleExpanded(chunk.index)}
+                selected={selected.has(chunk.index)}
+                selectMode={selectMode}
+                onSelect={() => toggleSelected(chunk.index)}
+                onConvert={
+                  offerConversion && canConvert
+                    ? (target) => startConversion([chunk.index], target)
+                    : undefined
+                }
+                converting={conversion.running && busyIndex === chunk.index}
+                convertingLabel={conversion.progressLabel}
+                onSendToEditor={onSendToEditor}
+                onCopy={(text, key) => void copy(text, key)}
+                copied={copied === `c${chunk.index}`}
+                requiresConversion={needsConversion}
+              />
             ))}
           </ul>
         </>

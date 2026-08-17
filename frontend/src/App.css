@@ -1731,59 +1731,11 @@ textarea {
   color: var(--text);
 }
 
-.transcript-chunks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
 
-.transcript-chunk {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background: var(--panel-raised);
-}
 
-.chunk-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
 
-.chunk-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: var(--radius-full);
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
 
-.chunk-text {
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-base);
-  line-height: 1.6;
-  color: var(--text);
-  /* Long RTL/LTR runs must not push the buttons out of the card. */
-  overflow-wrap: anywhere;
-}
 
-.chunk-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
 
 /* ── Script conversion (Import tab) ─────────────────────────────────────────
    A panel rather than a lone button, because the choice it presents is between
@@ -1889,19 +1841,6 @@ textarea {
   border-radius: var(--radius-sm);
 }
 
-/* The captions as they arrived, kept ABOVE the conversion. Three of the four
-   conversions have never passed a listening gate, and the gated one still
-   produces valid Urdu words meaning something else — so the source is what
-   makes a suggestion checkable rather than merely believable. */
-.chunk-source {
-  margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
-  line-height: 1.55;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  padding-left: var(--space-3);
-  border-left: 2px solid var(--line-strong);
-}
 
 .chunk-rejected {
   display: flex;
@@ -1920,4 +1859,147 @@ textarea {
   gap: var(--space-2);
   align-items: center;
   font-size: var(--text-sm);
+}
+
+/* ── Transcript parts ───────────────────────────────────────────────────────
+   Collapsed by default. A 15-minute video is 23 of these and a two-hour one is
+   six times that, so the closed state has to read as a table of contents. */
+.part {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.part.open {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+}
+
+.part-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 0 var(--space-3);
+}
+
+/* The whole header row is the toggle — a 44px target rather than a chevron,
+   per the touch-size rule. */
+.part-toggle {
+  display: flex;
+  flex: 1;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.part-index {
+  min-width: 2.2ch;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Status carries a WORD as well as a colour. Colour alone fails anyone who
+   cannot distinguish these four, and the label is what makes "edited" mean
+   something rather than being a shade of green. */
+.part-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.part-dot.converted { background: var(--success); }
+.part-dot.edited    { background: var(--accent); }
+.part-dot.rejected  { background: var(--danger); }
+
+.part-status {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.part-chars {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two lines, then stop. Restoring the full text here is what made the page
+   unscannable in the first place. */
+.part-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--muted);
+  overflow: hidden;
+  /* Long RTL/LTR runs must not push the row wider than its card. */
+  overflow-wrap: anywhere;
+}
+
+.part-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.part-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.part-field .field-label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* The caption as it arrived. Read-only and visually quieter than the
+   conversion, because it is the reference rather than the answer. */
+.part-source {
+  margin: 0;
+  padding-left: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted);
+  border-left: 2px solid var(--line-strong);
+  overflow-wrap: anywhere;
+  /* Reading measure. Full-width lines of unfamiliar script are far harder to
+     proofread, and proofreading is the entire job here. */
+  max-width: 70ch;
+}
+
+.part-edit {
+  max-width: 70ch;
+  min-height: 92px;
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+
+.part-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  /* Buttons go full-width rather than wrapping into ragged rows. */
+  .part-actions .btn-sm { flex: 1 1 auto; justify-content: center; }
+  .part-status { display: none; }
 }
