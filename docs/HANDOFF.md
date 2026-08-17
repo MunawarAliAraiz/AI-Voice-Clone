@@ -6,21 +6,30 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ Start here (state as of 2026-08-17, end of day)
+## ⚡ Start here (state as of 2026-08-17, evening)
 
 > **If you read only one section, read this one.** Everything below it is history explaining how
 > the current state came to be.
 
 **Branch:** `feature/roman-urdu-phase-a`. Push to the **`fork`** remote, not `origin`.
 
-**Live pod:** `.claude/remote.local.md` (gitignored). A NEW pod was created 2026-08-17 and is
-**mid-bootstrap** — RTX A5000 24 GB, `/workspace` empty at start. Two things about it:
-- The first bootstrap **died on `uv`'s 30 s HTTP timeout**; this pod's network is slow. It was
-  restarted with `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600`, which fixed it. Use those.
-- **The secrets did NOT survive the old pod.** `/workspace/vcs-secrets.env` is gone, so
-  `VCS_API_KEY` / `VCS_MEDIA_TOKEN_SECRET` must be recreated by the owner before the frontend can
-  talk to it. Every request 401s until then.
-- `scripts/pod-bootstrap.sh` fetches **`main`** — re-checkout the feature branch afterwards.
+**Live pod:** `.claude/remote.local.md` (gitignored). A NEW pod (the third in three days) was
+created 2026-08-17 and is **mid-bootstrap**. Four things about it:
+- **It is an A40 with 45 GB, and that changes nothing.** The owner's instruction is to design for a
+  **24 GB** card: `budget_mb = 16000`, `max_workers = 2`, and Phase B's load-convert-unload all
+  stay. A Phase B measurement taken here is an UPPER bound on what fits, not proof that it fits —
+  anything that works only because of the extra 21 GB is a failure, not a pass.
+- `scripts/pod-bootstrap.sh` fetches **`main`**, so **`.venv-gemma` will not exist** when it
+  finishes — that section lives on the feature branch. Check the branch out and provision it, or
+  Phase B has nothing to run against.
+- **Watch the volume.** 41 GB used at step 8; a fully bootstrapped pod has measured 76 GB, and
+  Gemma's ~19 GB would put it near 95 GB. Check the size in the RunPod console *before* pulling it.
+  `df` reports the whole MooseFS cluster and will claim terabytes free on a full volume —
+  `du -sh /workspace`.
+- **The secrets did NOT survive** the pod before this one. `VCS_API_KEY` /
+  `VCS_MEDIA_TOKEN_SECRET` must be recreated by the owner; every request 401s until then.
+- Always launch the bootstrap with `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600` — `uv`'s 30 s
+  default killed a run outright.
 
 ### What is DONE and what is only WRITTEN
 
@@ -29,25 +38,30 @@ project lost a day of planning because the only copy lived on a pod that was ter
 | Pronunciation dictionary (table, CRUD, tab, search) | ✅ shipped, browser-verified |
 | Generation titles, non-blocking Generate, retry button, merged Recent/History | ✅ shipped, browser-verified |
 | Clause/sentence/paragraph breaks (Urdu `،`, newlines) | ✅ shipped, tested |
-| YouTube transcript import — backend + Import tab | ✅ built & unit-tested, **never clicked in a browser** |
-| Phase B: `exclusive_gpu`, validator, Gemma runtime, `TransliteratorScheduler` | ⚠️ **written, wired to NOTHING** |
-| Phase B: endpoint, `JobKind.TRANSLITERATE`, handler, config, UI | ❌ not started |
-| Devanagari → Perso-Arabic | ❌ not started, and **ungated** — see below |
+| YouTube transcript import — backend + Import tab | ✅ shipped, **browser-verified against a real video** |
+| Phase B: `exclusive_gpu`, validator, Gemma runtime, `TransliteratorScheduler` | ✅ written |
+| Phase B: `POST /api/text/transliterate`, `JobKind.TRANSLITERATE`, handler, config, lifespan | ✅ wired & tested (CPU, fake scheduler) |
+| Phase B: **run on an actual GPU** | ❌ never — no pod has had `.venv-gemma` |
+| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** |
+| Composer UI for transliteration | ❌ not started — blocked on the Roman-draft decision |
 
 ### The next three things, in order
 
-1. **Wire Phase B.** `runtimes/gemma_transliterator.py`, `transliterator_scheduler.py` and
-   `domain/transliterate.py` all exist and nothing calls them. Needs: `JobKind.TRANSLITERATE` + a
-   handler (follow `handlers/analyze_llm.py`, the precedent for a non-audio job with `route=None`),
-   `POST /api/text/transliterate`, `Settings.gemma_transliterator_python`
-   (`VCS_GEMMA_TRANSLITERATOR_PYTHON`, already added to `config.py`) kept **out** of
-   `interpreters()`, lifespan wiring in `main.py`, and a `.venv-gemma` in `pod-bootstrap.sh`.
-   It must be a JOB, not a synchronous endpoint: a conversion takes the whole GPU for ~78 s.
-2. **Devanagari as a source script**, for the Hindi-transcript path. Prompt + exemplars in the
-   Gemma runtime, and `validate_transliteration`'s echo check currently only recognises a LATIN
-   echo. **This has no listening gate yet and must not be presented as working until it passes
-   one** — R4b measured the reverse hop compounding errors badly (مجھے → "majhay" → मझे).
-3. **The Roman-draft decision** (below) — the owner has not chosen yet.
+1. **GPU-verify Phase B.** Everything above the GPU line is done and nothing below it has ever run.
+   On the pod: check out `feature/roman-urdu-phase-a`, provision `.venv-gemma` (the bootstrap's
+   step 13b/13c), then confirm Gemma loads under `exclusive_gpu`, converts, and the worker is
+   **killed** — with `nvidia-smi` showing the VRAM actually returned and the audio models reloading
+   cold afterwards. That last part is the claim most likely to be wrong.
+2. **The Devanagari listening gate.** The path is built and reports `source_script` on every result
+   so an ungated conversion is identifiable, but nothing has *heard* one. Add a Devanagari arm to
+   `eval/run_roman_arabic_probe.py` and run the A3 protocol end to end. Synthesis is unseeded —
+   sample repeatedly, listen blind, and remember the numbers can only fail a candidate.
+   The Import tab currently disables both send buttons on a Devanagari transcript and says the
+   feature is still being validated. **That is correct and must stay true until the gate passes.**
+   One thing the gate should settle that nothing has decided: what to do with an English loanword
+   already spelled in Devanagari (मीटिंग). The exemplars deliberately say nothing about it.
+3. **The Roman-draft decision** (below) — the owner leaned toward keeping the Roman draft but has
+   not picked among the three shapes. The Composer UI is blocked on it.
 
 ### Open design question the owner is deciding
 
@@ -149,7 +163,20 @@ API key pasted into Settings, and it is the first thing to do.
    `tests/test_scheduler.py` asserts both that the card is emptied and that no synthesis completes
    during the window.
 
-   What is NOT built is everything that would let a user reach it — see "The next three things".
+   **Wired to the API 2026-08-17, later the same day.** `POST /api/text/transliterate` returns 202
+   and enqueues `JobKind.TRANSLITERATE`; the handler owns the ORDER (convert, then validate) and
+   nothing else, so "is this a transliteration or an answer" stays provable without a 19 GB
+   download. A validator rejection **fails the job** carrying the reason code — the text never
+   reaches the client, because returning it with a warning attached is golden rule 5's silent
+   substitution one layer above audio. `route=None`, like `analyze_llm`: `resolve()` is never
+   called and `TransformKind` is untouched.
+
+   Also fixed then: `GEMMA_TRANSLITERATOR_HF_REVISION` was the literal string `"main"` under a
+   comment claiming it was pinned — the exact supply-chain hole golden rule 7 exists to close, made
+   worse by a comment that stopped anyone looking. Now `842da3794eaa…`, and the repo id gained its
+   **capital B** (`google/gemma-4-31b-it` is a 307 redirect to `google/gemma-4-31B-it`).
+
+   **What still has not happened: any of it running on a GPU.** No pod has ever had `.venv-gemma`.
 2. ~~**Build the user-editable pronunciation dictionary.**~~ **Built.** §9e's measurement is why it
    exists — **17.2% of English loanword instances** (11 of 54 distinct words, 32.5% of generations)
    are mispronounced by OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely

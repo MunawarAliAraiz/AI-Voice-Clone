@@ -102,18 +102,52 @@ is a real thing to want when working through a transcript part by part.
 
 ---
 
+## Devanagari → Perso-Arabic: built, ungated
+
+The conversion path landed 2026-08-17. `build_system_prompt` takes a source script, which selects
+the header wording, the turn prefix and the exemplar set **together** — they are one decision, not
+three, because a prompt that says "Hindi" over six `Roman:` turns is worse than either half alone.
+`validate_transliteration`'s echo check lost its `Script.LATIN` condition, which had made a
+Devanagari echo report as "replied in the wrong script": true, and it sent the user to fix the wrong
+thing.
+
+**The exemplars are derived, not written.** The Urdu side of all six is byte-identical to the Roman
+set — the strings A3 run 3 passed on by ear. This is a safety property: authoring six new gold Urdu
+strings would put unreviewed Urdu into the *prompt*, where an error does not merely score badly, it
+teaches the model the error. (There is already an open task for native-speaker review of gold
+strings written that way.) Writing a Devanagari *input* for a known-good Urdu *output* is a far
+weaker claim. Five hard cases carry over unchanged; the sixth cannot — SMS orthography with dropped
+vowels has no Devanagari form — so that slot demonstrates the **danda** (`।` U+0964), which has no
+counterpart in the target.
+
+**Presence, not dominance, picks the source set.** `detect_script` returns MIXED for the ordinary
+shape of a Hindi caption carrying English words, and MIXED would fall back to Latin — showing the
+model six `Roman:` examples for text it cannot read as Roman. `source_script_of` asks which exemplar
+set has anything to *say* about the input, and the Latin set has nothing to say about Devanagari.
+It is detected in the handler and never taken from the request: the user declares the language, the
+code detects the script.
+
+**One thing the exemplars deliberately do not decide:** an English loanword already spelled in
+Devanagari (मीटिंग for *meeting*). Auto-generated Hindi captions are full of them and the Latin
+contract's rule 2 has nothing to say — there are no Latin letters to preserve. Converting it to
+میٹنگ and leaving it as मीटिंग are both defensible, and **nothing has measured which one OmniVoice
+says better**. An exemplar would be inventing that answer, so there is none. The gate below decides
+it.
+
 ## What is NOT built
 
-- **Devanagari → Perso-Arabic.** The Import tab detects it, says so, and disables Send. The
-  conversion itself needs: a source-script parameter and Devanagari exemplars in
-  `runtimes/gemma_transliterator.py`, and `validate_transliteration`'s echo check extended (it
-  currently only recognises a LATIN echo).
-- **Its listening gate.** R4b measured the *reverse* hop compounding errors badly (مجھے →
+- **The listening gate.** R4b measured the *reverse* hop compounding errors badly (مجھے →
   "majhay" → मझे). Direct Devanagari → Perso-Arabic is a different and probably easier mapping but
   **has never been measured here**. Add a Devanagari arm to `eval/run_roman_arabic_probe.py` and run
   the A3 protocol end to end. Synthesis is unseeded — sample repeatedly, listen blind, and remember
   numeric screens can only fail a candidate, never approve one.
-- **Any browser verification.** Backend is unit-tested offline; the tab has only been built.
+
+  Until it passes, the Import tab keeps disabling Send on a Devanagari transcript and keeps saying
+  the feature is still being validated. **That message is the truth, not a placeholder — do not
+  remove it because the backend now works.** Every job result carries `source_script` for the same
+  reason: a conversion produced by the ungated exemplar set must be identifiable as one.
+- **Any of it on a GPU.** The whole transliterator is tested against a fake scheduler; no pod has
+  ever had `.venv-gemma`.
 
 ---
 
