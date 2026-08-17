@@ -13,6 +13,8 @@ from app.domain.youtube import (
     InvalidVideoUrl,
     TranscriptCue,
     cues_to_text,
+    group_cues,
+    parse_chapters,
     parse_json3,
     parse_video_id,
 )
@@ -172,3 +174,116 @@ def test_a_transcript_that_never_terminates_is_still_one_line() -> None:
 
 def test_empty_input_is_empty_output() -> None:
     assert cues_to_text([]) == ""
+
+
+# ── Chapters ─────────────────────────────────────────────────────────────────
+# Grouping cues by chapter is what lets a part never straddle a chapter
+# boundary. All of it is pure, so all of it is tested here rather than through
+# the router.
+
+
+def test_parse_chapters_degrades_to_empty_rather_than_raising() -> None:
+    """Same contract as `parse_json3` above, for the same reason: yt-dlp's
+    `chapters` is third-party data whose shape is not ours."""
+    assert parse_chapters(None) == []
+    assert parse_chapters([]) == []
+    assert parse_chapters("not a list") == []
+    assert parse_chapters([None, 42, "x"]) == []
+    # An entry with no usable start is skipped, not guessed at.
+    assert parse_chapters([{"title": "No start"}]) == []
+    assert parse_chapters([{"start_time": "abc", "title": "Bad"}]) == []
+
+
+def test_parse_chapters_sorts_by_start_and_names_the_unnamed() -> None:
+    """yt-dlp does not promise an order, and `group_cues`'s boundary search
+    assumes one. A chapter with no title is still a real division of the video
+    — dropping it would silently merge it into its neighbour."""
+    chapters = parse_chapters([
+        {"start_time": 30, "end_time": 60, "title": "Second"},
+        {"start_time": 0, "end_time": 30},
+        {"start_time": 60, "title": "  "},
+    ])
+    assert [c.start_sec for c in chapters] == [0.0, 30.0, 60.0]
+    assert [c.index for c in chapters] == [0, 1, 2]
+    assert chapters[0].title == "Chapter 1"
+    assert chapters[1].title == "Second"
+    assert chapters[2].title == "Chapter 3"
+    # `end_time` is optional and kept only for display.
+    assert chapters[2].end_sec is None
+
+
+def test_a_missing_end_time_does_not_affect_grouping() -> None:
+    """Boundaries come from `start_sec` alone. yt-dlp emits chapters with gaps,
+    with overlaps, and with no `end_time` at all — one rule handles all three
+    where three rules would disagree."""
+    chapters = parse_chapters([
+        {"start_time": 0, "end_time": 5, "title": "A"},   # ends at 5...
+        {"start_time": 10, "title": "B"},                  # ...but B starts at 10
+    ])
+    # A cue at 7 is in the GAP. It belongs to A, because A runs until B starts.
+    groups = group_cues([TranscriptCue("gap", 7.0, 1.0)], chapters)
+    assert [g[0].title for g in groups] == ["A"]
+
+
+def test_no_chapters_returns_exactly_one_group_holding_everything() -> None:
+    """
+    THE INVARIANT THE WHOLE FEATURE RESTS ON, asserted on the object rather
+    than inferred from downstream text.
+
+    A chapter-less video must produce byte-identical output to before chapters
+    existed, and every downstream difference follows from the number of groups.
+    One group in means one `cues_to_text` call, which means no join, which
+    means no injected newline — and a newline is ~380 ms of real silence.
+    """
+    cues = [TranscriptCue("a", 0.0, 1.0), TranscriptCue("b", 5.0, 1.0)]
+    assert group_cues(cues, []) == [(None, cues)]
+
+
+def test_a_cue_on_a_boundary_belongs_to_the_later_chapter() -> None:
+    """Half-open spans: `[start, next start)`. Stated as a test because "which
+    side of the boundary" is exactly the kind of thing that gets flipped by a
+    later refactor with nothing to catch it."""
+    chapters = parse_chapters([
+        {"start_time": 0, "title": "First"},
+        {"start_time": 10, "title": "Second"},
+    ])
+    groups = group_cues([TranscriptCue("edge", 10.0, 1.0)], chapters)
+    assert [g[0].title for g in groups] == ["Second"]
+
+
+def test_cues_before_the_first_chapter_get_a_leading_unnamed_group() -> None:
+    """YouTube requires a chapter at 00:00, but description-derived chapters do
+    not, so this is reachable. It renders exactly as the no-chapters case."""
+    chapters = parse_chapters([{"start_time": 20, "title": "Late start"}])
+    groups = group_cues(
+        [TranscriptCue("intro", 0.0, 1.0), TranscriptCue("body", 25.0, 1.0)],
+        chapters,
+    )
+    assert groups[0][0] is None
+    assert [c.text for c in groups[0][1]] == ["intro"]
+    assert groups[1][0] is not None
+    assert groups[1][0].title == "Late start"
+
+
+def test_a_chapter_with_no_cues_is_dropped_not_returned_empty() -> None:
+    """An empty group renders as a heading with nothing under it, which reads
+    as a broken transcript rather than a quiet stretch of video."""
+    chapters = parse_chapters([
+        {"start_time": 0, "title": "Talking"},
+        {"start_time": 100, "title": "Silent montage"},
+    ])
+    groups = group_cues([TranscriptCue("hello", 1.0, 1.0)], chapters)
+    assert [g[0].title for g in groups] == ["Talking"]
+
+
+def test_every_cue_survives_grouping_exactly_once() -> None:
+    """Grouping partitions; it must not drop or duplicate. Cheap to assert and
+    the failure would be near-invisible in a long transcript."""
+    cues = [TranscriptCue(f"c{i}", float(i * 5), 1.0) for i in range(12)]
+    chapters = parse_chapters([
+        {"start_time": 0, "title": "A"},
+        {"start_time": 20, "title": "B"},
+        {"start_time": 40, "title": "C"},
+    ])
+    regrouped = [cue for _, group in group_cues(cues, chapters) for cue in group]
+    assert regrouped == cues

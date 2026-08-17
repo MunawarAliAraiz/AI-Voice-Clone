@@ -38,15 +38,19 @@ middle of a sentence.
 from __future__ import annotations
 
 import re
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 __all__ = [
     "TranscriptCue",
+    "TranscriptChapter",
     "InvalidVideoUrl",
     "parse_video_id",
     "parse_json3",
+    "parse_chapters",
+    "group_cues",
     "cues_to_text",
 ]
 
@@ -78,6 +82,21 @@ class TranscriptCue:
     text: str
     start_sec: float
     duration_sec: float
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptChapter:
+    """
+    One chapter of a video. Times in seconds from the start.
+
+    `end_sec` is FOR DISPLAY ONLY and is never used to decide which chapter a
+    cue belongs to — see `group_cues`.
+    """
+
+    index: int
+    title: str
+    start_sec: float
+    end_sec: float | None
 
 
 def parse_video_id(url: str) -> str:
@@ -163,6 +182,103 @@ def parse_json3(payload: dict[str, Any]) -> list[TranscriptCue]:
             )
         )
     return cues
+
+
+def parse_chapters(raw: object) -> list[TranscriptChapter]:
+    """
+    yt-dlp's `chapters` list, or `[]`.
+
+    Same tolerance contract as `parse_json3`, for the same reason: this is
+    third-party data whose shape is not ours, and it should degrade to "no
+    chapters" rather than a 500. `None`, a non-list, and entries missing or
+    mistyping `start_time` are all skipped rather than raising.
+
+    Sorted by start, because yt-dlp does not promise an order and the boundary
+    search below assumes one. A missing `title` gets a positional fallback —
+    a chapter with no name is still a real division of the video, and dropping
+    it would silently merge it into its neighbour.
+    """
+    if not isinstance(raw, list):
+        return []
+
+    parsed: list[tuple[float, float | None, str]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            start = float(entry["start_time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        try:
+            end: float | None = float(entry["end_time"])
+        except (KeyError, TypeError, ValueError):
+            end = None
+        title = str(entry.get("title") or "").strip()
+        parsed.append((start, end, title))
+
+    parsed.sort(key=lambda item: item[0])
+    return [
+        TranscriptChapter(
+            index=i,
+            title=title or f"Chapter {i + 1}",
+            start_sec=start,
+            end_sec=end,
+        )
+        for i, (start, end, title) in enumerate(parsed)
+    ]
+
+
+def group_cues(
+    cues: list[TranscriptCue],
+    chapters: list[TranscriptChapter],
+) -> list[tuple[TranscriptChapter | None, list[TranscriptCue]]]:
+    """
+    Split cues into one group per chapter, in video order.
+
+    **With no chapters this returns exactly `[(None, cues)]`.** That is not a
+    convenience — it is what makes the caller a single code path and keeps a
+    chapter-less video producing byte-identical output to before chapters
+    existed. Every downstream difference follows from the number of groups.
+
+    BOUNDARIES COME FROM `start_sec` ALONE. A chapter spans `[its start, the
+    next chapter's start)`, and `end_sec` is ignored. yt-dlp emits chapters
+    with gaps, with overlaps, and with no `end_time` at all (description-derived
+    ones routinely do), and one rule handles all three where three rules would
+    disagree with each other.
+
+    A cue belongs to the chapter containing its OWN start — not its midpoint,
+    and not wherever most of it lies. Deterministic, and it matches what
+    YouTube's chapter bar does with the same cue.
+
+    Two shapes worth knowing:
+
+    - Cues starting before the first chapter get a leading `(None, ...)` group.
+      YouTube requires a chapter at 00:00, but description-derived ones do not,
+      so this is reachable.
+    - **A chapter with no cues in its window is DROPPED**, not returned empty.
+      An empty group would render as a heading with nothing under it, which
+      reads as a bug in the transcript rather than a quiet stretch of video.
+    """
+    if not chapters:
+        return [(None, cues)]
+
+    starts = [chapter.start_sec for chapter in chapters]
+    buckets: dict[int, list[TranscriptCue]] = {}
+    for cue in cues:
+        # -1 is the pre-first-chapter bucket. `bisect_right` puts a cue exactly
+        # on a boundary into the LATER chapter, which is the half-open reading
+        # of the span above.
+        slot = bisect_right(starts, cue.start_sec) - 1
+        buckets.setdefault(slot, []).append(cue)
+
+    groups: list[tuple[TranscriptChapter | None, list[TranscriptCue]]] = []
+    if buckets.get(-1):
+        groups.append((None, buckets[-1]))
+    for i, chapter in enumerate(chapters):
+        group = buckets.get(i)
+        if group:
+            groups.append((chapter, group))
+    return groups
 
 
 #: Terminators after which a cue boundary is a real sentence boundary. Covers
