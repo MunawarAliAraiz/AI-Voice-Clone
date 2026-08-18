@@ -13,14 +13,39 @@ script into the pod's shell. Running it from anywhere else fails with `No such f
 cd /path/to/AI-Voice-Clone
 ```
 
-Then, from that directory — this is the whole deployment, provisioning through running server:
+Then, from that directory — this is the whole deployment, provisioning through running server.
+
+**Public deployment (ngrok + your deployed frontend):**
 
 ```bash
 ssh root@<HOST> -p <PORT> "START=1 NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.workers.dev bash -s" < scripts/pod-bootstrap.sh
 ```
 
-It provisions everything, then starts the backend and ngrok and polls until `/api/health` answers, so
-there is no second step. It ends by printing your API key and a status block:
+**Local frontend against the pod backend (no ngrok, no public URL):** provision and start the backend,
+then reach it over an SSH tunnel from your laptop. You don't need `NGROK_*` or `FRONTEND_URL` — a
+tunnelled request is same-origin from the browser's view, so CORS never applies:
+
+```bash
+ssh root@<HOST> -p <PORT> "START=1 bash -s" < scripts/pod-bootstrap.sh
+```
+
+Then, on your laptop, tunnel the pod backend and point the dev server at it (see
+[Connect a local frontend](#connect-a-local-frontend-ssh-tunnel) for the full flow):
+
+```bash
+ssh -N -L 8010:127.0.0.1:8000 -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST>
+```
+
+```bash
+cd frontend && VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
+```
+
+Port `8010` (not `8000`) sidesteps a local backend you may already be running on `8000`. Paste the
+pod's `VCS_API_KEY` (printed by the bootstrap) into the frontend's settings gear — the pod mints its
+own key, distinct from any local one.
+
+The public form provisions everything, then starts the backend and ngrok and polls until `/api/health`
+answers, so there is no second step. It ends by printing your API key and a status block:
 
 ```
 == 20. current status ==
@@ -185,16 +210,44 @@ is passphrase-protected and only the Windows ssh-agent — which Git Bash can't 
 
 ---
 
-## Start serving
+## Start / stop / restart — `ctl.sh`
 
-Bootstrap writes `/workspace/serve.sh` with the secrets and CORS origin already baked in, so starting
-the backend is one command:
+Bootstrap writes two files: `/workspace/serve.sh` (the launcher, with secrets and CORS origin baked
+in) and `/workspace/ctl.sh` (its lifecycle wrapper). Prefer `ctl.sh` — it is idempotent and won't
+double-start:
+
+```bash
+/workspace/ctl.sh up        # start the backend ONLY if it isn't already up (safe default)
+```
+
+```bash
+/workspace/ctl.sh restart   # stop then start
+```
+
+```bash
+/workspace/ctl.sh stop      # stop the backend
+```
+
+```bash
+/workspace/ctl.sh status    # is the backend (and ngrok) up?
+```
+
+`up` is the one to reach for when you just want to be sure it's running: if the backend is already
+healthy it prints `backend already running` and does nothing; if it's down it starts it and polls
+`/api/health` until it answers. Run these as SSH one-liners from your laptop, e.g.
+`ssh root@<HOST> -p <PORT> -i ~/.ssh/id_ed25519 "/workspace/ctl.sh up"`.
+
+`ctl.sh` manages only the backend. ngrok is started by `START=1` on the bootstrap (below), or by hand
+(see [Starting ngrok](#starting-ngrok)).
+
+Under the hood `ctl.sh` runs `/workspace/serve.sh` in a detached `tmux` session named `backend`, so it
+survives your SSH session closing. To run the launcher directly instead:
 
 ```bash
 tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
 ```
 
-Or skip this entirely by passing `START=1` to the bootstrap, which starts backend and ngrok itself.
+Or skip all of this by passing `START=1` to the bootstrap, which starts backend and ngrok itself.
 
 `serve.sh` sources `/workspace/vcs-secrets.env` rather than inlining
 `VCS_API_KEY=$(python -c 'secrets...')`, and that is the whole point: the inline form mints a brand-new
@@ -253,12 +306,12 @@ A pod **stop/start** keeps `/workspace` (both venvs, the weights cache, `backend
 voices + history) but wipes `/`, and kills every running process. So the code and weights are still
 there — you just need to restart the backend (and ngrok, if you're using it):
 
-`/workspace` survived, so `serve.sh`, the secrets file and the saved frontend origin all did too —
-which means the restart reuses the same API key and the same CORS origin rather than drifting:
+`/workspace` survived, so `serve.sh`, `ctl.sh`, the secrets file and the saved frontend origin all did
+too — which means the restart reuses the same API key and the same CORS origin rather than drifting:
 
 ```bash
-tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
-tmux new-session -d -s ngrok   'ngrok http --domain=<your-name>.ngrok-free.dev 8000'
+/workspace/ctl.sh up
+tmux new-session -d -s ngrok 'ngrok http --domain=<your-name>.ngrok-free.dev 8000'
 ```
 
 You do not need to re-run the full bootstrap script — nothing it built was lost. Re-running it anyway
@@ -292,25 +345,29 @@ rebuild, no `BACKEND_ORIGIN` edit. Only your `ssh` host and port differ.
 
 For reaching the backend yourself, from your own machine — not for sharing a link with anyone else.
 The server binds to `127.0.0.1` on the pod, not the public internet, so reach it with an SSH tunnel.
-Run this **on your own machine** and leave it open:
+Run this **on your own machine** and leave it open — forward a **local** port `8010` to the pod's
+`8000`, so a local backend you might already be running on `8000` doesn't collide:
 
 ```bash
-ssh -N -L 8000:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>
+ssh -N -L 8010:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>
 ```
 
-Then start the UI locally — it defaults to `http://localhost:8000`, which the tunnel forwards to the
-pod:
+Then start the UI locally, pointing its dev proxy at the tunnel. `vite.config.ts` reads
+`VITE_PROXY_TARGET` (default `http://127.0.0.1:8000`); the browser only ever talks to the vite server,
+which proxies `/api` server-side, so it stays same-origin and **CORS never applies** — which is why
+this works even though the pod's `VCS_CORS_ORIGINS` doesn't list `localhost`:
 
 ```bash
-cd frontend && npm install && npm run dev
+cd frontend && npm install && VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
 ```
 
-Open http://localhost:1420 — the status chip should read **backend online**. (On Windows, use
-`C:\Windows\System32\OpenSSH\ssh.exe` if your key lives in the Windows ssh-agent — Git Bash's `ssh`
-can't see it.)
+Open http://localhost:1420, then **paste the pod's `VCS_API_KEY` into the settings gear** — the
+bootstrap prints it, and it lives in `/workspace/vcs-secrets.env` on the pod. The pod mints its own
+key (distinct from any local backend's), so requests 401 until it's pasted.
 
-No `VCS_API_KEY` needed for this path — leave it unset on the backend and the UI's API-key box blank.
-RunPod assigns a new host:port on every restart, so the tunnel command changes each time.
+(On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` if your key lives in the Windows ssh-agent —
+Git Bash's `ssh` can't see it.) RunPod assigns a new host:port on every restart, so the tunnel command
+changes each time.
 
 ---
 
