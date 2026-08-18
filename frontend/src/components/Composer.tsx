@@ -184,6 +184,29 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   );
   const selectedModel = modelId ? compatibleModels.find((m) => m.id === modelId) : undefined;
 
+  // CONVERT-ON-GENERATE, decided here on the CLIENT — routing stays pure and is
+  // never asked to substitute (golden rules 4/5). The picker filters by
+  // language but not script, so an Urdu-script-only model (OmniVoice declares
+  // only (ur, ARABIC)) can be selected while the text is Roman Urdu. That pair
+  // is a 422 `NoRouteError`, and resolve() rightly refuses to silently swap the
+  // model the user chose. So instead of sending the request that would fail,
+  // convert the Roman to Urdu script first and show the result for review — the
+  // converter's failure mode is a real word meaning something else, so this can
+  // never be silent (Part E: a human reading it is the only check there is).
+  const detectedLatinUrdu = detect?.script === 'latin' && language === 'ur';
+  // Auto (no explicit model) counts as serving Latin: resolve() picks a
+  // Latin-capable model (VoxCPM2) when one exists, and `detect.routable`
+  // already reflects that. The gap is only an EXPLICIT model without the cell.
+  const selectedModelServesLatin =
+    !selectedModel ||
+    selectedModel.languages.some((l) => l.language === language && l.script === 'latin');
+  // `preConvert === null` — once a conversion has been applied the textarea IS
+  // the Urdu script; the debounced `detect` may still read the pre-conversion
+  // Latin for a moment, and re-triggering off that stale value would convert
+  // twice. A pending conversion (preConvert set) means "already handled".
+  const needsConversionBeforeGenerate =
+    canConvert && detectedLatinUrdu && !selectedModelServesLatin && preConvert === null;
+
   // A manually-picked model that no longer supports the language (the user
   // switched languages after choosing one) falls back to Auto rather than
   // silently sending an id that would now 422.
@@ -451,6 +474,20 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
     setErr(null);
+
+    // The selected model reads Urdu script but the text is Roman Urdu. Rather
+    // than enqueue a job that would 422, convert first (~5 s, Gemma resident)
+    // and stop here. The conversion effect replaces the text with the
+    // Perso-Arabic and shows the "read it before you generate" review banner;
+    // pressing Generate again — one tap — then goes through, because `detect`
+    // now reads `arabic` and `preConvert` is set. This is the whole reason
+    // convert-on-generate is not silent: the model can produce a real word
+    // that means something else, and only a human reading the review catches it.
+    if (needsConversionBeforeGenerate && !conversion.running) {
+      conversion.start([text.trim()], 'perso_arabic');
+      return;
+    }
+
     const editedSegments = Object.values(directionEdits);
 
     // NEVER await the analyzer here. It loads a ~6 GB model, so awaiting it
@@ -846,23 +883,43 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
       <div className="composer-foot">
         <div className="detect-slot" aria-live="polite">
           {detect && (
-            <span className={`detect ${detect.routable ? '' : 'bad'}`}>
-              {detect.routable ? <IconCheck size={13} /> : <IconAlert size={13} />}
-              {detect.routable
-                ? `${detect.script} · ${
-                    modelId
-                      ? compatibleModels.find((m) => m.id === modelId)?.display_name ?? modelId
-                      : detect.would_route_to?.model_display_name ?? 'ready'
-                  }`
-                : (detect.hint ?? 'This text cannot be routed.')}
-            </span>
+            needsConversionBeforeGenerate ? (
+              // `detect.routable` is true here — Roman Urdu CAN route (to
+              // VoxCPM2) — but the user picked a model that can't read it, and
+              // the plain chip would render `latin · OmniVoice (Urdu)` as
+              // though it were fine, right up until Generate 422s. Say what
+              // will actually happen instead: it converts, then you review.
+              <span className="detect bad">
+                <IconAlert size={13} />
+                Roman Urdu — {selectedModel?.display_name ?? 'this model'} reads Urdu script.
+                Generate converts it first, for you to check.
+              </span>
+            ) : (
+              <span className={`detect ${detect.routable ? '' : 'bad'}`}>
+                {detect.routable ? <IconCheck size={13} /> : <IconAlert size={13} />}
+                {detect.routable
+                  ? `${detect.script} · ${
+                      modelId
+                        ? compatibleModels.find((m) => m.id === modelId)?.display_name ?? modelId
+                        : detect.would_route_to?.model_display_name ?? 'ready'
+                    }`
+                  : (detect.hint ?? 'This text cannot be routed.')}
+              </span>
+            )
           )}
           {/* OFFERED, never applied on its own. Roman Urdu is routable — it
               goes to VoxCPM2 — but A0 is the finding that the owner HEARD an
               English accent from that path, which is the whole reason the
               converter exists. So this appears whenever Urdu is being written
               in Latin, routable or not, and says what it is for. */}
-          {canConvert && detect?.script === 'latin' && language === 'ur' && (
+          {/* Only when the selected model ALSO reads Latin (VoxCPM2). Then the
+              conversion is optional — Generate would go straight through — but
+              still offered, because A0 is the finding that the direct Roman
+              path sounds like an English accent. When the model can't read
+              Latin, Generate itself does the conversion (see
+              needsConversionBeforeGenerate), so this button would be a
+              redundant second door to the same step. */}
+          {canConvert && detect?.script === 'latin' && language === 'ur' && selectedModelServesLatin && (
             <button
               type="button"
               className="btn-sm ghost"
@@ -942,12 +999,18 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
 
       <button
         className="btn primary"
-        disabled={disabled}
-        aria-busy={busy}
+        disabled={disabled || conversion.running}
+        aria-busy={busy || conversion.running}
         onClick={() => void generate()}
       >
-        {busy ? <IconSpinner size={15} /> : <IconSpark size={15} />}
-        {busy ? 'Generating…' : 'Generate'}
+        {busy || conversion.running ? <IconSpinner size={15} /> : <IconSpark size={15} />}
+        {busy
+          ? 'Generating…'
+          : conversion.running
+            ? 'Converting to Urdu script…'
+            : needsConversionBeforeGenerate
+              ? 'Convert to Urdu script, then review'
+              : 'Generate'}
       </button>
 
       {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
