@@ -29,6 +29,11 @@ import { useSystemStatus } from '../hooks/queries';
 
 type Target = 'roman' | 'perso_arabic';
 
+/** Mirrors `MAX_BATCH_CHUNKS` in `backend/app/domain/transliterate.py`, which
+ *  `schemas/text.py` enforces. Checked here so an oversized selection is
+ *  refused with a reason rather than sent and 422'd. */
+const MAX_BATCH_CHUNKS = 200;
+
 interface Props {
   /** Puts text into the Composer and switches to it. */
   onSendToEditor: (text: string) => void;
@@ -74,6 +79,26 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       if (!next.delete(index)) next.add(index);
       return next;
     });
+
+  //: A rejected part carries no text and a Devanagari part that was never
+  //: converted cannot be spoken, so neither is sendable. Counted rather than
+  //: silently dropped, so the button says how many will actually go.
+  const sendableCount = (indexes: number[]) =>
+    indexes.filter((i) => {
+      const status = parts.status(i);
+      if (status === 'rejected') return false;
+      return !needsConversion || status === 'converted' || status === 'edited';
+    }).length;
+
+  //: Joined in TRANSCRIPT order regardless of the order they were ticked, and
+  //: with a blank line between parts — `direction_analyze` reads that as the
+  //: longest pause, which is what a jump between parts should sound like.
+  const joinParts = (indexes: number[]) =>
+    [...indexes]
+      .sort((a, b) => a - b)
+      .filter((i) => parts.status(i) !== 'rejected')
+      .map((i) => parts.outgoing(i))
+      .join('\n\n');
 
   const toggleSelected = (index: number) =>
     setSelected((prev) => {
@@ -338,6 +363,118 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   )}
                   . Read every part before you generate from it.
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* SELECTION + ONE ACTION BAR, rather than repeating actions on every
+              row. Reuses HistoryPanel's `.bulkbar` shape and CSS verbatim —
+              including the indeterminate select-all — because a second
+              implementation of the same control is a second set of bugs. */}
+          {data.chunks.length > 1 && (
+            <div className="transcript-actions">
+              <button
+                type="button"
+                className={`btn-sm ${selectMode ? 'on' : ''}`}
+                aria-pressed={selectMode}
+                onClick={() => {
+                  setSelectMode((on) => !on);
+                  setSelected(new Set());
+                }}
+              >
+                {selectMode ? 'Done' : 'Select parts'}
+              </button>
+            </div>
+          )}
+
+          {selectMode && (
+            <div className="bulkbar" role="toolbar" aria-label="Bulk actions on parts">
+              <label className="bulkbar-all">
+                <input
+                  type="checkbox"
+                  checked={selected.size > 0 && selected.size === data.chunks.length}
+                  ref={(el) => {
+                    if (el) {
+                      el.indeterminate =
+                        selected.size > 0 && selected.size < data.chunks.length;
+                    }
+                  }}
+                  onChange={() =>
+                    setSelected(
+                      selected.size === data.chunks.length
+                        ? new Set()
+                        : new Set(data.chunks.map((c) => c.index)),
+                    )
+                  }
+                  aria-label="Select all parts"
+                />
+                {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+              </label>
+
+              {selected.size > 0 && (
+                <>
+                  {offerConversion && canConvert && (
+                    <>
+                      {/* ONE call for the whole selection. `convert_many` runs
+                          them against a single model residency, which from a
+                          cold start is the difference between one 19 GB load
+                          and N of them. Looping here would throw that away. */}
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        disabled={conversion.running || selected.size > MAX_BATCH_CHUNKS}
+                        onClick={() => startConversion([...selected].sort((a, b) => a - b), 'roman')}
+                      >
+                        Convert {selected.size} → Roman
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-sm"
+                        disabled={conversion.running || selected.size > MAX_BATCH_CHUNKS}
+                        onClick={() =>
+                          startConversion([...selected].sort((a, b) => a - b), 'perso_arabic')
+                        }
+                      >
+                        Convert {selected.size} → Urdu script
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    onClick={() => onSendToEditor(joinParts([...selected]))}
+                    disabled={!sendableCount([...selected])}
+                    title={
+                      sendableCount([...selected])
+                        ? 'Put the selected parts in the editor, in order'
+                        : 'None of the selected parts can be generated yet'
+                    }
+                  >
+                    Send {sendableCount([...selected])} to editor
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => void copy(joinParts([...selected]), 'sel')}
+                  >
+                    {copied === 'sel' ? <IconCheck size={13} /> : <IconCopy size={13} />}
+                    {copied === 'sel' ? 'Copied' : 'Copy'}
+                  </button>
+                  {selected.size > MAX_BATCH_CHUNKS && (
+                    <span className="muted">
+                      Convert handles {MAX_BATCH_CHUNKS} parts at a time — deselect{' '}
+                      {selected.size - MAX_BATCH_CHUNKS}.
+                    </span>
+                  )}
+                  {/* A multi-part conversion sets `busyIndex` to null, so no
+                      single row shows the spinner — the progress belongs here,
+                      on the bar that started it. */}
+                  {conversion.running && busyIndex === null && (
+                    <span className="muted chunk-progress">
+                      <IconSpinner size={13} /> {conversion.progressLabel}
+                    </span>
+                  )}
+                </>
               )}
             </div>
           )}
