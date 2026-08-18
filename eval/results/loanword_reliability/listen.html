@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loanword reliability — blind</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 780px; margin: 2rem auto;
+       padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+.warn { background:#1d2230; border-left:3px solid #6c8cff; padding:.8rem 1rem;
+        border-radius:4px; }
+.row { display:flex; align-items:center; gap:1rem; margin:.55rem 0;
+       padding:.55rem .8rem; background:#161922; border-radius:6px; }
+.no { font-variant-numeric: tabular-nums; font-weight:700; color:#e6b86c;
+      min-width:2.2rem; font-size:1.05rem; }
+audio { flex:1; }
+code { background:#1d2230; padding:.1rem .3rem; border-radius:3px; }
+</style></head>
+<body>
+<h1>Loanword reliability — blind listen</h1>
+<p class="warn"><b>Why this is blind and repetitive.</b> You rated the same audio text
+<i>wrong</i> once and <i>correct</i> once, about an hour apart. That is not an inconsistency
+on your part — <code>OmniVoiceBackend</code> sets no seed, so every generation samples
+differently and the pronunciation is a coin flip, not a property of the spelling. So each
+spelling appears <b>4 times</b> here in scrambled order, and the labels are hidden so
+knowing which one ships cannot sway the call.</p>
+<p><b>What to do:</b> for each clip, decide only whether the loanword
+(<i>database</i> or <i>URL</i>) is pronounced correctly. Ignore everything else.
+Then send me the list of clip numbers that were <b>correct</b> — e.g. "3, 7, 12, 19".
+I will decode which spelling each belonged to.</p>
+<p>32 clips.</p>
+
+  <div class="row">
+    <div class="no">1</div>
+    <audio controls src="url_verbatim_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">2</div>
+    <audio controls src="db_bari_ye_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">3</div>
+    <audio controls src="db_bayss_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">4</div>
+    <audio controls src="db_verbatim_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">5</div>
+    <audio controls src="db_bays_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">6</div>
+    <audio controls src="db_bayss_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">7</div>
+    <audio controls src="db_shipping_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">8</div>
+    <audio controls src="db_dayta_base_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">9</div>
+    <audio controls src="db_shipping_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">10</div>
+    <audio controls src="db_bayss_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">11</div>
+    <audio controls src="db_shipping_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">12</div>
+    <audio controls src="db_verbatim_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">13</div>
+    <audio controls src="db_bayss_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">14</div>
+    <audio controls src="url_verbatim_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">15</div>
+    <audio controls src="db_verbatim_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">16</div>
+    <audio controls src="db_dayta_base_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">17</div>
+    <audio controls src="url_shipping_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">18</div>
+    <audio controls src="db_bari_ye_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">19</div>
+    <audio controls src="db_bays_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">20</div>
+    <audio controls src="url_shipping_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">21</div>
+    <audio controls src="db_shipping_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">22</div>
+    <audio controls src="db_bays_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">23</div>
+    <audio controls src="db_dayta_base_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">24</div>
+    <audio controls src="url_shipping_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">25</div>
+    <audio controls src="db_dayta_base_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">26</div>
+    <audio controls src="db_verbatim_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">27</div>
+    <audio controls src="db_bari_ye_s2.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">28</div>
+    <audio controls src="db_bays_s3.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">29</div>
+    <audio controls src="url_verbatim_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">30</div>
+    <audio controls src="url_verbatim_s1.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">31</div>
+    <audio controls src="db_bari_ye_s4.wav"></audio>
+  </div>
+  <div class="row">
+    <div class="no">32</div>
+    <audio controls src="url_shipping_s3.wav"></audio>
+  </div>
+</body></html>

@@ -21,12 +21,36 @@ memory that presents as a random illegal-access crash.
 
 If you find yourself adding a second place that evicts, stop: the invariant is
 gone and so is the guarantee.
+
+AMENDMENT WITHDRAWN 2026-08-17 — back to one eviction call site
+----------------------------------------------------------------
+For most of a day this file documented a SECOND eviction call site,
+`exclusive_gpu()`, added because Phase B's Gemma-4-31B is ~19 GB and could
+never be co-resident with the audio models on a 24 GB card. It needed the GPU
+emptied, and `_make_room_for` cannot express "empty it".
+
+**Its premise is gone.** Measured on a real card: Gemma peaks at 19221 MiB and
+generation takes 2.7-5.1 s while loading takes 150-327 s, so unloading it
+between conversions spent 97% of every request reloading what it had just
+thrown away. The owner moved the design target from 24 GB to ~32 GB precisely
+so it can stay resident (Gemma 19.2 + VoxCPM 5.4 + OmniVoice 4.7 ~= 29.3 GB,
+plus headroom). A model that co-resides does not need the card emptied, and
+emptying it would now be actively wrong — it would discard the audio models on
+every load and reintroduce a 176 s re-warm.
+
+So `exclusive_gpu` is gone and `reserve_slot()` replaces it: it holds the same
+semaphore and evicts NOTHING. The rule above is back to its original,
+stronger, one-call-site form. A card too small for co-residency is refused at
+startup by `check_capacity()` rather than silently degraded into thrashing —
+which is golden rule 5's argument applied to VRAM.
+
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -40,6 +64,8 @@ from ..exceptions import (
 from .catalog import ModelCatalog
 from .protocol import ModelStatus, SynthRequest, SynthResult, WireOp, WorkerHandle
 from .spec import ModelSpec, ModelState, RuntimeKind
+
+logger = logging.getLogger("app.inference.scheduler")
 
 __all__ = ["SchedulerConfig", "InferenceScheduler"]
 
@@ -243,6 +269,35 @@ class InferenceScheduler:
         spec = self._require(model_id)
         async with self._hold_slot():
             await self._ensure_ready(spec)
+
+    @contextlib.asynccontextmanager
+    async def reserve_slot(self, reason: str):
+        """
+        Hold the GPU slot without evicting anything.
+
+        For a non-audio model that co-resides with the audio ones and needs a
+        quiet moment to allocate — Phase B's transliterator, loading ~19 GB.
+        Holding the slot means no synthesis can begin into that allocation
+        spike; evicting nothing means the audio models are still warm when it
+        finishes.
+
+        THIS REPLACED `exclusive_gpu()`, WHICH EVICTED EVERYTHING. That was
+        right while the design target was a 24 GB card, where Gemma and the
+        audio models could not coexist. At ~32 GB they can, and evicting would
+        now throw away warm audio models on every load to make room that is
+        already there — turning a 5 s conversion back into 5 s plus a 176 s
+        re-warm of whatever it discarded.
+
+        Its withdrawal restores golden rule 3 to one eviction call site. See
+        the module docstring; do not reintroduce a second one without the
+        measurements that justified this.
+        """
+        async with self._hold_slot():
+            logger.info("GPU slot reserved (%s); nothing evicted", reason)
+            try:
+                yield
+            finally:
+                logger.info("GPU slot released (%s)", reason)
 
     async def shutdown(self) -> None:
         """Kill every worker. Idempotent. Called from the app lifespan."""

@@ -153,6 +153,40 @@ class HistoryNotFoundError(AppError):
         super().__init__(f"Generation {history_id} does not exist.", history_id=history_id)
 
 
+class PronunciationNotFoundError(AppError):
+    code = "PRONUNCIATION_NOT_FOUND"
+    http_status = 404
+    title = "Dictionary entry not found"
+
+    def __init__(self, entry_id: int) -> None:
+        super().__init__(
+            f"Pronunciation entry {entry_id} does not exist.", entry_id=entry_id
+        )
+
+
+class PronunciationConflictError(AppError):
+    """
+    A dictionary entry already exists for this word in this language.
+
+    Carries the existing entry's id as an extension member so the client can
+    offer "edit the one you already have" instead of only reporting a clash —
+    a user re-adding `database` almost always means they forgot, not that they
+    want a second row that could never win the match anyway.
+    """
+
+    code = "PRONUNCIATION_CONFLICT"
+    http_status = 409
+    title = "Word already in the dictionary"
+
+    def __init__(self, key_text: str, language: str, existing_id: int | None = None) -> None:
+        super().__init__(
+            f"{key_text!r} already has a pronunciation entry for language "
+            f"{language!r}. Matching is case-insensitive, so a different "
+            f"capitalisation is the same entry.",
+            key_text=key_text, language=language, existing_id=existing_id,
+        )
+
+
 class ModelNotFoundError(AppError):
     code = "MODEL_NOT_FOUND"
     http_status = 404
@@ -475,6 +509,139 @@ class JobQueueFullError(AppError):
             limit=limit,
             depth=depth,
             retry_after_sec=retry_after_sec,
+        )
+
+
+class TransliteratorUnavailableError(AppError):
+    """
+    The Roman/Devanagari → Perso-Arabic transliterator could not run.
+
+    Infrastructure, not output quality: no interpreter configured, the worker
+    failed to start, or it died mid-request. A model that ran and produced
+    something unusable is `TransliterationRejectedError` — the distinction
+    matters because one is "retry" and the other is "edit your text".
+    """
+
+    code = "TRANSLITERATOR_UNAVAILABLE"
+    http_status = 503
+    title = "Transliterator unavailable"
+
+
+class TransliterationRejectedError(AppError):
+    """
+    The model ran, and what came back is not a transliteration.
+
+    Carries `reason` from `domain/transliterate.py` so a client can tell an
+    echo from an answer from a summary without parsing prose.
+    """
+
+    code = "TRANSLITERATION_REJECTED"
+    http_status = 422
+    title = "Not a transliteration"
+
+    def __init__(self, detail: str, reason: str) -> None:
+        super().__init__(detail, reason=reason)
+
+
+class UnsupportedConversionError(AppError):
+    """
+    No prompt exists for this (source, target) pair.
+
+    A 422 at ENQUEUE, deliberately, not a failed job. A conversion the
+    transliterator has no exemplars for is a bad request — the client asked for
+    something that does not exist — and finding that out forty seconds into a
+    19 GB model load would spend the whole GPU to report a typo. The pairs are
+    `domain/transliterate.SUPPORTED_PAIRS`.
+
+    Both scripts ride in the payload because "unsupported" alone does not tell
+    a caller whether they named a bad target or handed over text in an
+    unexpected script.
+    """
+
+    code = "UNSUPPORTED_CONVERSION"
+    http_status = 422
+    title = "Conversion not supported"
+
+    def __init__(self, source: str, target: str) -> None:
+        super().__init__(
+            f"Cannot convert {source} to {target}.",
+            source_script=source,
+            target_script=target,
+        )
+
+
+class InvalidVideoUrlError(AppError):
+    """
+    Not a YouTube video URL. Also the SSRF rejection — see
+    `domain/youtube.parse_video_id`, which is the only thing permitted to
+    decide what gets fetched.
+    """
+
+    code = "INVALID_VIDEO_URL"
+    http_status = 422
+    title = "Invalid video URL"
+
+
+class TranscriptUnavailableError(AppError):
+    """The video exists but publishes no caption track this can use."""
+
+    code = "TRANSCRIPT_UNAVAILABLE"
+    http_status = 404
+    title = "No transcript available"
+
+
+class TranscriptToolMissingError(AppError):
+    """
+    `yt-dlp` is not installed in the API environment.
+
+    ITS OWN CLASS BECAUSE THE ALTERNATIVE ACTIVELY MISLEADS. This used to fall
+    into `TranscriptFetchFailedError`'s broad `except Exception`, which told the
+    user "could not reach YouTube — on a datacenter connection this is usually
+    rate limiting, try again shortly." Every clause of that was wrong: the pod
+    reached youtube.com fine (HTTP 200), nothing was rate limited, and trying
+    again shortly could never have worked. A wrong cause is worse than an
+    unknown one — it sends someone to wait instead of to `uv sync`.
+
+    503, not 502: nothing upstream failed. This deployment is missing a
+    dependency, which is the same shape as a transliterator with no
+    `.venv-gemma` and is reported the same way.
+    """
+
+    code = "TRANSCRIPT_TOOL_MISSING"
+    http_status = 503
+    title = "Transcript import is not set up"
+
+
+class TranscriptFetchFailedError(AppError):
+    """
+    YouTube could not be reached, or refused.
+
+    502 rather than 500 on purpose: this is an upstream failing, and on a
+    datacenter IP (which every pod has) a refusal is the expected outcome
+    often enough that it must not read as an application bug.
+    """
+
+    code = "TRANSCRIPT_FETCH_FAILED"
+    http_status = 502
+    title = "Could not fetch the transcript"
+
+
+class JobNotRetryableError(AppError):
+    """
+    Retry is for jobs that are DONE and went wrong. A queued or running job is
+    not stuck, it is working — offering to duplicate it would put two
+    generations of the same text on a GPU that runs one at a time.
+    """
+
+    code = "JOB_NOT_RETRYABLE"
+    http_status = 409
+    title = "Job cannot be retried"
+
+    def __init__(self, job_id: int, status: str) -> None:
+        super().__init__(
+            f"Job {job_id} is {status!r}; only a finished job can be retried.",
+            job_id=job_id,
+            status=status,
         )
 
 

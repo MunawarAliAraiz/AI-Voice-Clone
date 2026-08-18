@@ -1,5 +1,24 @@
 /**
- * Recent generations.
+ * Recent — one list for everything you have generated.
+ *
+ * MERGED FROM TWO PANELS (2026-08-16). "Recent" and "History" were separate
+ * cards showing overlapping data, which is what the owner (rightly) called the
+ * same thing twice.
+ *
+ * The merge is not a concatenation, because the two sources have different
+ * lifetimes and only one of them is durable:
+ *
+ *   generation_history  kept indefinitely
+ *   jobs                PRUNED after `job_retention_hours` (72h)
+ *
+ * So **history is the spine** and only UNFINISHED jobs are overlaid on top —
+ * queued, running, failed and cancelled, which are exactly the states history
+ * structurally cannot represent because no `generation_history` row exists for
+ * them. A SUCCEEDED job is deliberately not rendered here: it already has a
+ * history row, and showing both would list every clip twice.
+ *
+ * Driving the whole list from `/api/jobs` instead would have been simpler and
+ * wrong — everything older than three days would silently vanish.
  *
  * The predecessor rendered `null` when empty, capped at 20 with no way to see
  * more, and fired favourite/delete with no `.catch` — a failed action was
@@ -7,8 +26,11 @@
  * the star optimistically, and always surfaces failure.
  */
 import { useMemo, useState } from 'react';
+import { useRetryJobMutation } from '../hooks/queries';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { HistoryItem } from '../types/api';
+import type { JobStatusResponse } from '../types/api';
+import { ActiveJobRow } from './ActiveJobRow';
 import { AudioPlayer } from './AudioPlayer';
 import { IconAlert, IconCheckSquare, IconSearch, IconSpinner, IconStar, IconTrash, IconX } from './icons';
 import { dayBucket, fmtDuration, relativeTime, type DayBucket } from '../lib/format';
@@ -20,12 +42,32 @@ interface Props {
   hasMore: boolean;
   onLoadMore: () => void;
   onChanged: () => void;
+  /**
+   * Jobs that have NOT succeeded — queued, running, failed, cancelled. The
+   * caller filters; this component renders them pinned above the day groups.
+   * Succeeded jobs must not be passed: they already appear as history rows.
+   */
+  activeJobs?: JobStatusResponse[];
+  /** Failed and cancelled jobs. THEIR OWN SECTION — a failed job is not in
+   *  progress, and listing it under that heading is what made every past
+   *  failure look like current work. */
+  failedJobs?: JobStatusResponse[];
+  /** Ids of failed jobs whose retry already exists. Those rows show what
+   *  happened instead of offering the button a second time. */
+  retriedJobIds?: Set<number>;
+  onCancelJob?: (id: number) => void;
+  cancellingJobId?: number | null;
 }
 
 type Filter = 'all' | 'favorites';
 const GROUPS: DayBucket[] = ['Today', 'Yesterday', 'Earlier'];
 
-export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onChanged }: Props) {
+export function HistoryPanel({
+  items, total, loading, hasMore, onLoadMore, onChanged,
+  activeJobs = [], failedJobs = [], retriedJobIds = new Set(),
+  onCancelJob, cancellingJobId = null,
+}: Props) {
+  const retryJob = useRetryJobMutation();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   /** id → optimistic favourite value, pending confirmation from the server. */
@@ -48,6 +90,10 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
       if (!q) return true;
       return (
         h.input_text.toLowerCase().includes(q) ||
+        // Searching the title matters more than searching the text for Urdu,
+        // where the text is a wall of script and the title is the bit you
+        // actually remember.
+        (h.title ?? '').toLowerCase().includes(q) ||
         (h.profile_name ?? '').toLowerCase().includes(q) ||
         h.route.model_display_name.toLowerCase().includes(q)
       );
@@ -144,7 +190,7 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
     <section className="card history" aria-labelledby="history-h">
       <header className="card-head">
         <h2 id="history-h">
-          History
+          Recent
           {total > 0 && <span className="count">{total}</span>}
         </h2>
 
@@ -256,11 +302,60 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
         </div>
       )}
 
-      {items.length === 0 ? (
+      {activeJobs.length > 0 && (
+        <div className="hist-group" key="active">
+          <div className="group-label">
+            <span>In progress</span>
+            <span className="rule" />
+            <span className="group-count">{activeJobs.length}</span>
+          </div>
+          <ul className="hist">
+            {activeJobs.map((job) => (
+              <ActiveJobRow
+                key={job.id}
+                job={job}
+                onCancel={onCancelJob ? () => onCancelJob(job.id) : undefined}
+                cancelling={cancellingJobId === job.id}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* SEPARATE, because a failed job is not in progress. The three sections
+          describe the lifecycle: Try again moves a row from here into "In
+          progress", and it lands in the day groups below (succeeded) or back
+          here. A row whose retry already exists says so instead of offering
+          the button again — that is what turned one failure into four
+          identical queued jobs. */}
+      {failedJobs.length > 0 && (
+        <div className="hist-group" key="failed">
+          <div className="group-label">
+            <span>Failed</span>
+            <span className="rule" />
+            <span className="group-count">{failedJobs.length}</span>
+          </div>
+          <ul className="hist">
+            {failedJobs.map((job) => (
+              <ActiveJobRow
+                key={job.id}
+                job={job}
+                alreadyRetried={retriedJobIds.has(job.id)}
+                onRetry={() => retryJob.mutate(job.id)}
+                retrying={retryJob.isPending && retryJob.variables === job.id}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {items.length === 0 && activeJobs.length === 0 ? (
         <EmptyState
           title="No generations yet"
           body="Pick a voice, type something, and hit Generate — your clips will collect here."
         />
+      ) : items.length === 0 ? (
+        null
       ) : showing === 0 ? (
         <EmptyState
           title="Nothing matches"
@@ -311,9 +406,12 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
                             aria-label={`Select "${h.input_text.slice(0, 40)}"`}
                           />
                         )}
-                        <p className="h-text" dir={isRtl(h.route.source_script) ? 'rtl' : 'ltr'}>
-                          {h.input_text}
-                        </p>
+                        <div className="h-titled">
+                          {h.title && <p className="h-title">{h.title}</p>}
+                          <p className="h-text" dir={isRtl(h.route.source_script) ? 'rtl' : 'ltr'}>
+                            {h.input_text}
+                          </p>
+                        </div>
                         {!selectMode && (
                           <div className="h-actions">
                             <button
@@ -343,6 +441,18 @@ export function HistoryPanel({ items, total, loading, hasMore, onLoadMore, onCha
                           {h.route.model_display_name}
                         </span>
                         {h.route.lossy && <span className="tag warn">lossy</span>}
+                        {/* Only when it is genuinely > 0. `null` is an older
+                            row that predates the column, and rendering
+                            "undirected" for it would be asserting something
+                            the database does not know. */}
+                        {h.direction_segments != null && h.direction_segments > 0 && (
+                          <span
+                            className="tag"
+                            title={`Speech Direction: synthesized as ${h.direction_segments} separate parts, joined with pauses`}
+                          >
+                            directed · {h.direction_segments}
+                          </span>
+                        )}
                         <span className="dot" />
                         <span>{fmtDuration(h.duration_sec)}</span>
                         <span className="dot" />

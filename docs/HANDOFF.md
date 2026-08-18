@@ -6,12 +6,237 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ In flight right now — LoRA withdrawn, OmniVoice shipped, code-switch bug fixed (2026-08-15)
+## ⚡ Start here (state as of 2026-08-17, evening)
 
-Branch **`feature/urdu-bakeoff`**. The bake-off itself (130/130 blind-scored, arms A–E) was already
-complete as of the previous checkpoint below, and arm D (VoxCPM2 + LoRA) had been integrated as
-`voxcpm2_urdu_lora`. **This checkpoint reverses that** based on real usage, then ships the bake-off's
-actual best-scoring arm properly.
+> **If you read only one section, read this one.** Everything below it is history explaining how
+> the current state came to be.
+
+**Branch:** `feature/roman-urdu-phase-a`. Push to the **`fork`** remote, not `origin`.
+
+**Live pod:** `.claude/remote.local.md` (gitignored). A NEW pod (the third in three days) was
+created 2026-08-17 and is **mid-bootstrap**. Four things about it:
+- **It is an A40 with 45 GB, and that changes nothing.** The owner's instruction is to design for a
+  **24 GB** card: `budget_mb = 16000`, `max_workers = 2`, and Phase B's load-convert-unload all
+  stay. A Phase B measurement taken here is an UPPER bound on what fits, not proof that it fits —
+  anything that works only because of the extra 21 GB is a failure, not a pass.
+- `scripts/pod-bootstrap.sh` fetches **`main`**, so **`.venv-gemma` will not exist** when it
+  finishes — that section lives on the feature branch. Check the branch out and provision it, or
+  Phase B has nothing to run against.
+- **Watch the volume.** 41 GB used at step 8; a fully bootstrapped pod has measured 76 GB, and
+  Gemma's ~19 GB would put it near 95 GB. Check the size in the RunPod console *before* pulling it.
+  `df` reports the whole MooseFS cluster and will claim terabytes free on a full volume —
+  `du -sh /workspace`.
+- **The secrets did NOT survive** the pod before this one. `VCS_API_KEY` /
+  `VCS_MEDIA_TOKEN_SECRET` must be recreated by the owner; every request 401s until then.
+- Always launch the bootstrap with `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600` — `uv`'s 30 s
+  default killed a run outright.
+
+### What is DONE and what is only WRITTEN
+
+| | State |
+|---|---|
+| Pronunciation dictionary (table, CRUD, tab, search) | ✅ shipped, browser-verified |
+| Generation titles, non-blocking Generate, retry button, merged Recent/History | ✅ shipped, browser-verified |
+| Clause/sentence/paragraph breaks (Urdu `،`, newlines) | ✅ shipped, tested |
+| YouTube transcript import — backend + Import tab | ✅ shipped, **browser-verified against a real video** |
+| Import tab rework — chapters, collapsible parts, per-part editing, bulk bar, track picker | ✅ shipped & browser-verified (2026-08-18) |
+| Phase B: `exclusive_gpu`/`reserve_slot`, validator, Gemma runtime, `TransliteratorScheduler` | ✅ written |
+| Phase B: `POST /api/text/transliterate`, `JobKind.TRANSLITERATE`, handler, config, lifespan | ✅ wired & tested (CPU, fake scheduler) |
+| Phase B: **run on an actual GPU** | ✅ `.venv-gemma` provisioned on the A40 pod 2026-08-17; Gemma **resident** (idle-killed, warmed at startup), `latin → perso_arabic` GPU-verified |
+| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** (Devanagari listening gate still unrun) |
+| Composer convert-on-generate (Roman Urdu → Urdu script, client-side, with review) | ✅ shipped 2026-08-18 (browser verify pending a warm pod) |
+
+### The next three things, in order
+
+1. **Browser-verify convert-on-generate end to end on a warm pod.** The client-side flow shipped
+   2026-08-18 (Composer: Urdu selected + OmniVoice default + Roman text → chip warns → Generate
+   converts → review banner → one tap → audio) but has only been proven by `npm run build` and code
+   reading. Bring up the pod backend over the SSH tunnel with Gemma warm and run the checklist in
+   the plan's "In the browser" section, including the Import-tab bulk convert landing on the right
+   parts and the 375px chapter jump list.
+2. **The Devanagari listening gate.** The path is built and reports `source_script` on every result
+   so an ungated conversion is identifiable, but nothing has *heard* one. Add a Devanagari arm to
+   `eval/run_roman_arabic_probe.py` and run the A3 protocol end to end. Synthesis is unseeded —
+   sample repeatedly, listen blind, and remember the numbers can only fail a candidate.
+   The Import tab currently disables both send buttons on a Devanagari transcript and says the
+   feature is still being validated. **That is correct and must stay true until the gate passes.**
+   One thing the gate should settle that nothing has decided: what to do with an English loanword
+   already spelled in Devanagari (मीटिंग). The exemplars deliberately say nothing about it.
+3. **Confirm Gemma's residency behaves under load.** `TransliteratorScheduler` idle-kills and warms
+   at startup; verify with `nvidia-smi` that it actually returns VRAM when idle-killed and that the
+   audio models reload cold afterwards. That reload claim is the one most likely to be wrong.
+
+### The Roman-draft question — DECIDED 2026-08-18
+
+The owner's proposal — type/import **Roman Urdu**, keep it as the readable editable draft, convert to
+Perso-Arabic for OmniVoice (which has no `(ur, LATIN)` cell, and where VoxCPM2's direct Roman
+rendering is the A0 finding the owner heard as an English accent) — was **adopted**, in the third
+shape: **both kept; editing the Roman marks the Urdu stale and blocks Generate until re-converted.**
+
+The one cost that shape carried (`~78 s` Gemma load per re-convert) is **obsolete**: Gemma is
+resident since 2026-08-17, so a re-convert is ~5 s. Implemented two ways:
+
+- **Import tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
+  `outgoing = draft ?? converted ?? source`, edit marks the part stale/edited.
+- **Composer** (client-side convert-on-generate): Generate runs the conversion when the selected
+  model can't read Latin, shows the Perso-Arabic for review, one tap generates. `resolve()` and
+  `TransformKind` are untouched — the sequencing is in the UI so the review step can exist (golden
+  rules 4/5).
+
+Still **not exposed**: `generation_history.resolved_text` ("the post-transform string the model
+actually received") in `HistoryItem`/`frontend/src/types/api.ts` — deferred, so history can't yet
+show the Roman a clip came from.
+
+### Hindi: the fact that governs the whole transcript feature
+
+**No model here renders Hindi, and that is deliberate.** `hi` is not a `LanguageCode`
+(`domain/language.py`), no catalog spec declares a Devanagari cell (`f5_indic` was removed), and
+`domain/routing.py` raises `NoRouteError` for `(ur, DEVANAGARI)` with a comment saying accepting it
+"would quietly make the language field meaningless". OmniVoice claims only `(ur, ARABIC)`;
+VoxCPM2 claims `(en, LATIN)` and `(ur, LATIN)`.
+
+Hindi therefore exists here as a **source format only, never a target language** — a Devanagari
+transcript is text OmniVoice could speak *if it were Perso-Arabic*, which is what the transliterator
+is for. `POST /api/transcript/fetch` already returns `needs_transliteration`, computed server-side
+from the catalog so the UI never encodes routing rules.
+
+**The headline: the Roman-Urdu → Perso-Arabic feature PASSED its listening gate on 2026-08-16,
+on the third model tried. Phase B is unblocked.** A3 ran three times against the same harness:
+Qwen2.5-7B → *"not usable"*; Ministral-3-8B → ten reported defects; **Gemma-4-31B at 4-bit →
+*"perfect with the current data… it's best"***. Reasoning per run:
+[URDU_BAKEOFF_RESULTS.md §9–§15](URDU_BAKEOFF_RESULTS.md).
+
+Runs 2 and 3 scored the **same contract rate to within one point** and landed on opposite sides of
+the gate. Treat that as settled: **the text metrics can only fail a candidate, never approve one**,
+and every candidate goes through a listen. Prompt engineering is also not a lever — Gemma's four
+arms are within noise of each other because it already holds the constraints, inverting §10a where
+Qwen could not hold them at all.
+
+**Two constraints Phase B must design around before writing code:**
+1. **Gemma-4-31B is ~19 GB resident** (4-bit, 78.4 s cold load) against a 24 GB card with
+   `budget_mb = 16000`. It never needs to be co-resident with OmniVoice — convert, unload, user
+   edits, Generate — but a second scheduler that can demand 19 GB while sitting outside the main
+   scheduler's GPU-slot semaphore is exactly what golden rule 3 exists to prevent. `AnalyzerScheduler`
+   gets away with it only because Qwen2.5-3B's ~6 GB fits in the slack. **Ministral is the named
+   fallback, but run 2 is the measured record of how it sounds and it did not pass — do not
+   substitute on VRAM grounds without re-running A3 on the substitute.**
+2. ~~**The one remaining defect is dictionary work with a new requirement.**~~ **Done — the
+   dictionary shipped 2026-08-16/17** (see below). میٹنگ is read as *mating*; gold writes میٹنگ too,
+   so it was never the model's doing. Because the text arrives already in Perso-Arabic,
+   `_LOANWORD_LEXICON`'s Latin-only keys could never match it — the lexicon is now data-driven and
+   `مِیٹِنگ` ships as the first Perso-Arabic-keyed default, which is what proves the either-script
+   requirement is satisfiable rather than merely stated.
+
+**Shipped since the gate passed (2026-08-16/17):** the **pronunciation dictionary** end to end
+(`pronunciation_entries` table, `/api/pronunciations` CRUD, a `Pronunciation` tab, a pure
+`effective_lexicon` merge policy, and a `get_lexicon(db)` dependency that keeps golden rule 4's
+`resolve()` free of I/O), plus the Studio workflow changes: analyzer-suggested editable titles
+returned in the *same* CLASSIFY response as the prosody rows, a Generate button that enqueues and
+re-enables immediately with a queued toast and an In progress strip, Recent+History merged, an
+editor toolbar attached to the textarea, adaptive job polling that stops when nothing is in flight,
+and startup warm-up that runs a throwaway synthesis per model (weights alone don't remove the
+~160 s stall — OmniVoice's embedded Whisper loads on first `synth()`). It also added **the first
+schema migration this project has had**: an add-only `PRAGMA table_info` + `ALTER TABLE ADD COLUMN`
+pass in `Database.connect()`, because a new `title` column would otherwise have reached a fresh
+install and silently missed the pod's real database. `pytest -m "not gpu"` and `npm run build` are
+both green; **none of it has been exercised against the pod in a browser yet** — that needs the
+API key pasted into Settings, and it is the first thing to do.
+
+**What a fresh session should do first:**
+
+0. **Click through the shipped UI against the pod** (SSH tunnel + `npm run dev`, key pasted into
+   Settings): add a dictionary entry and hear it applied, generate twice in a row without the
+   button locking, confirm the queued toast and the In progress strip, and check the startup log
+   shows both models warmed *and* synthesized. Everything above is verified by tests and a local
+   build only.
+
+1. ~~**Design Phase B, starting with the VRAM question above.**~~ **The VRAM question is ANSWERED
+   and the answer is built** (2026-08-17): `InferenceScheduler.exclusive_gpu(reason)` holds the
+   main GPU slot and evicts EVERY worker, so Gemma gets an empty card and no synthesis can run
+   while it is resident. `TransliteratorScheduler` owns nothing between calls — spawn, LOAD,
+   TRANSLITERATE, kill, every time — because at ~19 GB it is resident or the audio models are,
+   never both. `_make_room_for` could not express this: it evicts until a spec fits a budget
+   deliberately sized for co-residency (16 GB), so a 19 GB spec fails its first check.
+
+   **This is a SECOND EVICTION CALL SITE, an explicit amendment to golden rule 3**, argued in
+   `scheduler.py`'s module docstring rather than left to be discovered. The property the rule buys
+   — unload-during-inference being unrepresentable — is intact: the same semaphore is held across
+   the whole body and eviction still goes through the same `_evict` behind the same assertion.
+   `tests/test_scheduler.py` asserts both that the card is emptied and that no synthesis completes
+   during the window.
+
+   **Wired to the API 2026-08-17, later the same day.** `POST /api/text/transliterate` returns 202
+   and enqueues `JobKind.TRANSLITERATE`; the handler owns the ORDER (convert, then validate) and
+   nothing else, so "is this a transliteration or an answer" stays provable without a 19 GB
+   download. A validator rejection **fails the job** carrying the reason code — the text never
+   reaches the client, because returning it with a warning attached is golden rule 5's silent
+   substitution one layer above audio. `route=None`, like `analyze_llm`: `resolve()` is never
+   called and `TransformKind` is untouched.
+
+   Also fixed then: `GEMMA_TRANSLITERATOR_HF_REVISION` was the literal string `"main"` under a
+   comment claiming it was pinned — the exact supply-chain hole golden rule 7 exists to close, made
+   worse by a comment that stopped anyone looking. Now `842da3794eaa…`, and the repo id gained its
+   **capital B** (`google/gemma-4-31b-it` is a 307 redirect to `google/gemma-4-31B-it`).
+
+   **What still has not happened: any of it running on a GPU.** No pod has ever had `.venv-gemma`.
+2. ~~**Build the user-editable pronunciation dictionary.**~~ **Built.** §9e's measurement is why it
+   exists — **17.2% of English loanword instances** (11 of 54 distinct words, 32.5% of generations)
+   are mispronounced by OmniVoice, and 9 of the 11 fail *every* time, so a respelling genuinely
+   fixes them rather than shifting a coin flip. What remains is owner work, not code: the built-in
+   defaults are deliberately thin (three entries), and adding a fourth means picking a respelling
+   by ear. §15f's tie stands unbroken — five spellings of `meeting` scored equally over 4 blind
+   samples each, and the owner's point that hand-picking respellings is exactly the work the
+   dictionary exists to hand back to the user is why no second sampling round was run.
+   Design notes in §9d/§15d.
+3. **One one-click owner action:** accept the licence at huggingface.co/ai4bharat/IndicF5 to unblock
+   bake-off arms H/I/J. (`docs/outreach/mavkif-licence-request.md` is now **moot** — it existed only
+   to reopen a feature that has since passed its gate on Gemma-4-31B. Don't post it.)
+4. **Native review of the 32 new corpus gold strings** (`_meta.authoring_rule_EXCEPTION_phase_a_items`).
+   They were drafted by Claude, and any number scored against them is provisional until reviewed.
+   §15b showed the corpus gold is itself inconsistent in places — it converts `office`/`file`/`meeting`
+   to Urdu script while the contract says to keep English in Latin.
+
+**Three findings from the 2026-08-17 analyzer debugging, all verified on the pod:**
+
+- **`AnalyzerScheduler` must hold one lock across the whole `classify()`, including the wire call.**
+  `worker_client.py`'s docstring states the precondition — it needs no locking of its own *because*
+  the scheduler holds the slot — and `AnalyzerScheduler` was releasing at start+load. Two concurrent
+  callers then wrote two frames onto one stdin; `WorkerProcess.call` caught it by request id and
+  killed the worker, so every collision cost a ~30 s reload the next collision destroyed. Latent
+  until the debounced title suggestion became a second caller.
+- **Qwen2.5-3B ends this prompt's response one `}` short.** It closes the rows array and stops.
+  **Byte-identical at `max_new_tokens` 300 and 900 under greedy decoding**, so it is choosing to
+  stop, not being cut off — don't "fix" it by raising the ceiling again. `_scan_object` appends
+  closers only for brackets it watched open; a genuinely incomplete response still fails, and
+  everything still goes through the same strict validation.
+- **The direction preview makes zero Qwen calls.** `routers/direction.py`'s preview is the pure
+  heuristic `analyze()`. Only the "AI suggest" path calls the LLM, and that one *does* carry the
+  title in the same response as the rows. So a title alongside the preview is necessarily a
+  separate call — there is no model response to ride along in.
+
+**Two live findings that change how all future evaluation is done here:**
+
+- **Synthesis is unseeded** (§9b). `OmniVoiceBackend.synth()` sets no seed, so a word's pronunciation
+  is a random variable and any n=1 listening verdict is a coin flip. This is not theoretical — it
+  produced two opposite owner verdicts on one byte-identical sentence an hour apart, and it explains
+  `late` passing, failing, then passing across three listens. Sample repeatedly and listen blind;
+  `eval/run_loanword_reliability.py` is the pattern.
+- **Numeric screens can only fail something, never approve it.** Four demonstrations now: A0's ASR
+  screen looked encouraging while the owner heard a plain English accent; §10's contract metric
+  passed `owner_01_sick`, whose Urdu is mangled; §14b's four best-scoring items (CER 0.020–0.077,
+  contract OK) each contained an error caught by ear; and §15a's runs 2 and 3 scored the same
+  contract rate to within a point while landing on opposite sides of the gate.
+
+Historical detail on how the current state came to be follows.
+
+---
+
+## LoRA withdrawn, OmniVoice shipped, code-switch bug fixed (2026-08-15)
+
+Originally branch **`feature/urdu-bakeoff`**, since merged. The bake-off itself (130/130
+blind-scored, arms A–E) was already complete as of the previous checkpoint below, and arm D (VoxCPM2
++ LoRA) had been integrated as `voxcpm2_urdu_lora`. **This checkpoint reverses that** based on real
+usage, then ships the bake-off's actual best-scoring arm properly.
 
 **1. The LoRA was withdrawn.** Using the real running app (not the eval harness), the owner's verdict
 was that **base VoxCPM2 sounds better than the LoRA** — contradicting the blind-listen median (4.0 vs

@@ -189,12 +189,29 @@ class CorpusItem:
     stresses: tuple[str, ...]
     perso_arabic: str
     roman: str
-    devanagari: str
+    #: Empty for the Phase-A items added 2026-08-16 — see the corpus's
+    #: `_meta.devanagari_is_optional_from_2026_08_16`. Arms that need it must
+    #: filter with `has()` rather than assume every item carries it.
+    devanagari: str = ""
     note: str = ""
 
     @property
     def devanagari_plain(self) -> str:
         return strip_nuqta(self.devanagari)
+
+    def has(self, representation: str) -> bool:
+        """
+        Whether this item can be rendered in `representation`.
+
+        Only Devanagari is ever absent, but this is written generally so a
+        future optional representation does not need a second mechanism.
+        Deliberately explicit: `render()` does NOT filter silently, because an
+        arm quietly scoring 13 items while its neighbour scores 45 is exactly
+        the kind of invisible incomparability this corpus exists to prevent.
+        """
+        if representation in (Representation.DEVANAGARI, Representation.DEVANAGARI_PLAIN):
+            return bool(self.devanagari)
+        return True
 
     @property
     def cer_reference(self) -> str:
@@ -215,6 +232,11 @@ class CorpusItem:
         ascii_digits: bool = False,
     ) -> str:
         """Render this item in `representation`, applying the ladder toggles."""
+        if not self.has(representation):
+            raise ValueError(
+                f"item {self.id!r} has no {representation!r} rendering; "
+                f"filter with CorpusItem.has() before calling text_for()"
+            )
         if representation == Representation.DEVANAGARI_PLAIN:
             text = self.devanagari_plain
         else:
@@ -240,7 +262,7 @@ def load_corpus(path: Path | None = None) -> tuple[CorpusItem, ...]:
             stresses=tuple(i["stresses"]),
             perso_arabic=i["perso_arabic"],
             roman=i["roman"],
-            devanagari=i["devanagari"],
+            devanagari=i.get("devanagari", ""),
             note=i.get("note", ""),
         )
         for i in raw["items"]

@@ -24,6 +24,31 @@ __all__ = ["Database"]
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
+#: Columns added to a table AFTER it first shipped.
+#:
+#: `CREATE TABLE IF NOT EXISTS` leaves an existing database at its original
+#: shape forever, so a column added to `schema.sql` reaches new installs and
+#: silently misses every database that already exists. This list is applied on
+#: every connect, so both converge.
+#:
+#: DELIBERATELY ADD-COLUMN ONLY. No renames, no drops, no type changes, no
+#: version counter. SQLite's ADD COLUMN is O(1) and cannot lose data, which is
+#: what makes this safe without a real migration framework — anything beyond it
+#: is not, and needs one. New columns must be nullable or carry a constant
+#: DEFAULT, because SQLite refuses to add a NOT NULL column with no default to
+#: a table that already has rows.
+_ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    # (table, column, full DDL fragment)
+    ("generation_history", "title", "title TEXT"),
+    ("generation_history", "direction_segments", "direction_segments INTEGER"),
+    # Which failed job this one is a retry OF. Nullable; set only by the retry
+    # endpoint. Exists so the UI can stop offering "Try again" on a row whose
+    # retry is already queued — without it, four clicks on one failed job
+    # produced four identical queued jobs and no way to tell they were the
+    # same attempt.
+    ("jobs", "retry_of_job_id", "retry_of_job_id INTEGER"),
+)
+
 
 class Database:
     def __init__(self, path: str | Path) -> None:
@@ -41,6 +66,7 @@ class Database:
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.executescript(_SCHEMA_PATH.read_text(encoding="utf-8"))
         await self._conn.commit()
+        await self._add_missing_columns()
         # The job queue's atomic claim (UPDATE ... RETURNING) needs SQLite 3.35+
         # (2021). Assert it here rather than discovering it at the first claim,
         # deep inside a request.
@@ -49,6 +75,24 @@ class Database:
                 f"SQLite {sqlite3.sqlite_version} is too old for the job queue's "
                 f"atomic claim (UPDATE ... RETURNING needs 3.35+)."
             )
+
+    async def _add_missing_columns(self) -> None:
+        """
+        Bring an existing database up to `_ADDED_COLUMNS`. Idempotent.
+
+        Reads the live shape with `PRAGMA table_info` rather than tracking a
+        schema version, so it is correct no matter which subset of columns a
+        given database already has — including a database this code has never
+        seen before.
+        """
+        for table, column, ddl in _ADDED_COLUMNS:
+            cur = await self._c.execute(f"PRAGMA table_info({table})")
+            existing = {row["name"] for row in await cur.fetchall()}
+            if column in existing:
+                continue
+            async with self._write_lock:
+                await self._c.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+                await self._c.commit()
 
     async def close(self) -> None:
         if self._conn is not None:
@@ -151,17 +195,20 @@ class Database:
         output_path: str | Path, output_format: str, duration_sec: float | None,
         gen_time_sec: float | None, model_id: str, transform: str, is_lossy: bool,
         source_script: str, route_rationale: str, resolved_text: str | None,
+        title: str | None = None, direction_segments: int | None = None,
     ) -> aiosqlite.Row:
         async with self._write_lock:
             cur = await self._c.execute(
                 """INSERT INTO generation_history
                    (profile_id, input_text, language, output_path, output_format,
                     duration_sec, gen_time_sec, model_id, transform, is_lossy,
-                    source_script, route_rationale, resolved_text)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_script, route_rationale, resolved_text, title,
+                    direction_segments)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (profile_id, input_text, language, str(output_path), output_format,
                  duration_sec, gen_time_sec, model_id, transform, int(is_lossy),
-                 source_script, route_rationale, resolved_text),
+                 source_script, route_rationale, resolved_text, title,
+                 direction_segments),
             )
             await self._c.commit()
             new_id = cur.lastrowid
@@ -234,12 +281,14 @@ class Database:
     async def create_job(
         self, *, kind: str, params_json: str, route_json: str | None,
         profile_id: int | None, priority: int = 0,
+        retry_of_job_id: int | None = None,
     ) -> aiosqlite.Row:
         async with self._write_lock:
             cur = await self._c.execute(
-                """INSERT INTO jobs (kind, params_json, route_json, profile_id, priority)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (kind, params_json, route_json, profile_id, priority),
+                """INSERT INTO jobs
+                     (kind, params_json, route_json, profile_id, priority, retry_of_job_id)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (kind, params_json, route_json, profile_id, priority, retry_of_job_id),
             )
             await self._c.commit()
             new_id = cur.lastrowid
@@ -461,3 +510,109 @@ class Database:
             )
             await self._c.commit()
             return cur.rowcount
+
+    # ── pronunciation dictionary ─────────────────────────────────────────────
+    #
+    # These return ROWS, not a lexicon. Merging the user's entries over the
+    # shipped defaults is policy, and policy lives in `domain/urdu_text.py`'s
+    # pure `effective_lexicon()` where it can be tested without a database.
+
+    async def list_pronunciations(
+        self, *, language: str | None = None, enabled_only: bool = False
+    ) -> list[aiosqlite.Row]:
+        """
+        Newest first, so the settings list shows what was just added at the top.
+
+        `enabled_only` is for the synthesis path, which wants only rows that
+        actually apply. The settings UI wants everything, disabled included —
+        an entry the user switched off must still be visible to switch back on.
+        """
+        # Static SQL with the filters expressed as parameters, rather than a
+        # WHERE clause assembled in Python. Both filters are internal, so an
+        # assembled clause would also be safe, but this one cannot drift into
+        # being unsafe later and needs no `noqa` to say so.
+        cur = await self._c.execute(
+            """SELECT * FROM pronunciation_entries
+                WHERE (? IS NULL OR language = ?)
+                  AND (? = 0 OR is_enabled = 1)
+                ORDER BY id DESC""",
+            (language, language, int(enabled_only)),
+        )
+        return list(await cur.fetchall())
+
+    async def get_pronunciation(self, entry_id: int) -> aiosqlite.Row | None:
+        cur = await self._c.execute(
+            "SELECT * FROM pronunciation_entries WHERE id = ?", (entry_id,)
+        )
+        return await cur.fetchone()
+
+    async def find_pronunciation(self, *, key_text: str, language: str) -> aiosqlite.Row | None:
+        """
+        Case-insensitive lookup by key, matching the UNIQUE constraint.
+
+        Exists so the API can answer "this word already has an entry" with the
+        conflicting row rather than only a constraint violation — a user who
+        re-adds `database` should be shown what they already wrote.
+        """
+        cur = await self._c.execute(
+            """SELECT * FROM pronunciation_entries
+                WHERE language = ? AND key_text = ? COLLATE NOCASE""",
+            (language, key_text),
+        )
+        return await cur.fetchone()
+
+    async def create_pronunciation(
+        self, *, key_text: str, replacement: str, language: str = "ur",
+        is_enabled: bool = True, notes: str | None = None,
+    ) -> aiosqlite.Row:
+        """
+        Raises `sqlite3.IntegrityError` on a duplicate key for the language.
+        Deliberately not caught here: the access layer reports what the database
+        said, and the API layer decides that this means 409.
+        """
+        async with self._write_lock:
+            cur = await self._c.execute(
+                """INSERT INTO pronunciation_entries
+                   (key_text, replacement, language, is_enabled, notes)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (key_text, replacement, language, int(is_enabled), notes),
+            )
+            await self._c.commit()
+            new_id = int(cur.lastrowid)
+        row = await self.get_pronunciation(new_id)
+        assert row is not None
+        return row
+
+    async def update_pronunciation(
+        self, entry_id: int, **fields: Any
+    ) -> aiosqlite.Row | None:
+        """
+        Partial update. `None` for a field means "not supplied", so an entry's
+        `notes` cannot be cleared by passing None — pass "" instead. Returns
+        None when the row does not exist.
+        """
+        allowed = {"key_text", "replacement", "language", "is_enabled", "notes"}
+        sets = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if "is_enabled" in sets:
+            sets["is_enabled"] = int(sets["is_enabled"])
+        if not sets:
+            return await self.get_pronunciation(entry_id)
+        # `cols` is built only from the `allowed` whitelist above — never from
+        # user input — so the interpolation is safe; values stay parameterized.
+        cols = ", ".join(f"{k} = ?" for k in sets)
+        async with self._write_lock:
+            await self._c.execute(
+                f"UPDATE pronunciation_entries SET {cols},"  # noqa: S608
+                " updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+                (*sets.values(), entry_id),
+            )
+            await self._c.commit()
+        return await self.get_pronunciation(entry_id)
+
+    async def delete_pronunciation(self, entry_id: int) -> bool:
+        async with self._write_lock:
+            cur = await self._c.execute(
+                "DELETE FROM pronunciation_entries WHERE id = ?", (entry_id,)
+            )
+            await self._c.commit()
+            return cur.rowcount > 0

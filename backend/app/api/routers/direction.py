@@ -33,7 +33,14 @@ from ...inference.catalog import ModelCatalog
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
 from ...jobs.direction import capability_for
-from ..deps import get_catalog, get_db, get_job_runner, get_scheduler, get_settings
+from ..deps import (
+    get_catalog,
+    get_db,
+    get_job_runner,
+    get_lexicon,
+    get_scheduler,
+    get_settings,
+)
 from ..schemas.direction import (
     CapabilityReportOut,
     DirectedSegmentOut,
@@ -55,6 +62,7 @@ router = APIRouter(prefix="/direction", tags=["direction"])
 async def analyze_direction(
     body: DirectionAnalyzeRequest,
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
+    lexicon: Annotated[dict[str, str], Depends(get_lexicon)],
 ) -> DirectionAnalyzeResponse:
     # Pure routing, exactly like `POST /generate` — decides what WOULD run,
     # honoring the caller's model_id/allow_experimental exactly like
@@ -62,7 +70,10 @@ async def analyze_direction(
     # NoRouteError (422, lists what works) / AmbiguousScriptError, both
     # mapped to problem+json by the installed handler.
     text_profile = profile_text(body.text, body.language)
-    plan = resolve(text_profile, body.model_id, catalog, allow_experimental=body.allow_experimental)
+    plan = resolve(
+        text_profile, body.model_id, catalog,
+        allow_experimental=body.allow_experimental, lexicon=lexicon,
+    )
 
     spec = catalog.get(plan.model_id)
     assert spec is not None  # resolve() only returns catalog ids

@@ -47,8 +47,14 @@ _VALID_RATES = tuple(r.value for r in Rate)
 _SYSTEM_PROMPT = f"""You are a speech-direction classifier for a text-to-speech system. \
 For each numbered sentence, classify how it should be SPOKEN (not what it means literally).
 
-Return ONLY a JSON array, one object per sentence, in order, no other text:
-[{{"index": 0, "emotion": "...", "intensity": "...", "energy": "...", "rate": "..."}}, ...]
+Also give the whole passage a SHORT TITLE: 2-3 words naming what it is about. \
+No punctuation, no quotes, no trailing period. Same language as the text.
+
+Return ONLY a JSON object, no other text:
+{{"title": "...", "rows": [{{"index": 0, "emotion": "...", \
+"intensity": "...", "energy": "...", "rate": "..."}}, ...]}}
+
+One row per sentence, in order.
 
 emotion: one of {_VALID_EMOTIONS}
 intensity: one of {_VALID_LEVELS} (how strongly the emotion is expressed)
@@ -58,9 +64,14 @@ rate: one of {_VALID_RATES} (speaking speed)
 Use "neutral"/"medium"/"medium"/"normal" when nothing in the text signals otherwise \
 — never guess dramatically to seem clever."""
 
-#: Probe default; generous enough for a full sentence list's worth of JSON
-#: rows without giving the model room to ramble past the array.
-_DEFAULT_MAX_NEW_TOKENS = 300
+#: Sized for the rows alone when it was the probe's default. Adding the title
+#: pushed a real three-sentence Urdu request to within ONE TOKEN of the limit
+#: — the model emitted the whole object and got cut off before its closing
+#: brace, which then read as a JSON syntax error rather than as truncation.
+#: Raised with room to spare: the ceiling exists to stop a model rambling past
+#: the object, and it does that job just as well at 900 as at 300, while 300
+#: was also quietly failing legitimate responses.
+_DEFAULT_MAX_NEW_TOKENS = 900
 
 
 def _build_prompt(sentences: list[str]) -> str:
@@ -68,21 +79,151 @@ def _build_prompt(sentences: list[str]) -> str:
     return f"Sentences:\n{numbered}"
 
 
-def _parse_and_validate(raw: str, expected_count: int) -> list[dict[str, Any]]:
+#: A title is a label, not a sentence. Anything longer is the model narrating.
+_MAX_TITLE_WORDS = 5
+_MAX_TITLE_CHARS = 60
+
+
+def _validate_title(value: Any) -> str:
+    """
+    Strict, same as the rows: a bad title raises rather than being trimmed into
+    shape. The CALLER decides what to do about a missing title (the API falls
+    back to the input text) — silently repairing it here would hide that a
+    prompt or a model change had broken this path.
+    """
+    if not isinstance(value, str):
+        raise RuntimeError(f"analyzer title is not a string: {value!r}")
+    title = " ".join(value.split())
+    if not title:
+        raise RuntimeError("analyzer title is empty")
+    if len(title) > _MAX_TITLE_CHARS:
+        raise RuntimeError(f"analyzer title is {len(title)} chars, max {_MAX_TITLE_CHARS}")
+    if len(title.split(" ")) > _MAX_TITLE_WORDS:
+        raise RuntimeError(f"analyzer title has more than {_MAX_TITLE_WORDS} words: {title!r}")
+    return title
+
+
+#: Enough of a bad response to see the shape of the failure — truncation,
+#: a stray quote, trailing prose — without pasting a whole generation into a
+#: log line.
+_SNIPPET_CHARS = 400
+
+
+def _snippet(raw: str) -> str:
+    return repr(raw if len(raw) <= _SNIPPET_CHARS else raw[:_SNIPPET_CHARS] + "…[truncated]")
+
+
+def _scan_object(raw: str, start: int) -> tuple[int | None, str]:
+    """
+    Find the `}` closing the `{` at `start`.
+
+    Returns `(end_index, "")` when the object closes properly, or
+    `(None, closers)` when it does not — where `closers` is the exact
+    sequence of `]`/`}` that would balance what is still open at EOF.
+
+    Replaces an `rfind("}")` that produced a genuinely misleading failure in
+    production. Given a response whose only flaw was a missing final brace,
+    `rfind` landed on the last ROW's closing brace, silently discarding the
+    `]` as well — so a truncation of one character was reported as
+    `Expecting ',' delimiter: line 6 column 93`, pointing at valid text in
+    the middle of an array. Depth-matching cannot make that mistake: either
+    the object closes and the slice is exactly it, or it does not and the
+    caller says "unterminated".
+
+    Quote-aware, because a `}` inside a string value is not structure. Titles
+    are model-written free text and this analyzer's are frequently Urdu, so
+    braces and escapes inside them are not hypothetical.
+    """
+    stack: list[str] = []
+    in_string = False
+    escaped = False
+    for i in range(start, len(raw)):
+        ch = raw[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "[":
+            stack.append("]")
+        elif ch in "}]":
+            if not stack or stack[-1] != ch:
+                # Mismatched close. Not something to reason about further —
+                # the response is malformed in a way no completion fixes.
+                return None, ""
+            stack.pop()
+            if not stack:
+                return i, ""
+    return None, "".join(reversed(stack))
+
+
+def _parse_and_validate(raw: str, expected_count: int) -> tuple[str, list[dict[str, Any]]]:
     """
     Parse+validate exactly what the probe's `validate_response` reported as
     `problems` — except here a problem is fatal, not a line in a report.
+
+    Returns `(title, rows)`. The title rides along in the SAME response as the
+    rows rather than costing a second call: this model is ~6 GB and its load
+    dominates, so asking for both in one generation is the difference between
+    one worker round-trip and two.
     """
-    start, end = raw.find("["), raw.rfind("]")
-    if start == -1 or end == -1:
-        raise RuntimeError(f"no JSON array found in analyzer response: {raw!r}")
+    start = raw.find("{")
+    if start == -1:
+        raise RuntimeError(f"no JSON object found in analyzer response: {raw!r}")
+    end, closers = _scan_object(raw, start)
+    if end is not None:
+        candidate = raw[start : end + 1]
+    elif closers:
+        # WHY THIS IS COMPLETION AND NOT REPAIR, AND WHY IT IS ALLOWED HERE.
+        #
+        # Qwen2.5-3B measurably ends this response with `]` and then stops,
+        # omitting the object's own final `}`. Verified on the pod: the output
+        # is byte-identical at max_new_tokens=300 and 900, and decoding is
+        # greedy (`do_sample=False`), so the model is choosing to stop — it is
+        # not being cut off. Raising here means the feature simply does not
+        # work on the analyzer this project actually ships.
+        #
+        # What is appended is only `]`/`}` for brackets THIS SCAN WATCHED OPEN.
+        # No key, no value, no default classification, nothing the model did
+        # not say. And it cannot paper over a genuinely incomplete response:
+        # a half-written row or a cut-off string still fails `json.loads`
+        # below, and every field still goes through the same strict validation
+        # afterwards. The only responses this rescues are the ones that were
+        # already complete.
+        candidate = raw[start:] + closers
+    else:
+        raise RuntimeError(
+            f"analyzer response object never closes and cannot be completed; "
+            f"model returned {_snippet(raw)}"
+        )
     try:
-        rows = json.loads(raw[start : end + 1])
+        payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"analyzer response JSON parse failed: {exc}") from exc
+        # Include what the model actually said. Without it the error names a
+        # line and column in a string nobody can see, which is how a real
+        # production failure ("Expecting ',' delimiter: line 6 column 93")
+        # stayed undiagnosable — truncated output, an unescaped quote inside
+        # an Urdu title, and a model rambling past the object all produce it
+        # and need different fixes.
+        raise RuntimeError(
+            f"analyzer response JSON parse failed: {exc}; "
+            f"model returned {_snippet(raw)}"
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("analyzer response is not a JSON object")
+    title = _validate_title(payload.get("title"))
+    rows = payload.get("rows")
 
     if not isinstance(rows, list):
-        raise RuntimeError("analyzer response is not a JSON array")
+        raise RuntimeError("analyzer response 'rows' is not a JSON array")
     if len(rows) != expected_count:
         raise RuntimeError(
             f"analyzer response has {len(rows)} rows, expected {expected_count}"
@@ -101,7 +242,7 @@ def _parse_and_validate(raw: str, expected_count: int) -> list[dict[str, Any]]:
                 raise RuntimeError(
                     f"analyzer response row {i}: {field}={row.get(field)!r} not in {valid}"
                 )
-    return rows
+    return title, rows
 
 
 class QwenAnalyzerBackend:
@@ -141,7 +282,7 @@ class QwenAnalyzerBackend:
         if self._model is None or self._tokenizer is None:
             raise RuntimeError("classify called before load")
         if not sentences:
-            return {"rows": [], "gen_time_sec": 0.0}
+            return {"title": "", "rows": [], "gen_time_sec": 0.0}
 
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
@@ -165,8 +306,8 @@ class QwenAnalyzerBackend:
             out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
         )
 
-        rows = _parse_and_validate(response, len(sentences))
-        return {"rows": rows, "gen_time_sec": gen_sec}
+        title, rows = _parse_and_validate(response, len(sentences))
+        return {"title": title, "rows": rows, "gen_time_sec": gen_sec}
 
     def unload(self) -> None:
         self._model = None

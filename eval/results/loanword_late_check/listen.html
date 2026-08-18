@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loanword pronunciation — late / database</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto;
+       padding: 0 1rem; background:#0b0d12; color:#e6e8ee; }
+h1 { font-size: 1.3rem; }
+h2 { font-size: 1.05rem; color:#6c8cff; margin-bottom:.3rem; }
+.grp { margin: 2rem 0; padding: 1rem; background:#161922; border-radius:8px; }
+.blurb { font-size:.9rem; color:#9aa4b2; margin-top:0; }
+.row { margin: 1rem 0; padding:.7rem; background:#1d2230; border-radius:6px; }
+.lab { font-size:.75rem; color:#e6b86c; text-transform:uppercase;
+       letter-spacing:.04em; margin-bottom:.35rem; }
+.txt { font-size:1.1rem; margin:.3rem 0; }
+audio { width:100%; margin-top:.3rem; }
+</style></head>
+<body>
+<h1>Loanword pronunciation — following up your A0 listen</h1>
+<p>You reported that column B (the Perso-Arabic gold) still mispronounces <b>late</b> and
+<b>database</b>. Those turn out to be two different problems, so they are separated below.
+Same reference voice and checkpoint as A0.</p>
+<div class="grp"><h2>late</h2><p class="blurb"><b>The real finding.</b> `late` is not in <code>_LOANWORD_LEXICON</code>, and §5b recorded it as passing. If a respelling below sounds right, it earns a lexicon entry — by ear, which is the only way words get in there.</p>
+      <div class="row">
+        <div class="lab">Latin `late` (what runs today)</div>
+        <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔</div>
+        <audio controls src="late_latin.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">Respelled لیٹ</div>
+        <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں لیٹ ہو گیا۔</div>
+        <audio controls src="late_urdu_let.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">Respelled لیٹھ (aspirated, in case لیٹ reads too short)</div>
+        <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں لیٹھ ہو گیا۔</div>
+        <audio controls src="late_urdu_leyt.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">Bare Latin `late` (isolated, for contrast)</div>
+        <div class="txt" dir="rtl">late</div>
+        <audio controls src="late_bare_latin.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">Bare لیٹ (isolated, for contrast)</div>
+        <div class="txt" dir="rtl">لیٹ</div>
+        <audio controls src="late_bare_urdu.wav"></audio>
+      </div></div><div class="grp"><h2>database</h2><p class="blurb"><b>Probably not a real defect.</b> A0 fed text verbatim and so skipped production's loanword lexicon. Compare the first two: if `ڈیٹا base` sounds right, production was already correct and A0 simply misrepresented it.</p>
+      <div class="row">
+        <div class="lab">Raw `database` — what A0 fed (NOT production)</div>
+        <div class="txt" dir="rtl">ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+        <audio controls src="database_verbatim.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">`ڈیٹا base` — what production actually sends</div>
+        <div class="txt" dir="rtl">ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+        <audio controls src="database_production.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">`ڈیٹا بیس` — the all-Urdu form §5c rejected (بیس = &#x27;twenty&#x27;)</div>
+        <div class="txt" dir="rtl">ہمیں ڈیٹا بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔</div>
+        <audio controls src="database_all_urdu.wav"></audio>
+      </div></div><div class="grp"><h2>office</h2><p class="blurb"><b>Control.</b> §5b passed this word and you did not flag it. If it also sounds wrong, the problem is broader than a per-word lexicon can fix.</p>
+      <div class="row">
+        <div class="lab">Latin `office` (control — should already be fine)</div>
+        <div class="txt" dir="rtl">یار، آج office میں کافی کام تھا، اس لیے میں دیر سے آیا۔</div>
+        <audio controls src="office_latin.wav"></audio>
+      </div>
+      <div class="row">
+        <div class="lab">Respelled آفس (control)</div>
+        <div class="txt" dir="rtl">یار، آج آفس میں کافی کام تھا، اس لیے میں دیر سے آیا۔</div>
+        <audio controls src="office_urdu.wav"></audio>
+      </div></div>
+</body></html>

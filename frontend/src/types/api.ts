@@ -111,6 +111,8 @@ export interface DirectionPlanIn {
 
 export interface TTSGenerateRequest {
   text: string;
+  /** Optional. A generation without one is shown by its text. */
+  title?: string | null;
   profile_id: number;
   language: string;
   model_id?: string | null;
@@ -216,6 +218,7 @@ export interface HistoryItem {
   id: number;
   profile_id: number;
   profile_name: string | null;
+  title: GenerationTitle;
   input_text: string;
   language: string;
   audio_url: string;
@@ -223,6 +226,13 @@ export interface HistoryItem {
   duration_sec: number | null;
   gen_time_sec: number | null;
   is_favorite: boolean;
+  /**
+   * Pause-joined segments Speech Direction rendered this into. `0` means it
+   * was synthesized in one piece with no direction. `null` means the row
+   * predates the column — not the same claim as `0`, so the UI shows nothing
+   * rather than asserting "undirected" about a generation it cannot know.
+   */
+  direction_segments: number | null;
   route: RouteInfo;
   created_at: string;
 }
@@ -264,6 +274,9 @@ export interface AnalyzeLlmRow {
  */
 export interface AnalyzeLlmResult {
   rows: AnalyzeLlmRow[];
+  /** Produced in the SAME generation as the rows, so one AI-suggest press
+   *  yields both prosody and a title — no second model round-trip. */
+  title: string;
   gen_time_sec: number;
   load_time_sec: number;
 }
@@ -284,6 +297,9 @@ export interface JobStatusResponse {
   profile_id: number | null;
   profile_name: string | null;
   input_text: string | null;
+  /** Carried from the job's stored params, so a QUEUED job already has it —
+   *  before any history row exists. */
+  title: GenerationTitle;
   /** Never absent from 'queued' onward for kinds that route through the audio
    *  catalog (currently only 'synthesize') — routing is pure and already ran.
    *  `null` for kinds that never touch `resolve()`/the audio catalog at all
@@ -291,6 +307,9 @@ export interface JobStatusResponse {
    *  audio and is not a routable ModelSpec). */
   route: RouteInfo | null;
   /** 0-indexed jobs strictly ahead of this one. Only set while 'queued'. */
+  /** The failed job this one retries. `null` for a first attempt. Lets the UI
+   *  stop offering "Try again" on a row whose retry already exists. */
+  retry_of_job_id: number | null;
   position: number | null;
   /** Seconds. A UI estimate, not a promise. Set while 'queued' or 'running'. */
   eta_sec: number | null;
@@ -324,12 +343,88 @@ export interface GPUInfo {
   temperature_c: number | null;
 }
 
+/** Whether an optional feature can run here, and if not, WHY IN WORDS.
+ *  Render `reason` next to the disabled control — a feature that is merely
+ *  missing with no explanation leaves the user unable to tell "this server
+ *  can't" from "this is broken", and those have different next steps. */
+export interface FeatureAvailability {
+  available: boolean;
+  reason: string | null;
+}
+
 export interface SystemStatus {
   version: string;
   gpu: GPUInfo;
   resident_models: string[];
   workers_alive: number;
   fake_runtime_enabled: boolean;
+  /** Script conversion holds ~19 GB resident, which not every card has. The
+   *  app runs fine without it and says why rather than failing to start. */
+  script_conversion: FeatureAvailability;
+}
+
+/**
+ * One pronunciation-dictionary entry: a word OmniVoice says wrong, and the
+ * respelling to synthesize instead.
+ *
+ * `key_text` may be in EITHER script — Latin for an English loanword sitting
+ * inside Urdu ("database"), Perso-Arabic for a word that arrives already
+ * converted ("میٹنگ", read as "mating"). Matching is case-insensitive, so
+ * "Database" and "database" are the same entry.
+ */
+/**
+ * Short human label for a generation, 2-3 words. Produced by the analyzer in
+ * the SAME response as its prosody rows, and editable before generating.
+ * `null` on every generation made before titles existed.
+ */
+export type GenerationTitle = string | null;
+
+export interface TitleResponse {
+  title: string;
+  /** `"text"` means the analyzer was unavailable and this is the first few
+   *  words instead — surfaced rather than hidden. */
+  source: 'analyzer' | 'text';
+}
+
+export interface PronunciationItem {
+  id: number;
+  key_text: string;
+  replacement: string;
+  language: string;
+  /**
+   * Disabling is not the same as deleting. A disabled entry whose key matches
+   * a SHIPPED default suppresses that default — it is the only way to switch a
+   * built-in off. Deleting the row restores the default instead.
+   */
+  is_enabled: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PronunciationList {
+  items: PronunciationItem[];
+  total: number;
+}
+
+export interface PronunciationCreate {
+  key_text: string;
+  replacement: string;
+  language?: string;
+  is_enabled?: boolean;
+  notes?: string | null;
+}
+
+/**
+ * Partial update. An omitted field is left alone, so `notes` is cleared by
+ * sending `""` rather than `null` — same convention as the backend.
+ */
+export interface PronunciationUpdate {
+  key_text?: string;
+  replacement?: string;
+  language?: string;
+  is_enabled?: boolean;
+  notes?: string | null;
 }
 
 /** RFC 9457 problem+json error body. */
@@ -340,4 +435,124 @@ export interface ProblemJson {
   detail: string;
   code: string;
   [k: string]: unknown;
+}
+
+/* ── YouTube transcript import ────────────────────────────────────────────── */
+
+export interface TranscriptTrack {
+  language: string;
+  name: string | null;
+  /** Auto-generated captions are markedly worse in Urdu and Hindi. Surfaced so
+   *  the UI can say so rather than passing a machine guess off as authored. */
+  is_auto_generated: boolean;
+}
+
+/** One chapter of the video.
+ *
+ *  Carries the only timestamps in this response, deliberately: a chunk gets no
+ *  `start_sec`. Stamping a chapter's start on all twelve of its parts is free
+ *  and would be a precise-looking wrong number, and the honest per-part version
+ *  is not recoverable (whitespace normalization destroys the offsets). */
+export interface TranscriptChapterInfo {
+  index: number;
+  title: string;
+  start_sec: number;
+  /** Absent on description-derived chapters. Display only — boundaries are
+   *  decided by the NEXT chapter's start, never by this. */
+  end_sec: number | null;
+}
+
+export interface TranscriptChunk {
+  /** GLOBAL across the transcript, not per chapter. Safe to key conversion
+   *  results off — the server renumbers after chunking each chapter. */
+  index: number;
+  text: string;
+  /** False means the chunk was cut at a clause or word boundary because a
+   *  sentence would not fit — where a join artifact will be audible. */
+  ends_on_sentence: boolean;
+  /** `null` when the video has no chapters, or for the stretch before the
+   *  first one starts. */
+  chapter_index: number | null;
+}
+
+/** Body for `POST /api/text/transliterate` (202 + poll on `GET /api/jobs/{id}`).
+ *
+ *  Send `text` OR `texts`, never both. There is no `source` field on purpose:
+ *  the user declares the LANGUAGE, the server detects the SCRIPT — the same
+ *  rule the whole app runs on, and why Roman Urdu and English can share the
+ *  Latin alphabet without being confusable. The TARGET is ours to choose
+ *  because "readable" and "speakable" are different things to want. */
+export interface TransliterateRequest {
+  text?: string;
+  /** Several chunks against ONE model residency. This is the shape a
+   *  transcript needs: ~45 chunks that would otherwise each pay a cold load. */
+  texts?: string[];
+  instruction?: string;
+  /** Omit for this source's usual destination: Roman Urdu → Perso-Arabic (to
+   *  speak it), Devanagari or Perso-Arabic → Roman (to read and edit it). */
+  target?: 'roman' | 'perso_arabic';
+}
+
+/** One chunk's outcome. A `rejected` item carries NO `text` — the user never
+ *  receives a string that is not a conversion of what they wrote. */
+export interface TransliterateItem {
+  index: number;
+  status: 'ok' | 'rejected';
+  source_text: string;
+  /** Present only when `status === 'ok'`. */
+  text?: string;
+  /** Present only when `status === 'rejected'`. Stable code, so a client can
+   *  tell an echo from an answer from a summary without parsing prose. */
+  reason?: string;
+  detail?: string;
+  arabic_share?: number;
+  length_ratio?: number;
+  residual_source_share?: number;
+}
+
+/** The `result` of a succeeded TRANSLITERATE job.
+ *
+ *  Always a list, even for one passage. A job that succeeds may still contain
+ *  rejected chunks — check `rejected_count`. The job only FAILS when every
+ *  chunk was rejected. */
+export interface TransliterateResult {
+  items: TransliterateItem[];
+  ok_count: number;
+  rejected_count: number;
+  /** `latin` | `devanagari` | `arabic`, detected from the whole batch. */
+  source_script: string;
+  /** `perso_arabic` | `roman`. **Only `latin` → `perso_arabic` has passed a
+   *  listening gate** — a result from any other pair must not be presented as
+   *  a verified conversion. */
+  target_script: string;
+  /** Charged once for the batch, because the model loaded once. */
+  load_time_sec: number;
+  gen_time_sec: number;
+}
+
+export interface TranscriptResponse {
+  video_id: string;
+  title: string | null;
+  duration_sec: number | null;
+  /** Authored tracks plus the chosen one — NOT every track. A real video had
+   *  4867, almost all machine auto-translations, at 367 KB of JSON. */
+  available_tracks: TranscriptTrack[];
+  /** How many existed before that trim, so the number is not silently lost. */
+  total_tracks: number;
+  chosen_track: TranscriptTrack;
+  text: string;
+  /** `latin` | `arabic` | `devanagari` | ... — the same detector routing uses. */
+  script: string;
+  /** True when NOTHING in the catalog renders this script (Devanagari). Decided
+   *  server-side so the UI never encodes routing rules. */
+  needs_transliteration: boolean;
+  /** Empty when the video has no chapters — the common case, and it must stay
+   *  indistinguishable from the pre-chapters behaviour. May be `undefined`
+   *  against a pod that predates this field. */
+  chapters: TranscriptChapterInfo[];
+  /** True when the transcript hit the server ceiling and was cut. Previously
+   *  only a server-side log, so the user was handed a shortened transcript with
+   *  no indication. */
+  truncated: boolean;
+  chunks: TranscriptChunk[];
 }

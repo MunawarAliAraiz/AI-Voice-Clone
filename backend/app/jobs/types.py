@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from ..inference.analyzer_scheduler import AnalyzerScheduler
     from ..inference.catalog import ModelCatalog
     from ..inference.protocol import SchedulerProtocol
+    from ..inference.transliterator_scheduler import TransliteratorScheduler
 
 __all__ = [
     "JobKind",
@@ -52,6 +53,14 @@ class JobKind(StrEnum):
     #: No `generation_history` row, no audio, no `route` (never touches
     #: `resolve()`/the audio catalog) — see that handler's docstring.
     ANALYZE_LLM = "analyze_llm"
+    #: Roman/Devanagari -> Perso-Arabic script conversion
+    #: (`jobs/handlers/transliterate.py`). A JOB rather than a synchronous
+    #: endpoint for one reason: it takes the WHOLE GPU exclusively for ~78 s of
+    #: model load plus generation (`TransliteratorScheduler`), so it cannot sit
+    #: in a request handler. Like ANALYZE_LLM it has no `generation_history`
+    #: row, no audio, and no `route` — its output is editable text a human
+    #: approves, never a routing transform.
+    TRANSLITERATE = "transliterate"
 
 
 class JobStatus(StrEnum):
@@ -126,6 +135,14 @@ class JobRecord:
     started_at: str | None
     finished_at: str | None
     updated_at: str
+    #: The failed job this one retries, if any. `None` for a first attempt.
+    #:
+    #: LAST, and defaulted, deliberately: `JobRecord` is constructed positionally
+    #: in a dozen tests, and a required field in the middle breaks all of them
+    #: for a value none of them care about. A row that predates the column is
+    #: not a retry of anything, so `None` is the honest default rather than a
+    #: placeholder.
+    retry_of_job_id: int | None = None
 
 
 def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
@@ -155,6 +172,13 @@ def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
         error=error,
         profile_id=row["profile_id"],
         priority=row["priority"],
+        # `.keys()` guard: a row read from a database that predates the column
+        # has no such key, and `_ADDED_COLUMNS` only fixes it at the next
+        # connect(). Defaulting to None is correct — an old row is by
+        # definition not a retry of anything.
+        retry_of_job_id=(
+            row["retry_of_job_id"] if "retry_of_job_id" in row.keys() else None
+        ),
         cancel_requested=bool(row["cancel_requested"]),
         attempt=row["attempt"],
         queued_at=row["queued_at"],
@@ -184,6 +208,11 @@ class JobContext:
     #: audio `scheduler`, never the same object. Only `analyze_llm.py` reads
     #: this; every other handler ignores it.
     analyzer: AnalyzerScheduler
+    #: The Gemma transliterator's own scheduler. Optional because the feature
+    #: is opt-in infrastructure: a deployment with no `.venv-gemma` still runs
+    #: every other job kind, and a TRANSLITERATE job then fails with an error
+    #: naming the missing setting rather than the app refusing to start.
+    transliterator: TransliteratorScheduler | None = None
 
 
 @dataclass(frozen=True, slots=True)

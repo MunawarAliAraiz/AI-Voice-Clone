@@ -238,9 +238,16 @@ input::placeholder, textarea::placeholder {
 }
 
 /* The global input rule above (width, padding, border, background) is meant
-   for text-like fields. Range and checkbox inputs have their own native box
-   model — inheriting that rule boxes a thin slider track in visible padding
-   and border, and stretches checkboxes to full width. */
+   for text-like fields. Range, checkbox and radio inputs have their own native
+   box model — inheriting that rule boxes a thin slider track in visible padding
+   and border, and stretches checkboxes and radios to full width.
+
+   RADIO WAS MISSING FROM THIS LIST until the script-conversion picker became
+   the first radio in the app. The result was not subtle: each radio expanded
+   to 100% of its option card, pushing the label text out past the card's
+   border entirely. The bug was in this rule, not in the new component, which
+   is why the fix is here — the next radio anywhere would have broken the same
+   way. */
 input[type='range'] {
   width: 100%;
   padding: 0;
@@ -251,7 +258,8 @@ input[type='range'] {
   cursor: pointer;
 }
 
-input[type='checkbox'] {
+input[type='checkbox'],
+input[type='radio'] {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -1380,6 +1388,8 @@ textarea {
 .toast.error { border-color: rgba(255, 107, 122, 0.32); }
 .toast.success svg { color: var(--success); flex-shrink: 0; margin-top: 2px; }
 .toast.error svg { color: var(--danger); flex-shrink: 0; margin-top: 2px; }
+.toast.info { border-color: var(--accent-line); }
+.toast.info svg { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
 
 .toast-msg { flex: 1; line-height: 1.4; }
 
@@ -1406,4 +1416,657 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ── Pronunciation dictionary ──────────────────────────────────────────────
+   The word and its replacement are frequently in different scripts, so every
+   text node here carries its own dir="auto" in the JSX. Nothing in this block
+   sets `direction` — doing so would override that per-field decision and
+   mangle whichever half disagreed. */
+
+/* Its own tab, so the card would otherwise stretch the full window for two
+   short inputs. Capped at a readable measure and centred instead. */
+.pron-card {
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.pron-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-3);
+}
+
+.pron-form .field { margin-bottom: 0; }
+
+.pron-form .field span {
+  font-size: var(--text-base);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.pron-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pron-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 10px;
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* Disabled rows stay legible rather than being greyed into unreadability:
+   this is the state that switches a built-in spelling OFF, so it has to be
+   findable to be switched back on. */
+.pron-row.off { opacity: 0.62; }
+
+.pron-words {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.pron-key, .pron-value {
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.pron-key { color: var(--text); font-weight: 500; }
+.pron-value { color: var(--accent); }
+.pron-arrow { color: var(--muted); flex: none; }
+
+.pron-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.pron-actions .icon-btn { font-size: var(--text-sm); }
+
+@media (max-width: 640px) {
+  /* Its own tab, so the card would otherwise stretch the full window for two
+   short inputs. Capped at a readable measure and centred instead. */
+.pron-card {
+  max-width: 780px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.pron-form { grid-template-columns: 1fr; }
+}
+
+/* ── Composer text tools + the pointer to Recent ───────────────────────────── */
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+/* The character count sits inside the tool row now, so it must not also push
+   itself to the right or it fights the row's own `margin-left: auto`. */
+.composer-tools .count { margin-right: 4px; }
+
+.composer-recent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+  align-self: center;
+}
+
+/* Count badge on the Recent tab — the signpost from Studio. */
+.seg-badge {
+  margin-left: 6px;
+  padding: 0 6px;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* ── Title above the text, in Recent and the in-progress strip ─────────────── */
+
+.h-titled {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* The title is the scannable line and the text is context beneath it — the
+   reverse of the pre-title layout, where an RTL wall of Urdu was the heading.
+   No `dir` here: a title is short and the browser's own bidi handling is
+   correct for it, while the text below keeps its explicit direction. */
+.h-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.h-titled .h-text {
+  font-size: var(--text-base);
+  color: var(--muted);
+}
+
+/* Title sits with the other generation properties, near the top. */
+.editor-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* The tool row is glued to the textarea: labelled "Text", flush with the field
+   below it, and sharing its top corners so it reads as one control rather than
+   three buttons floating near the top of the card. */
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 10px;
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.editor-toolbar + .textarea-wrapper textarea,
+.editor-toolbar ~ .textarea-wrapper textarea {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.editor-title {
+  flex: 1;
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* Sits on the input's baseline, not the label's — `.editor-bar` aligns to
+   flex-end, so no nudging is needed. `flex-shrink: 0` keeps the label from
+   wrapping to two lines when the title field is long. */
+.editor-title-suggest {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* The offered suggestion. Deliberately a row of its own rather than a
+   placeholder or an inline hint: it holds two real choices, and both need to
+   be reachable and hit-target sized. */
+.title-suggestion {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-inset);
+}
+
+.title-suggestion-text {
+  font-weight: 600;
+  color: var(--text);
+  /* The suggestion can be Urdu next to English UI chrome; `dir="auto"` on the
+     element picks the direction, and this keeps a long one from pushing the
+     buttons off the row. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The Voice Studio panel is kept MOUNTED and hidden rather than unmounted, so
+   an in-progress draft survives a look at another tab. `display: contents`
+   makes the wrapper vanish from layout, leaving its `.col` children as direct
+   grid items of `<main class="grid">` exactly as before.
+
+   The `[hidden]` rule is not redundant: `display: contents` here would
+   otherwise beat the user-agent's `[hidden] { display: none }`, and the panel
+   would stay visible on every tab. */
+.tab-panel {
+  display: contents;
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+/* Pronunciation search. The `.search` shell itself is shared with History —
+   only the row that holds it and the Exact toggle live here. */
+.pron-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.pron-search .search { flex: 1; min-width: 0; }
+.pron-search .search input { width: 100%; }
+
+/* Not a `.field`: this label sits beside its checkbox, where `.field`'s
+   column direction would stack them. */
+.pron-exact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ── YouTube transcript import ───────────────────────────────────────────── */
+.transcript-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  align-items: end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .transcript-form { grid-template-columns: minmax(0, 1fr); }
+}
+
+.transcript-form .field { margin-bottom: 0; }
+
+.transcript-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-base);
+  color: var(--muted);
+  margin-bottom: var(--space-3);
+}
+
+.transcript-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* Read-only on purpose: the editable copy lives in the Composer, and two
+   editable copies of the same text is how they drift apart. */
+.transcript-text {
+  background: var(--panel-inset);
+  margin-bottom: var(--space-4);
+}
+
+.transcript-h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+}
+
+
+
+
+
+
+
+/* ── Script conversion (Import tab) ─────────────────────────────────────────
+   A panel rather than a lone button, because the choice it presents is between
+   two INTENTIONS — read it, or speak it — and a bare "Convert" would not say
+   which one is about to happen. */
+.convert-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--panel-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.convert-why {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.convert-why svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warn);
+}
+
+.convert-target {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.convert-target legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.convert-option {
+  display: flex;
+  flex: 1 1 220px;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3);
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.convert-option:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+
+.convert-option input {
+  /* Sizing and appearance come from the global input[type='radio'] rule.
+     Only the alignment is this component's business. */
+  margin-top: 2px;
+}
+
+.convert-option span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.convert-option strong {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* The trade-off, not a restatement of the label. "Urdu script" alone does not
+   tell you it skips the step you came here for. */
+.convert-option em {
+  font-size: var(--text-sm);
+  font-style: normal;
+  color: var(--muted);
+}
+
+.convert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.convert-summary {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--panel);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+
+
+.chunk-rejected {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--danger);
+}
+
+/* Progress for a SINGLE part, shown on its own row. The panel-level control
+   stays idle during a per-part conversion — one spinner, on the thing the user
+   actually clicked. */
+.chunk-progress {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-sm);
+}
+
+/* ── Transcript parts ───────────────────────────────────────────────────────
+   Collapsed by default. A 15-minute video is 23 of these and a two-hour one is
+   six times that, so the closed state has to read as a table of contents. */
+.part {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+}
+
+.part.open {
+  border-color: var(--line-strong);
+  background: var(--panel-2);
+}
+
+.part-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: 0 var(--space-3);
+}
+
+/* The whole header row is the toggle — a 44px target rather than a chevron,
+   per the touch-size rule. */
+.part-toggle {
+  display: flex;
+  flex: 1;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.part-index {
+  min-width: 2.2ch;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Status carries a WORD as well as a colour. Colour alone fails anyone who
+   cannot distinguish these four, and the label is what makes "edited" mean
+   something rather than being a shade of green. */
+.part-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.part-dot.converted { background: var(--success); }
+.part-dot.edited    { background: var(--accent); }
+.part-dot.rejected  { background: var(--danger); }
+
+.part-status {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.part-chars {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two lines, then stop. Restoring the full text here is what made the page
+   unscannable in the first place. */
+.part-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--muted);
+  overflow: hidden;
+  /* Long RTL/LTR runs must not push the row wider than its card. */
+  overflow-wrap: anywhere;
+}
+
+.part-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.part-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.part-field .field-label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* The caption as it arrived. Read-only and visually quieter than the
+   conversion, because it is the reference rather than the answer. */
+.part-source {
+  margin: 0;
+  padding-left: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--muted);
+  border-left: 2px solid var(--line-strong);
+  overflow-wrap: anywhere;
+  /* Reading measure. Full-width lines of unfamiliar script are far harder to
+     proofread, and proofreading is the entire job here. */
+  max-width: 70ch;
+}
+
+.part-edit {
+  max-width: 70ch;
+  min-height: 92px;
+  font-size: var(--text-base);
+  line-height: 1.7;
+}
+
+.part-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+@media (max-width: 560px) {
+  /* Buttons go full-width rather than wrapping into ragged rows. */
+  .part-actions .btn-sm { flex: 1 1 auto; justify-content: center; }
+  .part-status { display: none; }
+}
+
+/* ── Chapter grouping ───────────────────────────────────────────────────────
+   A long video groups its parts under the chapters the author wrote, so a
+   two-hour transcript is navigable rather than a flat wall of 120 rows. */
+.chapter-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.chapter {
+  margin-bottom: var(--space-3);
+}
+
+.chapter-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--space-2);
+}
+
+.chapter-toggle {
+  display: flex;
+  flex: 1;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 32px;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.chapter-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.chapter-time {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.chapter-count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* The jump row scrolls horizontally rather than wrapping into many lines on
+     a video with a lot of chapters. */
+  .chapter-jump {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chapter-jump .btn-sm { flex: none; }
 }

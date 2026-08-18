@@ -9,9 +9,16 @@ import type {
   LanguageListResponse,
   ModelListResponse,
   ProblemJson,
+  PronunciationCreate,
+  PronunciationItem,
+  PronunciationList,
+  PronunciationUpdate,
   ScriptDetectResponse,
   SystemStatus,
   TTSGenerateRequest,
+  TitleResponse,
+  TranscriptResponse,
+  TransliterateRequest,
   VoiceProfile,
   VoiceProfileList,
 } from '../types/api';
@@ -166,6 +173,14 @@ export const api = {
     request<JobList>(`/api/jobs?page=${page}&page_size=${pageSize}`),
   cancelJob: (id: number) => request<void>(`/api/jobs/${id}`, { method: 'DELETE' }),
 
+  /**
+   * Re-enqueue a finished job from its own stored parameters. The server
+   * reuses the ORIGINAL route rather than re-resolving it, so a retry cannot
+   * quietly come back on a different model than the one you were shown.
+   */
+  retryJob: (id: number) =>
+    request<JobStatusResponse>(`/api/jobs/${id}/retry`, { method: 'POST' }),
+
   // history
   history: (page = 1, pageSize = 50) =>
     request<HistoryList>(`/api/history?page=${page}&page_size=${pageSize}`),
@@ -177,4 +192,71 @@ export const api = {
     }),
   deleteHistory: (id: number) =>
     request<void>(`/api/history/${id}`, { method: 'DELETE' }),
+
+  /**
+   * Short label for a generation. Synchronous, not a job — the client needs it
+   * before it can enqueue. Never throws the caller into a dead end: the server
+   * falls back to the text and says `source: "text"` when the analyzer is
+   * unavailable.
+   */
+  /**
+   * Import a YouTube caption track. The URL is validated SERVER-SIDE by
+   * `domain/youtube.parse_video_id` — the SSRF guard lives there, in one
+   * tested place, and is deliberately not duplicated as a weaker regex here.
+   */
+  fetchTranscript: (url: string, language?: string) =>
+    request<TranscriptResponse>('/api/transcript/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, language: language || null }),
+    }),
+
+  /**
+   * Convert text between scripts. **202 + poll**, not synchronous — unlike
+   * `suggestTitle` below, this one touches the GPU.
+   *
+   * Send one `text` or many `texts`, never both. The server detects the SOURCE
+   * script from the text; `target` is the caller's choice and may be omitted
+   * for this source's usual destination.
+   *
+   * A 503 here means the server has no transliterator — read
+   * `SystemStatus.script_conversion.reason` and show it rather than retrying.
+   */
+  transliterate: (body: TransliterateRequest) =>
+    request<JobStatusResponse>('/api/text/transliterate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  suggestTitle: (text: string, language: string) =>
+    request<TitleResponse>('/api/text/title', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    }),
+
+  // pronunciation dictionary
+  //
+  // The list deliberately includes DISABLED entries: a disabled entry whose
+  // key matches a shipped default is the only way to switch that default off,
+  // so filtering them here would hide the mechanism.
+  pronunciations: (language?: string) =>
+    request<PronunciationList>(
+      language ? `/api/pronunciations?language=${encodeURIComponent(language)}` : '/api/pronunciations',
+    ),
+  createPronunciation: (body: PronunciationCreate) =>
+    request<PronunciationItem>('/api/pronunciations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  updatePronunciation: (id: number, body: PronunciationUpdate) =>
+    request<PronunciationItem>(`/api/pronunciations/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deletePronunciation: (id: number) =>
+    request<void>(`/api/pronunciations/${id}`, { method: 'DELETE' }),
 };

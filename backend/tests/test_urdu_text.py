@@ -9,7 +9,12 @@ actually heard, not a re-derivation.
 
 from __future__ import annotations
 
-from app.domain.urdu_text import TextNormalization, apply_text_normalizations
+from app.domain.urdu_text import (
+    DEFAULT_LOANWORD_LEXICON,
+    TextNormalization,
+    apply_text_normalizations,
+    effective_lexicon,
+)
 
 
 def test_expand_numbers_matches_eval_verified_values() -> None:
@@ -50,15 +55,35 @@ def test_loanword_lexicon_respells_url() -> None:
     assert applied == (TextNormalization.LOANWORD_LEXICON,)
 
 
-def test_loanword_lexicon_respells_database_leaving_base_latin() -> None:
-    # docs/URDU_BAKEOFF_RESULTS.md SS5d: the all-Urdu "ڈیٹا بیس" was rejected
-    # (بیس collides with the Urdu word for "twenty"). The mixed form keeps
-    # "base" in Latin, matching office/check/GitHub which already work as-is.
+def test_loanword_lexicon_respells_database_with_bari_ye() -> None:
+    # docs/URDU_BAKEOFF_RESULTS.md SS9c. Chosen by blind repeat sampling, not
+    # one listen: `ڈیٹا بےس` scored 11/12 against the previously-shipped
+    # `ڈیٹا base` at 7/12 and verbatim `database` at 0/4.
+    #
+    # Bari ye (U+06D2) carries the /eɪ/. The earlier all-Urdu `ڈیٹا بیس` was
+    # rejected because بیس is also the Urdu word for "twenty"; `ڈیٹا base` was
+    # rejected because a Latin `base` standing alone after Urdu text is often
+    # read as "boss".
     text, applied = apply_text_normalizations(
         "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,)
     )
-    assert text == "ہمیں ڈیٹا base چاہیے۔"
+    assert text == "ہمیں ڈیٹا بےس چاہیے۔"
     assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+def test_loanword_lexicon_no_longer_emits_the_ambiguous_forms() -> None:
+    """
+    Regression guard for the two rejected spellings.
+
+    Both were plausible enough to ship once -- `ڈیٹا base` actually did, on a
+    single listen recorded as "verified" -- so this pins the distinction rather
+    than trusting the entry not to drift back.
+    """
+    text, _ = apply_text_normalizations(
+        "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,)
+    )
+    assert "base" not in text, "Latin `base` alone is read as 'boss'"
+    assert "بیس" not in text, "بیس is also the Urdu word for 'twenty'"
 
 
 def test_loanword_lexicon_is_word_boundary_aware() -> None:
@@ -85,7 +110,7 @@ def test_both_normalizations_compose() -> None:
         "ہمیں database کا 3 بار backup چاہیے۔",
         (TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON),
     )
-    assert text == "ہمیں ڈیٹا base کا تین بار backup چاہیے۔"
+    assert text == "ہمیں ڈیٹا بےس کا تین بار backup چاہیے۔"
     assert set(applied) == {TextNormalization.NUMBERS, TextNormalization.LOANWORD_LEXICON}
 
 
@@ -93,3 +118,153 @@ def test_no_normalizations_is_a_pure_pass_through() -> None:
     text, applied = apply_text_normalizations("کوئی بھی متن 123", ())
     assert text == "کوئی بھی متن 123"
     assert applied == ()
+
+
+# ── The user-editable lexicon (2026-08-16) ──────────────────────────────────
+#
+# `apply_text_normalizations` now takes the lexicon as an argument so the
+# per-user dictionary can be supplied without `routing.resolve()` doing I/O.
+# These pin the behaviours the dictionary depends on; the shipped-default
+# tests above pin that omitting the argument still behaves exactly as before.
+
+
+def test_supplied_lexicon_replaces_the_shipped_defaults_entirely() -> None:
+    """Not merged with the defaults — the caller decides the whole table."""
+    text, applied = apply_text_normalizations(
+        "ہمیں database چاہیے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"chaiye": "چاہیے"},
+    )
+    assert text == "ہمیں database چاہیے۔", "the default `database` entry must not leak in"
+    assert applied == ()
+
+
+def test_lexicon_keys_may_be_perso_arabic() -> None:
+    """
+    A3's one defect: میٹنگ is read as "mating", and it arrives already in
+    Perso-Arabic, so a Latin-keyed table can never match it.
+    """
+    text, applied = apply_text_normalizations(
+        "کہ میٹنگ ملتوی ہو گئی ہے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"میٹنگ": "مِیٹِنگ"},
+    )
+    assert text == "کہ مِیٹِنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+def test_perso_arabic_keys_still_respect_word_boundaries() -> None:
+    """`\b` is Unicode-aware, so a key must not match inside a longer word."""
+    text, _ = apply_text_normalizations(
+        "میٹنگوں میں",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"میٹنگ": "مِیٹِنگ"},
+    )
+    assert text == "میٹنگوں میں", "میٹنگ must not match inside میٹنگوں"
+
+
+def test_lexicon_matching_is_case_insensitive() -> None:
+    """A user writes the entry once; they will not type every case variant."""
+    text, _ = apply_text_normalizations(
+        "Database, DATABASE and database",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"database": "ڈیٹا بےس"},
+    )
+    assert text == "ڈیٹا بےس, ڈیٹا بےس and ڈیٹا بےس"
+
+
+def test_longer_keys_win_over_shorter_ones() -> None:
+    """
+    Python alternation is first-match-wins and dict order is the user's, which
+    is no order at all — so the pattern sorts by length itself.
+    """
+    text, _ = apply_text_normalizations(
+        "open a pull request please",
+        (TextNormalization.LOANWORD_LEXICON,),
+        lexicon={"request": "رِیکویسٹ", "pull request": "پُل رِیکویسٹ"},
+    )
+    assert text == "open a پُل رِیکویسٹ please"
+
+
+def test_empty_lexicon_is_a_pass_through_not_a_crash() -> None:
+    """A user with no dictionary entries is the common case, not an edge one."""
+    text, applied = apply_text_normalizations(
+        "ہمیں database چاہیے۔", (TextNormalization.LOANWORD_LEXICON,), lexicon={}
+    )
+    assert text == "ہمیں database چاہیے۔"
+    assert applied == ()
+
+
+def test_shipped_defaults_include_the_perso_arabic_meeting_entry() -> None:
+    """
+    The first default keyed in Perso-Arabic — proving the either-script path is
+    live in production, not merely supported by the code.
+    """
+    text, applied = apply_text_normalizations(
+        "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+        (TextNormalization.LOANWORD_LEXICON,),
+    )
+    assert text == "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)
+
+
+# ── effective_lexicon: merging the user's rows over the shipped defaults ─────
+
+
+def _row(key: str, replacement: str, enabled: bool = True) -> dict[str, object]:
+    return {"key_text": key, "replacement": replacement, "is_enabled": enabled}
+
+
+def test_effective_lexicon_with_no_entries_is_the_defaults() -> None:
+    assert effective_lexicon([]) == dict(DEFAULT_LOANWORD_LEXICON)
+
+
+def test_user_entry_with_a_new_key_is_added() -> None:
+    lexicon = effective_lexicon([_row("schedule", "سکیجول")])
+    assert lexicon["schedule"] == "سکیجول"
+    assert lexicon["database"] == "ڈیٹا بےس", "defaults must survive alongside"
+
+
+def test_user_entry_overrides_a_shipped_default() -> None:
+    """The user has heard both spellings; the maintainer has heard neither."""
+    lexicon = effective_lexicon([_row("database", "ڈیٹا bays")])
+    assert lexicon["database"] == "ڈیٹا bays"
+
+
+def test_user_override_of_a_default_is_case_insensitive() -> None:
+    """
+    Otherwise `Database` would sit BESIDE the shipped `database` and which one
+    applied would come down to alternation order.
+    """
+    lexicon = effective_lexicon([_row("DataBase", "ڈیٹا bays")])
+    assert lexicon.get("database") is None
+    assert lexicon["DataBase"] == "ڈیٹا bays"
+
+
+def test_disabled_user_entry_suppresses_the_matching_default() -> None:
+    """The only way to switch off a built-in entry — hence disabled rows must
+    reach this function rather than being filtered out by the caller."""
+    lexicon = effective_lexicon([_row("database", "anything", enabled=False)])
+    assert "database" not in lexicon
+    assert lexicon["URL"] == "یو آر ایل", "other defaults are unaffected"
+
+
+def test_disabled_user_entry_with_a_new_key_is_simply_absent() -> None:
+    lexicon = effective_lexicon([_row("schedule", "سکیجول", enabled=False)])
+    assert "schedule" not in lexicon
+    assert lexicon == dict(DEFAULT_LOANWORD_LEXICON)
+
+
+def test_effective_lexicon_can_suppress_the_perso_arabic_default() -> None:
+    """میٹنگ ships as a default; a user who prefers the plain spelling turns it off."""
+    lexicon = effective_lexicon([_row("میٹنگ", "", enabled=False)])
+    assert "میٹنگ" not in lexicon
+
+
+def test_effective_lexicon_result_drives_the_matcher_end_to_end() -> None:
+    lexicon = effective_lexicon([_row("میٹنگ", "می ٹنگ")])
+    text, applied = apply_text_normalizations(
+        "کہ میٹنگ ملتوی ہو گئی ہے۔", (TextNormalization.LOANWORD_LEXICON,), lexicon
+    )
+    assert text == "کہ می ٹنگ ملتوی ہو گئی ہے۔"
+    assert applied == (TextNormalization.LOANWORD_LEXICON,)

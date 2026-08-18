@@ -599,6 +599,17 @@ def test_no_stray_modules_in_contract_packages() -> None:
         # from it (one fixed model, no VRAM-budget eviction). No torch here;
         # see analyzer_scheduler.py's module docstring.
         "analyzer_scheduler",
+        # Phase B's transliterator scheduler. Same reasoning as the analyzer's
+        # — one fixed model, not a `RuntimeKind`, unreachable from `resolve()`
+        # — and since 2026-08-17 the same SHAPE too: resident with an idle
+        # timer, after a real GPU run measured generation at 2.7-5.1 s against
+        # a 150-330 s load. No torch here; the stack is in
+        # runtimes/gemma_transliterator.py.
+        "transliterator_scheduler",
+        # Whether this card can afford the resident models, and what to tell
+        # the user when it cannot. No torch (it shells out to nvidia-smi) —
+        # which is the point, since app.main imports it.
+        "capacity",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected

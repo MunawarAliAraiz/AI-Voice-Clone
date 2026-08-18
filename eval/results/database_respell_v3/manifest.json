@@ -1,0 +1,123 @@
+{
+  "clips": [
+    {
+      "group": "database",
+      "variant": "v1_latin",
+      "label": "`database` — Latin, verbatim (you heard: Da-ta-base)",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v1_latin.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v2_shipping",
+      "label": "`ڈیٹا base` — SHIPPING TODAY (you heard: data-boss)",
+      "text": "ہمیں ڈیٹا base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v2_shipping.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v3_all_urdu",
+      "label": "`ڈیٹا بیس` — all-Urdu (you heard: data-bes)",
+      "text": "ہمیں ڈیٹا بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v3_all_urdu.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v4_one_token",
+      "label": "`ڈیٹابیس` — one token, no space (kills the 'twenty' word boundary)",
+      "text": "ہمیں ڈیٹابیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v4_one_token.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v5_zabar",
+      "label": "`ڈیٹا بَیس` — zabar on the ب to pin the /eɪ/",
+      "text": "ہمیں ڈیٹا بَیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v5_zabar.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v6_bari_ye",
+      "label": "`ڈیٹا بےس` — bari ye for the /eɪ/",
+      "text": "ہمیں ڈیٹا بےس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v6_bari_ye.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v7_voiced",
+      "label": "`ڈیٹا بیز` — voiced ending, as many speakers say it",
+      "text": "ہمیں ڈیٹا بیز کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v7_voiced.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v8_two_latin",
+      "label": "`data base` — two Latin words (lets the syllable break fall right)",
+      "text": "ہمیں data base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v8_two_latin.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v9_mixed_rev",
+      "label": "`data بیس` — Latin data, Urdu base (mirror of what ships)",
+      "text": "ہمیں data بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v9_mixed_rev.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v10_daata",
+      "label": "`ڈاٹا بیس` — the other common Urdu spelling of 'data'",
+      "text": "ہمیں ڈاٹا بیس کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v10_daata.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v11_daytabase",
+      "label": "`daytabase` — one Latin token (keeps the 'base' that works), 'data' half respelled",
+      "text": "ہمیں daytabase کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v11_daytabase.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v12_daytabays",
+      "label": "`daytabays` — same idea, 'base' half also spelled for English orthography",
+      "text": "ہمیں daytabays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v12_daytabays.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v13_urdu_bays",
+      "label": "`ڈیٹا bays` — keeps the ڈیٹا that works, avoids the Latin `base`→'boss' trap",
+      "text": "ہمیں ڈیٹا bays کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v13_urdu_bays.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v14_urdu_bayss",
+      "label": "`ڈیٹا bayss` — as above, doubled s to force the unvoiced ending",
+      "text": "ہمیں ڈیٹا bayss کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v14_urdu_bayss.wav"
+    },
+    {
+      "group": "database",
+      "variant": "v15_dayta_base",
+      "label": "`dayta base` — two Latin tokens, both halves respelled",
+      "text": "ہمیں dayta base کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "database_v15_dayta_base.wav"
+    },
+    {
+      "group": "url",
+      "variant": "latin",
+      "label": "`URL` — Latin, verbatim",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
+      "wav": "url_latin.wav"
+    },
+    {
+      "group": "url",
+      "variant": "shipping",
+      "label": "`یو آر ایل` — SHIPPING TODAY (control: is the other entry still good?)",
+      "text": "براہ کرم PDF فائل ای میل کر دیں اور یو آر ایل بھی ساتھ بھیج دیں۔",
+      "wav": "url_shipping.wav"
+    }
+  ]
+}

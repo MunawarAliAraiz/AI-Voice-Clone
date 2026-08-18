@@ -74,6 +74,11 @@ class WireOp(StrEnum):
     #: (emotion/intensity/energy/rate). Text-only — no audio, no file paths.
     #: Served only by the `qwen_analyzer` runtime; see `analyzer_scheduler.py`.
     CLASSIFY = "classify"
+    #: Convert Roman-Urdu text into Perso-Arabic script. Text-only — no audio,
+    #: no file paths. Served only by the `gemma_transliterator` runtime; see
+    #: `transliterator_scheduler.py`. Returns text for a HUMAN TO EDIT, which
+    #: is why this is not a `TransformKind` and never touches `resolve()`.
+    TRANSLITERATE = "transliterate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,9 +188,32 @@ class AnalyzeResult:
     """
 
     rows: tuple[dict[str, Any], ...]
+    #: 2-3 word label for the whole passage, produced in the SAME generation as
+    #: the rows. Empty only when there were no sentences to classify.
+    title: str
     gen_time_sec: float
     #: Seconds spent loading, if this request paid a cold start. Zero once
     #: the worker's checkpoint is already resident.
+    load_time_sec: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class TransliterateResult:
+    """
+    What the Gemma transliterator worker produced.
+
+    `text` is the model's raw output, deliberately UNVALIDATED at this layer:
+    the worker's job is to produce a string, and whether that string is a
+    transliteration rather than an answer is decided by
+    `domain/transliterate.py` in the API process, where it is pure and
+    testable without a 19 GB model.
+    """
+
+    text: str
+    gen_time_sec: float
+    #: Seconds spent loading. Never zero in practice for this runtime — it is
+    #: resident with an idle timer since 2026-08-17, because it
+    #: cannot stay resident alongside the audio models.
     load_time_sec: float = 0.0
 
 

@@ -78,6 +78,55 @@ class Settings(BaseSettings):
     #: docstring for why this exists (the audio scheduler's `budget_mb` is
     #: sized assuming only audio models are resident).
     qwen_analyzer_idle_unload_sec: float = 300.0
+    #: What the analyzer occupies while resident, for `check_capacity`'s
+    #: arithmetic. Qwen2.5-3B, ~6 GB. Sits OUTSIDE `budget_mb` because it is
+    #: not a `RuntimeKind` — a routing decision with a VRAM consequence that
+    #: went unaccounted until the transliterator forced the sums to be written
+    #: down.
+    qwen_analyzer_reserve_mb: int = 6000
+    #: Interpreter for the Gemma transliterator worker. Same reasoning as the
+    #: analyzer above and the same deliberate omission from `interpreters()`:
+    #: converting Roman/Devanagari text to Perso-Arabic is not audio, and
+    #: `resolve()` must never be able to route a TTS request to it.
+    #: `TransliteratorScheduler` reads this directly. Unset means the Convert
+    #: action fails with a clear error naming this variable; it never breaks
+    #: generation.
+    gemma_transliterator_python: str = ""
+    #: What Gemma occupies while resident. **MEASURED, not estimated**:
+    #: `scripts/phase_b_smoke.py` recorded a 19221 MiB peak across four
+    #: conversions on an A40. `check_capacity` adds this to `budget_mb` and the
+    #: analyzer's reserve; when the total exceeds the card, script conversion
+    #: is DISABLED WITH A REASON and everything else still runs.
+    gemma_transliterator_reserve_mb: int = 19500
+    #: Seconds of no conversions before the ~19 GB worker is killed.
+    #:
+    #: 30 minutes against the analyzer's 5, and the ratio is a measurement:
+    #: that one reloads in seconds, this one in 150-330 s. Reclaiming VRAM
+    #: should not cost five minutes to undo because somebody paused to read.
+    gemma_transliterator_idle_unload_sec: float = 1800.0
+
+    #: Chunk sizing for an imported transcript.
+    #:
+    #: A CONFIG SETTING, NOT A PER-MODEL FIGURE, and the difference is worth
+    #: stating: `chunk_for_synthesis`'s docstring is explicit that `max_chars`
+    #: derives from a model's frame limit and must never be hardcoded in shared
+    #: code. `ModelSpec` carries no such field today and inventing one would
+    #: mean inventing numbers for four runtimes that have never been measured.
+    #: So this is a conservative default the owner can tune, and the honest
+    #: upgrade path is a measured `ModelSpec.max_chars` — not a guess dressed
+    #: up as one.
+    transcript_chunk_chars: int = 600
+    #: Floor for the FINAL chunk. `chunk_for_synthesis` uses it to avoid
+    #: emitting a two-word tail, which every one of these models renders with
+    #: audibly clipped prosody.
+    transcript_chunk_min_chars: int = 80
+    #: Hard ceiling on a fetched caption track before chunking. A three-hour
+    #: video's transcript is megabytes; refusing early beats chunking it into
+    #: thousands of pieces the UI then has to render.
+    transcript_max_chars: int = 200_000
+    #: Seconds before a caption fetch is abandoned. YouTube from a datacenter
+    #: IP either answers quickly or is throttling.
+    transcript_timeout_sec: float = 30.0
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 
@@ -85,7 +134,25 @@ class Settings(BaseSettings):
     #: /generate doesn't pay the ~20-60s cold-load cost. Fired in the background
     #: from the lifespan — startup and /api/health return immediately either way,
     #: this only changes how soon a worker happens to already be resident.
+    #: COMMA-SEPARATED. A single id still works, so no existing deployment
+    #: breaks; `voxcpm2,omnivoice_urdu` warms both. VoxCPM2 7300 MB +
+    #: OmniVoice 4700 MB = 12 GB, inside `budget_mb = 16000` with
+    #: `max_workers = 2`, so both stay resident rather than evicting each other.
     warm_on_startup: str | None = None
+
+    #: After a model's weights load, run ONE short synthesis and delete the
+    #: output. This exists because OmniVoice lazily loads an embedded Whisper
+    #: sub-model on its FIRST `synth()` call when no `ref_text` is given
+    #: (measured in the Phase 1 pod smoke test), so warming weights alone still
+    #: leaves the first real generation paying tens of seconds. Needs a voice
+    #: profile to use as the reference; skipped with a log line when there are
+    #: none, because a warm-up cannot invent one.
+    warm_synth_on_startup: bool = True
+
+    @property
+    def warm_model_ids(self) -> tuple[str, ...]:
+        raw = self.warm_on_startup or ""
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
 
     max_upload_mb: int = 50
     default_sample_rate: int = 44_100

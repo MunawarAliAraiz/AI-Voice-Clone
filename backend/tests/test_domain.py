@@ -431,8 +431,12 @@ def test_text_normalization_applies_only_to_the_spec_that_declares_it() -> None:
     The regression test that proves scoping is per-spec, not global: the SAME
     input, routed to two different specs claiming the SAME (language, script),
     is normalized only for the one that declares it.
+
+    The carrier deliberately contains NO lexicon word, so the assertion below
+    isolates `numbers`. It used to say میٹنگ, which became a shipped lexicon
+    entry on 2026-08-16 and quietly turned this into a two-normalization test.
     """
-    text_with_digits = "میٹنگ 3 بجے ہے"
+    text_with_digits = "کلاس 3 بجے ہے"
 
     normalized = resolve(
         profile_text(text_with_digits, "ur"), "normalizing_stub",

@@ -37,6 +37,13 @@ class _FakeWorkerProcess:
         #: When True, a CLASSIFY call also marks the worker dead — simulates
         #: a crash mid-request, distinct from a merely-invalid response.
         self.die_on_classify = False
+        #: Overlap tracking. The real `WorkerProcess` is one subprocess behind
+        #: one stdin/stdout pair with monotonic request ids, and its docstring
+        #: states it needs no locking BECAUSE the scheduler serializes access.
+        #: A double that cannot observe two calls overlapping cannot catch the
+        #: scheduler breaking that promise — which is exactly what happened.
+        self._in_flight = 0
+        self.max_in_flight = 0
 
     async def start(self) -> None:
         self.start_calls += 1
@@ -47,6 +54,20 @@ class _FakeWorkerProcess:
         return self._alive
 
     async def call(self, op: WireOp, payload: dict, *, timeout: float) -> WireResponse:
+        self._in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self._in_flight)
+        try:
+            # Yield twice so a genuinely concurrent second caller is given a
+            # real chance to enter before this one returns. Without a yield
+            # every call runs to completion atomically and overlap is
+            # unobservable no matter how broken the caller's locking is.
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            return await self._call(op, payload)
+        finally:
+            self._in_flight -= 1
+
+    async def _call(self, op: WireOp, payload: dict) -> WireResponse:
         if op == WireOp.LOAD:
             self.load_calls += 1
             if self.fail_load:
@@ -111,6 +132,63 @@ async def test_lazy_single_start_under_concurrent_callers(monkeypatch) -> None:
     assert created[0].load_calls == 1, "LOAD must happen exactly once, not once per call"
     assert len(results[0].rows) == 2
     assert len(results[1].rows) == 1
+
+
+async def test_concurrent_classify_calls_never_overlap_on_the_wire(monkeypatch) -> None:
+    """
+    REGRESSION (2026-08-17). `_start_lock` was released before the CLASSIFY
+    call, so two concurrent callers wrote two frames onto one stdin and read
+    each other's replies. `WorkerProcess.call` catches that by request id and
+    KILLS the worker rather than resyncing — correct, and it meant every
+    collision cost a ~30 s reload that the next collision destroyed again.
+
+    Nothing failed loudly: `POST /api/text/title` still returned 200 with the
+    text-derived fallback, so the only symptom was titles that were always the
+    first four words. Latent until the debounced title suggestion gave
+    `classify()` a second caller.
+    """
+    scheduler, created = _patched_scheduler(monkeypatch)
+
+    await asyncio.gather(
+        *(scheduler.classify(language="en", sentences=(f"s{i}",)) for i in range(6))
+    )
+
+    worker = created[0]
+    assert worker.max_in_flight == 1, (
+        f"{worker.max_in_flight} wire calls were in flight at once; the worker is one "
+        "subprocess behind one pipe and its request ids must come back in order"
+    )
+    assert worker.kill_calls == 0, "no call should have been treated as a desync"
+    assert len(worker.classify_calls) == 6
+
+
+async def test_a_failed_wire_call_lets_the_next_caller_start_a_fresh_worker(
+    monkeypatch,
+) -> None:
+    """
+    `WorkerProcess.call` kills the process on timeout, EOF, or desync, which
+    leaves the scheduler holding a dead handle. If that handle is not cleared,
+    every later call raises "worker is not alive" and the analyzer is down
+    until the API restarts — a permanent outage from one transient fault.
+    """
+    scheduler, created = _patched_scheduler(monkeypatch)
+    await scheduler.classify(language="en", sentences=("warm the worker",))
+    first = created[0]
+
+    async def exploding_call(op, payload, *, timeout):
+        if op == WireOp.CLASSIFY:
+            await first.kill()  # what the real client does before it raises
+            raise RuntimeError("qwen_analyzer worker stream desynchronized")
+        return WireResponse(id=0, ok=True, result={"load_time_sec": 0.01})
+
+    monkeypatch.setattr(first, "call", exploding_call)
+    with pytest.raises(AnalyzerUnavailableError):
+        await scheduler.classify(language="en", sentences=("boom",))
+
+    result = await scheduler.classify(language="en", sentences=("recovered",))
+    assert len(result.rows) == 1
+    assert len(created) == 2, "the dead worker was never replaced"
+    assert created[1].load_calls == 1
 
 
 async def test_load_once_then_classify_sequencing(monkeypatch) -> None:

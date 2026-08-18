@@ -97,7 +97,7 @@ class AnalyzerScheduler:
     """
     Owns a single Qwen analyzer worker subprocess. One model, no eviction.
 
-    `classify()` lazily starts the worker (once, under `_start_lock` so two
+    `classify()` lazily starts the worker (once, under `_worker_lock` so two
     concurrent callers cannot spawn two processes), issues `WireOp.LOAD`
     once per worker lifetime, then `WireOp.CLASSIFY` per call. A non-ok
     `WireResponse` becomes `AnalyzerUnavailableError` (infrastructure: the
@@ -129,9 +129,30 @@ class AnalyzerScheduler:
 
         self._worker: WorkerProcess | None = None
         self._loaded = False
-        #: Serializes worker start + load so two concurrent classify() calls
-        #: on a cold scheduler spawn exactly one subprocess, not two.
-        self._start_lock = asyncio.Lock()
+        #: Serializes EVERY wire interaction with the worker — start, load, and
+        #: the CLASSIFY call itself — not merely the lifecycle half.
+        #:
+        #: This is `AnalyzerScheduler`'s equivalent of `InferenceScheduler`'s
+        #: GPU slot, and it is a precondition of `WorkerProcess`, not a
+        #: nicety: `worker_client.py`'s docstring says outright that it needs
+        #: no locking of its own *because* every method is called while the
+        #: scheduler holds the slot. One subprocess, one stdin, one stdout,
+        #: and request ids that must come back in the order they went out.
+        #:
+        #: Holding it only across start+load — which is what this did until
+        #: 2026-08-17 — let two concurrent `classify()` calls write two frames
+        #: and read each other's replies. `WorkerProcess.call` detects that
+        #: (`want id=5, got 2`) and KILLS the worker rather than resyncing,
+        #: which is the right call and also means every collision cost a
+        #: ~30 s reload that the next collision destroyed again. It stayed
+        #: invisible while `classify()` had exactly one caller; the debounced
+        #: title suggestion added a second, and titles silently fell back to
+        #: the input text from then on.
+        #:
+        #: Yes, this serializes concurrent title requests behind a
+        #: classification. That is not a regression to work around — there is
+        #: one process and one pipe, so they were never actually parallel.
+        self._worker_lock = asyncio.Lock()
         self._idle_task: asyncio.Task[None] | None = None
         #: monotonic() timestamp of the last classify() activity. The idle
         #: loop kills the worker once `now - _last_activity >= idle_unload_sec`.
@@ -152,7 +173,7 @@ class AnalyzerScheduler:
                 "(set VCS_QWEN_ANALYZER_PYTHON)"
             )
 
-        async with self._start_lock:
+        async with self._worker_lock:
             if self._worker is None or not self._worker.is_alive:
                 await self._start_worker()
             if not self._loaded:
@@ -160,14 +181,26 @@ class AnalyzerScheduler:
             self._touch()
             load_time_sec, self._pending_load_time_sec = self._pending_load_time_sec, 0.0
 
-        try:
-            response = await self._worker.call(
-                WireOp.CLASSIFY,
-                {"language": language, "sentences": list(sentences)},
-                timeout=self._classify_timeout_sec,
-            )
-        finally:
-            self._touch()
+            try:
+                response = await self._worker.call(
+                    WireOp.CLASSIFY,
+                    {"language": language, "sentences": list(sentences)},
+                    timeout=self._classify_timeout_sec,
+                )
+            except Exception as exc:
+                # The call kills the worker on timeout, EOF, or desync, so the
+                # scheduler's view of it is stale the moment this raises.
+                # Clearing it here is what lets the NEXT caller start a fresh
+                # one instead of calling into a dead process and getting
+                # "worker is not alive" forever.
+                self._loaded = False
+                if self._worker is not None and not self._worker.is_alive:
+                    self._worker = None
+                raise AnalyzerUnavailableError(
+                    f"qwen analyzer worker call failed: {exc}"
+                ) from exc
+            finally:
+                self._touch()
 
         if not response.ok:
             if self._worker is None or not self._worker.is_alive:
@@ -183,6 +216,7 @@ class AnalyzerScheduler:
         result = response.result
         return AnalyzeResult(
             rows=tuple(result.get("rows") or ()),
+            title=str(result.get("title") or ""),
             gen_time_sec=float(result.get("gen_time_sec", 0.0)),
             load_time_sec=load_time_sec,
         )
@@ -252,7 +286,7 @@ class AnalyzerScheduler:
                 if remaining > 0:
                     await asyncio.sleep(remaining)
                     continue
-                async with self._start_lock:
+                async with self._worker_lock:
                     idle_for = time.monotonic() - self._last_activity
                     if self._worker is not None and idle_for >= self._idle_unload_sec:
                         logger.info(

@@ -22,13 +22,14 @@ never be left wondering why their Urdu came out sounding like Hindi.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from ..exceptions import AmbiguousScriptError, ModelNotFoundError, NoRouteError
 from .language import LanguageCode, Script, TextProfile
 from .ports import CatalogView, SpecView
-from .urdu_text import apply_text_normalizations
+from .urdu_text import DEFAULT_LOANWORD_LEXICON, apply_text_normalizations
 
 __all__ = [
     "TransformKind",
@@ -162,6 +163,7 @@ def resolve(
     catalog: CatalogView,
     strategy: UrduStrategy = UrduStrategy.NATIVE,
     allow_experimental: bool = False,
+    lexicon: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
 ) -> RoutePlan:
     """
     Decide which spec should render `profile`, and how the text must be shaped.
@@ -268,12 +270,18 @@ def resolve(
     # Pronunciation normalization is pure (table lookup + regex), unlike
     # TransformKind's script transforms which need a model — so it runs here,
     # synchronously, rather than through the impure with_resolved_text() seam.
+    #
+    # `lexicon` arrives as an ARGUMENT, which is what keeps this function pure
+    # now that the table is per-user and lives in the database. Reading those
+    # rows here would put I/O in routing — golden rule 4's exact defect. The
+    # caller loads them (`deps.get_lexicon`); this applies them. Defaulting to
+    # the shipped table means every existing caller and test is unaffected.
     # Only applied when transform.is_identity: normalization targets the
     # script the CHOSEN model actually receives, and is declared per-spec
     # (ModelSpec.text_normalizations), never globally for "Urdu".
     if transform.is_identity and chosen.text_normalizations:
         resolved_text, applied_normalizations = apply_text_normalizations(
-            profile.text, chosen.text_normalizations
+            profile.text, chosen.text_normalizations, lexicon
         )
     else:
         # Identity transforms with no declared normalization pass through

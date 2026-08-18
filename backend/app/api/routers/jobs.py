@@ -10,13 +10,14 @@ cached, because both change the moment another job claims the GPU slot.
 from __future__ import annotations
 
 import time
+import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response
 
 from ...config import Settings
 from ...db import Database
-from ...exceptions import JobNotFoundError
+from ...exceptions import JobNotFoundError, JobNotRetryableError
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner, JobStatus, job_record_from_row
 from ...jobs.estimate import estimate_remaining_for_running, estimate_wait_seconds, queue_position
@@ -95,6 +96,13 @@ def _input_text(job: JobRecord) -> str | None:
     return str(text) if text else None
 
 
+def _title(job: JobRecord) -> str | None:
+    """Same source as `_input_text`. A job enqueued before titles existed has
+    no key here and reads as None, which is what the UI expects."""
+    title = job.params.get("title")
+    return str(title) if title else None
+
+
 async def _queue_position_and_eta(
     job: JobRecord, db: Database, scheduler: SchedulerProtocol
 ) -> tuple[int | None, float | None]:
@@ -134,8 +142,10 @@ def _build_list_item(
         kind=job.kind.value,
         status=job.status.value,
         profile_id=job.profile_id,
+        retry_of_job_id=job.retry_of_job_id,
         profile_name=profile_name,
         input_text=_input_text(job),
+        title=_title(job),
         route=route,
         result=_result_or_none(job, route, settings),
         error=_error_or_none(job),
@@ -170,7 +180,9 @@ async def build_job_status_response(
         status=job.status.value,
         profile_id=job.profile_id,
         profile_name=profile["name"] if profile else None,
+        retry_of_job_id=job.retry_of_job_id,
         input_text=_input_text(job),
+        title=_title(job),
         route=route,
         position=position,
         eta_sec=eta_sec,
@@ -216,6 +228,66 @@ async def get_job(
     if row is None:
         raise JobNotFoundError(job_id)
     job = job_record_from_row(row)
+    return await build_job_status_response(job, db, settings, scheduler, response)
+
+
+@router.post("/{job_id}/retry", response_model=JobStatusResponse, status_code=202)
+async def retry_job(
+    job_id: int,
+    response: Response,
+    db: Annotated[Database, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
+) -> JobStatusResponse:
+    """
+    Re-enqueue a settled job from its own stored parameters.
+
+    WHY THIS EXISTS: `JOB_INTERRUPTED` — the failure a server restart leaves
+    behind — says "Re-submit it", and until now there was nothing to click.
+    The text had to be retyped from a row that was still showing it.
+
+    GOLDEN RULE 8, PRECISELY: the stored `route_json` is REUSED, not
+    recomputed. Calling `resolve()` again here would be rule 4's bug wearing a
+    retry button — a job that comes back on a different model than the one the
+    user was told about. If the catalog changed underneath, the handler's
+    existing `ModelNotFoundError` path fails it loudly, which is the correct
+    outcome and not something to paper over here.
+
+    A NEW ROW, not a resurrection of the old one. History stays truthful: the
+    interrupted attempt remains failed and visible, and the retry is its own
+    row with its own outcome. Rewriting the original to 'queued' would erase
+    the evidence that anything went wrong.
+    """
+    row = await db.get_job(job_id)
+    if row is None:
+        raise JobNotFoundError(job_id)
+    original = job_record_from_row(row)
+
+    if not original.status.is_terminal:
+        raise JobNotRetryableError(job_id, str(original.status))
+
+    params = dict(original.params)
+    if original.kind == JobKind.SYNTHESIZE:
+        # A FRESH output path. The old one may already hold a partial file, or
+        # may have been swept by the startup orphan reaper; either way, the
+        # orphan rule requires the path to be recorded on the row that writes
+        # it, so a retry gets its own.
+        fmt = params.get("output_format") or "wav"
+        params["output_path"] = str(settings.generated_dir / f"{uuid.uuid4().hex}.{fmt}")
+
+    job = await runner.enqueue(
+        original.kind,
+        params=params,
+        route=original.route,
+        profile_id=original.profile_id,
+        # The link back. Without it the original row keeps offering "Try
+        # again" after it has already been retried, and four clicks produce
+        # four identical queued jobs with nothing to say they are the same
+        # attempt. The new row stays a NEW row (see above) -- this records
+        # what it came from, it does not resurrect anything.
+        retry_of_job_id=original.id,
+    )
     return await build_job_status_response(job, db, settings, scheduler, response)
 
 

@@ -87,6 +87,74 @@ async def test_no_unload_during_inference(tmp_path: Path) -> None:
         assert worker.max_concurrent <= 1, "two requests held the GPU at once"
 
 
+async def test_reserve_slot_blocks_synthesis_and_evicts_NOTHING(
+    tmp_path: Path,
+) -> None:
+    """
+    `reserve_slot` is what replaced `exclusive_gpu`, and the two assertions
+    below are the whole difference.
+
+    It still holds the slot, so no synthesis runs while the transliterator is
+    allocating its ~19 GB — that part is unchanged and is why loading takes the
+    slot at all. What changed is that it evicts NOTHING: at the ~32 GB design
+    target Gemma co-resides with the audio models, so throwing them out would
+    make room that already exists and cost a 176 s re-warm to reclaim it.
+
+    That withdrawal restores golden rule 3 to a single eviction call site. If
+    this test ever asserts `_workers == {}` again, the rule has a second one.
+    """
+    sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.02)
+
+    inside = False
+    saw_synth_during = False
+    workers_during: dict | None = None
+
+    async def hammer() -> None:
+        nonlocal saw_synth_during
+        for model in ("a", "b", "c", "a", "b"):
+            await sched.synthesize(_req(model, tmp_path))
+            if inside:
+                saw_synth_during = True
+
+    async def take_the_slot() -> None:
+        nonlocal inside, workers_during
+        await asyncio.sleep(0.03)  # let some synthesis get going first
+        async with sched.reserve_slot("transliterate-load"):
+            inside = True
+            workers_during = dict(sched._workers)
+            await asyncio.sleep(0.05)
+            inside = False
+
+    await asyncio.gather(hammer(), take_the_slot())
+
+    assert not saw_synth_during, "a synthesis completed while the slot was reserved"
+    assert workers_during, "reserve_slot evicted workers; it must evict nothing"
+    for worker in made.values():
+        assert not worker.unload_during_synth, f"{worker.runtime} evicted mid-inference"
+        assert worker.max_concurrent <= 1, "two requests held the GPU at once"
+
+
+async def test_a_worker_stays_warm_across_reserve_slot(tmp_path: Path) -> None:
+    """
+    The audio model must be the SAME process afterwards.
+
+    Under the old `exclusive_gpu` it was necessarily a new one, and that cost
+    a full cold load on the next generation — measured at 176 s for VoxCPM.
+    Identity is what proves the difference, because a load COUNT would look
+    identical either way once `made` is overwritten.
+    """
+    sched, made = _make_scheduler(load_delay_sec=0.01, synth_delay_sec=0.001)
+    await sched.synthesize(_req("a", tmp_path))
+    first_worker = made[RuntimeKind.F5]
+
+    async with sched.reserve_slot("transliterate-load"):
+        assert sched._workers, "the warm worker was evicted"
+
+    await sched.synthesize(_req("a", tmp_path))
+    second_worker = made[RuntimeKind.F5]
+    assert second_worker is first_worker, "the worker was replaced across reserve_slot"
+
+
 async def test_no_double_load(tmp_path: Path) -> None:
     """10 concurrent requests for one model must load it exactly once."""
     sched, made = _make_scheduler(load_delay_sec=0.02, synth_delay_sec=0.001)

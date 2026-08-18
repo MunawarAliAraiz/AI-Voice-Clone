@@ -1,0 +1,295 @@
+{
+  "seed": 20260817,
+  "n": 4,
+  "carrier": "کل جب میں دفتر پہنچا تو پتہ چلا کہ {} ملتوی ہو گئی ہے۔",
+  "plan": [
+    {
+      "variant": "meet_kasra_meem",
+      "desc": "مِیٹنگ — kasra on the meem",
+      "token": "مِیٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_kasra_meem_s2.wav",
+      "clip_no": 1
+    },
+    {
+      "variant": "meet_kasra_both",
+      "desc": "مِیٹِنگ — kasra on both",
+      "token": "مِیٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_kasra_both_s3.wav",
+      "clip_no": 2
+    },
+    {
+      "variant": "meet_verbatim_urdu",
+      "desc": "میٹنگ — CONTROL: what gold and Gemma both write today",
+      "token": "میٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_verbatim_urdu_s4.wav",
+      "clip_no": 3
+    },
+    {
+      "variant": "meet_extra_ye",
+      "desc": "میٹینگ — a second ی for the middle vowel",
+      "token": "میٹینگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹینگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_extra_ye_s4.wav",
+      "clip_no": 4
+    },
+    {
+      "variant": "meet_verbatim_urdu",
+      "desc": "میٹنگ — CONTROL: what gold and Gemma both write today",
+      "token": "میٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_verbatim_urdu_s1.wav",
+      "clip_no": 5
+    },
+    {
+      "variant": "meet_split",
+      "desc": "می ٹنگ — split at the word break",
+      "token": "می ٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ می ٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_split_s4.wav",
+      "clip_no": 6
+    },
+    {
+      "variant": "meet_kasra_meem",
+      "desc": "مِیٹنگ — kasra on the meem",
+      "token": "مِیٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_kasra_meem_s4.wav",
+      "clip_no": 7
+    },
+    {
+      "variant": "meet_kasra_meem",
+      "desc": "مِیٹنگ — kasra on the meem",
+      "token": "مِیٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_kasra_meem_s1.wav",
+      "clip_no": 8
+    },
+    {
+      "variant": "meet_kasra_te",
+      "desc": "میٹِنگ — kasra on the ٹ",
+      "token": "میٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_kasra_te_s2.wav",
+      "clip_no": 9
+    },
+    {
+      "variant": "meet_kasra_te",
+      "desc": "میٹِنگ — kasra on the ٹ",
+      "token": "میٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_kasra_te_s1.wav",
+      "clip_no": 10
+    },
+    {
+      "variant": "meet_kasra_te",
+      "desc": "میٹِنگ — kasra on the ٹ",
+      "token": "میٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_kasra_te_s4.wav",
+      "clip_no": 11
+    },
+    {
+      "variant": "meet_short_i",
+      "desc": "مِٹنگ — short i, no ی at all",
+      "token": "مِٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_short_i_s1.wav",
+      "clip_no": 12
+    },
+    {
+      "variant": "meet_split",
+      "desc": "می ٹنگ — split at the word break",
+      "token": "می ٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ می ٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_split_s3.wav",
+      "clip_no": 13
+    },
+    {
+      "variant": "meet_short_i",
+      "desc": "مِٹنگ — short i, no ی at all",
+      "token": "مِٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_short_i_s4.wav",
+      "clip_no": 14
+    },
+    {
+      "variant": "meet_latin",
+      "desc": "meeting — CONTROL: Latin, as cs_02_meeting's gold does it",
+      "token": "meeting",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ meeting ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_latin_s4.wav",
+      "clip_no": 15
+    },
+    {
+      "variant": "meet_kasra_te",
+      "desc": "میٹِنگ — kasra on the ٹ",
+      "token": "میٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_kasra_te_s3.wav",
+      "clip_no": 16
+    },
+    {
+      "variant": "meet_short_i",
+      "desc": "مِٹنگ — short i, no ی at all",
+      "token": "مِٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_short_i_s3.wav",
+      "clip_no": 17
+    },
+    {
+      "variant": "meet_kasra_both",
+      "desc": "مِیٹِنگ — kasra on both",
+      "token": "مِیٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 4,
+      "wav": "meet_kasra_both_s4.wav",
+      "clip_no": 18
+    },
+    {
+      "variant": "meet_latin",
+      "desc": "meeting — CONTROL: Latin, as cs_02_meeting's gold does it",
+      "token": "meeting",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ meeting ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_latin_s2.wav",
+      "clip_no": 19
+    },
+    {
+      "variant": "meet_split",
+      "desc": "می ٹنگ — split at the word break",
+      "token": "می ٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ می ٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_split_s1.wav",
+      "clip_no": 20
+    },
+    {
+      "variant": "meet_extra_ye",
+      "desc": "میٹینگ — a second ی for the middle vowel",
+      "token": "میٹینگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹینگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_extra_ye_s1.wav",
+      "clip_no": 21
+    },
+    {
+      "variant": "meet_short_i",
+      "desc": "مِٹنگ — short i, no ی at all",
+      "token": "مِٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_short_i_s2.wav",
+      "clip_no": 22
+    },
+    {
+      "variant": "meet_extra_ye",
+      "desc": "میٹینگ — a second ی for the middle vowel",
+      "token": "میٹینگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹینگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_extra_ye_s3.wav",
+      "clip_no": 23
+    },
+    {
+      "variant": "meet_latin",
+      "desc": "meeting — CONTROL: Latin, as cs_02_meeting's gold does it",
+      "token": "meeting",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ meeting ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_latin_s3.wav",
+      "clip_no": 24
+    },
+    {
+      "variant": "meet_kasra_both",
+      "desc": "مِیٹِنگ — kasra on both",
+      "token": "مِیٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_kasra_both_s2.wav",
+      "clip_no": 25
+    },
+    {
+      "variant": "meet_latin",
+      "desc": "meeting — CONTROL: Latin, as cs_02_meeting's gold does it",
+      "token": "meeting",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ meeting ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_latin_s1.wav",
+      "clip_no": 26
+    },
+    {
+      "variant": "meet_kasra_both",
+      "desc": "مِیٹِنگ — kasra on both",
+      "token": "مِیٹِنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹِنگ ملتوی ہو گئی ہے۔",
+      "sample": 1,
+      "wav": "meet_kasra_both_s1.wav",
+      "clip_no": 27
+    },
+    {
+      "variant": "meet_split",
+      "desc": "می ٹنگ — split at the word break",
+      "token": "می ٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ می ٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_split_s2.wav",
+      "clip_no": 28
+    },
+    {
+      "variant": "meet_extra_ye",
+      "desc": "میٹینگ — a second ی for the middle vowel",
+      "token": "میٹینگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹینگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_extra_ye_s2.wav",
+      "clip_no": 29
+    },
+    {
+      "variant": "meet_verbatim_urdu",
+      "desc": "میٹنگ — CONTROL: what gold and Gemma both write today",
+      "token": "میٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 2,
+      "wav": "meet_verbatim_urdu_s2.wav",
+      "clip_no": 30
+    },
+    {
+      "variant": "meet_kasra_meem",
+      "desc": "مِیٹنگ — kasra on the meem",
+      "token": "مِیٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ مِیٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_kasra_meem_s3.wav",
+      "clip_no": 31
+    },
+    {
+      "variant": "meet_verbatim_urdu",
+      "desc": "میٹنگ — CONTROL: what gold and Gemma both write today",
+      "token": "میٹنگ",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے۔",
+      "sample": 3,
+      "wav": "meet_verbatim_urdu_s3.wav",
+      "clip_no": 32
+    }
+  ]
+}

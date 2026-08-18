@@ -38,6 +38,9 @@ class FakeAnalyzerScheduler:
         #: Every classify() call received, as (language, sentences) tuples.
         self.calls: list[tuple[str, tuple[str, ...]]] = []
         self.shutdown_calls = 0
+        #: Overridable per test; the real analyzer returns this in the same
+        #: generation as the rows.
+        self.title = "Fake Title"
 
     async def classify(self, *, language: str, sentences: tuple[str, ...]) -> AnalyzeResult:
         self.calls.append((language, sentences))
@@ -54,7 +57,8 @@ class FakeAnalyzerScheduler:
                 for i in range(len(sentences))
             ]
         return AnalyzeResult(
-            rows=tuple(rows), gen_time_sec=self.gen_time_sec, load_time_sec=0.0
+            rows=tuple(rows), title=self.title, gen_time_sec=self.gen_time_sec,
+            load_time_sec=0.0,
         )
 
     async def shutdown(self) -> None:

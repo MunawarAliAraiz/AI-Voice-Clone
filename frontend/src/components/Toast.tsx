@@ -8,11 +8,11 @@
  * to from `Composer` when a polled job first reaches a terminal status.
  */
 import { useEffect } from 'react';
-import { IconAlert, IconCheck, IconX } from './icons';
+import { IconAlert, IconCheck, IconSpinner, IconX } from './icons';
 
 export interface ToastItem {
   id: number;
-  tone: 'success' | 'error';
+  tone: 'success' | 'error' | 'info';
   message: string;
 }
 
@@ -42,7 +42,15 @@ function Toast({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: number)
 
   return (
     <div className={`toast ${toast.tone}`} role="status">
-      {toast.tone === 'success' ? <IconCheck size={15} /> : <IconAlert size={15} />}
+      {/* `info` is an acknowledgement of work that has STARTED, so it gets the
+          spinner rather than a tick — a tick would read as "done". */}
+      {toast.tone === 'success' ? (
+        <IconCheck size={15} />
+      ) : toast.tone === 'info' ? (
+        <IconSpinner size={15} />
+      ) : (
+        <IconAlert size={15} />
+      )}
       <span className="toast-msg">{toast.message}</span>
       <button
         type="button"

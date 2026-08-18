@@ -156,20 +156,36 @@ transform, lossy, rationale}`, rendered in the UI as a visible chip.
 This table lists the current live spec set — see `backend/app/inference/catalog.py` (`ALL_SPECS`) as
 the actual source of truth if this drifts.
 
-F5 is **one runtime class with three registered specs** — not three classes (the
-hard parts — reference trimming to the 8192-frame limit, `۔` chunking, concat —
-are identical, and three classes means fixing every F5 bug three times), and not
-one opaque "F5" entry (different languages, licenses and quality per checkpoint;
-collapsing them reproduces the exact lie the old code told). A checkpoint swap
-within a warm runtime is ~1–3 s; a runtime switch is 20–60 s. The scheduler and
-the UI both surface that difference.
+The **one runtime class, many specs** split is the point: not a class per
+checkpoint (the hard parts — reference trimming to the 8192-frame limit, `۔`
+chunking, concat — are identical, and N classes means fixing every bug N times),
+and not one opaque per-runtime entry (different languages, licenses and quality
+per checkpoint; collapsing them reproduces the exact lie the old code told).
+`voxcpm` is the surviving example, with two specs on one checkpoint. F5 was the
+original motivating case with three specs; it is down to one — `f5_indic` went
+with Hindi and `f5_openf5_en` went for licensing — but the shape is unchanged
+and is what let those two be removed without touching runtime code at all.
+A checkpoint swap within a warm runtime is ~1–3 s; a runtime switch is 20–60 s.
+The scheduler and the UI both surface that difference.
 
 Removed: XTTS v2 (CPML, non-commercial), Fish Speech (research license), ChatTTS
 (`NameError` in `generate()`, and it calls `sample_random_speaker()` — it never
 cloned), and the mock.
 
-**Only permissive licenses ship.** `License.is_permissive` gates it and Wave 4
-audits `catalog.unshippable()` is empty.
+**Only permissive licenses ship — but the catalog is no longer all-permissive.**
+Golden rule 6 was amended 2026-08-15: `License.CC_BY_NC` may appear for the
+owner's personal use behind `VCS_API_KEY`, because no permissively-licensed
+model both lists Urdu and clones from reference audio (surveyed exhaustively,
+`docs/URDU_MODEL_LICENSING.md`). `omnivoice_urdu` is the one such spec, so
+`catalog.unshippable()` is **not** empty and is no longer asserted to be —
+`test_non_commercial_weights_are_badged_and_documented` instead asserts every
+entry in it is exactly `CC_BY_NC`, never something stricter. Two separate
+guards keep this honest: `License.personal_use_ok` bounds what may be in the
+catalog at all (`RESEARCH_ONLY` stays fully banned — it's why Higgs Audio v3 is
+unintegrated), and `ModelCatalog.candidates()` filters on `is_permissive` so a
+non-commercial spec is never auto-routed to or offered as a fallback, only
+picked by name. `ModelSummary.commercial_use` surfaces it as a "Non-commercial"
+badge, independent of the `experimental` badge.
 
 ### Nothing routes on a Wave 0 checkout
 

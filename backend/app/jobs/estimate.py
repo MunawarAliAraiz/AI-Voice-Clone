@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from ..inference.protocol import ModelStatus
-from .types import JobRecord
+from .types import JobKind, JobRecord
 
 __all__ = [
     "estimate_synth_seconds",
@@ -68,9 +68,73 @@ def _job_model_id(job: JobRecord) -> str | None:
     return str(model_id) if model_id else None
 
 
+#: Transliteration cost, as TWO terms — a fixed cost per chunk plus a rate per
+#: character. Both solved from real jobs on the pod:
+#:
+#:     job 11   23 chunks   12,839 chars   420.8 s
+#:     job 21    3 chunks      229 chars    25.7 s
+#:
+#: A single per-character rate was tried first and was badly wrong, because it
+#: was fitted to job 11 alone. It predicted 7.5 s for job 21, which took 25.7 —
+#: the UI then advertised "3 s" for a job that ran for half a minute, which is
+#: worse than showing nothing. One data point cannot distinguish a fixed cost
+#: from a proportional one; two can.
+#:
+#: The ~7 s per chunk is not mysterious. Every chunk is its own generation with
+#: the whole system prompt and exemplar set prefilled ahead of it, so a batch of
+#: 23 pays that 23 times. It is also why a 596-character part costs ~19 s while
+#: 596 characters spread over three parts costs ~33.
+#:
+#: FITTED TO EXACTLY TWO POINTS. It reproduces both by construction, which is
+#: not evidence — it is arithmetic. Treat it as a working model, and re-solve if
+#: a real job misses it badly.
+_TRANSLITERATE_SEC_PER_CHUNK = 7.03
+_TRANSLITERATE_SEC_PER_CHAR = 0.0202
+_MIN_TRANSLITERATE_SEC = 3.0
+
+
 def _job_text_len(job: JobRecord) -> int:
-    text = (job.params or {}).get("text", "")
+    """
+    Characters of input, across BOTH job param shapes.
+
+    `texts` (a list) is what transliterate jobs carry since batching landed;
+    `text` is what synthesize jobs carry. Reading only `text` reported every
+    transliterate job as zero characters, so every one of them got an ETA of
+    the floor value -- a 23-part, seven-minute conversion advertised as three
+    seconds, which is worse than showing nothing.
+    """
+    params = job.params or {}
+    texts = params.get("texts")
+    if isinstance(texts, list):
+        return sum(len(str(t)) for t in texts)
+    text = params.get("text", "")
     return len(str(text)) if text else 0
+
+
+def _job_chunk_count(job: JobRecord) -> int:
+    """How many passages a transliterate job carries. At least 1."""
+    texts = (job.params or {}).get("texts")
+    return max(1, len(texts)) if isinstance(texts, list) else 1
+
+
+def estimate_transliterate_seconds(chunks: int, text_len: int) -> float:
+    """Expected wall-clock for `chunks` passages totalling `text_len` chars."""
+    return max(
+        _MIN_TRANSLITERATE_SEC,
+        chunks * _TRANSLITERATE_SEC_PER_CHUNK + text_len * _TRANSLITERATE_SEC_PER_CHAR,
+    )
+
+
+def _job_cost_seconds(job: JobRecord, rtf_by_model: dict[str | None, float | None]) -> float:
+    """
+    Expected wall-clock for one job, dispatched on KIND.
+
+    A transliterate job has no `route` and therefore no model id, so the
+    synthesis path would price it at the floor regardless of size.
+    """
+    if job.kind is JobKind.TRANSLITERATE:
+        return estimate_transliterate_seconds(_job_chunk_count(job), _job_text_len(job))
+    return estimate_synth_seconds(_job_text_len(job), rtf_by_model.get(_job_model_id(job)))
 
 
 def estimate_remaining_for_running(
@@ -86,9 +150,8 @@ def estimate_remaining_for_running(
     `estimate_wait_seconds` does not itself report — it only returns entries
     for the `queued` sequence).
     """
-    rtf_by_model = {s.spec.id: s.spec.est_rtf for s in statuses}
-    model_id = _job_model_id(job)
-    remaining_total = estimate_synth_seconds(_job_text_len(job), rtf_by_model.get(model_id))
+    rtf_by_model: dict[str | None, float | None] = {s.spec.id: s.spec.est_rtf for s in statuses}
+    remaining_total = _job_cost_seconds(job, rtf_by_model)
     elapsed = (
         max(0.0, now - _parse_job_timestamp(job.started_at)) if job.started_at else 0.0
     )
@@ -114,7 +177,7 @@ def estimate_wait_seconds(
     never calls the scheduler itself; it is handed the numbers and does math.
     """
     load_cost_by_model = {s.spec.id: s.est_wait_sec for s in statuses}
-    rtf_by_model = {s.spec.id: s.spec.est_rtf for s in statuses}
+    rtf_by_model: dict[str | None, float | None] = {s.spec.id: s.spec.est_rtf for s in statuses}
 
     t = 0.0
     resident: str | None = None
@@ -129,7 +192,7 @@ def estimate_wait_seconds(
         if model_id != resident:
             t += load_cost_by_model.get(model_id, 0.0) if model_id else 0.0
             resident = model_id
-        t += estimate_synth_seconds(_job_text_len(job), rtf_by_model.get(model_id))
+        t += _job_cost_seconds(job, rtf_by_model)
         out[job.id] = t
     return out
 

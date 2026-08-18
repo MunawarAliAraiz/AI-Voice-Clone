@@ -29,6 +29,20 @@ def _single_segment(text: str, language: str) -> DirectedSegment:
     return plan.segments[0]
 
 
+def _first_segment(text: str, language: str) -> DirectedSegment:
+    """
+    For text with commas, which is now split into one segment per clause.
+
+    Safe to assert prosody on the FIRST segment because emotion, intensity,
+    energy and rate are decided from the whole SENTENCE and copied to each of
+    its clauses (`direction_analyze._split_units`) — the clause split moves
+    breaths, not delivery.
+    """
+    plan = analyze(text, language)
+    assert plan.segments, "expected at least one segment"
+    return plan.segments[0]
+
+
 # ── Basic sanity across all three languages ─────────────────────────────────
 
 
@@ -157,7 +171,9 @@ def test_sad_keyword_wins_over_anxious_keyword_in_same_segment() -> None:
     """Protects SAD's placement ahead of ANXIOUS in _EMOTION_PRIORITY: when
     both a sad-lexicon and an anxious-lexicon word appear, SAD wins regardless
     of word order in the text."""
-    seg = _single_segment("Main bohat udaas hoon, aur thoda pareshan bhi.", "ur")
+    # One sentence, two clauses -> two segments now, but emotion is decided
+    # from the whole sentence, so the priority order still means something.
+    seg = _first_segment("Main bohat udaas hoon, aur thoda pareshan bhi.", "ur")
     assert seg.emotion is Emotion.SAD
 
 
@@ -192,7 +208,10 @@ def test_energy_falls_with_calm_emotion() -> None:
 
 
 def test_long_clause_dense_sentence_is_slow() -> None:
-    seg = _single_segment(
+    # The clause-density rule is measured on the SENTENCE. Were it measured on
+    # each split clause it could never fire again — a lone clause contains no
+    # separators by construction.
+    seg = _first_segment(
         "First, we gather the ingredients, then, we mix them, "
         "and finally, carefully, patiently, we bake the whole thing.",
         "en",
@@ -311,3 +330,61 @@ def test_analyze_is_deterministic_across_languages() -> None:
         ("How are you? I am very happy today!", "en"),
     ):
         assert analyze(text, language) == analyze(text, language)
+
+
+# ── Clause and paragraph breaks (2026-08-17) ─────────────────────────────────
+
+
+def test_urdu_comma_makes_a_short_pause_not_a_full_stop() -> None:
+    """
+    The Urdu comma is `،` (U+060C), a DIFFERENT CODEPOINT from Latin `,`.
+    Nothing in the pipeline had ever seen it, so Urdu text produced no clause
+    breaks at all — the owner's report.
+    """
+    plan = analyze("کل میٹنگ ہے، اور رپورٹ بھی تیار کرنی ہے۔", "ur")
+    assert len(plan.segments) == 2, plan.segments
+    # Short: a comma is a breath, not a stop.
+    assert plan.segments[0].pause_after_ms < plan.segments[1].pause_after_ms
+    assert plan.segments[0].text.endswith("،")
+
+
+def test_newline_is_a_hard_break_with_the_longest_pause() -> None:
+    """
+    Newlines had NO effect before: `split_sentences` calls
+    `normalize_whitespace`, which is `" ".join(text.split())`, so every newline
+    became a space before segmentation ran. The signal was destroyed upstream.
+    """
+    plan = analyze("First line.\nSecond line.", "en")
+    assert len(plan.segments) == 2
+    # The newline pause must beat the sentence pause it also carries.
+    assert plan.segments[0].pause_after_ms > plan.segments[1].pause_after_ms
+
+
+def test_newline_breaks_urdu_too() -> None:
+    plan = analyze("پہلی سطر۔\nدوسری سطر۔", "ur")
+    assert len(plan.segments) == 2
+    assert plan.segments[0].pause_after_ms > plan.segments[1].pause_after_ms
+
+
+def test_a_newline_without_terminating_punctuation_still_breaks() -> None:
+    """Line breaks in a list or an address carry no full stops, and are
+    exactly where an author most wants the pause."""
+    plan = analyze("Milk\nEggs\nBread", "en")
+    assert len(plan.segments) == 3
+    assert [s.text for s in plan.segments] == ["Milk", "Eggs", "Bread"]
+
+
+def test_a_comma_inside_a_number_is_not_a_clause_break() -> None:
+    """"1,000" is one figure. Splitting it puts silence inside a number."""
+    plan = analyze("We sold 1,000 units.", "en")
+    assert len(plan.segments) == 1
+    assert plan.segments[0].text == "We sold 1,000 units."
+
+
+def test_pause_lengths_are_ordered_clause_then_sentence_then_paragraph() -> None:
+    """The whole point of three break levels: they must actually differ, in
+    the right order."""
+    clause = analyze("one, two", "en").segments[0].pause_after_ms
+    sentence = analyze("One. Two.", "en").segments[0].pause_after_ms
+    paragraph = analyze("One.\nTwo.", "en").segments[0].pause_after_ms
+    assert clause < sentence < paragraph

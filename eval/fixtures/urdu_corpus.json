@@ -1,32 +1,29 @@
 {
   "_meta": {
     "purpose": "The single shared test corpus for the Urdu bake-off (docs/URDU_BAKEOFF_RESULTS.md). EVERY arm reads its text from this file, so 'same corpus everywhere' is enforced by construction rather than by discipline.",
-
     "authoring_rule": "`perso_arabic` is the source of truth and was authored first. `roman` and `devanagari` are hand-authored renderings of the SAME sentence — same words, same order, same meaning. Nothing here is a translation: Urdu vocabulary is preserved, so دفتر becomes 'daftar' / दफ़्तर and never an Indian-Hindi synonym like कार्यालय.",
 
+    "authoring_rule_EXCEPTION_phase_a_items": "The 32 items added 2026-08-16 (categories conversational_everyday, ambiguous_spelling, code_switch_heavy, proper_nouns[name_*], numbers_dates[numd_*], messy_realworld, technical_terms[tech_*]) INVERT the rule above, deliberately. They exist to evaluate Roman Urdu -> Perso-Arabic conversion, where the Roman string is the artifact under test — it has to look like what a person actually types, including SMS spellings ('hy', 'nhi', 'q'), dropped vowels, missing punctuation and ALL CAPS. Authoring Perso-Arabic first and rendering it into Roman would have produced tidy, well-formed Roman that no user writes, which is precisely the input the earlier probes were too easy on. So for these items `roman` was authored first as realistic input and `perso_arabic` is the INTENDED READING of it. Consequence: the gold is a judgement call in a way the original 13 are not, and it is the owner's to make — these strings were drafted by Claude and NEED A NATIVE-SPEAKER REVIEW PASS before any number computed against them is quoted as a result.",
+
+    "devanagari_is_optional_from_2026_08_16": "Only the original 13 items carry a `devanagari` field. The 32 Phase-A items omit it and `eval/urdu_represent.py` treats it as optional. Devanagari exists solely to feed IndicF5 arms C/I/J; Hindi is not a target language and hand-authoring 32 more Devanagari renderings would be effort spent on an arm that is still blocked on HuggingFace repo access. Arms that need Devanagari must filter with `CorpusItem.has()` — see urdu_represent.py — and will therefore run on 13 items while Roman/Perso-Arabic arms run on all 45. Do not compare an arm scored over 13 items against one scored over 45.",
     "why_devanagari_is_hand_authored": "Deliberate, and it changes how arms C/I/J must be read. A Perso-Arabic->Devanagari transliterator is genuinely hard (abjad->abugida; Perso-Arabic omits the short vowels Devanagari must write, so it needs vowel restoration). Building a mediocre one first would confound the experiment: a bad result could mean 'the model cannot speak Urdu from Devanagari' OR 'my transliterator is bad', and we could not tell which. Hand-authored gold removes that variable. Arms C/I/J are therefore a CEILING TEST — an upper bound on what any converter could deliver. If a model fails here, the whole Devanagari route is dead and no converter can rescue it. If it succeeds, THEN a real converter is worth building. That ordering is the point.",
-
     "two_devanagari_variants": "`devanagari` preserves the nuqta forms that carry Urdu phonemes (फ़ ज़ क़ ग़ ख़) and is the arm J 'phonetic / Hindustani' representation. Arm I's plainer transliteration is DERIVED from it at run time by eval/urdu_represent.py's strip_nuqta(), which folds फ़->फ, ज़->ज, क़->क, ग़->ग, ख़->ख — exactly what a naive Hindi-ified transliteration produces. So arms I and J differ in precisely one controlled way: whether Urdu-specific phonemes survive.",
-
     "latin_islands": "English words (GitHub, pull request, database) are left in Latin script in every representation, matching how a user actually types. Whether a model copes is part of what the code-switching criterion measures — it is not pre-solved here.",
-
     "cer_reference_rule": "CER for EVERY arm is scored against `perso_arabic`, whatever representation was fed in. The audio is Urdu speech in all arms, so the one canonical Urdu string is the only defensible ground truth; scoring an arm against the Devanagari it happened to be fed would make arm C's CER incomparable to arm B's.",
-
     "asr_caveat": "Whisper's script choice for Urdu/Hindi audio is unstable and its Urdu is weak. CER here is a SCREEN for gross breakage (silence, wrong language, garbage) — NOT a quality ranking. The decision comes from the blind listening scores; see the plan's 3e/3g.",
-
     "reference_axis": "Orthogonal to this file. Every item runs against both a male and a female Pakistani Urdu reference clip.",
-
-    "KNOWN_LIMITATION_ladder_rung_B": "These sentences were authored with correct Urdu codepoints throughout, so eval/urdu_represent.py's normalize_urdu() is a VERIFIED NO-OP on all 13 items (measured: 13/13 unchanged). Ladder rung B — 'Unicode/character normalization only' — therefore cannot be evaluated against this corpus, and a null result for it must NOT be read as 'normalization does not help'. It means the input was already clean. That normalization exists for text a real user types or pastes, which routinely mixes Arabic codepoints (ARABIC YEH U+064A for FARSI YEH U+06CC, ARABIC KAF U+0643 for KEHEH U+06A9, ARABIC HEH U+0647 for HEH GOAL U+06C1) — confirmed working on deliberately dirty input, 4 codepoints folded. To actually test rung B, add dirty variants of these items or source real user-typed Urdu; do not conclude anything about it from this file as it stands.",
-
-    "arm_I_vs_J_discrimination": "strip_nuqta() changes 10 of 13 items. The other 3 (owner_03_deadline, owner_04_late, owner_05_github) contain no nuqta consonants, so arms I and J are byte-identical for them and they cannot discriminate between those arms. Expected, not a defect — but exclude them when computing any I-vs-J delta, or the difference will be diluted by three guaranteed ties.",
-
-    "item_count": 13
+    "KNOWN_LIMITATION_ladder_rung_B": "Applies to the original 13 items; the Phase-A items have not been re-measured for it. These sentences were authored with correct Urdu codepoints throughout, so eval/urdu_represent.py's normalize_urdu() is a VERIFIED NO-OP on all 13 items (measured: 13/13 unchanged). Ladder rung B — 'Unicode/character normalization only' — therefore cannot be evaluated against this corpus, and a null result for it must NOT be read as 'normalization does not help'. It means the input was already clean. That normalization exists for text a real user types or pastes, which routinely mixes Arabic codepoints (ARABIC YEH U+064A for FARSI YEH U+06CC, ARABIC KAF U+0643 for KEHEH U+06A9, ARABIC HEH U+0647 for HEH GOAL U+06C1) — confirmed working on deliberately dirty input, 4 codepoints folded. To actually test rung B, add dirty variants of these items or source real user-typed Urdu; do not conclude anything about it from this file as it stands.",
+    "arm_I_vs_J_discrimination": "Applies to the 13 Devanagari-bearing items only. strip_nuqta() changes 10 of 13 items. The other 3 (owner_03_deadline, owner_04_late, owner_05_github) contain no nuqta consonants, so arms I and J are byte-identical for them and they cannot discriminate between those arms. Expected, not a defect — but exclude them when computing any I-vs-J delta, or the difference will be diluted by three guaranteed ties.",
+    "item_count": 45
   },
   "items": [
     {
       "id": "owner_01_sick",
       "category": "owner_core",
-      "stresses": ["conversational", "code_switch_light"],
+      "stresses": [
+        "conversational",
+        "code_switch_light"
+      ],
       "perso_arabic": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
       "roman": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
       "devanagari": "यार, आज मैं ऑफ़िस नहीं आ सकूँ गा क्योंकि मेरी तबीयत कुछ ठीक नहीं है।"
@@ -34,7 +31,10 @@
     {
       "id": "owner_02_file",
       "category": "owner_core",
-      "stresses": ["conversational", "loanword_file"],
+      "stresses": [
+        "conversational",
+        "loanword_file"
+      ],
       "perso_arabic": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
       "roman": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
       "devanagari": "आप ने जो फ़ाइल भेजी थी, मैं ने उसे चेक कर लिया है।"
@@ -42,7 +42,10 @@
     {
       "id": "owner_03_deadline",
       "category": "owner_core",
-      "stresses": ["conversational", "pure_urdu_vocab"],
+      "stresses": [
+        "conversational",
+        "pure_urdu_vocab"
+      ],
       "perso_arabic": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
       "roman": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
       "devanagari": "मुझे लगता है के हमें यह काम कल तक मुकम्मल कर लेना चाहिए।"
@@ -50,7 +53,10 @@
     {
       "id": "owner_04_late",
       "category": "owner_core",
-      "stresses": ["code_switch", "latin_island"],
+      "stresses": [
+        "code_switch",
+        "latin_island"
+      ],
       "perso_arabic": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
       "roman": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
       "devanagari": "यार, आज office में काफ़ी काम था, इस लिए मैं late हो गया।"
@@ -58,16 +64,22 @@
     {
       "id": "owner_05_github",
       "category": "owner_core",
-      "stresses": ["code_switch", "latin_island", "technical_terms", "proper_noun_latin"],
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "technical_terms",
+        "proper_noun_latin"
+      ],
       "perso_arabic": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
       "roman": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
       "devanagari": "मैं ने GitHub पर pull request create कर दी है, आप उसे review कर लेना।"
     },
-
     {
       "id": "num_ascii",
       "category": "numbers",
-      "stresses": ["numbers_ascii"],
+      "stresses": [
+        "numbers_ascii"
+      ],
       "note": "Controlled pair with num_eastern: identical sentence, ASCII digits. Any audible difference between the two is purely a digit-form handling effect.",
       "perso_arabic": "میٹنگ 3 بجے شروع ہوگی اور تقریباً 45 منٹ چلے گی۔",
       "roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
@@ -76,7 +88,9 @@
     {
       "id": "num_eastern",
       "category": "numbers",
-      "stresses": ["numbers_non_ascii"],
+      "stresses": [
+        "numbers_non_ascii"
+      ],
       "note": "Controlled pair with num_ascii: identical sentence, non-ASCII digits — Eastern Arabic-Indic ۰-۹ in Perso-Arabic, Devanagari ०-९ in the Devanagari arm. Tests whether the model reads native digit forms at all.",
       "perso_arabic": "میٹنگ ۳ بجے شروع ہوگی اور تقریباً ۴۵ منٹ چلے گی۔",
       "roman": "Meeting 3 baje shuru hogi aur taqreeban 45 minute chalay gi.",
@@ -85,7 +99,11 @@
     {
       "id": "date",
       "category": "dates",
-      "stresses": ["dates", "year_reading", "numbers_ascii"],
+      "stresses": [
+        "dates",
+        "year_reading",
+        "numbers_ascii"
+      ],
       "perso_arabic": "یہ رپورٹ 14 اگست 2026 تک جمع کرانی ہے۔",
       "roman": "Yeh report 14 August 2026 tak jama karani hai.",
       "devanagari": "यह रिपोर्ट 14 अगस्त 2026 तक जमा करानी है।"
@@ -93,7 +111,10 @@
     {
       "id": "names",
       "category": "proper_nouns",
-      "stresses": ["person_names", "place_names"],
+      "stresses": [
+        "person_names",
+        "place_names"
+      ],
       "perso_arabic": "علی احمد اور فاطمہ نے کراچی سے لاہور تک کا سفر کیا۔",
       "roman": "Ali Ahmed aur Fatima ne Karachi se Lahore tak ka safar kiya.",
       "devanagari": "अली अहमद और फ़ातिमा ने कराची से लाहौर तक का सफ़र किया।"
@@ -101,7 +122,11 @@
     {
       "id": "abbreviations",
       "category": "abbreviations",
-      "stresses": ["acronyms", "latin_island", "letter_by_letter_reading"],
+      "stresses": [
+        "acronyms",
+        "latin_island",
+        "letter_by_letter_reading"
+      ],
       "note": "PDF and URL must be read letter by letter, not as words. A model that says 'pudf' or 'earl' fails this.",
       "perso_arabic": "براہ کرم PDF فائل ای میل کر دیں اور URL بھی ساتھ بھیج دیں۔",
       "roman": "Baraye meherbani PDF file email kar dein aur URL bhi saath bhej dein.",
@@ -110,7 +135,11 @@
     {
       "id": "technical",
       "category": "technical_terms",
-      "stresses": ["technical_terms", "latin_island", "code_switch"],
+      "stresses": [
+        "technical_terms",
+        "latin_island",
+        "code_switch"
+      ],
       "perso_arabic": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
       "roman": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
       "devanagari": "हमें database का backup लेना होगा और फिर server दोबारा restart करना पड़ेगा।"
@@ -118,7 +147,11 @@
     {
       "id": "colloquial",
       "category": "conversational_pakistani",
-      "stresses": ["pakistani_register", "discourse_particles", "informal"],
+      "stresses": [
+        "pakistani_register",
+        "discourse_particles",
+        "informal"
+      ],
       "note": "Deliberately colloquial Pakistani register — 'aray yaar', 'chhoro na'. Indian-Hindi-leaning output will be most audible here.",
       "perso_arabic": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
       "roman": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
@@ -127,11 +160,380 @@
     {
       "id": "long_multiclause",
       "category": "long_form",
-      "stresses": ["length", "multi_clause", "prosody", "breath_groups"],
+      "stresses": [
+        "length",
+        "multi_clause",
+        "prosody",
+        "breath_groups"
+      ],
       "note": "Tests chunking and prosody over a long span. domain/text.py's chunk_for_synthesis() is currently never called in the generate path, so this is also the case most likely to expose that gap.",
       "perso_arabic": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
       "roman": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
       "devanagari": "कल जब मैं दफ़्तर पहुँचा तो पता चला के मीटिंग मुल्तवी हो गई है, इस लिए मैं ने सोचा के पहले बाक़ी काम मुकम्मल कर लूँ, और फिर दोपहर के खाने के बाद रिपोर्ट पर काम शुरू करूँगा।"
+    },
+    {
+      "id": "conv_01_greeting",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "greeting"
+      ],
+      "perso_arabic": "السلام علیکم، کیا حال ہے آپ کا؟ بہت دنوں بعد بات ہوئی۔",
+      "roman": "Assalam o alaikum, kya haal hai aap ka? Bohat dinon baad baat hui."
+    },
+    {
+      "id": "conv_02_plans",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "future_tense"
+      ],
+      "perso_arabic": "چلو پھر شام کو ملتے ہیں، میں تمہیں call کر لوں گا۔",
+      "roman": "Chalo phir shaam ko miltay hain, main tumhein call kar loon ga."
+    },
+    {
+      "id": "conv_03_food",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "aspirated_consonants"
+      ],
+      "note": "Two kh- words that Roman spells identically to the velar خ. A model that reads 'khana' as خانہ instead of کھانا says a different word.",
+      "perso_arabic": "امی نے آج بریانی بنائی ہے، تم بھی کھانا کھانے آ جاؤ۔",
+      "roman": "Ammi ne aaj biryani banai hai, tum bhi khana khane aa jao."
+    },
+    {
+      "id": "conv_04_weather",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "idiomatic"
+      ],
+      "perso_arabic": "آج بہت گرمی ہے، باہر نکلنے کا دل نہیں کر رہا۔",
+      "roman": "Aaj bohat garmi hai, bahar nikalne ka dil nahi kar raha."
+    },
+    {
+      "id": "conv_05_apology",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "code_switch_light",
+        "latin_island"
+      ],
+      "perso_arabic": "معاف کرنا، میں تمہارا message دیکھ نہیں سکا تھا۔",
+      "roman": "Maaf karna, main tumhara message dekh nahi saka tha."
+    },
+    {
+      "id": "conv_06_family",
+      "category": "conversational_everyday",
+      "stresses": [
+        "conversational",
+        "honorifics"
+      ],
+      "perso_arabic": "بھائی جان گھر آ گئے ہیں، سب بہت خوش ہیں۔",
+      "roman": "Bhai jaan ghar aa gaye hain, sab bohat khush hain."
+    },
+    {
+      "id": "spell_01_kia_kya",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "homograph"
+      ],
+      "note": "'kia' appears twice with two different senses (interrogative کیا and the verb کیا). Both happen to be spelled the same in Urdu, so this tests spelling stability, not disambiguation.",
+      "perso_arabic": "کیا تم نے وہ کام کیا ہے جو میں نے کہا تھا؟",
+      "roman": "Kia tum ne wo kaam kia hai jo main ne kaha tha?"
+    },
+    {
+      "id": "spell_02_hy_hai",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "sms_orthography"
+      ],
+      "note": "'hy' is a very common SMS spelling of ہے. A model that transliterates it letter-wise produces ہائے or similar.",
+      "perso_arabic": "یہ کام بہت ضروری ہے، اسے آج ہی کرنا ہے۔",
+      "roman": "Ye kaam bohat zaroori hy, isay aaj hi karna hy."
+    },
+    {
+      "id": "spell_03_q_kyu",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "single_letter_abbrev"
+      ],
+      "note": "'q' standing alone for کیوں. Requires knowing the convention, not sounding it out.",
+      "perso_arabic": "تم کیوں نہیں آئے کل؟ میں تمہارا انتظار کرتا رہا۔",
+      "roman": "Tum q nahi aaye kal? Main tumhara intezar karta raha."
+    },
+    {
+      "id": "spell_04_doubled_vowels",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "vowel_length"
+      ],
+      "note": "Deliberately over-doubled vowels. The correct output must NOT lengthen the Urdu spelling to match.",
+      "perso_arabic": "بھائی صاحب، ذرا دھیان سے سنیے میری بات۔",
+      "roman": "Bhaaee saahab, zaraa dhyaan se suniye meri baat."
+    },
+    {
+      "id": "spell_05_dropped_vowels",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "sms_orthography",
+        "vowel_dropping"
+      ],
+      "note": "Heavy consonant-skeleton SMS style — vowels dropped throughout, 'k' for کہ. The hardest ambiguous-spelling case in the corpus.",
+      "perso_arabic": "مجھے سمجھ نہیں آ رہا کہ یہ کیسے ہوا۔",
+      "roman": "Mjhe smjh nhi aa rha k ye kese hua."
+    },
+    {
+      "id": "spell_06_nahi_variants",
+      "category": "ambiguous_spelling",
+      "stresses": [
+        "ambiguous_spelling",
+        "inconsistent_within_sentence"
+      ],
+      "note": "Same word spelled two ways ('nhi', 'nahi') inside one sentence, plus 'hy'. Both must land on نہیں.",
+      "perso_arabic": "نہیں یار، ایسا کچھ نہیں ہے، تم غلط سمجھے۔",
+      "roman": "Nhi yaar, aisa kuch nahi hy, tum ghalat samjhe."
+    },
+    {
+      "id": "cs_01_deploy",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "technical_terms"
+      ],
+      "perso_arabic": "میں نے staging پر deploy کر دیا ہے، اب production کا wait کر رہے ہیں۔",
+      "roman": "Main ne staging par deploy kar diya hai, ab production ka wait kar rahe hain."
+    },
+    {
+      "id": "cs_02_meeting",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "sentence_initial_english"
+      ],
+      "note": "Starts with an English word. A model that decides the sentence's script from its first token will get this wrong.",
+      "perso_arabic": "client کے ساتھ meeting reschedule ہو گئی ہے، اب Friday کو ہے۔",
+      "roman": "Client ke saath meeting reschedule ho gayi hai, ab Friday ko hai."
+    },
+    {
+      "id": "cs_03_bug",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "imperative"
+      ],
+      "perso_arabic": "یہ bug production میں آ رہا ہے، log check کرو پہلے۔",
+      "roman": "Ye bug production mein aa raha hai, log check karo pehle."
+    },
+    {
+      "id": "cs_04_laptop",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "acronym"
+      ],
+      "perso_arabic": "میرا laptop slow ہو گیا ہے، شاید RAM upgrade کرنی پڑے گی۔",
+      "roman": "Mera laptop slow ho gaya hai, shayad RAM upgrade karni paray gi."
+    },
+    {
+      "id": "cs_05_whatsapp",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "brand_name",
+        "internal_capital"
+      ],
+      "note": "'WhatsApp' has an internal capital that must survive verbatim — lowercasing it is a code-switch-preservation failure even though it is still Latin.",
+      "perso_arabic": "میں نے WhatsApp پر screenshot بھیج دیا ہے، دیکھ لینا۔",
+      "roman": "Main ne WhatsApp par screenshot bhej diya hai, dekh lena."
+    },
+    {
+      "id": "cs_06_interview",
+      "category": "code_switch_heavy",
+      "stresses": [
+        "code_switch",
+        "latin_island",
+        "acronym"
+      ],
+      "perso_arabic": "کل interview ہے، میں نے اپنا CV update کر لیا ہے۔",
+      "roman": "Kal interview hai, main ne apna CV update kar liya hai."
+    },
+    {
+      "id": "name_01_people",
+      "category": "proper_nouns",
+      "stresses": [
+        "person_names",
+        "place_names",
+        "list"
+      ],
+      "note": "Urdu-script names, unlike the Latin-island brand names — a transliterator must convert these rather than leave them in Latin.",
+      "perso_arabic": "بلال، عائشہ اور عثمان کل اسلام آباد جا رہے ہیں۔",
+      "roman": "Bilal, Ayesha aur Usman kal Islamabad ja rahe hain."
+    },
+    {
+      "id": "name_02_places",
+      "category": "proper_nouns",
+      "stresses": [
+        "place_names"
+      ],
+      "perso_arabic": "پشاور سے کوئٹہ تک کا سفر کافی لمبا ہے۔",
+      "roman": "Peshawar se Quetta tak ka safar kaafi lamba hai."
+    },
+    {
+      "id": "name_03_institution",
+      "category": "proper_nouns",
+      "stresses": [
+        "person_names",
+        "latin_island",
+        "title_abbrev"
+      ],
+      "note": "Mixed decision in one sentence: the person's name and title convert to Urdu, the institution's name stays Latin. Tests that the model is not applying one blanket rule to all proper nouns.",
+      "perso_arabic": "ڈاکٹر سعید نے Aga Khan Hospital میں appointment دے دی ہے۔",
+      "roman": "Dr. Saeed ne Aga Khan Hospital mein appointment de di hai."
+    },
+    {
+      "id": "numd_01_time",
+      "category": "numbers_dates",
+      "stresses": [
+        "numbers_ascii",
+        "code_switch",
+        "latin_island"
+      ],
+      "perso_arabic": "meeting صبح 9 بجے ہے، please 10 منٹ پہلے آ جانا۔",
+      "roman": "Meeting subah 9 baje hai, please 10 minute pehle aa jana."
+    },
+    {
+      "id": "numd_02_price",
+      "category": "numbers_dates",
+      "stresses": [
+        "numbers_ascii",
+        "large_numbers",
+        "code_switch"
+      ],
+      "perso_arabic": "اس کی قیمت 2500 روپے ہے، discount کے بعد 2000 ہو جائے گی۔",
+      "roman": "Is ki qeemat 2500 rupay hai, discount ke baad 2000 ho jaye gi."
+    },
+    {
+      "id": "numd_03_date",
+      "category": "numbers_dates",
+      "stresses": [
+        "dates",
+        "year_reading",
+        "month_name"
+      ],
+      "note": "Month name written in Latin in the input but conventionally Urdu in the gold — the one place a proper noun SHOULD be converted, unlike the brand names.",
+      "perso_arabic": "12 دسمبر 2026 کو ہماری شادی کی سالگرہ ہے۔",
+      "roman": "12 December 2026 ko hamari shadi ki salgirah hai."
+    },
+    {
+      "id": "numd_04_phone",
+      "category": "numbers_dates",
+      "stresses": [
+        "numbers_ascii",
+        "digit_string",
+        "leading_zero"
+      ],
+      "note": "A digit string that must be read out digit by digit and must keep its leading zero. Also the one item where 'number' is conventionally written نمبر rather than kept Latin.",
+      "perso_arabic": "میرا نمبر 0300 1234567 ہے، save کر لو۔",
+      "roman": "Mera number 0300 1234567 hai, save kar lo."
+    },
+    {
+      "id": "messy_01_no_punct",
+      "category": "messy_realworld",
+      "stresses": [
+        "no_punctuation",
+        "conversational",
+        "run_on"
+      ],
+      "note": "No punctuation and no capitals anywhere, as typed on a phone. The output should not invent punctuation the user did not write.",
+      "perso_arabic": "یار سن نا کل جو بات ہوئی تھی اس کا کیا بنا بتاؤ مجھے",
+      "roman": "yaar sun na kal jo baat hui thi us ka kya bana batao mujhe"
+    },
+    {
+      "id": "messy_02_runon",
+      "category": "messy_realworld",
+      "stresses": [
+        "run_on",
+        "length",
+        "no_punctuation",
+        "multi_clause"
+      ],
+      "note": "Long, unpunctuated, multi-clause — the combination most likely to make a model summarize or 'tidy' rather than transliterate.",
+      "perso_arabic": "میں سوچ رہا تھا کہ اگر time مل گیا تو شام کو market چلا جاؤں گا اور کچھ سامان لے آؤں گا پھر گھر آ کر کام ختم کر لوں گا",
+      "roman": "main soch raha tha ke agar time mil gaya to shaam ko market chala jaon ga aur kuch samaan le aaon ga phir ghar aa kar kaam khatam kar loon ga"
+    },
+    {
+      "id": "messy_03_abbrev",
+      "category": "messy_realworld",
+      "stresses": [
+        "abbreviations",
+        "code_switch",
+        "latin_island",
+        "informal"
+      ],
+      "note": "Chat abbreviations ('asap', 'plz') must stay exactly as typed — expanding them to 'as soon as possible' is a rewrite, not a transliteration.",
+      "perso_arabic": "asap reply کرنا plz، boss نے بولا ہے کہ urgent ہے",
+      "roman": "asap reply karna plz, boss ne bola hai k urgent hai"
+    },
+    {
+      "id": "messy_04_repetition",
+      "category": "messy_realworld",
+      "stresses": [
+        "repetition",
+        "discourse_particles",
+        "informal"
+      ],
+      "note": "Deliberate repetition. A model that 'improves' the sentence will collapse the duplicates — a meaning-preservation failure.",
+      "perso_arabic": "اچھا اچھا ٹھیک ہے ٹھیک ہے میں دیکھ لیتا ہوں",
+      "roman": "acha acha theek hai theek hai main dekh leta hoon"
+    },
+    {
+      "id": "messy_05_allcaps",
+      "category": "messy_realworld",
+      "stresses": [
+        "all_caps",
+        "imperative",
+        "urgency"
+      ],
+      "note": "All caps. Urdu has no case, so the shouting is simply lost in the gold — that is correct, and a model must not compensate by adding exclamation marks.",
+      "perso_arabic": "بھائی جان جلدی آؤ یہاں بہت ضروری کام ہے",
+      "roman": "BHAI JAAN JALDI AAO YAHAN BOHAT ZAROORI KAAM HAI"
+    },
+    {
+      "id": "tech_01_api",
+      "category": "technical_terms",
+      "stresses": [
+        "technical_terms",
+        "latin_island",
+        "acronym",
+        "code_switch"
+      ],
+      "perso_arabic": "API کا response slow ہے، cache enable کرنا پڑے گا۔",
+      "roman": "API ka response slow hai, cache enable karna paray ga."
+    },
+    {
+      "id": "tech_02_git",
+      "category": "technical_terms",
+      "stresses": [
+        "technical_terms",
+        "latin_island",
+        "command_name",
+        "code_switch"
+      ],
+      "note": "'git' is lowercase on purpose — it is a command name, and capitalizing it is a code-switch-preservation failure.",
+      "perso_arabic": "git pull کرنے کے بعد merge conflict آ گیا ہے۔",
+      "roman": "git pull karne ke baad merge conflict aa gaya hai."
     }
   ]
 }

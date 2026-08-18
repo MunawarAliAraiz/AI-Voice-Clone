@@ -15,6 +15,22 @@
 # (ephemeral, chmod 600) — NEVER to /workspace, which persists and is snapshotted:
 #
 #   ssh root@HOST -p PORT "GH_USER=u GH_TOKEN=t bash -s" < scripts/pod-bootstrap.sh
+#
+# The full real-world invocation — provision, then start backend + ngrok, with
+# the public domain and the frontend origin remembered on /workspace so a later
+# re-run needs neither:
+#
+#   ssh root@HOST -p PORT "START=1 NGROK_AUTHTOKEN=... NGROK_DOMAIN=your.ngrok-free.dev \
+#     FRONTEND_URL=https://your-frontend.example bash -s" < scripts/pod-bootstrap.sh
+#
+# Carry your EXISTING secrets onto a fresh pod (otherwise a new /workspace mints
+# a new VCS_API_KEY and every browser must be re-paired — see step 15):
+#
+#   ... VCS_API_KEY=... VCS_MEDIA_TOKEN_SECRET=... bash -s" < scripts/pod-bootstrap.sh
+#
+# Provisions five Python envs, ~15GB of weights, and takes 15-30 min on a cold
+# /workspace. Re-running against a warm one is fast and is the intended way to
+# restart things — every step is idempotent.
 
 set -euo pipefail
 
@@ -153,9 +169,11 @@ PY
 
 echo "== 10. OmniVoice runtime env (separate interpreter, same reason as VoxCPM) =="
 # CC-BY-NC weights — personal use only, see docs/URDU_MODEL_LICENSING.md and
-# golden rule 6's 2026-08-15 amendment. Not routable by default (unverified
-# cell — Phase 1 pod smoke test needed before verified=True), but the venv +
-# weights are worth having warm the same way Chatterbox's are (step 8).
+# golden rule 6's 2026-08-15 amendment. Its (ur, ARABIC) cell is verified=True
+# as of 2026-08-15, so this venv is REQUIRED, not just convenient: an explicit
+# model_id=omnivoice_urdu request fails without it. Auto-routing still never
+# picks it — ModelCatalog.candidates() excludes non-permissive licences even
+# when verified — but the picker offers it and the owner uses it by name.
 OV_VENV="$REPO_DIR/backend/.venv-omnivoice"
 if [ ! -x "$OV_VENV/bin/python" ]; then
   uv venv "$OV_VENV" --python 3.12
@@ -184,7 +202,86 @@ p = snapshot_download("k2-fsa/OmniVoice", revision=sys.argv[1])
 print("   weights at", p)
 PY
 
-echo "== 12. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
+echo "== 12. Qwen Speech-Direction analyzer env (NOT an audio runtime) =="
+# Powers POST /api/direction/analyze-llm — the "Let AI suggest emotion/tone"
+# button in the Advanced editor. Without this venv the endpoint raises
+# (analyzer_scheduler.py: "set VCS_QWEN_ANALYZER_PYTHON") and that button
+# fails on a fresh pod, which is exactly how this step came to be missing
+# for three days after the feature shipped.
+#
+# Deliberately NOT a RuntimeKind and NOT in Settings.interpreters(): this
+# classifies text, never synthesizes audio, and must stay unreachable from
+# domain/routing.py's resolve(). AnalyzerScheduler reads its own setting.
+# Same venv the eval probes use (eval/run_qwen_analyzer_probe.py,
+# run_translit_probe.py, run_roman_arabic_probe.py) — one Qwen stack, not two.
+QWEN_VENV="$REPO_DIR/backend/.venv-qwen"
+if [ ! -x "$QWEN_VENV/bin/python" ]; then
+  uv venv "$QWEN_VENV" --python 3.12
+fi
+# Same cu130-silent-CPU trap as every other runtime above — pin cu128.
+uv pip install --python "$QWEN_VENV" \
+  torch --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+# `jiwer` is only needed by the transliteration probes, not by production —
+# harmless and small, and it keeps this venv able to run every eval/ Qwen
+# script without a second provisioning step.
+uv pip install --python "$QWEN_VENV" transformers accelerate jiwer 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$QWEN_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 13. Qwen analyzer weights (pinned revision, ~6GB, cached on /workspace) =="
+# Pinned per golden rule 7. Must match QWEN_ANALYZER_HF_REVISION in
+# backend/app/inference/analyzer_scheduler.py — if you bump one, bump both.
+QWEN_REV="aa8e72537993ba99e69dfaafa59ed015b17504d1"
+"$QWEN_VENV/bin/python" - "$QWEN_REV" <<'PY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download("Qwen/Qwen2.5-3B-Instruct", revision=sys.argv[1])
+print("   weights at", p)
+PY
+
+echo "== 13b. Gemma transliterator env (Phase B: Roman/Devanagari -> Perso-Arabic) =="
+# Deliberately NOT a RuntimeKind and NOT in Settings.interpreters(), same rule
+# as the Qwen analyzer above: this converts TEXT and must stay unreachable
+# from domain/routing.py's resolve(). TransliteratorScheduler reads its own
+# setting (VCS_GEMMA_TRANSLITERATOR_PYTHON).
+#
+# Shaped differently from the analyzer for one reason: at ~19GB 4-bit this
+# cannot be co-resident with the audio models on a 24GB card, so it is
+# load-convert-UNLOAD per call inside InferenceScheduler.exclusive_gpu().
+#
+# bitsandbytes is what makes the 4-bit load possible. The UNQUANTIZED weights
+# do not fit this card at all, so it is not an optimisation -- it is the only
+# form of the model that has ever run here (A3 run 3, the arm that passed).
+GEMMA_VENV="$REPO_DIR/backend/.venv-gemma"
+if [ ! -x "$GEMMA_VENV/bin/python" ]; then
+  uv venv "$GEMMA_VENV" --python 3.12
+fi
+# Same cu130-silent-CPU trap as every other runtime -- pin cu128.
+uv pip install --python "$GEMMA_VENV" torch --index-url https://download.pytorch.org/whl/cu128 2>&1 | tail -2
+uv pip install --python "$GEMMA_VENV" transformers accelerate bitsandbytes 2>&1 | tail -2
+echo "   torch CUDA visible:"
+"$GEMMA_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
+
+echo "== 13c. Gemma weights (pinned revision, ~19GB 4-bit, cached on /workspace) =="
+# Pinned per golden rule 7. Must match GEMMA_TRANSLITERATOR_HF_REPO *and*
+# _REVISION in backend/app/inference/transliterator_scheduler.py -- bump one,
+# bump both, and check the REPO not just the revision.
+#
+# THE unsloth 4-BIT REPO, NOT google/gemma-4-31B-it. That mistake was made once:
+# Google's full-precision release is 59GB rather than 19, is not the checkpoint
+# A3 run 3 passed on, and cannot load on this card at all (no quantization_config
+# means the backend takes its bfloat16 branch: ~62GB of VRAM for 31B params).
+# Not gated, so no HF token is needed.
+GEMMA_REPO="unsloth/gemma-4-31B-it-unsloth-bnb-4bit"
+GEMMA_REV="8e256fc6d63003fc0ca8c91b976e6dcc38433385"
+"$GEMMA_VENV/bin/python" - "$GEMMA_REPO" "$GEMMA_REV" <<'GEMMAPY' 2>&1 | tail -2
+import sys
+from huggingface_hub import snapshot_download
+p = snapshot_download(sys.argv[1], revision=sys.argv[2])
+print("   weights at", p)
+GEMMAPY
+
+echo "== 14. eval harness env (Whisper CER + ECAPA speaker cosine, Phase A/4c) =="
 # A separate venv from every runtime, deliberately: the harness's own deps
 # (transformers, speechbrain) have no reason to co-resolve with a runtime's
 # torch pin, and mixing them risks silently upgrading the runtime's torch
@@ -208,7 +305,7 @@ uv pip install --python "$EVAL_VENV" \
 # this reason — don't "fix" a torchcodec ModuleNotFoundError by installing it.
 "$EVAL_VENV/bin/python" -c "import torch; print('   ->', torch.__version__, 'cuda', torch.cuda.is_available())"
 
-echo "== 13. secrets (generated once, reused on every restart) =="
+echo "== 15. secrets (generated once, reused on every restart) =="
 # These MUST be stable across restarts. Regenerating VCS_API_KEY 401s every
 # frontend that has the old one saved; regenerating VCS_MEDIA_TOKEN_SECRET
 # invalidates every signed audio URL already handed out. So they are generated
@@ -249,12 +346,12 @@ fi
 # shellcheck disable=SC1090
 set -a; source "$SECRETS_FILE"; set +a
 
-echo "== 14. research lab =="
+echo "== 16. research lab =="
 mkdir -p /workspace/engines-lab/{r1-f5,r2-chatterbox,r3-voxcpm,r4-urdu}
 cp /workspace/engines-lab-ENV.sh /workspace/engines-lab/ENV.sh
 touch /workspace/engines-lab/.gpu.lock   # serializes GPU access between agents
 
-echo "== 15. verify =="
+echo "== 17. verify =="
 nvidia-smi --query-gpu=name,memory.total,compute_cap --format=csv,noheader
 python3 --version
 # VCS_API_KEY must NOT be visible here. Step 8 exports it, and the API-key
@@ -266,7 +363,7 @@ cd "$REPO_DIR/backend" && env -u VCS_API_KEY -u VCS_MEDIA_TOKEN_SECRET \
   uv run pytest -q -m "not gpu" 2>&1 | tail -3
 df -h / /workspace | tail -2
 
-echo "== 16. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
+echo "== 18. ngrok (OPTIONAL — only if NGROK_AUTHTOKEN is set) =="
 # Remember the domain the same way FRONTEND_URL is remembered. A restart that
 # forgets it does not fail loudly — ngrok happily allocates a RANDOM url, which
 # the deployed frontend has no way to reach, so the app looks broken for a
@@ -300,7 +397,7 @@ else
   echo "   skipped (NGROK_AUTHTOKEN not set)"
 fi
 
-echo "== 17. serve script (CORS baked in, remembered across runs) =="
+echo "== 19. serve script (CORS baked in, remembered across runs) =="
 # CORS is the easiest thing to get wrong here, and it fails in the least
 # obvious way: the origin must match the deployed frontend EXACTLY — scheme,
 # host, no trailing slash — or every request dies in preflight with "No
@@ -329,21 +426,89 @@ set -euo pipefail
 set -a; source /workspace/vcs-secrets.env; set +a
 export HF_HOME=/workspace/hf-cache
 export VCS_CORS_ORIGINS='["${CORS_ORIGIN}"]'
-export VCS_WARM_ON_STARTUP=voxcpm2
+# Comma-separated. Both fit: VoxCPM2 7300 MB + OmniVoice 4700 MB = 12 GB,
+# inside budget_mb=16000 with max_workers=2, so they do not evict each other.
+# Warming OmniVoice matters most — it was always the cold one, and its first
+# generation paid ~160 s. VCS_WARM_SYNTH_ON_STARTUP defaults to true and runs
+# one throwaway synthesis per model, because OmniVoice lazily loads an embedded
+# Whisper sub-model on its FIRST synth() call; loading weights alone does not
+# remove that stall. It needs a voice profile as a reference and skips with a
+# log line when there are none.
+export VCS_WARM_ON_STARTUP=voxcpm2,omnivoice_urdu
 export VCS_VOXCPM_PYTHON=${VOX_VENV}/bin/python
 # Chatterbox is not yet routable (LanguageSupport cells unverified — Phase
 # 4c), but pointing this at the venv now means routing needs no redeploy the
 # moment a cell flips verified=True.
 export VCS_CHATTERBOX_PYTHON=${CB_VENV}/bin/python
-# omnivoice_urdu is likewise unverified (experimental_listing=True only) —
-# same reasoning as Chatterbox above.
+# omnivoice_urdu's (ur, ARABIC) cell is verified=True (2026-08-15), so this
+# one is load-bearing, not speculative: without it every explicit
+# model_id=omnivoice_urdu request fails with "no interpreter configured for
+# runtime 'omnivoice'".
 export VCS_OMNIVOICE_PYTHON=${OV_VENV}/bin/python
+# Speech Direction's LLM analyzer (POST /api/direction/analyze-llm, the "Let
+# AI suggest emotion/tone" button). Deliberately NOT a RuntimeKind — see
+# step 12 and analyzer_scheduler.py's docstring.
+export VCS_QWEN_ANALYZER_PYTHON=${QWEN_VENV}/bin/python
+# Phase B's Roman/Devanagari -> Perso-Arabic transliterator. This is what makes
+# script conversion AVAILABLE — /api/system reports available=false and the UI's
+# "Convert to Urdu script" affordance (Import tab + Composer convert-on-generate)
+# stays hidden without it. Deliberately NOT a RuntimeKind (see
+# transliterator_scheduler.py); it warms on startup via its own task and takes
+# the whole GPU slot when converting, so it never co-resides with audio models.
+export VCS_GEMMA_TRANSLITERATOR_PYTHON=${GEMMA_VENV}/bin/python
 export VCS_WORKER_CWD=${REPO_DIR}/backend
 cd ${REPO_DIR}/backend
 exec uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 SERVEEOF
 chmod +x /workspace/serve.sh
 echo "   wrote /workspace/serve.sh (CORS origin: $CORS_ORIGIN)"
+
+# One command to run the backend's life: `ctl.sh up` starts it only if it is
+# not already up, `stop` stops it, `restart` bounces it, `status` reports.
+# `up` is the safe default — it never double-starts and never errors on an
+# already-healthy backend, which is what "just make sure it's running" wants.
+# Quoted heredoc: this is a literal script, nothing here is expanded at write
+# time (serve.sh already baked in the secrets and paths).
+cat > /workspace/ctl.sh <<'CTLEOF'
+#!/usr/bin/env bash
+# Backend lifecycle on the pod. Generated by pod-bootstrap.sh.
+#   ctl.sh up       start only if not already running (safe default)
+#   ctl.sh start     (re)start
+#   ctl.sh restart   stop then start
+#   ctl.sh stop      stop
+#   ctl.sh status    is the backend (and ngrok) up?
+set -euo pipefail
+HEALTH=http://127.0.0.1:8000/api/health
+is_up() { curl -sf -m 3 "$HEALTH" >/dev/null 2>&1; }
+start() {
+  tmux kill-session -t backend 2>/dev/null || true
+  tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
+  # Model + transliterator warm is slow; poll rather than guess a sleep.
+  for _ in $(seq 60); do is_up && return 0; sleep 2; done
+  return 1
+}
+case "${1:-up}" in
+  up)
+    if is_up; then echo "backend already running — http://127.0.0.1:8000 (nothing to do)"; exit 0; fi
+    echo "backend is down — starting..."
+    start && echo "backend up" || { echo "backend failed to come up — see /workspace/backend.log"; exit 1; }
+    ;;
+  start|restart)
+    echo "(re)starting backend..."
+    start && echo "backend up" || { echo "backend failed to come up — see /workspace/backend.log"; exit 1; }
+    ;;
+  stop)
+    if tmux kill-session -t backend 2>/dev/null; then echo "backend stopped"; else echo "backend was not running"; fi
+    ;;
+  status)
+    is_up && echo "backend: UP   (127.0.0.1:8000)" || echo "backend: DOWN"
+    pgrep -x ngrok >/dev/null 2>&1 && echo "ngrok:   UP" || echo "ngrok:   DOWN"
+    ;;
+  *) echo "usage: ctl.sh {up|start|restart|stop|status}"; exit 2 ;;
+esac
+CTLEOF
+chmod +x /workspace/ctl.sh
+echo "   wrote /workspace/ctl.sh (up | start | restart | stop | status)"
 
 if [ "${START:-0}" = "1" ]; then
   echo "   START=1 — (re)starting backend and ngrok in tmux"
@@ -360,7 +525,7 @@ if [ "${START:-0}" = "1" ]; then
   done
 fi
 
-echo "== 18. current status =="
+echo "== 20. current status =="
 # Without START=1 bootstrap only provisions, so on a first run both of these are
 # expected to be down. The value is on a RE-RUN against a live pod, where it
 # answers "is the thing I already started still up?" without a second SSH trip.
@@ -401,8 +566,10 @@ fi
 echo
 echo "== READY =="
 echo "  repo:    $REPO_DIR ($BRANCH)"
-echo "  runtime: $VOX_VENV  (torch cu128)"
-echo "  runtime: $CB_VENV  (torch cu128, not yet routable — Phase 4c)"
+echo "  runtime: $VOX_VENV  (torch cu128, routable — English + Roman Urdu)"
+echo "  runtime: $OV_VENV  (torch cu128, routable by explicit pick — Perso-Arabic Urdu)"
+echo "  runtime: $CB_VENV  (torch cu128, NOT routable — failed its identity listen, Phase 4c)"
+echo "  analyzer:$QWEN_VENV  (torch cu128, Speech Direction 'suggest emotion/tone')"
 echo "  eval:    $EVAL_VENV  (torch cu128, Whisper CER + ECAPA speaker cosine)"
 echo "  lab:     /workspace/engines-lab/"
 echo "  caches:  /workspace/{hf,torch,pip,uv}-cache"
@@ -419,8 +586,11 @@ if [ "$CORS_ORIGIN" = "https://YOUR-PAGES-URL.pages.dev" ]; then
   echo "        remembered in $FRONTEND_FILE from then on."
   echo
 fi
-echo "Start serving (detached, survives your SSH session closing):"
-echo "  tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'"
+echo "Run the backend (detached, survives your SSH session closing):"
+echo "  /workspace/ctl.sh up        # start only if not already running"
+echo "  /workspace/ctl.sh restart   # bounce it"
+echo "  /workspace/ctl.sh stop      # stop it"
+echo "  /workspace/ctl.sh status    # is it up?"
 echo
 echo "  Or re-run this bootstrap with START=1 to start backend + ngrok for you."
 echo "  serve.sh has the secrets and the CORS origin baked in, so a restart"

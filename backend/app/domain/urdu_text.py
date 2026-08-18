@@ -19,19 +19,34 @@ WHAT IS NOT HERE
 ------------------
 No general English-transliteration system. `office`/`check`/`GitHub`/`pull
 request` already render correctly as plain Latin text and must stay
-untouched — `_LOANWORD_LEXICON` holds exactly the words individually tested
-and verified by ear, not a starting point for "respell every English word".
-Extending it requires the same per-word verify-by-ear discipline as URL and
-database got, not a heuristic.
+untouched — `DEFAULT_LOANWORD_LEXICON` holds exactly the words individually
+tested and verified by ear, not a starting point for "respell every English
+word". Extending the SHIPPED table requires the same per-word verify-by-ear
+discipline as URL and database got, not a heuristic.
+
+The user's own dictionary is a different matter and is deliberately not held
+to that bar: they hear the defect, they choose the respelling, and they hear
+the result. The discipline above exists because a maintainer is guessing on
+behalf of users who cannot check; it does not apply to a user fixing their own
+output. Which is why `apply_text_normalizations` takes the lexicon as an
+argument rather than reading this module's table.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from enum import StrEnum
+from functools import lru_cache
+from types import MappingProxyType
+from typing import Any
 
-__all__ = ["TextNormalization", "apply_text_normalizations"]
+__all__ = [
+    "DEFAULT_LOANWORD_LEXICON",
+    "TextNormalization",
+    "apply_text_normalizations",
+    "effective_lexicon",
+]
 
 
 class TextNormalization(StrEnum):
@@ -125,33 +140,170 @@ def _expand_numbers(text: str) -> str:
 
 # ── Loanwords: exactly 2 verified entries, see module docstring ─────────────
 #
-# docs/URDU_BAKEOFF_RESULTS.md SS5d: `ڈیٹا بیس` (all-Urdu) was REJECTED for
-# "database" -- بیس collides with the Urdu word for "twenty" and the model
-# read it that way in 2 of 3 tested contexts. The mixed form keeps "base" in
-# Latin, matching how office/check/GitHub already render correctly untouched.
-_LOANWORD_LEXICON: dict[str, str] = {
-    "URL": "یو آر ایل",
-    "database": "ڈیٹا base",
-}
-
-_LOANWORD_PATTERN = re.compile(
-    "|".join(rf"\b{re.escape(word)}\b" for word in _LOANWORD_LEXICON)
+# Both entries are now backed by BLIND REPEAT SAMPLING, not a single listen
+# (docs/URDU_BAKEOFF_RESULTS.md SS9b/SS9c, `eval/run_loanword_reliability.py`).
+# That method exists because synthesis is unseeded: `OmniVoiceBackend.synth()`
+# sets no seed, so a loanword's pronunciation is a random variable and any n=1
+# verdict is a coin flip. The owner demonstrated this by rating one
+# byte-identical sentence wrong and then correct an hour apart.
+#
+# Measured, owner-rated, blind, over two rounds (round 1 n=4, round 2 n=8):
+#
+#     URL       verbatim      0/4     یو آر ایل   4/4
+#     database  verbatim      0/4     ڈیٹا بےس   11/12
+#                                     ڈیٹا base   7/12
+#                                     ڈیٹا bays   4/12
+#
+# Both verbatim forms score ZERO, which is what justifies having entries here
+# at all rather than leaving the text alone.
+#
+# `ڈیٹا بےس` uses bari ye (U+06D2) for the /eɪ/. The earlier all-Urdu attempt
+# `ڈیٹا بیس` was rejected because بیس is also the Urdu word for "twenty"; bari
+# ye avoids that reading. `ڈیٹا base` -- which shipped until 2026-08-16 and was
+# recorded as "verified" on one listen -- is a genuine coin flip at 7/12: Latin
+# `base` standing alone after Urdu text is often read as "boss". Note it is
+# only correct as the TAIL of the Latin token `database`, so the model reads a
+# Latin token as a whole rather than letter by letter.
+#
+# `ڈیٹا bays` is kept here as a warning: it produced the single best-sounding
+# clip of the whole experiment ("most accurate for a native Urdu speaker") and
+# still scored 4/12. Picking a spelling by its best clip would have shipped the
+# second-worst one.
+# `میٹنگ` is the FIRST Perso-Arabic key, added 2026-08-16 after A3 passed. It
+# is also the first entry whose defect the corpus GOLD shares -- gold spells it
+# میٹنگ too, so this is not a transliteration artefact and no choice of model
+# would have removed it.
+#
+# Blind, n=4 per spelling, one carrier sentence (`eval/run_meeting_respell.py`,
+# owner-rated):
+#
+#     میٹنگ   (in use)   2/4    <- the defect, and INTERMITTENT
+#     می ٹنگ  (split)    3/4
+#     meeting (Latin)    4/4
+#     مِیٹنگ             4/4
+#     میٹِنگ             4/4
+#     مِیٹِنگ            4/4    <- shipped
+#     میٹینگ             4/4
+#     مِٹنگ              4/4
+#
+# Two things this measured that no amount of reading the text could have:
+# respelling a word that is ALREADY Perso-Arabic does change how OmniVoice
+# reads it (the whole premise of an either-script dictionary), and the broken
+# spelling is right half the time rather than never -- which is why it survived
+# every previous review and surfaced only on one listen.
+#
+# Five candidates tie at 4/4 and n=4 cannot separate them. `مِیٹِنگ` is chosen
+# on a non-acoustic tie-break: it adds only DIACRITICS to the standard
+# skeleton, so the text a user sees in the Composer still reads as میٹنگ. The
+# alternatives change letters or word boundaries and look wrong on the page.
+# Deliberately NOT resolved with another sampling round -- that is a value the
+# user's own dictionary lets them override by ear, and picking it for them is
+# the work the dictionary exists to avoid.
+DEFAULT_LOANWORD_LEXICON: Mapping[str, str] = MappingProxyType(
+    {
+        "URL": "یو آر ایل",
+        "database": "ڈیٹا بےس",
+        "میٹنگ": "مِیٹِنگ",
+    }
 )
 
 
-def _respell_loanwords(text: str) -> str:
-    """Word-boundary substitution for the verified loanword lexicon only."""
-    return _LOANWORD_PATTERN.sub(lambda m: _LOANWORD_LEXICON[m.group(0)], text)
+# ── Keys may be in EITHER script ────────────────────────────────────────────
+#
+# Until 2026-08-16 every key here was Latin, because every measured defect was
+# an English loanword sitting in Latin inside Urdu text. A3's passing run
+# produced the counter-example: میٹنگ is read as "mating", and the text arrives
+# ALREADY in Perso-Arabic -- the transliterator converted it, and the corpus
+# gold spells it that way too. A Latin-keyed table cannot reach that word at
+# all, so keys are matched in whatever script they are written in.
+#
+# `\b` is Unicode-aware in Python's `re`: Perso-Arabic letters are `\w`, so a
+# word boundary falls between میٹنگ and a space or an Urdu full stop exactly as
+# it does for Latin. No separate Arabic code path is needed.
+#
+# Matching is CASE-INSENSITIVE, which is a deliberate change from the
+# hardcoded table's behaviour. A user typing a dictionary entry will write
+# `Database` once and then type `database` in the Composer; a table that
+# silently missed the second is a support burden with no upside. The
+# REPLACEMENT is used verbatim -- case is not carried over, because the
+# replacement is usually Perso-Arabic, which has no case to carry.
+#
+# Longest key first, so `pull request` wins over a hypothetical `request`.
+# Python's alternation is first-match-wins, not longest-match-wins, and the
+# dict's insertion order is the user's, which is no order at all.
+@lru_cache(maxsize=64)
+def _compiled(entries: tuple[tuple[str, str], ...]) -> tuple[re.Pattern[str], Mapping[str, str]]:
+    by_key = {key.casefold(): replacement for key, replacement in entries}
+    pattern = re.compile(
+        "|".join(
+            rf"\b{re.escape(key)}\b"
+            for key in sorted((k for k, _ in entries), key=len, reverse=True)
+        ),
+        re.IGNORECASE,
+    )
+    return pattern, by_key
 
 
-_APPLIERS: dict[TextNormalization, Callable[[str], str]] = {
-    TextNormalization.NUMBERS: _expand_numbers,
+def _respell_loanwords(text: str, lexicon: Mapping[str, str]) -> str:
+    """Word-boundary substitution for the supplied lexicon only."""
+    if not lexicon:
+        return text
+    pattern, by_key = _compiled(tuple(lexicon.items()))
+    return pattern.sub(lambda m: by_key[m.group(0).casefold()], text)
+
+
+_APPLIERS: dict[TextNormalization, Callable[[str, Mapping[str, str]], str]] = {
+    TextNormalization.NUMBERS: lambda text, _lexicon: _expand_numbers(text),
     TextNormalization.LOANWORD_LEXICON: _respell_loanwords,
 }
 
 
+def effective_lexicon(
+    entries: Iterable[Mapping[str, Any]],
+    defaults: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
+) -> dict[str, str]:
+    """
+    Merge a user's dictionary rows over the shipped defaults.
+
+    `entries` are read by SUBSCRIPT (`entry["key_text"]`), which is what an
+    `aiosqlite.Row` and a plain dict both support — so `domain/` keeps not
+    importing `db/` and the tests need no database.
+
+    Three behaviours, in this order of precedence:
+
+    1. A user entry with a NEW key adds it.
+    2. A user entry whose key matches a default REPLACES it. The user has heard
+       both their own text and the shipped spelling; the maintainer has heard
+       neither.
+    3. A **disabled** user entry whose key matches a default SUPPRESSES it.
+       This is the only way to switch off a built-in entry, and it is why
+       disabled rows cannot simply be filtered out before getting here.
+
+    Matching is case-insensitive to mirror the matcher, so a user entry for
+    `Database` overrides the shipped `database` rather than sitting beside it
+    and losing a coin flip on alternation order.
+
+    Pure, and takes rows rather than fetching them — same reasoning as
+    `apply_text_normalizations`. Golden rule 4.
+    """
+    folded_defaults = {key.casefold(): (key, value) for key, value in defaults.items()}
+    merged: dict[str, str] = dict(defaults)
+
+    for entry in entries:
+        key = str(entry["key_text"])
+        shadowed = folded_defaults.get(key.casefold())
+        if shadowed is not None:
+            merged.pop(shadowed[0], None)
+        if entry["is_enabled"]:
+            merged[key] = str(entry["replacement"])
+
+    return merged
+
+
 def apply_text_normalizations(
-    text: str, kinds: tuple[TextNormalization, ...]
+    text: str,
+    kinds: tuple[TextNormalization, ...],
+    lexicon: Mapping[str, str] = DEFAULT_LOANWORD_LEXICON,
 ) -> tuple[str, tuple[TextNormalization, ...]]:
     """
     Apply each declared normalization, in the order given.
@@ -160,10 +312,16 @@ def apply_text_normalizations(
     a spec can declare `LOANWORD_LEXICON` and still see `()` returned for it on
     a particular input with no matching word, so callers reflect reality
     (`RoutePlan.text_normalizations`), not mere capability.
+
+    `lexicon` is a PARAMETER rather than a module global so the user-editable
+    dictionary can be passed in without this module — or `routing.resolve()`,
+    which calls it — ever touching the database. Golden rule 4 says routing is
+    pure; a pure function is allowed to receive data, it is just not allowed to
+    go and fetch it. The caller loads the rows; this applies them.
     """
     applied: list[TextNormalization] = []
     for kind in kinds:
-        new_text = _APPLIERS[kind](text)
+        new_text = _APPLIERS[kind](text, lexicon)
         if new_text != text:
             applied.append(kind)
         text = new_text

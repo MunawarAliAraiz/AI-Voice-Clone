@@ -55,6 +55,11 @@ CREATE TABLE IF NOT EXISTS generation_history (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     profile_id      INTEGER NOT NULL REFERENCES voice_profiles(id) ON DELETE CASCADE,
 
+    -- Short human label, 2-3 words, suggested by the analyzer and editable
+    -- before generating. Nullable: every row written before 2026-08-16 has
+    -- none, and the UI falls back to the text.
+    title           TEXT,
+
     input_text      TEXT    NOT NULL,
     language        TEXT    NOT NULL,
     output_path     TEXT    NOT NULL,
@@ -75,6 +80,13 @@ CREATE TABLE IF NOT EXISTS generation_history (
     -- input_text whenever transform != 'none'; without it, a transliteration
     -- bug is undebuggable after the fact.
     resolved_text   TEXT,
+
+    -- How many pause-joined segments Speech Direction rendered this into.
+    -- 0 means the text was synthesized in one piece, with no direction applied.
+    -- NULL means the row predates this column and we genuinely do not know --
+    -- deliberately distinct from 0, because backfilling "no direction" onto
+    -- rows that may well have used it would be inventing history.
+    direction_segments INTEGER,
 
     is_favorite     INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
@@ -172,11 +184,15 @@ CREATE TABLE IF NOT EXISTS transliteration_cache (
 -- `app/jobs/estimate.py`, which keeps the scheduler's eviction-under-slot
 -- invariant untouched. See `app/jobs/__init__.py` for the full design.
 --
--- There is no migration mechanism (see the note at the top of this file's
--- history for voice_profiles/generation_history — the same applies here):
--- CREATE TABLE IF NOT EXISTS means an existing table keeps its old shape
--- forever. Every column any foreseeable job kind will need must exist NOW,
--- including result_json for kinds that never produce a generation_history row.
+-- There is a LIMITED migration mechanism as of 2026-08-16: `_ADDED_COLUMNS` in
+-- database.py applies missing ADD COLUMNs on every connect, so a column added
+-- here also reaches databases that already exist. It is ADD COLUMN ONLY — no
+-- renames, drops, type changes or constraint changes, and no way to backfill.
+-- So the rule below is relaxed, not repealed: a column can be added later, but
+-- getting the SHAPE right still matters, because nothing here can change it.
+-- CREATE TABLE IF NOT EXISTS still means an existing table keeps everything
+-- else it has. Prefer having the column now, including result_json for kinds
+-- that never produce a generation_history row.
 
 CREATE TABLE IF NOT EXISTS jobs (
     -- AUTOINCREMENT doubles as the FIFO sequence: monotonic, so "how many jobs
@@ -217,6 +233,9 @@ CREATE TABLE IF NOT EXISTS jobs (
 
     profile_id             INTEGER REFERENCES voice_profiles(id) ON DELETE CASCADE,
     priority               INTEGER NOT NULL DEFAULT 0,
+    -- The failed job this row is a retry of, so the UI can tell an
+    -- un-retried failure from one whose retry is already queued.
+    retry_of_job_id        INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
     cancel_requested       INTEGER NOT NULL DEFAULT 0,
     attempt                INTEGER NOT NULL DEFAULT 0,
 
@@ -237,3 +256,61 @@ CREATE INDEX IF NOT EXISTS idx_jobs_queued
 -- "Show everything queued for this voice."
 CREATE INDEX IF NOT EXISTS idx_jobs_profile
     ON jobs (profile_id);
+
+
+-- ── Pronunciation dictionary: the user's own respellings ─────────────────────
+--
+-- OmniVoice mispronounces some words, and the fix is to rewrite the text before
+-- synthesis. `domain/urdu_text.py`'s DEFAULT_LOANWORD_LEXICON holds the handful
+-- verified by ear by the maintainer; this table holds the user's own, which the
+-- maintainer cannot verify and should not try to.
+--
+-- Rows are DATA for the pure `apply_text_normalizations()`, which takes the
+-- lexicon as an argument. Nothing in `domain/` reads this table — golden rule 4
+-- keeps routing pure, and a pure function may receive data but not fetch it.
+-- The enqueue path loads these rows and passes them down.
+--
+-- Same constraint as `jobs` above: a missing column can be added later via
+-- `_ADDED_COLUMNS`, but nothing else about an existing table can change. So
+-- every column this will foreseeably need exists now -- `language` and `notes`
+-- are here for that reason rather than because anything reads them yet.
+
+CREATE TABLE IF NOT EXISTS pronunciation_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    -- The word as the user types it, in EITHER script. Latin for an English
+    -- loanword sitting inside Urdu ('database'); Perso-Arabic for a word the
+    -- transliterator already converted ('میٹنگ', which OmniVoice reads as
+    -- "mating"). A Latin-only key could not reach the second case at all.
+    key_text        TEXT    NOT NULL,
+    -- What to synthesize instead. Used verbatim: no case is carried over,
+    -- because the replacement is usually Perso-Arabic, which has none.
+    replacement     TEXT    NOT NULL,
+
+    -- Which language's text this applies to. Only 'ur' is used today; the
+    -- column exists because it cannot be added later.
+    language        TEXT    NOT NULL DEFAULT 'ur',
+
+    -- Lets a user switch an entry off without losing what they wrote — and,
+    -- when key_text matches a shipped default, SUPPRESSES that default. That
+    -- is the only way to turn off a built-in entry, so this is load-bearing,
+    -- not a convenience.
+    is_enabled      INTEGER NOT NULL DEFAULT 1,
+
+    -- Free text, e.g. "was read as 'mating'". Never interpreted.
+    notes           TEXT,
+
+    created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+    updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+
+    -- COLLATE NOCASE mirrors the matcher, which is case-insensitive so a user
+    -- writes an entry once and then types whatever case they like. SQLite's
+    -- NOCASE folds ASCII A-Z only, which is exactly the range where case
+    -- exists here: Perso-Arabic is caseless, so there is no divergence between
+    -- this constraint and Python's `str.casefold()` for any realistic entry.
+    UNIQUE (language, key_text COLLATE NOCASE)
+);
+
+-- Every synthesis loads this user's enabled entries for one language.
+CREATE INDEX IF NOT EXISTS idx_pronunciation_lookup
+    ON pronunciation_entries (language, is_enabled);

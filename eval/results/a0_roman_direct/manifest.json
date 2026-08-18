@@ -1,0 +1,120 @@
+{
+  "purpose": "Phase A0 -- OmniVoice fed Roman Urdu directly vs Perso-Arabic gold.",
+  "reference_audio": "voice_urdu.wav",
+  "hf_revision": "c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+  "note": "Raw backend probe; resolve() deliberately not called. Verbatim text, no normalization.",
+  "clips": [
+    {
+      "id": "owner_01_sick",
+      "arm": "roman",
+      "text": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "wav": "owner_01_sick_roman.wav",
+      "bytes": 211244
+    },
+    {
+      "id": "owner_01_sick",
+      "arm": "arabic",
+      "text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "wav": "owner_01_sick_arabic.wav",
+      "bytes": 245804
+    },
+    {
+      "id": "owner_02_file",
+      "arm": "roman",
+      "text": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "wav": "owner_02_file_roman.wav",
+      "bytes": 151724
+    },
+    {
+      "id": "owner_02_file",
+      "arm": "arabic",
+      "text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "wav": "owner_02_file_arabic.wav",
+      "bytes": 180524
+    },
+    {
+      "id": "owner_03_deadline",
+      "arm": "roman",
+      "text": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "wav": "owner_03_deadline_roman.wav",
+      "bytes": 186284
+    },
+    {
+      "id": "owner_03_deadline",
+      "arm": "arabic",
+      "text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "wav": "owner_03_deadline_arabic.wav",
+      "bytes": 197804
+    },
+    {
+      "id": "owner_04_late",
+      "arm": "roman",
+      "text": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "wav": "owner_04_late_roman.wav",
+      "bytes": 167084
+    },
+    {
+      "id": "owner_04_late",
+      "arm": "arabic",
+      "text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "wav": "owner_04_late_arabic.wav",
+      "bytes": 190124
+    },
+    {
+      "id": "owner_05_github",
+      "arm": "roman",
+      "text": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "wav": "owner_05_github_roman.wav",
+      "bytes": 199724
+    },
+    {
+      "id": "owner_05_github",
+      "arm": "arabic",
+      "text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "wav": "owner_05_github_arabic.wav",
+      "bytes": 215084
+    },
+    {
+      "id": "colloquial",
+      "arm": "roman",
+      "text": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
+      "wav": "colloquial_roman.wav",
+      "bytes": 155564
+    },
+    {
+      "id": "colloquial",
+      "arm": "arabic",
+      "text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "wav": "colloquial_arabic.wav",
+      "bytes": 203564
+    },
+    {
+      "id": "technical",
+      "arm": "roman",
+      "text": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
+      "wav": "technical_roman.wav",
+      "bytes": 222764
+    },
+    {
+      "id": "technical",
+      "arm": "arabic",
+      "text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "wav": "technical_arabic.wav",
+      "bytes": 257324
+    },
+    {
+      "id": "long_multiclause",
+      "arm": "roman",
+      "text": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "wav": "long_multiclause_roman.wav",
+      "bytes": 518444
+    },
+    {
+      "id": "long_multiclause",
+      "arm": "arabic",
+      "text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "wav": "long_multiclause_arabic.wav",
+      "bytes": 585644
+    }
+  ]
+}

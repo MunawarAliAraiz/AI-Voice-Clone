@@ -133,6 +133,44 @@ def test_direction_default_is_single_shot(tmp_path: Path) -> None:
         assert r.json()["result"]["segment_count"] == 1
 
 
+def test_history_records_whether_direction_was_actually_applied(tmp_path: Path) -> None:
+    """
+    The history row says how many pause-joined segments were synthesized, so
+    the UI can tell a directed generation from an undirected one after the
+    fact. Taken from what was SYNTHESIZED, not from the request's
+    `apply_direction` flag — a model with no direction capability is asked and
+    renders one piece anyway, and a row claiming otherwise would be a lie of
+    exactly the kind `route` exists to prevent.
+    """
+    client, _sched = _client(tmp_path)
+    with client as c:
+        pid = _enroll(c, "en")
+
+        directed = _generate_and_poll(c, {
+            "profile_id": pid,
+            "text": "Hello there. This is exciting! Are you coming?",
+            "language": "en",
+            "apply_direction": True,
+        })
+        assert directed.json()["status"] == "succeeded"
+
+        plain = _generate_and_poll(c, {
+            "profile_id": pid,
+            "text": "Hello there. This is exciting!",
+            "language": "en",
+        })
+        assert plain.json()["status"] == "succeeded"
+
+        items = c.get("/api/history").json()["items"]
+        by_text = {i["input_text"]: i for i in items}
+        assert by_text["Hello there. This is exciting! Are you coming?"][
+            "direction_segments"
+        ] == 3
+        # 0, not None: this row knows direction was not applied. None is
+        # reserved for rows written before the column existed.
+        assert by_text["Hello there. This is exciting!"]["direction_segments"] == 0
+
+
 def test_directed_generate_single_sentence_still_directs(tmp_path: Path) -> None:
     """A single-sentence input still goes through the directed (one-segment)
     path when apply_direction=true — not silently downgraded to single-shot,

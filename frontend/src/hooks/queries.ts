@@ -5,7 +5,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { JobStatusResponse } from '../types/api';
+import type {
+  JobList,
+  JobStatusResponse,
+  PronunciationCreate,
+  PronunciationUpdate,
+  TransliterateRequest,
+} from '../types/api';
 
 export const queryKeys = {
   languages: ['languages'] as const,
@@ -14,6 +20,7 @@ export const queryKeys = {
   history: (page: number, pageSize: number) => ['history', page, pageSize] as const,
   jobs: (page: number, pageSize: number) => ['jobs', page, pageSize] as const,
   job: (id: number) => ['job', id] as const,
+  pronunciations: ['pronunciations'] as const,
 };
 
 export function useLanguages() {
@@ -39,10 +46,29 @@ export function useHistory(page: number, pageSize: number) {
   });
 }
 
+/**
+ * The job list, polled ONLY while something is actually running.
+ *
+ * It previously never polled at all, which was invisible while the list was a
+ * passive archive and became a bug the moment it started driving the
+ * "In progress" section: a running job's status and ETA never changed, and a
+ * finished one sat there until some unrelated action invalidated the key.
+ *
+ * The interval stops itself when every job is terminal, so an idle app makes no
+ * requests — the alternative, a fixed interval, polls forever for nothing.
+ */
 export function useJobsList(page: number, pageSize: number) {
   return useQuery({
     queryKey: queryKeys.jobs(page, pageSize),
     queryFn: () => api.jobs(page, pageSize),
+    refetchInterval: (query) => {
+      const data = query.state.data as JobList | undefined;
+      if (!data) return false;
+      const busy = data.items.some(
+        (j) => j.status === 'queued' || j.status === 'running',
+      );
+      return busy ? 2000 : false;
+    },
   });
 }
 
@@ -99,6 +125,52 @@ export function useAnalyzeLlmMutation() {
   });
 }
 
+/**
+ * Enqueue a script conversion. Same shape as the two mutations above — a
+ * distinct job kind on the same `jobs` table — so the caller polls it with the
+ * existing `useJob`.
+ *
+ * A batch is ONE call on purpose: `convert_many` runs every chunk against one
+ * model residency, which from a cold start is the difference between one 19 GB
+ * load and forty-five.
+ */
+export function useTransliterateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TransliterateRequest) => api.transliterate(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
+/**
+ * Server capacity and which optional features it can actually run.
+ *
+ * Polled rarely: whether this box has room for the ~19 GB transliterator is
+ * settled at startup and does not change while the app is open.
+ */
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: ['system'],
+    queryFn: api.system,
+    staleTime: 60_000,
+  });
+}
+
+export function useRetryJobMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.retryJob(id),
+    onSuccess: (_data, id) => {
+      // Both: the original row keeps its failed status (history stays
+      // truthful) and a NEW queued row appears, so the list is what changed.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.job(id) });
+      void queryClient.invalidateQueries({ queryKey: ['jobs'] });
+    },
+  });
+}
+
 export function useCancelJobMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -131,4 +203,46 @@ export function useInvalidateVoices() {
 export function useInvalidateHistory() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['history'] });
+}
+
+
+// ── Pronunciation dictionary ────────────────────────────────────────────────
+//
+// Entries take effect on the NEXT generation, not on anything already queued:
+// the route (including the post-normalization text) is decided once at enqueue
+// and stored on the job row. So there is nothing to invalidate beyond this
+// list — no history or jobs refetch, because no existing row changes.
+
+export function usePronunciations() {
+  return useQuery({ queryKey: queryKeys.pronunciations, queryFn: () => api.pronunciations() });
+}
+
+function useInvalidatePronunciations() {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: queryKeys.pronunciations });
+}
+
+export function useCreatePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: (body: PronunciationCreate) => api.createPronunciation(body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdatePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: PronunciationUpdate }) =>
+      api.updatePronunciation(id, body),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeletePronunciationMutation() {
+  const invalidate = useInvalidatePronunciations();
+  return useMutation({
+    mutationFn: (id: number) => api.deletePronunciation(id),
+    onSuccess: invalidate,
+  });
 }

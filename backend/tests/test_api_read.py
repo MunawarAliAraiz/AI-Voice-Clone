@@ -152,3 +152,98 @@ def test_wildcard_cors_is_refused_when_an_api_key_is_set(tmp_path: Path) -> None
         data_dir=tmp_path, api_key="secret", cors_origins=["https://studio.example.com"]
     )
     assert s2.cors_origins == ["https://studio.example.com"]
+
+
+# ── startup warm-up ──────────────────────────────────────────────────────────
+
+
+def _wav_bytes(dur: float = 1.5, sr: int = 16000) -> bytes:
+    import io as _io
+
+    import numpy as np
+    import soundfile as sf
+
+    t = np.linspace(0, dur, int(sr * dur), endpoint=False)
+    buf = _io.BytesIO()
+    sf.write(buf, (0.2 * np.sin(2 * np.pi * 220 * t)).astype(np.float32), sr, format="WAV")
+    return buf.getvalue()
+
+
+async def test_warm_on_startup_accepts_several_models(tmp_path: Path) -> None:
+    """
+    Comma-separated, so `voxcpm2,omnivoice_urdu` warms both. Before this only
+    one model could be warmed and OmniVoice was always the cold one — which is
+    what made the first Urdu generation take ~160s.
+    """
+    scheduler = FakeScheduler()
+    settings = Settings(
+        data_dir=tmp_path, allow_fake_runtime=True,
+        warm_on_startup="voxcpm2, omnivoice_urdu", warm_synth_on_startup=False,
+    )
+    with TestClient(create_app(scheduler=scheduler, settings=settings)):
+        for _ in range(200):
+            if set(scheduler.warmed) >= {"voxcpm2", "omnivoice_urdu"}:
+                break
+            await asyncio.sleep(0.01)
+        assert scheduler.warmed == ["voxcpm2", "omnivoice_urdu"], (
+            "warmed in the order given, sequentially — they share the GPU slot"
+        )
+
+
+async def test_warm_synth_is_skipped_when_there_is_no_reference(tmp_path: Path) -> None:
+    """
+    A synthesis needs a reference clip and a warm-up cannot invent one, so with
+    no voice profiles it must skip rather than guess or crash.
+    """
+    scheduler = FakeScheduler()
+    settings = Settings(
+        data_dir=tmp_path, allow_fake_runtime=True,
+        warm_on_startup="voxcpm2", warm_synth_on_startup=True,
+    )
+    with TestClient(create_app(scheduler=scheduler, settings=settings)) as c:
+        for _ in range(200):
+            if scheduler.warmed:
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
+        assert scheduler.warmed == ["voxcpm2"]
+        assert scheduler.requests == [], "no profiles means no warm synth"
+        assert c.get("/api/health").status_code == 200, "and startup still succeeded"
+
+
+async def test_warm_synth_runs_and_leaves_no_file_behind(tmp_path: Path) -> None:
+    """
+    The throwaway synthesis that triggers OmniVoice's lazy Whisper load. Its
+    audio must never survive — it is not a generation, has no history row, and
+    golden rule 1 is untouched only because nobody can ever receive it.
+    """
+    scheduler = FakeScheduler()
+    settings = Settings(data_dir=tmp_path, allow_fake_runtime=True)
+    # Enroll a profile FIRST, with warming off, then restart with it on.
+    with TestClient(create_app(scheduler=scheduler, settings=settings)) as c:
+        r = c.post(
+            "/api/voices",
+            files={"file": ("ref.wav", _wav_bytes(), "audio/wav")},
+            data={"name": "v", "language": "ur", "consent": "true"},
+        )
+        assert r.status_code == 201, r.text
+
+    warm_settings = Settings(
+        data_dir=tmp_path, allow_fake_runtime=True,
+        warm_on_startup="voxcpm2", warm_synth_on_startup=True,
+    )
+    scheduler2 = FakeScheduler()
+    with TestClient(create_app(scheduler=scheduler2, settings=warm_settings)):
+        for _ in range(300):
+            if scheduler2.requests:
+                break
+            await asyncio.sleep(0.01)
+        assert len(scheduler2.requests) == 1
+        assert scheduler2.requests[0].model_id == "voxcpm2"
+        out = scheduler2.requests[0].output_path
+        await asyncio.sleep(0.05)
+        assert not out.exists(), "the warm-up's audio must be deleted, not kept"
+
+    # And nothing was recorded as a real generation.
+    with TestClient(create_app(scheduler=FakeScheduler(), settings=settings)) as c:
+        assert c.get("/api/history").json()["total"] == 0

@@ -13,17 +13,42 @@ script into the pod's shell. Running it from anywhere else fails with `No such f
 cd /path/to/AI-Voice-Clone
 ```
 
-Then, from that directory — this is the whole deployment, provisioning through running server:
+Then, from that directory — this is the whole deployment, provisioning through running server.
+
+**Public deployment (ngrok + your deployed frontend):**
 
 ```bash
 ssh root@<HOST> -p <PORT> "START=1 NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<your-name>.ngrok-free.dev FRONTEND_URL=https://<your-app>.workers.dev bash -s" < scripts/pod-bootstrap.sh
 ```
 
-It provisions everything, then starts the backend and ngrok and polls until `/api/health` answers, so
-there is no second step. It ends by printing your API key and a status block:
+**Local frontend against the pod backend (no ngrok, no public URL):** provision and start the backend,
+then reach it over an SSH tunnel from your laptop. You don't need `NGROK_*` or `FRONTEND_URL` — a
+tunnelled request is same-origin from the browser's view, so CORS never applies:
+
+```bash
+ssh root@<HOST> -p <PORT> "START=1 bash -s" < scripts/pod-bootstrap.sh
+```
+
+Then, on your laptop, tunnel the pod backend and point the dev server at it (see
+[Connect a local frontend](#connect-a-local-frontend-ssh-tunnel) for the full flow):
+
+```bash
+ssh -N -L 8010:127.0.0.1:8000 -p <PORT> -i ~/.ssh/id_ed25519 root@<HOST>
+```
+
+```bash
+cd frontend && VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
+```
+
+Port `8010` (not `8000`) sidesteps a local backend you may already be running on `8000`. Paste the
+pod's `VCS_API_KEY` (printed by the bootstrap) into the frontend's settings gear — the pod mints its
+own key, distinct from any local one.
+
+The public form provisions everything, then starts the backend and ngrok and polls until `/api/health`
+answers, so there is no second step. It ends by printing your API key and a status block:
 
 ```
-== 13. current status ==
+== 20. current status ==
    backend:  UP   (127.0.0.1:8000)
    ngrok:    UP   https://<your-name>.ngrok-free.dev
    public:   OK   https://<your-name>.ngrok-free.dev/api/health -> 200
@@ -58,10 +83,31 @@ under.
 
 That's it for a fresh pod. Piping the script in over `"bash -s" <` isn't backgrounded, so every line
 it prints streams to your terminal live as it runs — `uv sync`, the torch install, the weight
-download, the test run — nothing extra needed to watch it. It takes a few minutes (mostly downloading
-the VoxCPM 2 weights, ~7 GB) and ends by printing **your `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` in
-full**, plus the exact command to start serving. Copy the key into the frontend's settings gear, run
-the command, and the backend is up.
+download, the test run — nothing extra needed to watch it. On a cold `/workspace` it takes **15–30
+minutes** (~15 GB of weights across four model sets), and ends by printing **your `VCS_API_KEY` and
+`VCS_MEDIA_TOKEN_SECRET` in full**, plus the exact command to start serving. Copy the key into the
+frontend's settings gear, run the command, and the backend is up.
+
+> **The streaming form dies with your SSH connection.** That is the cost of watching it live: the
+> bootstrap is a child of the SSH session, so a dropped connection — `client_loop: send disconnect:
+> Connection reset`, a closed laptop, flaky wifi — kills it partway through, mid-`pip install`.
+> Observed on a real run that died at step 6 of 20. Re-running is safe (every step is idempotent),
+> but on a slow link, or if you want to walk away, run it **detached on the pod** instead so only
+> your *view* of it can disconnect:
+>
+> ```bash
+> # copy it over, then run it under tmux on the pod
+> ssh root@<HOST> -p <PORT> "cat > /workspace/pod-bootstrap.sh" < scripts/pod-bootstrap.sh
+> ssh root@<HOST> -p <PORT> "tmux new-session -d -s bootstrap \
+>   'START=1 NGROK_AUTHTOKEN=<token> NGROK_DOMAIN=<domain> FRONTEND_URL=<url> \
+>    bash /workspace/pod-bootstrap.sh 2>&1 | tee /workspace/bootstrap.log'"
+>
+> # then watch from anywhere, reconnect-safe:
+> ssh root@<HOST> -p <PORT> "tail -f /workspace/bootstrap.log"
+> ```
+>
+> `grep '^== ' /workspace/bootstrap.log | tail -5` gives you just the step headers if you only want
+> to know how far along it is.
 
 `-i ~/.ssh/id_ed25519` is only needed if you're not relying on an ssh-agent to offer the key
 automatically. On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` instead of Git Bash's `ssh` if
@@ -89,14 +135,27 @@ special access. A classic PAT with just the `repo` scope is enough.
 - Clones the repo to `/workspace/AI-Voice-Clone` (or pulls, if it's already there from a previous
   session on this same pod).
 - Installs `uv` and `ffmpeg` if missing.
-- Builds two separate Python environments — this is a structural requirement of the project, not
-  incidental: `import torch` must never be reachable from the API process, so the GPU model runs in a
+- Builds **six** separate Python environments — this is a structural requirement of the project, not
+  incidental: `import torch` must never be reachable from the API process, so each GPU model runs in a
   **separate interpreter** the API talks to over a wire protocol. `uv sync` builds the API's env (no
-  torch); a second `uv venv` builds the VoxCPM 2 runtime env, pinned to the **cu128** torch build —
-  a plain `pip install voxcpm` pulls a cu130 wheel whose CUDA runtime is newer than the RunPod driver,
-  which makes `torch.cuda.is_available()` silently `False` and every generation quietly falls back to
-  CPU and times out.
-- Downloads the VoxCPM 2 weights (~7 GB, pinned revision) into the HF cache on `/workspace`.
+  torch); then one `uv venv` per runtime, each pinned to the **cu128** torch build — a plain
+  `pip install voxcpm` pulls a cu130 wheel whose CUDA runtime is newer than the RunPod driver, which
+  makes `torch.cuda.is_available()` silently `False` and every generation quietly falls back to CPU
+  and times out.
+
+  | venv | For | Needed because |
+  |---|---|---|
+  | `.venv` | the API itself | no torch, by design |
+  | `.venv-voxcpm` | `voxcpm2`, `voxcpm2_urdu_arabic` | English + Roman Urdu — the default route |
+  | `.venv-omnivoice` | `omnivoice_urdu` | Perso-Arabic Urdu; verified, picked by name |
+  | `.venv-chatterbox` | `chatterbox_ml_v3` | not routable — kept warm for future work |
+  | `.venv-qwen` | Speech Direction's LLM analyzer | the "Let AI suggest emotion/tone" button |
+  | `.venv-eval` | `eval/` harness | Whisper CER + ECAPA cosine; never the API |
+
+- Downloads every pinned weight set into the HF cache on `/workspace`: VoxCPM 2 (~7 GB), Chatterbox,
+  OmniVoice (~1.2 GB), and Qwen2.5-3B (~6 GB). **Budget ~80 GB of volume** — a fully bootstrapped pod
+  measured 76 GB. Note `df` lies about this mount (it reports the whole MooseFS cluster); use
+  `du -sh /workspace`.
 - Generates `VCS_API_KEY` and `VCS_MEDIA_TOKEN_SECRET` **once** into `/workspace/vcs-secrets.env`
   (mode `600`) and reuses that file on every later run, so the values are stable across pod restarts.
   See [Generating and reusing secrets](#generating-and-reusing-secrets) for why stability matters.
@@ -151,16 +210,44 @@ is passphrase-protected and only the Windows ssh-agent — which Git Bash can't 
 
 ---
 
-## Start serving
+## Start / stop / restart — `ctl.sh`
 
-Bootstrap writes `/workspace/serve.sh` with the secrets and CORS origin already baked in, so starting
-the backend is one command:
+Bootstrap writes two files: `/workspace/serve.sh` (the launcher, with secrets and CORS origin baked
+in) and `/workspace/ctl.sh` (its lifecycle wrapper). Prefer `ctl.sh` — it is idempotent and won't
+double-start:
+
+```bash
+/workspace/ctl.sh up        # start the backend ONLY if it isn't already up (safe default)
+```
+
+```bash
+/workspace/ctl.sh restart   # stop then start
+```
+
+```bash
+/workspace/ctl.sh stop      # stop the backend
+```
+
+```bash
+/workspace/ctl.sh status    # is the backend (and ngrok) up?
+```
+
+`up` is the one to reach for when you just want to be sure it's running: if the backend is already
+healthy it prints `backend already running` and does nothing; if it's down it starts it and polls
+`/api/health` until it answers. Run these as SSH one-liners from your laptop, e.g.
+`ssh root@<HOST> -p <PORT> -i ~/.ssh/id_ed25519 "/workspace/ctl.sh up"`.
+
+`ctl.sh` manages only the backend. ngrok is started by `START=1` on the bootstrap (below), or by hand
+(see [Starting ngrok](#starting-ngrok)).
+
+Under the hood `ctl.sh` runs `/workspace/serve.sh` in a detached `tmux` session named `backend`, so it
+survives your SSH session closing. To run the launcher directly instead:
 
 ```bash
 tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
 ```
 
-Or skip this entirely by passing `START=1` to the bootstrap, which starts backend and ngrok itself.
+Or skip all of this by passing `START=1` to the bootstrap, which starts backend and ngrok itself.
 
 `serve.sh` sources `/workspace/vcs-secrets.env` rather than inlining
 `VCS_API_KEY=$(python -c 'secrets...')`, and that is the whole point: the inline form mints a brand-new
@@ -219,12 +306,12 @@ A pod **stop/start** keeps `/workspace` (both venvs, the weights cache, `backend
 voices + history) but wipes `/`, and kills every running process. So the code and weights are still
 there — you just need to restart the backend (and ngrok, if you're using it):
 
-`/workspace` survived, so `serve.sh`, the secrets file and the saved frontend origin all did too —
-which means the restart reuses the same API key and the same CORS origin rather than drifting:
+`/workspace` survived, so `serve.sh`, `ctl.sh`, the secrets file and the saved frontend origin all did
+too — which means the restart reuses the same API key and the same CORS origin rather than drifting:
 
 ```bash
-tmux new-session -d -s backend '/workspace/serve.sh 2>&1 | tee /workspace/backend.log'
-tmux new-session -d -s ngrok   'ngrok http --domain=<your-name>.ngrok-free.dev 8000'
+/workspace/ctl.sh up
+tmux new-session -d -s ngrok 'ngrok http --domain=<your-name>.ngrok-free.dev 8000'
 ```
 
 You do not need to re-run the full bootstrap script — nothing it built was lost. Re-running it anyway
@@ -258,25 +345,29 @@ rebuild, no `BACKEND_ORIGIN` edit. Only your `ssh` host and port differ.
 
 For reaching the backend yourself, from your own machine — not for sharing a link with anyone else.
 The server binds to `127.0.0.1` on the pod, not the public internet, so reach it with an SSH tunnel.
-Run this **on your own machine** and leave it open:
+Run this **on your own machine** and leave it open — forward a **local** port `8010` to the pod's
+`8000`, so a local backend you might already be running on `8000` doesn't collide:
 
 ```bash
-ssh -N -L 8000:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>
+ssh -N -L 8010:127.0.0.1:8000 -p <POD_PORT> root@<POD_HOST>
 ```
 
-Then start the UI locally — it defaults to `http://localhost:8000`, which the tunnel forwards to the
-pod:
+Then start the UI locally, pointing its dev proxy at the tunnel. `vite.config.ts` reads
+`VITE_PROXY_TARGET` (default `http://127.0.0.1:8000`); the browser only ever talks to the vite server,
+which proxies `/api` server-side, so it stays same-origin and **CORS never applies** — which is why
+this works even though the pod's `VCS_CORS_ORIGINS` doesn't list `localhost`:
 
 ```bash
-cd frontend && npm install && npm run dev
+cd frontend && npm install && VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev
 ```
 
-Open http://localhost:1420 — the status chip should read **backend online**. (On Windows, use
-`C:\Windows\System32\OpenSSH\ssh.exe` if your key lives in the Windows ssh-agent — Git Bash's `ssh`
-can't see it.)
+Open http://localhost:1420, then **paste the pod's `VCS_API_KEY` into the settings gear** — the
+bootstrap prints it, and it lives in `/workspace/vcs-secrets.env` on the pod. The pod mints its own
+key (distinct from any local backend's), so requests 401 until it's pasted.
 
-No `VCS_API_KEY` needed for this path — leave it unset on the backend and the UI's API-key box blank.
-RunPod assigns a new host:port on every restart, so the tunnel command changes each time.
+(On Windows, use `C:\Windows\System32\OpenSSH\ssh.exe` if your key lives in the Windows ssh-agent —
+Git Bash's `ssh` can't see it.) RunPod assigns a new host:port on every restart, so the tunnel command
+changes each time.
 
 ---
 
@@ -504,5 +595,18 @@ PY
 
 ## Notes
 
-- **Native Urdu script (اردو).** Not routable in the default deployment — the app returns a 422
-  rather than mis-rendering it. Use Roman Urdu ("aap kaise hain"). See the README for why.
+- **Native Urdu script (اردو) works — but you must pick the model by name.** Choose **OmniVoice
+  (Urdu)** in the Composer's Model dropdown (it's pre-selected when the language is Urdu). Its
+  `(ur, Perso-Arabic)` cell is `verified=True` as of 2026-08-15, and it was the best pronunciation
+  result of the whole Urdu bake-off (5.0/5). Digits and a couple of English loanwords are normalized
+  to spoken Urdu first — `2026` is read "دو ہزار چھبیس", not digit-by-digit.
+
+  Leaving the picker on **Auto** still returns a 422 for Perso-Arabic Urdu, and that is deliberate,
+  not a gap: OmniVoice's weights are CC-BY-NC, so `ModelCatalog.candidates()` excludes it from
+  auto-routing and from fallback suggestions. Only an explicit, named request reaches a
+  non-commercial model — see golden rule 6 in `CLAUDE.md`.
+
+  Roman Urdu ("aap kaise hain") routes automatically to VoxCPM 2 and needs no picking. Roman Urdu
+  → OmniVoice is **not** available: it would need a Roman→Perso-Arabic transliteration step, and four
+  separate probes (two target scripts × two model sizes) all missed their accuracy gate. See
+  `docs/URDU_BAKEOFF_RESULTS.md` §8–§8c.

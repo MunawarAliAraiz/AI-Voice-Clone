@@ -1,0 +1,156 @@
+{
+  "summary": {
+    "note": "SCREEN ONLY -- Whisper's Urdu is weak (see corpus asr_caveat). The A0 verdict is the owner's listening pass, not these numbers.",
+    "roman_mean_cer": 0.2016,
+    "arabic_mean_cer": 0.1188,
+    "roman_mean_cosine": 0.7171,
+    "arabic_mean_cosine": 0.7326,
+    "cer_gap_roman_minus_arabic": 0.0828
+  },
+  "rows": [
+    {
+      "id": "owner_01_sick",
+      "arm": "roman",
+      "input_text": "Yaar, aaj main office nahi aa sakoon ga kyunke meri tabiyat kuch theek nahi hai.",
+      "gold_perso_arabic": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "whisper_transcript": "یار آج مین آفیس نہیں آسا کنگا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے",
+      "cer_vs_gold": 0.1094,
+      "speaker_cosine": 0.7368
+    },
+    {
+      "id": "owner_01_sick",
+      "arm": "arabic",
+      "input_text": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "gold_perso_arabic": "یار، آج میں آفس نہیں آ سکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے۔",
+      "whisper_transcript": "یار آج میں آفس نہیں آسکوں گا کیونکہ میری طبیعت کچھ ٹھیک نہیں ہے",
+      "cer_vs_gold": 0.0156,
+      "speaker_cosine": 0.7157
+    },
+    {
+      "id": "owner_02_file",
+      "arm": "roman",
+      "input_text": "Aap ne jo file bheji thi, main ne usay check kar liya hai.",
+      "gold_perso_arabic": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "whisper_transcript": "آپ نے جو فیل بھیجی تھی میں نے اسے چیک کر لیا ہے",
+      "cer_vs_gold": 0.0417,
+      "speaker_cosine": 0.7052
+    },
+    {
+      "id": "owner_02_file",
+      "arm": "arabic",
+      "input_text": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "gold_perso_arabic": "آپ نے جو فائل بھیجی تھی، میں نے اسے چیک کر لیا ہے۔",
+      "whisper_transcript": "آپ نے جو فائل بھیجی تھی میں نے اسے چیک کر لیا ہے",
+      "cer_vs_gold": 0.0,
+      "speaker_cosine": 0.6682
+    },
+    {
+      "id": "owner_03_deadline",
+      "arm": "roman",
+      "input_text": "Mujhe lagta hai ke hamein yeh kaam kal tak mukammal kar lena chahiye.",
+      "gold_perso_arabic": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "whisper_transcript": "محل لگتا ہے کہ ہمیں یہ کام کل تک مکامل کر لینا چاہیے",
+      "cer_vs_gold": 0.0769,
+      "speaker_cosine": 0.7194
+    },
+    {
+      "id": "owner_03_deadline",
+      "arm": "arabic",
+      "input_text": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "gold_perso_arabic": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے۔",
+      "whisper_transcript": "مجھے لگتا ہے کہ ہمیں یہ کام کل تک مکمل کر لینا چاہیے",
+      "cer_vs_gold": 0.0,
+      "speaker_cosine": 0.7636
+    },
+    {
+      "id": "owner_04_late",
+      "arm": "roman",
+      "input_text": "Yaar, aaj office mein kaafi kaam tha, is liye main late ho gaya.",
+      "gold_perso_arabic": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "whisper_transcript": "یار آج آفیس من کافی کام تھا اس لیے میں ان لیٹ ہو گیا",
+      "cer_vs_gold": 0.2642,
+      "speaker_cosine": 0.715
+    },
+    {
+      "id": "owner_04_late",
+      "arm": "arabic",
+      "input_text": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "gold_perso_arabic": "یار، آج office میں کافی کام تھا، اس لیے میں late ہو گیا۔",
+      "whisper_transcript": "یار آج آفیس میں کافی کام تھا اس لیے میں لائت ہو گیا",
+      "cer_vs_gold": 0.1887,
+      "speaker_cosine": 0.7185
+    },
+    {
+      "id": "owner_05_github",
+      "arm": "roman",
+      "input_text": "Main ne GitHub par pull request create kar di hai, aap usay review kar lena.",
+      "gold_perso_arabic": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "whisper_transcript": "میں نے گھٹھا پرپل ریکویسٹ کریٹ کر دی ہے آپ اسے ریویو کر لینا",
+      "cer_vs_gold": 0.4478,
+      "speaker_cosine": 0.6967
+    },
+    {
+      "id": "owner_05_github",
+      "arm": "arabic",
+      "input_text": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "gold_perso_arabic": "میں نے GitHub پر pull request create کر دی ہے، آپ اسے review کر لینا۔",
+      "whisper_transcript": "میں نے گیت اپ پر پل ریکویسٹ کر دی ہے آپ اسے ریویو کر لینا",
+      "cer_vs_gold": 0.4478,
+      "speaker_cosine": 0.697
+    },
+    {
+      "id": "colloquial",
+      "arm": "roman",
+      "input_text": "Aray yaar chhoro na, koi baat nahi, agli dafa dekh lein ge.",
+      "gold_perso_arabic": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "whisper_transcript": "ارائیار چھرونا کو بات نہیں اگلی دفعہ دیکھ لیں گے",
+      "cer_vs_gold": 0.1346,
+      "speaker_cosine": 0.7012
+    },
+    {
+      "id": "colloquial",
+      "arm": "arabic",
+      "input_text": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "gold_perso_arabic": "ارے یار چھوڑو نا، کوئی بات نہیں، اگلی دفعہ دیکھ لیں گے۔",
+      "whisper_transcript": "ارے یار چھوڑو نہ کوئی بات نہیں اگلی دفعہ دیکھ لیں گے",
+      "cer_vs_gold": 0.0192,
+      "speaker_cosine": 0.7878
+    },
+    {
+      "id": "technical",
+      "arm": "roman",
+      "input_text": "Hamein database ka backup lena hoga aur phir server dobara restart karna paray ga.",
+      "gold_perso_arabic": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "whisper_transcript": "ہمین ڈاتابیس کا بیک اپ لینا ہوگا اور پھر سیور دوبارہ ریسٹارٹ کرنا پرائے گا",
+      "cer_vs_gold": 0.4133,
+      "speaker_cosine": 0.7584
+    },
+    {
+      "id": "technical",
+      "arm": "arabic",
+      "input_text": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "gold_perso_arabic": "ہمیں database کا backup لینا ہوگا اور پھر server دوبارہ restart کرنا پڑے گا۔",
+      "whisper_transcript": "ہمیں database کا بیک اپ لینا ہوگا اور پھر سیور دوبارہ ری سٹارٹ کرنا پڑے گا",
+      "cer_vs_gold": 0.2667,
+      "speaker_cosine": 0.7385
+    },
+    {
+      "id": "long_multiclause",
+      "arm": "roman",
+      "input_text": "Kal jab main daftar pahuncha to pata chala ke meeting multavi ho gayi hai, is liye main ne socha ke pehle baqi kaam mukammal kar loon, aur phir dopahar ke khanay ke baad report par kaam shuru karoon ga.",
+      "gold_perso_arabic": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "whisper_transcript": "کل جب میں ان دفتر پہنچا تو پاتا چالا کے میٹنگ ملتا بھی ہو گئی ہے اس لئے میں ان نے سوچا کہ پہلے باقی کام مکامل کر لوں اور پھر دوپہار کے خانے کے بعد ریپورٹ پر کام شروع کروں گا",
+      "cer_vs_gold": 0.125,
+      "speaker_cosine": 0.704
+    },
+    {
+      "id": "long_multiclause",
+      "arm": "arabic",
+      "input_text": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "gold_perso_arabic": "کل جب میں دفتر پہنچا تو پتہ چلا کہ میٹنگ ملتوی ہو گئی ہے، اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کر لوں، اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا۔",
+      "whisper_transcript": "کل جب میں دفتر پہنچا تو پتا چلا کہ میٹنگ ملتوی ہو گئی ہے اس لیے میں نے سوچا کہ پہلے باقی کام مکمل کرلوں اور پھر دوپہر کے کھانے کے بعد رپورٹ پر کام شروع کروں گا",
+      "cer_vs_gold": 0.0125,
+      "speaker_cosine": 0.7716
+    }
+  ]
+}

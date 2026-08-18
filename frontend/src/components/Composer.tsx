@@ -12,18 +12,42 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels } from '../hooks/queries';
+import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
+import { useScriptConversion } from '../hooks/useScriptConversion';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
 import { DirectionPanel } from './DirectionPanel';
-import { IconAlert, IconCheck, IconChevronDown, IconChevronUp, IconSpark, IconSpinner, IconX } from './icons';
+import {
+  IconAlert,
+  IconCheck,
+  IconChevronDown,
+  IconChevronUp,
+  IconCopy,
+  IconHistory,
+  IconPaste,
+  IconSpark,
+  IconSpinner,
+  IconTrash,
+  IconX,
+} from './icons';
 
 interface Props {
   voices: VoiceProfile[];
   languages: LanguageInfo[];
   /** Fires exactly once per job, the moment it first reaches a terminal status. */
-  onJobSettled?: (job: JobStatusResponse) => void;
+  /** Fired the moment the queue accepts the job (202), not when it finishes. */
+  onJobQueued?: (job: JobStatusResponse) => void;
+  /** Switches to the Recent tab. Undefined hides the pointer entirely. */
+  onOpenRecent?: () => void;
+  /**
+   * Text pushed in from another tab (the transcript importer).
+   *
+   * A TOKEN accompanies it rather than the effect keying on the string: sending
+   * the SAME chunk twice is a real thing to want, and a string-keyed effect
+   * would silently ignore the second send because nothing changed.
+   */
+  pendingText?: { text: string; token: number } | null;
 }
 
 /**
@@ -40,7 +64,12 @@ function modelSuffix(m: { experimental: boolean; commercial_use: boolean }): str
   return tags.length ? ` (${tags.join(', ')})` : '';
 }
 
-export function Composer({ voices, languages, onJobSettled }: Props) {
+/** Mirrors the server's own fallback, for when even the request fails. */
+function fallbackTitle(text: string): string {
+  return text.trim().split(/\s+/).slice(0, 4).join(' ');
+}
+
+export function Composer({ voices, languages, onJobQueued, onOpenRecent, pendingText }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -70,6 +99,21 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [text, setText] = useState('');
+  // The pre-conversion text, kept so Undo is possible. A conversion is a
+  // SUGGESTION, and one of the two things that makes it reviewable is being
+  // able to put it back — the other is seeing the source, which the transcript
+  // panel does and a single editor cannot.
+  const [preConvert, setPreConvert] = useState<string | null>(null);
+  const conversion = useScriptConversion();
+  const system = useSystemStatus();
+  // `false` until known: offering a control that then 503s is worse than one
+  // that appears a moment late.
+  //
+  // `script_conversion?` and not just `data?` — the frontend and backend deploy
+  // independently here (a local UI against a pod), so a server that predates
+  // this field is a real case, not a hypothetical. Without the second `?` it
+  // threw and took the whole Composer down with it.
+  const canConvert = system.data?.script_conversion?.available ?? false;
   const [err, setErr] = useState<string | null>(null);
   const [detect, setDetect] = useState<ScriptDetectResponse | null>(null);
 
@@ -98,6 +142,15 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   // anymore" apart from "the same plan was refetched" (e.g. re-opening the
   // disclosure), which should NOT throw away what the user just customized.
   const lastSegSignature = useRef<string | null>(null);
+
+  // Short label for Recent. Filled by the analyzer (same response as the
+  // prosody rows) or by the user; never blocks Generate.
+  const [title, setTitle] = useState('');
+  //: An analyzer suggestion produced while the field already had something in
+  //: it. Held rather than applied — see `suggestTitleNow`.
+  const [titleSuggestion, setTitleSuggestion] = useState<string | null>(null);
+  const [titleErr, setTitleErr] = useState<string | null>(null);
+  const [titling, setTitling] = useState(false);
 
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
@@ -131,6 +184,29 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
   );
   const selectedModel = modelId ? compatibleModels.find((m) => m.id === modelId) : undefined;
 
+  // CONVERT-ON-GENERATE, decided here on the CLIENT — routing stays pure and is
+  // never asked to substitute (golden rules 4/5). The picker filters by
+  // language but not script, so an Urdu-script-only model (OmniVoice declares
+  // only (ur, ARABIC)) can be selected while the text is Roman Urdu. That pair
+  // is a 422 `NoRouteError`, and resolve() rightly refuses to silently swap the
+  // model the user chose. So instead of sending the request that would fail,
+  // convert the Roman to Urdu script first and show the result for review — the
+  // converter's failure mode is a real word meaning something else, so this can
+  // never be silent (Part E: a human reading it is the only check there is).
+  const detectedLatinUrdu = detect?.script === 'latin' && language === 'ur';
+  // Auto (no explicit model) counts as serving Latin: resolve() picks a
+  // Latin-capable model (VoxCPM2) when one exists, and `detect.routable`
+  // already reflects that. The gap is only an EXPLICIT model without the cell.
+  const selectedModelServesLatin =
+    !selectedModel ||
+    selectedModel.languages.some((l) => l.language === language && l.script === 'latin');
+  // `preConvert === null` — once a conversion has been applied the textarea IS
+  // the Urdu script; the debounced `detect` may still read the pre-conversion
+  // Latin for a moment, and re-triggering off that stale value would convert
+  // twice. A pending conversion (preConvert set) means "already handled".
+  const needsConversionBeforeGenerate =
+    canConvert && detectedLatinUrdu && !selectedModelServesLatin && preConvert === null;
+
   // A manually-picked model that no longer supports the language (the user
   // switched languages after choosing one) falls back to Auto rather than
   // silently sending an id that would now 422.
@@ -149,14 +225,30 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     }
   }, [language, modelsData]);
 
-  // Fire the settle callback (toast) exactly once per job, the turn it first
-  // becomes terminal — not on every subsequent poll of the same finished job.
+  // Accept text pushed in from the transcript importer. Keyed on the token, so
+  // re-sending the same chunk works; `setText` replaces rather than appends,
+  // because "send to editor" means this text, not this text added to whatever
+  // was there.
+  const lastPendingToken = useRef(0);
+  useEffect(() => {
+    if (!pendingText || pendingText.token === lastPendingToken.current) return;
+    lastPendingToken.current = pendingText.token;
+    setText(pendingText.text);
+    setTitle('');
+    setTitleSuggestion(null);
+  }, [pendingText]);
+
+  // Refresh voices/history once per job, the turn it first becomes terminal.
+  //
+  // Deliberately NO toast here any more. This effect only ever saw `jobId` —
+  // the most recent submission — so a first job's failure went unannounced the
+  // moment a second was queued. Announcing settled jobs is now driven off the
+  // polled LIST in `App.tsx`, which sees all of them.
   useEffect(() => {
     if (!job || !isTerminal(job.status) || settledJobId.current === job.id) return;
     settledJobId.current = job.id;
-    onJobSettled?.(job);
     if (job.status === 'succeeded') invalidateAfterSuccess();
-  }, [job, onJobSettled, invalidateAfterSuccess]);
+  }, [job, invalidateAfterSuccess]);
 
   // Adjust default speed when language changes (English speech defaults to 0.9x for natural pace)
   function handleLanguageChange(newLang: string) {
@@ -212,6 +304,24 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     });
   }
 
+  // Apply a finished conversion to the editor.
+  //
+  // NOT automatic-and-silent: `preConvert` is set first so Undo works, and the
+  // banner below says which conversion ran. Three of the four have never
+  // passed a listening gate, and the gated one still produces valid Urdu words
+  // meaning something else — so this replaces the text and then asks the user
+  // to read it, rather than treating the model as correct.
+  useEffect(() => {
+    const first = conversion.ok[0]?.text;
+    if (!first) return;
+    setText((current) => {
+      if (current === first) return current;
+      setPreConvert(current);
+      return first;
+    });
+    // `conversion.ok` is a fresh array per result, so this fires once per job.
+  }, [conversion.ok]);
+
   // Debounced live script detection — powers the routability hint and dir.
   useEffect(() => {
     const t = text.trim();
@@ -226,6 +336,21 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         .catch(() => setDetect(null)); // hint only; a failure must not block typing
     }, 400);
     return () => window.clearTimeout(h);
+  }, [text, language]);
+
+  // Debounced title suggestion. Same shape as script detection and the
+  // direction preview: fires when typing settles, never on every keystroke.
+  // Deliberately background — nothing waits on it, and if it never lands
+  // `generate()` falls back to the text. Only runs while the field is empty,
+  // so it cannot fight the user for the input they are editing.
+  useEffect(() => {
+    const t = text.trim();
+    if (!t || title.trim()) return;
+    const h = window.setTimeout(() => void fillTitleIfEmpty(t), 1200);
+    return () => window.clearTimeout(h);
+    // `title` is read inside fillTitleIfEmpty's own guard; depending on it here
+    // would restart the timer on every character the user types INTO the title.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text, language]);
 
   // Debounced direction analysis — same pattern as script detection, but only
@@ -248,6 +373,12 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         .then((res) => {
           setDirection(res);
           setDirectionErr(null);
+          // Opening the preview is the user saying "I'm about to generate
+          // this", which is the right moment to have a name for it. The
+          // preview itself is heuristic and carries no title, so this asks
+          // separately — and only when the field is EMPTY, so it can never
+          // overwrite what the user typed.
+          void fillTitleIfEmpty(t);
         })
         .catch((e) => {
           setDirection(null);
@@ -300,6 +431,11 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
 
     if (llmJob.status === 'succeeded') {
       const result = llmJob.result;
+      // The title rides in the same response as the rows. Only fill an EMPTY
+      // field — the user's own wording always wins over a later suggestion.
+      if (result && 'title' in result && typeof result.title === 'string') {
+        setTitle((current) => current.trim() || result.title);
+      }
       if (result && 'rows' in result && direction) {
         for (const row of result.rows) {
           const seg = direction.plan.segments.find((s) => s.index === row.index);
@@ -338,9 +474,33 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
     setErr(null);
+
+    // The selected model reads Urdu script but the text is Roman Urdu. Rather
+    // than enqueue a job that would 422, convert first (~5 s, Gemma resident)
+    // and stop here. The conversion effect replaces the text with the
+    // Perso-Arabic and shows the "read it before you generate" review banner;
+    // pressing Generate again — one tap — then goes through, because `detect`
+    // now reads `arabic` and `preConvert` is set. This is the whole reason
+    // convert-on-generate is not silent: the model can produce a real word
+    // that means something else, and only a human reading the review catches it.
+    if (needsConversionBeforeGenerate && !conversion.running) {
+      conversion.start([text.trim()], 'perso_arabic');
+      return;
+    }
+
     const editedSegments = Object.values(directionEdits);
+
+    // NEVER await the analyzer here. It loads a ~6 GB model, so awaiting it
+    // froze the button for as long as that took — the exact stall this whole
+    // change set exists to remove. The field is normally already filled by the
+    // debounced suggestion below or by the direction preview; if it is not,
+    // the text-derived name is used immediately and the job goes to the queue
+    // now. A label is not worth making someone wait for.
+    const finalTitle = title.trim() || fallbackTitle(text);
+
     try {
       const newJob = await generateMutation.mutateAsync({
+        title: finalTitle || null,
         profile_id: profileId,
         language,
         model_id: modelId,
@@ -354,6 +514,7 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
       });
       settledJobId.current = null;
       setJobId(newJob.id);
+      onJobQueued?.(newJob);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'INVALID_DIRECTION_PLAN') {
         // The text changed after the Advanced editor's overrides were made,
@@ -381,7 +542,99 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
 
   const langs = languages.length ? languages : [];
   const rtl = detect?.is_rtl ?? false;
-  const busy = generateMutation.isPending || (job != null && !isTerminal(job.status));
+  // Only the enqueue POST blocks the button. A running job must NOT: the
+  // `jobs` table is the queue and the backend already admits several at once
+  // (admission_limit=8), so gating on `!isTerminal(job.status)` made the
+  // frontend the only thing serialising the user's work.
+  // ONLY the enqueue POST. Not the job (the queue runs several at once), and
+  // not the title suggestion (it is background work that must never gate a
+  // generation).
+  const busy = generateMutation.isPending;
+  // Text-editor tools. `copied` is a transient confirmation rather than a
+  // toast: the feedback belongs on the button you just pressed, and a toast
+  // for "copied" is noise next to a toast for "generation failed".
+  const [copied, setCopied] = useState(false);
+  const [clipboardError, setClipboardError] = useState<string | null>(null);
+
+  /**
+   * Fill the title from the analyzer, but never overwrite the user's own.
+   * Silent on failure: this is opportunistic, and Generate has its own
+   * fallback — a toast here would be noise about a field that fills itself.
+   *
+   * Returns early WITHOUT calling the API when the field is occupied, rather
+   * than fetching and discarding: the analyzer is a ~6 GB resident model
+   * behind a single-worker lock, so a request whose answer is already known
+   * to be unwanted is not a free one.
+   */
+  async function fillTitleIfEmpty(forText: string): Promise<void> {
+    if (title.trim() || titling || !forText.trim()) return;
+    setTitling(true);
+    try {
+      const suggested = (await api.suggestTitle(forText.trim(), language)).title;
+      setTitle((current) => current.trim() || suggested);
+    } catch {
+      // Leave it empty; generate() will fall back to the text.
+    } finally {
+      setTitling(false);
+    }
+  }
+
+  /**
+   * The explicit "Suggest" press. Distinct from the automatic path above in
+   * one way that matters: it runs even when the field already has something
+   * in it — but it OFFERS the result instead of applying it, because
+   * overwriting a title the user typed on purpose is not what a suggestion
+   * button should do. Empty field, nothing to protect, so it just fills.
+   *
+   * This one surfaces failure. The automatic path is invisible and staying
+   * quiet is right there; a button that visibly does nothing is not.
+   */
+  async function suggestTitleNow(): Promise<void> {
+    const t = text.trim();
+    if (!t || titling) return;
+    setTitleSuggestion(null);
+    setTitleErr(null);
+    setTitling(true);
+    try {
+      const suggested = (await api.suggestTitle(t, language)).title;
+      if (title.trim()) setTitleSuggestion(suggested);
+      else setTitle(suggested);
+    } catch (e) {
+      setTitleErr(e instanceof Error ? e.message : 'Could not suggest a title.');
+    } finally {
+      setTitling(false);
+    }
+  }
+
+  async function copyText() {
+    setClipboardError(null);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access is refused outright on a non-secure origin and can be
+      // denied by permission policy. Say so rather than looking like nothing
+      // happened — no `.catch(() => {})` here.
+      setClipboardError('Your browser blocked clipboard access.');
+    }
+  }
+
+  async function pasteText() {
+    setClipboardError(null);
+    try {
+      const clip = await navigator.clipboard.readText();
+      // Appended at the caret rather than replacing: pasting over text you
+      // already typed, with no undo, is the kind of "help" nobody wants.
+      const el = textareaRef.current;
+      const at = el?.selectionStart ?? text.length;
+      const next = (text.slice(0, at) + clip + text.slice(el?.selectionEnd ?? at)).slice(0, 5000);
+      setText(next);
+    } catch {
+      setClipboardError('Your browser blocked clipboard access.');
+    }
+  }
+
   const disabled = busy || !voices.length;
   const aiSuggestBusy =
     analyzeLlmMutation.isPending || (llmJob != null && !isTerminal(llmJob.status));
@@ -390,8 +643,74 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
     <section className="card composer" aria-labelledby="composer-h">
       <header className="card-head">
         <h2 id="composer-h">Generate speech</h2>
-        {text.length > 0 && <span className="count">{text.length} / 5000</span>}
       </header>
+
+      <div className="editor-bar">
+        <label className="field editor-title">
+          <span className="field-label">Title</span>
+          <input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setTitleSuggestion(null);
+              setTitleErr(null);
+            }}
+            placeholder={titling ? 'Naming…' : 'Auto-named when you generate'}
+            maxLength={60}
+            aria-label="Generation title"
+          />
+        </label>
+        <button
+          type="button"
+          className="btn-sm ghost editor-title-suggest"
+          onClick={() => void suggestTitleNow()}
+          disabled={titling || !text.trim()}
+          title={
+            title.trim()
+              ? 'Ask the analyzer for a name. Yours is kept — the suggestion is shown for you to take or ignore.'
+              : 'Ask the analyzer for a name now, without waiting.'
+          }
+        >
+          {titling ? <IconSpinner size={13} /> : <IconSpark size={13} />}
+          {titling ? 'Naming…' : 'Suggest'}
+        </button>
+      </div>
+
+      {/* Only reachable with a non-empty field: with an empty one the
+          suggestion is applied outright and there is nothing to offer. */}
+      {titleSuggestion && (
+        <div className="title-suggestion">
+          <span className="muted">Suggested:</span>
+          <span className="title-suggestion-text" dir="auto">
+            {titleSuggestion}
+          </span>
+          <button
+            type="button"
+            className="btn-sm"
+            onClick={() => {
+              setTitle(titleSuggestion);
+              setTitleSuggestion(null);
+            }}
+          >
+            Use it
+          </button>
+          <button
+            type="button"
+            className="btn-sm ghost"
+            onClick={() => setTitleSuggestion(null)}
+            aria-label="Dismiss the suggested title"
+          >
+            Keep mine
+          </button>
+        </div>
+      )}
+
+      {titleErr && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} /> {titleErr}
+        </div>
+      )}
+
 
       <div className="row">
         <label className="field">
@@ -487,6 +806,55 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
         </label>
       </div>
 
+      <div className="editor-toolbar">
+        {/* Directly on top of the textarea, and labelled, because these act on
+            THAT field. Sitting them up beside the Title left ~150px of voice,
+            language, model and speed controls between the buttons and the text
+            they clear. */}
+        <span className="field-label">Text</span>
+        <div className="composer-tools">
+          {text.length > 0 && <span className="count">{text.length} / 5000</span>}
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void copyText()}
+            disabled={!text}
+            title="Copy text"
+            aria-label="Copy text"
+          >
+            {copied ? <IconCheck size={13} /> : <IconCopy size={13} />}
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny"
+            onClick={() => void pasteText()}
+            title="Paste at the cursor"
+            aria-label="Paste at the cursor"
+          >
+            <IconPaste size={13} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn tiny danger"
+            onClick={() => {
+              setText('');
+              textareaRef.current?.focus();
+            }}
+            disabled={!text}
+            title="Clear text"
+            aria-label="Clear text"
+          >
+            <IconTrash size={13} />
+          </button>
+        </div>
+      </div>
+
+      {clipboardError && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={14} /> {clipboardError}
+        </div>
+      )}
+
       <div className="textarea-wrapper">
         <textarea
           ref={textareaRef}
@@ -515,20 +883,86 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
       <div className="composer-foot">
         <div className="detect-slot" aria-live="polite">
           {detect && (
-            <span className={`detect ${detect.routable ? '' : 'bad'}`}>
-              {detect.routable ? <IconCheck size={13} /> : <IconAlert size={13} />}
-              {detect.routable
-                ? `${detect.script} · ${
-                    modelId
-                      ? compatibleModels.find((m) => m.id === modelId)?.display_name ?? modelId
-                      : detect.would_route_to?.model_display_name ?? 'ready'
-                  }`
-                : (detect.hint ?? 'This text cannot be routed.')}
-            </span>
+            needsConversionBeforeGenerate ? (
+              // `detect.routable` is true here — Roman Urdu CAN route (to
+              // VoxCPM2) — but the user picked a model that can't read it, and
+              // the plain chip would render `latin · OmniVoice (Urdu)` as
+              // though it were fine, right up until Generate 422s. Say what
+              // will actually happen instead: it converts, then you review.
+              <span className="detect bad">
+                <IconAlert size={13} />
+                Roman Urdu — {selectedModel?.display_name ?? 'this model'} reads Urdu script.
+                Generate converts it first, for you to check.
+              </span>
+            ) : (
+              <span className={`detect ${detect.routable ? '' : 'bad'}`}>
+                {detect.routable ? <IconCheck size={13} /> : <IconAlert size={13} />}
+                {detect.routable
+                  ? `${detect.script} · ${
+                      modelId
+                        ? compatibleModels.find((m) => m.id === modelId)?.display_name ?? modelId
+                        : detect.would_route_to?.model_display_name ?? 'ready'
+                    }`
+                  : (detect.hint ?? 'This text cannot be routed.')}
+              </span>
+            )
+          )}
+          {/* OFFERED, never applied on its own. Roman Urdu is routable — it
+              goes to VoxCPM2 — but A0 is the finding that the owner HEARD an
+              English accent from that path, which is the whole reason the
+              converter exists. So this appears whenever Urdu is being written
+              in Latin, routable or not, and says what it is for. */}
+          {/* Only when the selected model ALSO reads Latin (VoxCPM2). Then the
+              conversion is optional — Generate would go straight through — but
+              still offered, because A0 is the finding that the direct Roman
+              path sounds like an English accent. When the model can't read
+              Latin, Generate itself does the conversion (see
+              needsConversionBeforeGenerate), so this button would be a
+              redundant second door to the same step. */}
+          {canConvert && detect?.script === 'latin' && language === 'ur' && selectedModelServesLatin && (
+            <button
+              type="button"
+              className="btn-sm ghost"
+              onClick={() => conversion.start([text.trim()], 'perso_arabic')}
+              disabled={conversion.running || !text.trim()}
+              title="Convert this Roman Urdu to Urdu script, which the Urdu voices read properly"
+            >
+              {conversion.running ? <IconSpinner size={13} /> : null}
+              {conversion.running ? conversion.progressLabel : 'Convert to Urdu script'}
+            </button>
+          )}
+          {preConvert !== null && (
+            <button
+              type="button"
+              className="btn-sm ghost"
+              onClick={() => {
+                setText(preConvert);
+                setPreConvert(null);
+                conversion.reset();
+              }}
+              title="Put back what you typed"
+            >
+              Undo conversion
+            </button>
           )}
         </div>
         <kbd className="kbd">Ctrl + ↵</kbd>
       </div>
+
+      {/* The conversion happened; now READ IT. Said in the imperative because
+          the model's failure mode is a valid Urdu word that means something
+          else, which looks entirely correct in a text box. */}
+      {preConvert !== null && !conversion.running && (
+        <div className="convert-summary" role="status">
+          Converted to Urdu script. <strong>Read it before you generate</strong> — a wrong
+          word here is still a real word, so it will not look wrong.
+        </div>
+      )}
+      {conversion.error && (
+        <div className="inline-error" role="alert">
+          <IconAlert size={13} /> {conversion.error}
+        </div>
+      )}
 
       <button
         type="button"
@@ -565,15 +999,29 @@ export function Composer({ voices, languages, onJobSettled }: Props) {
 
       <button
         className="btn primary"
-        disabled={disabled}
-        aria-busy={busy}
+        disabled={disabled || conversion.running}
+        aria-busy={busy || conversion.running}
         onClick={() => void generate()}
       >
-        {busy ? <IconSpinner size={15} /> : <IconSpark size={15} />}
-        {busy ? 'Generating…' : 'Generate'}
+        {busy || conversion.running ? <IconSpinner size={15} /> : <IconSpark size={15} />}
+        {busy
+          ? 'Generating…'
+          : conversion.running
+            ? 'Converting to Urdu script…'
+            : needsConversionBeforeGenerate
+              ? 'Convert to Urdu script, then review'
+              : 'Generate'}
       </button>
 
       {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
+
+      {/* Studio no longer shows any past generation, so without this there is
+          nothing on this screen telling you where your clips went. */}
+      {onOpenRecent && (
+        <button type="button" className="link composer-recent-link" onClick={onOpenRecent}>
+          <IconHistory size={13} /> Your generations are in Recent
+        </button>
+      )}
     </section>
   );
 }

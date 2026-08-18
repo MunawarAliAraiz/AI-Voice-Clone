@@ -38,6 +38,9 @@ class JobStatusResponse(BaseModel):
     #: The pre-transform text the user typed, read straight from the job's
     #: stored params (set once at enqueue) — no extra query needed for it.
     input_text: str | None = None
+    #: Same source as `input_text`, so a QUEUED job already has its title —
+    #: before any generation_history row exists to carry it.
+    title: str | None = None
 
     #: Never absent, from 'queued' onward, for job kinds that route through
     #: the audio catalog (currently only 'synthesize'). Routing (`resolve()`)
@@ -47,6 +50,13 @@ class JobStatusResponse(BaseModel):
     #: `resolve()` at all — currently only 'analyze_llm' (the Qwen Speech
     #: Direction analyzer is not audio and is not a routable `ModelSpec`).
     route: RouteInfo | None = None
+
+    #: The failed job this one retries. `None` for a first attempt.
+    #:
+    #: Surfaced so the client can tell that a failed row has ALREADY been
+    #: retried and stop offering the button — four clicks on one failure
+    #: otherwise produce four identical queued jobs.
+    retry_of_job_id: int | None = None
 
     #: 0-indexed jobs strictly ahead of this one in its kind's queue (a
     #: running job, if any, counts as 1). Populated only while status is

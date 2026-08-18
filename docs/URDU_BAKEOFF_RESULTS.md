@@ -430,7 +430,7 @@ capability and frontend normalization requirements, not a verdict on the model.
 | English code-switch in realistic sentences | **PASS** | `office`, `check`, `GitHub`/`pull request`/`review` confirmed working in realistic sentence contexts, both in isolation and in the original corpus |
 | Sparse/bare inputs | **UNRELIABLE / evaluation limitation** | Bare single words or 2–3 word fragments are substantially less reliable than realistic full sentences, independent of what they contain (میٹنگ, URL, and database all failed bare; office and check did not). This is recorded as a limitation of testing sparse inputs, not as proof that sparse input explains every individual failure — some failures (numbers, `database`) reproduce in full-sentence context too |
 | `URL` | **Targeted respelling verified in the demonstrated realistic failure** | Bare: unreliable/silent. Short sentence: correct. Busy realistic sentence (the original "abbreviations" corpus item): incorrect ("oo r l"). `یو آر ایل` respelling fixes the busy realistic sentence specifically — not claimed to fix every possible `URL` context |
-| `database` | **Context-dependent; targeted fix verified only in the realistic sentence** | Bare and short-context forms are unreliable in every direct form tested. The all-Urdu respelling `ڈیٹا بیس` collides with the existing Urdu word for "twenty" (بیس) and is inconsistent. The mixed respelling `ڈیٹا` (Urdu) + `base` (Latin, left unchanged) produces the correct pronunciation in the realistic full-sentence case (the original "technical" corpus item) but not in the bare/short forms. **Not fixed everywhere** — verified only in the demonstrated realistic case |
+| `database` | ⚠️ **SUPERSEDED by §9c — this row's conclusion was drawn from n=1 and is wrong** | What was recorded here: bare/short forms unreliable; all-Urdu `ڈیٹا بیس` collides with بیس ("twenty"); mixed `ڈیٹا` + Latin `base` "produces the correct pronunciation in the realistic full-sentence case". Blind repeat sampling later scored that mixed form at **7/12** — a coin flip, not a fix — and it shipped for a day on the strength of this single listen. The verified answer is `ڈیٹا بےس` (bari ye), **11/12**. See §9b for why every n=1 verdict in this document is suspect |
 
 **No broad English-transliteration system is being introduced.** office/check/GitHub already work as
 plain Latin text; URL and database needed a small, specific respelling each, found and verified
@@ -442,8 +442,8 @@ them:
 
 1. Digit/date expansion (`eval/urdu_numerals.py`)
 2. `URL` → `یو آر ایل`, where the demonstrated busy-sentence context requires it
-3. `database` → `ڈیٹا` + Latin `base` (mixed script), where the demonstrated realistic-sentence context
-   requires it
+3. ~~`database` → `ڈیٹا` + Latin `base` (mixed script)~~ — **superseded, see §9c.** This is the entry
+   that shipped on one listen and later measured 7/12. The verified answer is `ڈیٹا بےس`.
 
 Before any production integration, an open design question remains: do these belong in one general
 normalization layer, or a small targeted pronunciation lexicon (closer to what the evidence actually
@@ -678,3 +678,753 @@ Roman Urdu → OmniVoice stays unbuilt.
 # on the pod, in .venv-qwen
 PROBE_MODEL_ID=Qwen/Qwen2.5-7B-Instruct .venv-qwen/bin/python eval/run_roman_arabic_probe.py
 ```
+
+---
+
+## 9. Phase A0 — does OmniVoice read Roman Urdu unaided? `[LISTEN]` **No.**
+
+The cheapest test that could have made the whole Roman→Perso-Arabic conversion feature unnecessary.
+`OMNIVOICE_URDU` only *declares* `(ur, ARABIC)`, but nothing had ever fed it Latin — and VoxCPM2
+renders Roman Urdu fine, so it was worth ten minutes before building a pipeline.
+
+Eight corpus items, each synthesized twice from one loaded checkpoint against the owner reference:
+column **A** from `roman`, column **B** from `perso_arabic` (the *ceiling* — the best any conversion
+could deliver). `resolve()` was deliberately bypassed, since routing correctly refuses `(ur, LATIN)`
+against an `(ur, ARABIC)` spec and that refusal was the thing under question. Items were chosen with
+no bare digits so the absent number normalization could not confound the pair.
+Driver `eval/run_a0_roman_direct.py`, clips + page at `eval/results/a0_roman_direct/`.
+
+**ASR screen** (`eval/score_a0_roman_direct.py`, both arms scored against `perso_arabic` per the
+corpus's `cer_reference_rule`):
+
+| | mean CER | mean speaker cosine |
+|---|---|---|
+| A — Roman fed directly | 0.2016 | 0.7171 |
+| B — Perso-Arabic gold | 0.1188 | 0.7326 |
+
+The screen looked *encouraging*: the Roman arm is plainly not gibberish. Whisper recovered
+near-correct Urdu from it (`owner_02_file` 0.042, `owner_03_deadline` 0.077), and the two worst
+items — `owner_05_github` at 0.448 in **both** columns — are a Whisper artifact, since it transcribes
+Latin code-switch words phonetically into Urdu script regardless of arm.
+
+**The owner's listen overruled it: "Column A is English-accented."** The model is reading Roman Urdu
+as *English orthography*, producing Urdu words in an English accent. CER cannot see this at all — the
+words are right, so edit distance is small, while the thing the product is for is wrong. This is the
+same lesson as the harness docstring's 2026-08-04 case (cosine 0.686 + "sounds Hindi"), landing a
+second time on a different metric.
+
+**A0 fails ⇒ the conversion pipeline is justified.** Phase A continues to A1/A2/A3. No `(ur, LATIN)`
+cell is added to `omnivoice_urdu`.
+
+### 9a. What the same listen turned up about column B — `late` and `database`
+
+The owner also reported that **column B**, the supposed ceiling, mispronounces `late` and `database`.
+Two different things:
+
+- **`database` — an artifact of how A0 was run, not a production defect.** Feeding text verbatim also
+  bypassed `domain/urdu_text.py`'s loanword lexicon, so column B heard raw `database`, which
+  production never sends — it sends `ڈیٹا base`, the mixed respelling §5c verified on this exact
+  sentence. A0's own control was therefore weaker than production. Worth stating plainly: the ceiling
+  measured in §9 is a *floor* on the real ceiling.
+- **`late` — real, and a regression against a recorded result.** It is absent from
+  `_LOANWORD_LEXICON`, and §5b recorded it as passing (`owner_04_late` ✅, "code-switched
+  'office'/'late' both landed"). A word that passed one listen and failed the next is exactly what
+  §2's caveats warn about, now demonstrated within this project's own records rather than in the
+  abstract.
+
+`eval/run_loanword_late_check.py` puts both, plus `office` as a control, in front of the owner:
+`late` as Latin / `لیٹ` / `لیٹھ`, `database` as verbatim / production / all-Urdu. **Pending the
+owner's listen** — nothing enters `_LOANWORD_LEXICON` on a hunch, per its docstring.
+
+### 9b. The finding that reframes every listen in this document: **synthesis is unseeded**
+
+Chasing `database` produced something more important than a spelling. On 2026-08-16 the owner
+judged `ڈیٹا base` to be "data-boss" (wrong), and about an hour later judged the *same sentence*
+correct. The two texts were verified byte-identical from the two manifests — same reference, same
+checkpoint, same code path. The only difference was that they were **two separate generations**.
+
+`OmniVoiceBackend.synth()` sets no seed. `self._model.generate(...)` samples freshly on every call,
+so **a loanword's pronunciation is a random variable, not a property of the spelling.**
+
+That is not a criticism of the owner's ear; it is a property of the experiment. Every single-listen
+verdict in this document is an n=1 draw:
+
+| verdict | where | now reads as |
+|---|---|---|
+| "late passes, code-switched office/late both landed" | §5b | n=1 |
+| "`ڈیٹا base` verified correct in this sentence" | §5c | n=1 |
+| "column B mispronounces late" | §9 | n=1 |
+| "`ڈیٹا base` is data-boss" / "…is correct" | §9a | n=1 each, and they disagree |
+
+Their disagreement is the *expected* outcome of sampling a coin, not a contradiction needing an
+explanation — and it is the simplest account of `late` passing in §5b, failing in §9, then passing
+again on the focused re-listen. It also means §5c's method (choose a respelling from one clip) could
+not have worked reliably even in principle.
+
+**Consequences, in order of importance:**
+
+1. **The question changes from "is this spelling correct" to "how *often* is it correct".** A
+   spelling right 2 times in 4 is not a fix; it is the same coin flip with extra steps.
+   `eval/run_loanword_reliability.py` measures this — 8 variants × 4 samples, shuffled under a fixed
+   seed and presented as bare numbers, since the owner has now rated identical audio two ways and
+   knowing which clip ships is exactly the bias worth removing.
+2. **A wrong lexicon entry is worse than none.** Verbatim `database` is merely imperfect;
+   `_LOANWORD_LEXICON` actively rewrites it, so a bad entry *introduces* an error for every user.
+3. **Users see this variance too.** Even a perfect lexicon leaves any single generation able to come
+   out wrong, which makes "regenerate" a real remedy rather than a shrug — and is an argument for
+   the editable-text design over any silent transform.
+4. **Seeding is worth considering separately** — it would make experiments reproducible, but it also
+   freezes one draw, so it must not be added *just* to make this table look stable.
+
+### 9c. `database` settled by blind repeat sampling — and the lexicon's scaling problem
+
+Two blind rounds (`eval/run_loanword_reliability.py`), owner-rated, labels hidden, order shuffled:
+
+| spelling | round 1 (n=4) | round 2 (n=8) | total |
+|---|---|---|---|
+| `URL` verbatim | 0/4 | — | **0/4** |
+| **`یو آر ایل`** (shipped, unchanged) | 4/4 | — | **4/4** |
+| `database` verbatim | 0/4 | 0/4 | **0/8** |
+| **`ڈیٹا بےس`** (bari ye) | 3/4 | 8/8 | **11/12** ✅ |
+| `ڈیٹا base` (shipped until 2026-08-16) | 2/4 | 5/8 | **7/12** |
+| `ڈیٹا bays` | 1/4 | 3/8 | **4/12** |
+| `ڈیٹا bayss`, `dayta base` | 0/4 | — | **0/4** |
+
+`_LOANWORD_LEXICON["database"]` is now `ڈیٹا بےس`. The verbatim controls scoring **zero** are what
+justify having entries at all; the round-2 anchor (verbatim again 0/4) confirms the owner's criteria
+did not drift between sessions.
+
+**The result that should change how these are chosen:** `ڈیٹا bays` produced the single best-sounding
+clip of the entire experiment — the owner's note was *"most accurate for a native Urdu speaker"* — and
+scored **4/12**. Selecting a spelling by its best clip, which is what §5c effectively did, would have
+shipped the second-worst candidate. Best-draw and most-reliable are different questions, and only the
+second one is the product's.
+
+Note also that the winner is **11/12, not 12/12**. Per §9b there is no spelling that always works,
+so "regenerate" is a real remedy for users rather than a shrug.
+
+### 9d. Open design problem: the lexicon is hardcoded and does not scale
+
+`_LOANWORD_LEXICON` is a module-level dict of two entries. A word that is not in it is passed through
+verbatim, and adding one costs the owner roughly a dozen blind listens. That is affordable for two
+words and not affordable as the general answer to "what happens when a new loanword appears".
+
+What is *not* the answer:
+
+- **A general English→Urdu respeller.** It would have to know which words *these particular weights*
+  mispronounce — a property of the model, not of English — so it would guess, and it would damage
+  the words that already work (`office`, `check`, `GitHub`, `late`, `backup`, `server`, `restart`).
+- **ASR round-trip detection.** Tempting, but §9's screen showed Whisper transcribes Latin
+  code-switch words phonetically into Urdu script regardless of whether they were pronounced well —
+  `owner_05_github` scored 0.448 in *both* arms. The detector is blind to precisely the failure it
+  would need to catch.
+
+The two candidates worth pursuing, in order:
+
+1. **Measure the failure rate first.** Nobody knows how often this actually bites. The expanded
+   45-item corpus contains ~20 items carrying Latin islands; synthesizing and blind-rating those
+   gives a rate. If it is two words in twenty, a short shipped default list plus the editable
+   Composer text box is a complete answer and anything more is over-engineering.
+2. **If the rate is material: a user-editable pronunciation dictionary.** Move the mapping out of a
+   module constant into per-user data with a small settings UI, and demote the hardcoded dict to
+   *shipped defaults*. This scales because the person who cares about a word is the one who fixes it,
+   and they only need it to work for themselves — no owner listening session per word. It also fits
+   the existing architecture unchanged: still a pure text transform in `domain/urdu_text.py`, still
+   applied inside `resolve()`, still no model.
+
+**Not decided here.** Step 1 is cheap and should precede step 2.
+
+### 9e. The loanword failure rate, measured — and what it settles
+
+§9d's open question, answered. 20 Latin-island corpus items × 2 takes, through the **real production
+normalization path** (so `database` was already the corrected `ڈیٹا بےس` and `URL` already
+`یو آر ایل` — both drop out of the count, making this the *residual* rate for words the lexicon does
+not cover). Driver `eval/run_loanword_rate.py`, owner-rated.
+
+| | |
+|---|---|
+| clips containing at least one bad word | **13/40 (32.5%)** |
+| word instances mispronounced | **20/116 (17.2%)** |
+| distinct words affected | **11/54 (20.4%)** — one lexicon entry each |
+
+**Not the "2 in 20" that would have made a dictionary over-engineering.** One in three generations
+carries a mispronounced English word.
+
+The split between deterministic and stochastic failures is what makes this actionable:
+
+| | words |
+|---|---|
+| **Always wrong** (2/2 takes) — a spelling fixes these | `message`, `RAM`, `WhatsApp`, `interview`, `asap`, `reply`, `plz`, `API`, `cache` |
+| **Sometimes wrong** (1/2 takes) — §9b's unseeded variance, no spelling will fix it | `wait`, `screenshot` |
+
+**Nine of the eleven fail every time.** That is the encouraging half of a discouraging number: these
+are systematic, not luck, so a respelling can genuinely fix them and a user who adds an entry gets a
+durable result rather than a better coin. The owner's note on `interview` — *"the T is pronounced like
+an Arab would"* — is diagnostic of the whole class: the model applies Arabic phonology to Latin
+tokens, so `ٹ` (retroflex) is realised as `ت` (dental). That is a phoneme-mapping failure with an
+obvious respelling remedy (`انٹرویو`), not a mystery.
+
+Note what the failures are *not*: they are not rare or exotic words. `message`, `reply`, `API`,
+`WhatsApp`, `interview` are among the most common English words in Pakistani everyday and workplace
+speech. The lexicon cannot be a curiosity shelf.
+
+**Decision: build the user-editable pronunciation dictionary** (§9d's option 2). At 20% of distinct
+words, the hardcoded-list-plus-owner-listening approach would require the owner to work through
+roughly one word in five of all English vocabulary, at a dozen blind listens each. That does not
+finish. Moving the mapping into per-user data with the hardcoded dict demoted to *shipped defaults*
+scales because the person who wants a word fixed is the one who fixes it, and it only has to satisfy
+them. Architecturally nothing else changes: still a pure text transform in `domain/urdu_text.py`,
+still applied inside `resolve()`, still no model, still no `TransformKind`.
+
+Two caveats to carry into that build:
+
+- The 2 stochastic words mean a dictionary **cannot promise correctness**, only improvement. Users
+  will still hit a bad draw, so "regenerate" must be a visible remedy (§9b).
+- Seeding these numbers is one rater, one reference voice, one corpus, n=2. It is firmly enough to
+  decide *build vs don't build*; it is not a per-word verdict, and no word above should be given a
+  shipped default spelling without the §9c blind-repeat treatment.
+
+---
+
+## 10. Phase A2 — the Qwen baseline, pushed properly `[BENCH]`
+
+The plan requires a *strong* baseline from the existing Qwen infrastructure before any new
+transliteration model is surveyed. This is that attempt: four arms in one model load, at 3B and 7B,
+over the expanded 45-item corpus, scored on three metrics
+(`eval/run_roman_arabic_probe.py`, `eval/translit_metrics.py`).
+
+`control_*` are byte-identical to the arms behind §8b, so a gain is attributable to the prompt and
+not to the corpus having grown from 13 items to 45. `strict_*` states the contract as numbered
+non-negotiables, each naming one of §8/§8b's *observed* failures.
+
+| model | arm | contract ✅ | CER | preserve | complete | unparseable |
+|---|---|---|---|---|---|---|
+| 3B | control_zero_shot | 17/40 (43%) | 0.3268 | 0.652 | 0.693 | 5 |
+| 3B | control_few_shot | 12/37 (32%) | 0.3144 | 0.651 | 0.525 | 6 |
+| 3B | **strict_zero_shot** | **18/39 (46%)** | 0.3698 | 0.628 | 0.727 | 6 |
+| 3B | strict_few_shot | 14/37 (38%) | 0.3094 | 0.670 | 0.487 | 2 |
+| 7B | control_zero_shot | 17/44 (39%) | 0.3241 | 0.573 | 0.659 | 1 |
+| 7B | control_few_shot | 15/42 (36%) | 0.2763 | 0.811 | 0.643 | 1 |
+| 7B | **strict_zero_shot** | **18/45 (40%)** | 0.3061 | 0.587 | 0.696 | 0 |
+| 7B | strict_few_shot | 10/38 (26%) | 0.2733 | **0.852** | 0.450 | 1 |
+
+**"contract" = the gold's Latin survived verbatim AND no Urdu was left unconverted.** No arm clears
+50%. The best is 3B strict_zero_shot at 46%.
+
+### 10a. The strict prompt did not work
+
+On the trustworthy subset (the original 13 items, whose gold predates this session), 7B scores
+**62%** on `control_zero_shot` and **62%** on `strict_zero_shot` — identical. Writing the contract as
+explicit numbered rules bought nothing. §8b's failures were diagnosed as instruction-following
+problems; that diagnosis now looks wrong, or at least not addressable by instruction.
+
+### 10b. Few-shot examples trade preservation against completeness
+
+A real and consistent effect, visible at both sizes: adding examples **raises** code-switch
+preservation (7B: 0.573 → 0.811 control, 0.587 → 0.852 strict) and **wrecks** conversion completeness
+(0.696 → 0.450 on strict). The examples contain Latin islands, so the model learns "keep English" —
+and over-generalises it into keeping Urdu in Latin too. More examples make the contract's two halves
+fight each other rather than reinforcing.
+
+Consequence: few-shot is not simply better here, and the arm with the best CER (7B strict_few_shot,
+0.2733) has the *worst* contract rate (26%). One more demonstration that CER ranks these wrongly.
+
+### 10c. The failures are severe, not cosmetic
+
+This is what decides it. Sampling 7B/strict_zero_shot's failures:
+
+| item | what happened |
+|---|---|
+| `owner_04_late` | `office` → `دفتر` **translated**; `aaj` → `امروز` (a *Persian* word); Devanagari `हو` in the output |
+| `technical` | **all four** English words translated (`database`→`دیٹا بیس`, `backup`→`بک آپ`, `server`→`سرور`, `restart`→`ری استارت`), and the clause ends in nonsense |
+| `owner_05_github` | `pull request create` → `پلر ریquest کیٹر` — tokens broken mid-word, `_usay_` left in Latin with underscores |
+| `num_ascii` | `Meeting` → `ملاقات` translated; Devanagari `बजے`, `हوگی`; a stray Latin `ú` inside `مینút` |
+| `conv_05_apology` | `tumhara` → `تیرا` — **register changed**, second-person familiar swapped |
+| `spell_01_kia_kya` | `tum` → `تum`, a half-converted token — **at CER 0.049**, i.e. a near-perfect CER score on broken output |
+
+Three failure classes here are worse than "imperfect spelling": **translation of code-switched
+English** (the contract's most important rule), **script contamination** (Devanagari and stray Latin
+inside Urdu words), and **word substitution that changes meaning or register** (`امروز`, `تیرا`).
+
+`spell_01_kia_kya` deserves its own note: CER **0.049** — the best-looking number in the sample — on
+output containing `تum`. The residue metric catches it precisely because it does not care how few
+characters are wrong, only that Latin remains where the gold has none.
+
+### 10d. Where this leaves Phase A
+
+**The Qwen baseline is insufficient**, which is exactly the condition the plan set for A4 (surveying
+purpose-trained Roman-Urdu→Urdu models). At best 46% of sentences come out contract-clean, and the
+other half fail in ways a user would have to notice and repair by hand — which is the comparison that
+matters, since the feature's whole premise is that editing the suggestion beats typing Urdu directly.
+
+**Two honest limits on these numbers:**
+
+1. **32 of the 45 gold strings were drafted by Claude, not a native speaker** (flagged in the
+   corpus's `_meta.authoring_rule_EXCEPTION_phase_a_items`, task open). Contract scoring depends on
+   the gold's Latin token set, so on those items it partly measures *my* judgement about which words
+   stay English. The trusted-13 subset is the number to lean on — and it is *better* (62% vs ~30%),
+   so the full-corpus figures may understate the model. The gap is also consistent with the new items
+   simply being harder by design.
+2. One decoding config, greedy, one prompt family per arm.
+
+Neither limit rescues §10c: translation, Devanagari contamination and register changes are wrong
+against *any* reasonable gold.
+
+---
+
+## 11. Phase A4 — surveying purpose-trained Roman-Urdu→Urdu models `[CARD]`
+
+§10d met the plan's condition for this survey: the Qwen baseline is insufficient. Every candidate was
+vetted on three axes before any accuracy claim was entertained — **licence** (golden rule 6),
+**pinnable revision** (rule 7), and **dependency footprint** against the existing venvs.
+
+| candidate | direction | licence | verdict |
+|---|---|---|---|
+| `Mavkif/m2m100_rup_rur_to_ur` | Roman→Urdu ✅ | **none declared** | ❌ rule 6 |
+| `Mavkif/MLM_pretrained_RomanUrdu_Urdu` | pretraining ckpt | **none declared** | ❌ rule 6 |
+| `waqas0707/roman-to-urdu` | Roman→Urdu ✅ | `unknown` | ❌ **repo contains no weights** |
+| `waqas0707/roman-urdu-to-urdu-translation` | Roman→Urdu ✅ | **none declared** | ❌ rule 6 |
+| `psidharth567/indic-xlit-{50M,270M}` | Roman→Indic | **none declared** | ❌ rule 6 |
+| `rekhtalabs/hi-2-ur-translit` | **Devanagari**→Urdu | — | ❌ wrong input script; Hindi is gone |
+| **AI4Bharat IndicXlit** | Roman→Urdu ✅ | **MIT** ✅ | ❌ on accuracy + dependencies — see §11b |
+
+### 11a. The best-performing candidate has no licence at all
+
+`Mavkif/m2m100_rup_rur_to_ur` is exactly the right direction and carries the strongest published
+numbers in this space — Char-BLEU **97.44** for Roman-Urdu→Urdu (arXiv 2503.21530, LoResMT 2025),
+beating RNN baselines and GPT-4o Mini. Its commit SHA `e723a8d…` is pinnable, satisfying rule 7.
+
+**It declares no licence.** Confirmed against the HF API rather than the rendered page: the model's
+tags are `["safetensors","m2m_100","region:us"]`, with no `license:` entry and no `cardData`. No
+licence means all rights reserved, not "probably fine".
+
+The trap here is precisely the one golden rule 6 was written for. **The paper is CC BY 4.0** — and
+that covers the *article*, not the weights. Rule 6 requires the licence be checked at the HF card
+*separately* from the associated publication or code, because this project's own survey already found
+two candidates where the two disagreed and the permissive-looking answer was wrong both times. This is
+a third instance, and the worst kind: not a mismatch but an absence.
+
+Two further problems, independent of licence: the repo is a raw training dump — it ships
+`optimizer.pt`, `rng_state.pth`, `scheduler.pt`, `trainer_state.json` and `training_args.bin` — has
+**no model card**, and contains **no tokenizer** (that lives in a separate repo,
+`Mavkif/m2m100_rup_tokenizer_both`, also unlicensed).
+
+### 11b. The only correctly-licensed candidate is not accurate enough, and cannot be installed
+
+**AI4Bharat IndicXlit** is the one genuinely clean licence: **MIT**, covering code and models,
+explicitly listing Urdu among its 21 languages, ~11M parameters. It is the right shape and the right
+licence. It fails on the other two axes.
+
+**Accuracy.** Its own README reports Urdu word-level top-1 accuracy of **61.45%** (Dakshina) and
+**48.37%** (Aksharantar native words). Across the 21 languages accuracy ranges 42–77%, so Urdu is
+mid-pack rather than a weak outlier — this is simply what the model does. The consequence for us is
+decisive: **it is word-level, not sentence-level.** Its README states plainly that the model is
+trained on words as inputs, so users must split sentences into words first. At 61% per word, an
+average 10-word sentence has roughly a **0.7%** chance of coming out entirely correct. As a
+whole-sentence converter it is not usable alone, and it has no context with which to disambiguate
+`kia` from `kya` either — the exact problem arXiv 2109.14197 exists to address.
+
+**Dependencies.** `ai4bharat-transliteration` (last released **September 2022**) requires `fairseq`
+and `urduhack`. `urduhack` in turn requires **`tensorflow~=2.2`** — a 2020 release that does not
+build on Python 3.12. Installing this means a fairseq + TensorFlow 2.2 environment sitting beside
+five venvs already pinned to torch 2.8/2.11+cu128. That is the dependency-hell failure mode that
+killed this project's predecessor (`transformers>=4.57.6` versus fish-speech's `<=4.57.3`), and it
+would be self-inflicted this time.
+
+**Third problem, and the interesting one:** IndicXlit has no notion of leaving a word alone. It
+transliterates everything, so `office` becomes an Urdu spelling. Against the §10 contract that is a
+code-switch preservation failure — but see §11d, because it may not be a failure for the product.
+
+### 11c. Conclusion: no adoptable option, same shape as the licensing survey before it
+
+**A4 finds nothing adoptable.** The accurate model is unlicensed; the licensed model is neither
+accurate enough nor installable. This is structurally the same result `docs/URDU_MODEL_LICENSING.md`
+reached for TTS — no permissively-licensed model both lists Urdu and does the job — now reproduced
+for transliteration.
+
+What remains untried, in order of cost:
+
+1. **Ask the Mavkif authors to add a licence.** One issue on the HF repo. The paper is CC BY 4.0 and
+   the authors describe the models as open-sourced, so an omitted licence tag is the likelier
+   explanation than a deliberate reservation. Cheapest possible unblock, and it converts the best
+   candidate in the field from unusable to usable.
+2. **Train one.** Roman-Urdu-Parl and Dakshina are both public, and this project has already trained a
+   LoRA on this pod. Real work, but no licence obstacle.
+3. **Accept the Qwen baseline as an editable assist** and let A3 decide by ear whether ~46%
+   contract-clean output still saves the user time versus typing Urdu directly.
+
+### 11d. A connection worth not losing
+
+IndicXlit transliterating English words rather than preserving them looks like a contract violation —
+but §9e measured that **17.2% of English loanwords are mispronounced by OmniVoice** precisely
+*because* they are Latin, and that 9 of the 11 failing words fail deterministically. Rendering
+`interview` phonetically in Urdu script is exactly the remedy the pronunciation dictionary would
+apply by hand.
+
+So "convert English words too" may be the right behaviour for *pronunciation* while being wrong for
+*fidelity to what the user typed*. These two goals genuinely conflict, and the conflict is not
+resolved anywhere yet. It should be settled by ear in A3, not assumed in either direction — and it
+directly affects the dictionary design deferred in §9d.
+
+---
+
+## 12. Phase A3 — the gate. **Failed.** `[LISTEN]`
+
+Ten sentences, each synthesized twice through the real `OmniVoiceBackend` against the owner
+reference: column **A** from the Qwen 7B `strict_zero_shot` conversion of the Roman input, column
+**B** from the corpus's Perso-Arabic gold — i.e. what the user gets by typing correct Urdu
+themselves. Six items had passed A2's contract and four had failed it, labelled as such. Both arms
+went through production normalization. Driver `eval/run_a3_full_chain.py`, clips and page at
+`eval/results/a3_full_chain/`.
+
+The question put to the owner was deliberately not "is A perfect" — A2 had already established it
+would not be. It was: **would editing A be less work than typing B yourself?**
+
+**Owner's verdict: "column A is not usable."**
+
+**Phase B is therefore not started.** That was the plan's explicit gate, and this is the gate
+closing rather than a setback to be worked around. The Roman-Urdu → Perso-Arabic conversion feature
+is not built, and `NoRouteError` on Roman Urdu → OmniVoice stands.
+
+### 12a. What Phase A established, end to end
+
+| step | result |
+|---|---|
+| **A0** — does OmniVoice read Roman Urdu unaided? | ❌ No. Words right, accent English. CER could not see it |
+| **A1** — expand the corpus | ✅ 13 → 45 items; new gold still needs a native review |
+| **A2** — strong Qwen baseline | ❌ Best arm 46% contract-clean. Strict prompting bought nothing; few-shot traded preservation against completeness |
+| **A4** — purpose-trained models | ❌ Best model declares no licence; only MIT-licensed one is word-level, 61% top-1, and needs TensorFlow 2.2 |
+| **A3** — the full chain, by ear | ❌ **Not usable** |
+
+Four independent routes to the same feature, four negatives. That is a strong result, not an absence
+of one: the question "can a user type Roman Urdu and get good Perso-Arabic speech?" now has a
+documented answer with the reasoning for each dead end preserved.
+
+### 12b. What would reopen it
+
+Only one thing is cheap: **`Mavkif/m2m100_rup_rur_to_ur` acquiring a licence** (§11a,
+`docs/outreach/mavkif-licence-request.md`). At Char-BLEU 97.44 it is in a different class from the
+46% Qwen baseline that A3 just rejected, so it would genuinely deserve a fresh A2/A3 run rather than
+being assumed to fail alongside it. Training a replacement on the public Roman-Urdu-Parl and
+Dakshina corpora is the other route, and is real work rather than a request.
+
+Nothing else identified. Do not re-run the Qwen probes hoping for a different answer — four arms
+across two model sizes have now been measured, and §10a showed prompt engineering is not the lever.
+
+### 12c. The one thing A3 *unblocked*
+
+§11d parked a genuine conflict: should English loanwords be converted to Urdu script (better
+pronunciation, §9e measured 17.2% of them mispronounced) or preserved verbatim (fidelity to what the
+user typed)? That question only existed because an LLM converter was going to make the choice.
+
+**With Phase B dead, the conflict dissolves.** The only Perso-Arabic text reaching OmniVoice is text
+the user typed, so nothing is deciding on their behalf — and the pronunciation dictionary (§9d/§9e)
+becomes both simpler and, at a measured 17.2% failure rate, the most valuable Urdu work outstanding.
+It was deferred pending A3; it no longer is.
+
+---
+
+## 13. A2 revisited — Ministral-3-8B, and why §12's closure was premature `[BENCH]`
+
+§12 closed the feature on A3's listening verdict. That verdict was correct **about the model it
+tested**. Asked afterwards whether any freely-licensed open-weights model could do better, the survey
+pointed at [UrduMMLU](https://arxiv.org/abs/2606.07167) (26,431 Urdu MCQs, 30 models), where
+`Ministral-3-8B` co-leads the ≤25B open group at ~55–57% against Qwen3-8B's ~50%. It is **Apache 2.0**
+— cleanly permissive, no rule 6 friction, no non-commercial badge.
+
+Same probe, same corpus, same four arms, same three metrics. Only `PROBE_MODEL_ID` changed.
+
+| model | arm | contract ✅ | CER | preserve | complete | unparse |
+|---|---|---|---|---|---|---|
+| Qwen2.5-7B | strict_zero_shot | 18/45 (40%) | 0.3061 | 0.587 | 0.696 | 0 |
+| Qwen2.5-7B | strict_few_shot | 10/38 (26%) | 0.2733 | 0.852 | 0.450 | 1 |
+| **Ministral-3-8B** | control_few_shot | 26/43 (60%) | 0.1562 | 0.629 | **1.0000** | 0 |
+| **Ministral-3-8B** | **strict_few_shot** | **29/39 (74%)** | **0.0777** | 0.848 | 0.966 | **0** |
+
+On the **trusted original-13** items (gold predating this session): **82%** contract-clean, against
+Qwen's 27% on the same arm and same items.
+
+**Three things are qualitatively different, not just numerically better:**
+
+1. **Conversion completeness reaches 1.0000 on three of four arms.** Ministral never leaves Urdu
+   sitting in Latin letters. That was Qwen's single worst failure mode — `تum`, `ریquest`, half-
+   converted sentences — and it is simply absent.
+2. **CER 0.0777** on the best arm, against Qwen's best of 0.2733. Nearly 4× closer to gold.
+3. **Few-shot helps here, and hurt Qwen.** §10b found examples raising preservation while wrecking
+   completeness (0.696 → 0.450), because Qwen over-generalised "keep English" into keeping Urdu.
+   Ministral takes both lessons at once: preservation 0.848 *and* completeness 0.966. That is a model
+   able to hold two constraints instead of trading one against the other.
+
+Zero unparseable responses in all four arms, versus Qwen's scattered failures.
+
+**What this does and does not establish.** It does not reverse A3. Text metrics have twice been shown
+here to be unable to approve anything — A0's ASR screen looked fine while the owner heard an English
+accent, and §10's contract metric passed `owner_01_sick` while its Urdu was mangled. **A3's listening
+test must be re-run on Ministral's output before any claim that the feature works.**
+
+What it does establish is that **§12's closure was a verdict on Qwen, not on the idea.** The feature
+was rejected at 46% contract-clean and CER 0.27; the candidate now on the table is 74% and CER 0.078
+on a permissive licence. That deserves the gate re-run, not inheritance of the previous answer.
+
+The remaining weakness is code-switch preservation at 0.848 — Ministral still converts some English
+words to Urdu script. §11d is exactly the open question about whether that is a defect or an
+improvement, and §9e's measured 17.2% loanword mispronunciation rate is the reason it might be the
+latter. The ear decides that too.
+
+---
+
+## 14. A3 run 2 (Ministral) and the frontier-model survey `[LISTEN]` `[BENCH]`
+
+### 14a. Run 2 of the gate — the owner's per-item notes
+
+§13 said the gate had to be re-run rather than inherit §12's answer. It was: same harness, same
+production normalization, `_A2_ARM = strict_few_shot`, output at `eval/results/a3_ministral/`.
+Eight of ten items carry over from run 1; `technical` and `colloquial` are exemplars of this arm and
+were replaced by its two **highest-CER** items (`cs_06_interview` 0.340, `abbreviations` 0.281).
+
+The owner listened and reported ten defects. **Nine are text errors by Ministral, one is OmniVoice.**
+
+| # / item | reported | Ministral wrote | gold | class |
+|---|---|---|---|---|
+| 1 `owner_01_sick` | yaar → aray | ارے | یار | substitution |
+| 1 `owner_01_sick` | tabiyat → tabaat | **طباعت** (*printing*) | طبیعت (*health*) | **homophone, meaning changed** |
+| 3 `owner_03_deadline` | kar lena → karna | کرنا | کر لینا | compound verb dropped |
+| 5 `owner_05_github` | kar lena → karna | کرنا | کر لینا | same, repeated |
+| 6 `cs_06_interview` | Kal → Call | **کال** (*call*) | کل (*tomorrow*) | **homophone** |
+| 7 `abbreviations` | baray mehrbani | بارے مہربانی | براہ کرم | malformed (برائے expected) |
+| 7 `abbreviations` | bhej → bhj | **بجھ** (*extinguish*) | بھیج (*send*) | **homophone** |
+| 8 `long_multiclause` | Kal → Call | **کال** | کل | **homophone, repeated** |
+| 9 `conv_01_greeting` | Assalam → Islam | اسلام علیکم | السلام علیکم | dropped ال |
+| 10 `cs_04_laptop` | Mera → May ra | **میںرا** | میرا | token corruption |
+
+Two of the owner's notes were adjudicated *against* the complaint, and both matter:
+
+- **"meeting also converted" (#8) is not Ministral's doing** — gold writes میٹنگ too. Converting
+  *meeting* is the corpus's own convention.
+- **"Ram → Raam" (#10) is not Ministral either** — both columns keep `RAM` in Latin, so this is
+  OmniVoice reading a loanword. It is already a known §9e failure; the owner flagged `RAM` twice in
+  the blind loanword round as well. **This one belongs to the pronunciation dictionary.**
+
+`owner_04_late` carries the same `yaar → ارے` substitution as item 1 and was *not* flagged — the
+unseeded-synthesis pattern of §9b showing up in judgement rather than in audio.
+
+### 14b. The metrics failed a third time, and this is now a law of this project
+
+Items **3, 5, 8 and 9 all scored `contract_ok=True` with CER between 0.020 and 0.077** — the best
+numbers on the page. Every one of them contains an error the owner caught by ear. Item 9's CER is
+0.020 and it says *Islam* instead of *peace be upon you*.
+
+That is the third independent demonstration, after A0's ASR screen and §10's contract metric passing
+a mangled `owner_01_sick`. **Text metrics in this project can only fail a candidate, never approve
+one.** No exception has yet been found; stop looking for one.
+
+### 14c. Why the errors are the expensive kind
+
+کال/کل, طباعت/طبیعت, بجھ/بھیج are not garbled output. They are correctly-spelled, valid Urdu words
+that mean something else — *call* for *tomorrow*, *printing* for *health*, *extinguish* for *send*.
+Spotting them requires reading the Urdu carefully, which is most of the cost of typing it. The
+plan's gating question was **"would editing A be less work than typing B yourself?"**, and a
+substitution class that is invisible at a glance is the worst possible answer to it, independent of
+what percentage of sentences are clean.
+
+### 14d. The survey: what is actually above Ministral, and why none of it ran
+
+From [UrduMMLU](https://arxiv.org/html/2606.07167v1)'s Table 4, Urdu-prompt accuracy:
+
+| model | params | Urdu acc | licence | fits 24 GB? |
+|---|---|---|---|---|
+| DeepSeek-V4-Flash | large MoE | 81.4% | MIT | no |
+| Gemma-4-31B-IT | 31B dense | 76.4% | **Apache 2.0** | 4-bit ≈19 GB — too tight |
+| LLaMA-4-Maverick-17B-128E | 400B MoE | 75.8% | Llama 4 (bespoke) | no |
+| Qwen3.6-35B-A3B | 35B/3B MoE | 75.5% | Apache 2.0 | 4-bit ≈18.5 GB — too tight |
+| Gemma-4-26B-A4B-IT | 25B/3.8B MoE | 70.2% | **Apache 2.0** | 4-bit ≈14 GB ✅ — **attempted** |
+| Qwen3.6-27B | 27B dense | 69.7% | Apache 2.0 | 4-bit ≈17 GB — tight |
+| **Ministral-3-8B** | 8B | **57.0%** | Apache 2.0 | ✅ bf16 — what §13 measured |
+| Gemma-2-9B-IT | 9B | 56.8% | Gemma terms | ✅ |
+| Qwen3-8B | 8B | 49.0% | Apache 2.0 | ✅ |
+
+**Ministral is the ceiling of its weight class** — it tops everything ≤25B, so §13's 74% is what 8B
+can do, and the 57 → 70/76 gap is real unexploited headroom.
+
+**Gemma 4 is genuinely Apache 2.0.** Verified at `ai.google.dev/gemma/docs/gemma_4_license`
+directly, not from the HF card, per rule 6. This is a change from Gemma 1–3's bespoke terms. A
+separate Prohibited Use Policy applies, but it governs content, not the weights.
+
+**The wall is VRAM, not licences.** The A5000 has 23.56 GiB total and **5.23 GiB is held by an idle
+`voxcpm` worker (pid 3240) belonging to the owner's running backend**, leaving 18.1 GiB. Every model
+above Ministral needs ≥14 GiB at 4-bit plus KV cache. Killing that worker out from under the
+scheduler is **not** an option — golden rule 3 puts eviction inside `_ensure_ready()` under the
+GPU semaphore, and an external `kill` leaves the scheduler believing it still owns a worker.
+
+### 14e. Two probe bugs found on the way, both of the silent-wrong-number kind
+
+Neither would have crashed. Both would have produced a plausible score for something other than the
+model under test.
+
+1. **`dtype=torch.bfloat16` forced over a pre-quantized checkpoint** either errors or dequantizes
+   into VRAM the card does not have. `dtype` is now set only when the config carries no
+   `quantization_config`.
+2. **`caching_allocator_warmup` sizes its reservation from the *unquantized* parameter count.** For
+   a 26B model whose 4-bit weights are ~14 GiB it tried to reserve **22.36 GiB** and raised
+   `OutOfMemoryError` on a card with room for the real weights. It is a pure allocator optimisation,
+   so it is neutralised on the quantized path only — every unquantized result recorded so far is
+   bit-for-bit unaffected.
+
+And one that is not ours to fix, recorded because it nearly produced a **garbage benchmark**:
+
+3. **`cyankiwi/gemma-4-26B-A4B-it-AWQ-4bit` does not load correctly under transformers 5.15.0.** The
+   load report lists every
+   `model.language_model.layers.{0..29}.experts.{0..127}.{gate,up,down}_proj.weight_packed` as
+   `UNEXPECTED` and `experts.gate_up_proj` / `experts.down_proj` as `MISSING` — *"newly initialized
+   because missing from the checkpoint"*. The checkpoint stores experts per-expert; this
+   transformers version wants them fused. **Had VRAM been sufficient, the probe would have completed
+   and reported a score for a model with randomly-initialised MoE experts.** A second OOM, later in
+   loading, is the only reason it did not. Treat a transformers LOAD REPORT with `MISSING` weights as
+   a hard failure in any future bake-off, never as a warning.
+
+Also worth knowing for anyone repointing `PROBE_MODEL_ID`: Qwen3.6 and its descendants **think by
+default**, emitting `<think>…</think>` ahead of the answer, which `parse_transliteration` would have
+scored as the answer. The probe now passes `enable_thinking=False` to templates that declare it
+(detected in the template text, not by model name), raises the budget to 512 tokens, and strips a
+**closed** think block. An **unclosed** one is deliberately left in place: it means generation ran
+out mid-reasoning with no answer at all, which is a genuine unparseable and must score as one.
+
+---
+
+## 15. A3 run 3 — **the gate PASSED.** `[LISTEN]`
+
+Owner's verdict on `eval/results/a3_gemma31b/listen.html`:
+
+> *"I just read the transcript of gemma and it's perfect with the current data. Just a pronunciation
+> of meeting is not correct… But it's best."*
+
+**This is the first pass A3 has ever returned**, and it closes a run of four negatives (A0, A2, A4,
+A3-run-1) plus a partial (A3-run-2). §12's closure is now formally superseded: it was a verdict on
+Qwen2.5-7B, §14 showed it did not generalise to Ministral, and this shows it does not generalise to
+Gemma-4-31B either.
+
+**Phase B is unblocked.** The plan's explicit gate — *"Phase B is not started until A3 demonstrates
+consistently useful OmniVoice pronunciation"* — is satisfied.
+
+### 15a. The three runs, same ten sentences for runs 1 and 3
+
+| run | model | licence | contract | CER | owner's verdict |
+|---|---|---|---|---|---|
+| 1 | Qwen2.5-7B-Instruct | Apache 2.0 | 18/45 (40%) | 0.3061 | ❌ *"not usable"* |
+| 2 | Ministral-3-8B-Instruct-2512 | Apache 2.0 | 29/39 (74%) | 0.0777 | ⚠️ ten defects, nine of them text |
+| **3** | **Gemma-4-31B-it (bnb 4-bit)** | **Apache 2.0** | **33/45 (73%)** | **0.0414** | ✅ **"perfect with the current data"** |
+
+Note that runs 2 and 3 have **the same contract rate to within one point** while landing on opposite
+sides of the gate. The metric could not distinguish "ten meaning-changing errors" from "perfect".
+CER halved and *that* tracked the verdict — but only in hindsight, which is not a usable rule.
+**The fourth demonstration that these metrics can only fail, never approve.**
+
+### 15b. Every defect from run 2, fixed
+
+Checked item by item against the owner's own notes, not against a score:
+
+| run 2 defect | Ministral | Gemma-4-31B |
+|---|---|---|
+| yaar → aray | ارے | **یار** ✅ |
+| tabiyat → tabaat | طباعت (*printing*) | **طبیعت** (*health*) ✅ |
+| kar lena → karna (×2) | کرنا | **کر لینا** ✅ |
+| Kal → Call (×2) | کال (*call*) | **کل** (*tomorrow*) ✅ |
+| baraye meherbani | بارے مہربانی | **برائے مہربانی** ✅ |
+| bhej dein → bhj dein | بجھ (*extinguish*) | **بھیج** (*send*) ✅ |
+| Assalam → Islam | اسلام علیکم | **السلام و علیکم** ✅ |
+| Mera → May ra | میںرا | **میرا** ✅ |
+
+The homophone class — valid Urdu words meaning something else — is **gone**, which is what §14c
+identified as the class that made editing as expensive as typing.
+
+### 15c. Prompting is not the lever, in either direction
+
+Gemma's four arms are within noise: contract 30–33/45, CER 0.041–0.049, **0 unparseable in all
+four**. The strict prompt and six exemplars bought essentially nothing.
+
+That is the *inverse* of §10a's finding, and the pair is the useful result:
+
+- On **Qwen**, prompting bought nothing because the model **could not hold** the constraints.
+- On **Gemma**, prompting buys nothing because the model **already holds** them.
+
+Between those two states there is no amount of prompt engineering that substitutes for capability.
+`strict_zero_shot` is still the production arm — same score, and it is the prompt that states the
+contract, so the instruction the user can edit in Phase B matches what was measured.
+
+### 15d. The one remaining defect: `meeting` → "mating"
+
+The owner's single complaint is a **pronunciation** issue, not a conversion one:
+<span dir="rtl">میٹنگ</span> is read by OmniVoice as *mating* rather than *meeting*. Gemma wrote
+<span dir="rtl">میٹنگ</span>, which is also exactly what the corpus **gold** writes — so column B has
+the identical defect and this is not attributable to the model at all.
+
+**It is dictionary work, and it extends the dictionary's requirements in a way `database` did not.**
+`_LOANWORD_LEXICON` currently maps a **Latin** key to an Urdu respelling (`database` →
+<span dir="rtl">ڈیٹا بےس</span>). Here the text already arrives in Perso-Arabic, so a Latin key never
+matches. **Dictionary entries must therefore be keyable on either script**, and the design in #103
+has to account for that from the start rather than bolting it on.
+
+Candidate respellings must go through §9b's blind repeat sampling before any is committed —
+synthesis is unseeded, `database` needed twelve samples per candidate to separate 11/12 from 7/12,
+and the single best-*sounding* clip there scored 4/12.
+
+### 15e. The production problem this creates: 19 GB of transliterator
+
+Gemma-4-31B at 4-bit is **~19 GB resident**. The card is 24 GB with `budget_mb = 16000` and
+`max_workers = 2` sized for OmniVoice plus one other runtime. The winning model does not fit
+alongside the TTS engine it feeds.
+
+This is not fatal — the transliterator is a **pre-TTS step**, so it never needs to be co-resident:
+convert → unload → user edits → Generate. `AnalyzerScheduler`'s idle-unload timer is the existing
+precedent. But two facts have to be designed for rather than discovered:
+
+- **78.4 s cold load.** Acceptable behind the job queue (202 + poll), not acceptable synchronously.
+- **Two independent schedulers both allocating VRAM.** `AnalyzerScheduler` already sits outside the
+  main scheduler's semaphore, and Qwen2.5-3B's ~6 GB fits inside the slack. 19 GB does not. Golden
+  rule 3 puts eviction inside `_ensure_ready()` under the GPU-slot semaphore, and a second scheduler
+  that can demand 19 GB without participating in it is exactly the unrepresentable-state guarantee
+  that rule was written to protect. **Resolve this in the Phase B design, not in the implementation.**
+
+Ministral-3-8B is the fallback the owner already named, and it is genuinely cheaper — but run 2 is
+the measured record of what its output sounds like, and it was not passed. A 4-bit Ministral would
+be cheaper still and worse. **Do not substitute it for Gemma on VRAM grounds without re-running A3
+on the substitute**; that is the whole discipline of this phase.
+
+### 15f. `meeting` measured — and the either-script premise confirmed
+
+`eval/run_meeting_respell.py`, 8 spellings × 4 generations, blind, one carrier
+sentence (the clause the defect was heard in). Owner-rated:
+
+| spelling | correct |
+|---|---|
+| <span dir="rtl">میٹنگ</span> — **what shipped, and what gold writes** | **2/4** |
+| <span dir="rtl">می ٹنگ</span> — split at the word break | 3/4 |
+| `meeting` — Latin, as `cs_02_meeting`'s gold does it | 4/4 |
+| <span dir="rtl">مِیٹنگ</span> · <span dir="rtl">میٹِنگ</span> · <span dir="rtl">مِیٹِنگ</span> · <span dir="rtl">میٹینگ</span> · <span dir="rtl">مِٹنگ</span> | **4/4** each |
+
+**Two findings, and the first one is the one that mattered.**
+
+1. **Respelling a word that is already Perso-Arabic does change how OmniVoice
+   reads it.** Every prior lexicon entry keyed on a Latin word, so nothing had
+   ever established that the mechanism works in the other direction. It does —
+   which is what makes an either-script dictionary a viable design rather than
+   a hopeful one. Had this come back negative, #103 would have needed a
+   different mechanism entirely.
+2. **The broken spelling scores 2/4, not 0/4.** It is an *intermittent* defect,
+   which is exactly why it survived A2's metrics, three A3 runs, and every
+   read-through of the text, and surfaced only when the owner happened to hear
+   the bad half. Compare `database` and `URL`, both of which were 0/4 verbatim.
+   A defect that is right half the time is strictly harder to find than one
+   that is always wrong, and nothing in the numeric harness can see it.
+
+Five candidates tie at 4/4 and n=4 cannot separate them. <span dir="rtl">مِیٹِنگ</span>
+ships, chosen on a **non-acoustic** tie-break: it adds only diacritics to the
+standard skeleton, so the text a user sees in the Composer still reads as
+<span dir="rtl">میٹنگ</span>, whereas the alternatives change letters or word
+boundaries and look wrong on the page. **Deliberately not resolved with another
+sampling round** — the owner's point stands that choosing a respelling by hand
+is precisely the work the user-editable dictionary exists to hand back to them.
+It is a default, not a verdict.
+
+This is also the first shipped entry keyed in Perso-Arabic, so the either-script
+path is exercised in production rather than only in tests.

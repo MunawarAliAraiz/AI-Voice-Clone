@@ -62,3 +62,10 @@ frontend/src-tauri/bin/*.exe
 # key.json is NOT ignored: exported listening scores are token-keyed and only that
 # file maps a token back to an arm, so regenerating would orphan the scores.
 eval/results/urdu_bakeoff/blind/
+
+# Real recorded human voice, deliberately untracked: the LoRA POC training
+# clips and the second speaker reference. Same reasoning as backend/data/ --
+# real people's voice data does not belong in a shared repo. Swept in once by
+# an over-broad `git add -A eval/` (2026-08-16); ignored so it cannot recur.
+eval/training/
+eval/fixtures/voice_urdu_female.wav
