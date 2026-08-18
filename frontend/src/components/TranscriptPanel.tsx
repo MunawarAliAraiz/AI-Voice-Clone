@@ -17,10 +17,10 @@
  * sentence will not fit — chunks that were cut that way are BADGED, because
  * that is exactly where a join artifact becomes audible.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../services/api';
-import type { TranscriptResponse } from '../types/api';
-import { IconAlert, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
+import type { TranscriptChunk, TranscriptResponse } from '../types/api';
+import { IconAlert, IconChevronDown, IconChevronUp, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
 import { fmtDuration } from '../lib/format';
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { useTranscriptParts } from '../hooks/useTranscriptParts';
@@ -106,6 +106,85 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       if (!next.delete(index)) next.add(index);
       return next;
     });
+
+  //: Chapters default EXPANDED; a collapsed chapter would hide conversion
+  //: progress, and the parts are the volume problem, not the chapters.
+  const [collapsedChapters, setCollapsedChapters] = useState<Set<number>>(new Set());
+  //: The chapter <section> elements, so the jump list can scroll one into view.
+  const chapterRefs = useRef<Map<number, HTMLElement>>(new Map());
+
+  const toggleChapter = (key: number) =>
+    setCollapsedChapters((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
+  const selectChapter = (indexes: number[]) =>
+    setSelected((prev) => new Set([...prev, ...indexes]));
+
+  //: `chapter_index` is a real chapter number, so `null` (no chapters, or the
+  //: pre-chapter stretch) needs a sentinel key — -1, which no chapter uses.
+  const chapterGroups = useMemo(() => {
+    const chunks = data?.chunks ?? [];
+    const chapters = data?.chapters ?? [];
+    if (!chapters.length) return [{ chapter: null, chunks }];
+
+    const byKey = new Map<number, typeof chunks>();
+    const order: number[] = [];
+    for (const chunk of chunks) {
+      const key = chunk.chapter_index ?? -1;
+      if (!byKey.has(key)) {
+        byKey.set(key, []);
+        order.push(key);
+      }
+      byKey.get(key)!.push(chunk);
+    }
+    const chapterByIndex = new Map(chapters.map((c) => [c.index, c]));
+    return order.map((key) => ({
+      chapter: key === -1 ? null : (chapterByIndex.get(key) ?? null),
+      chunks: byKey.get(key)!,
+    }));
+  }, [data?.chunks, data?.chapters]);
+
+  const jumpToChapter = (key: number | null) => {
+    const target = key ?? -1;
+    // Ensure it is open before scrolling, or the row jumps to an empty header.
+    setCollapsedChapters((prev) => {
+      const next = new Set(prev);
+      next.delete(target);
+      return next;
+    });
+    // A frame later, so the just-expanded section has laid out.
+    requestAnimationFrame(() =>
+      chapterRefs.current.get(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  };
+
+  //: One row, so the flat list and every chapter group render identically.
+  const renderRow = (chunk: TranscriptChunk) => (
+    <TranscriptPartRow
+      key={chunk.index}
+      chunk={chunk}
+      parts={parts}
+      expanded={expanded.has(chunk.index)}
+      onToggle={() => toggleExpanded(chunk.index)}
+      selected={selected.has(chunk.index)}
+      selectMode={selectMode}
+      onSelect={() => toggleSelected(chunk.index)}
+      onConvert={
+        offerConversion && canConvert
+          ? (target) => startConversion([chunk.index], target)
+          : undefined
+      }
+      converting={conversion.running && busyIndex === chunk.index}
+      convertingLabel={conversion.progressLabel}
+      onSendToEditor={onSendToEditor}
+      onCopy={(text, key) => void copy(text, key)}
+      copied={copied === `c${chunk.index}`}
+      requiresConversion={needsConversion}
+    />
+  );
   //: Which part a single-part conversion is for, so its own row can show the
   //: progress instead of the panel-level control claiming to be busy.
   const [busyIndex, setBusyIndex] = useState<number | null>(null);
@@ -164,6 +243,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       setExpanded(new Set());
       setSelected(new Set());
       setSelectMode(false);
+      setCollapsedChapters(new Set());
       const fetched = await api.fetchTranscript(url.trim(), language || undefined);
       parts.reset(fetched.chunks);
       setData(fetched);
@@ -535,32 +615,94 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
             aria-label="Full transcript"
           />
 
+          {/* Jump list — only when there is more than one chapter to jump
+              between. Collapses to a <select> under 640px (CSS). */}
+          {chapterGroups.length > 1 && (
+            <nav className="chapter-jump" aria-label="Jump to chapter">
+              {chapterGroups.map((group, gi) =>
+                group.chapter ? (
+                  <button
+                    key={group.chapter.index}
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => jumpToChapter(group.chapter!.index)}
+                  >
+                    {group.chapter.title}
+                  </button>
+                ) : (
+                  <button
+                    key={`pre-${gi}`}
+                    type="button"
+                    className="btn-sm ghost"
+                    onClick={() => jumpToChapter(null)}
+                  >
+                    Intro
+                  </button>
+                ),
+              )}
+            </nav>
+          )}
+
           <h3 className="transcript-h3">Parts</h3>
-          <ul className="parts">
-            {data.chunks.map((chunk) => (
-              <TranscriptPartRow
-                key={chunk.index}
-                chunk={chunk}
-                parts={parts}
-                expanded={expanded.has(chunk.index)}
-                onToggle={() => toggleExpanded(chunk.index)}
-                selected={selected.has(chunk.index)}
-                selectMode={selectMode}
-                onSelect={() => toggleSelected(chunk.index)}
-                onConvert={
-                  offerConversion && canConvert
-                    ? (target) => startConversion([chunk.index], target)
-                    : undefined
-                }
-                converting={conversion.running && busyIndex === chunk.index}
-                convertingLabel={conversion.progressLabel}
-                onSendToEditor={onSendToEditor}
-                onCopy={(text, key) => void copy(text, key)}
-                copied={copied === `c${chunk.index}`}
-                requiresConversion={needsConversion}
-              />
-            ))}
-          </ul>
+
+          {chapterGroups.length > 1
+            ? chapterGroups.map((group) => {
+                const key = group.chapter ? group.chapter.index : -1;
+                const groupCollapsed = collapsedChapters.has(key);
+                const converted = group.chunks.filter(
+                  (c) => parts.status(c.index) !== 'original',
+                ).length;
+                return (
+                  <section
+                    key={key}
+                    className="chapter"
+                    ref={(el) => {
+                      if (el) chapterRefs.current.set(key, el);
+                    }}
+                  >
+                    <div className="chapter-head">
+                      <button
+                        type="button"
+                        className="chapter-toggle"
+                        aria-expanded={!groupCollapsed}
+                        onClick={() => toggleChapter(key)}
+                      >
+                        {groupCollapsed ? (
+                          <IconChevronDown size={13} />
+                        ) : (
+                          <IconChevronUp size={13} />
+                        )}
+                        <span className="chapter-title">
+                          {group.chapter ? group.chapter.title : 'Before the first chapter'}
+                        </span>
+                        {group.chapter && (
+                          <span className="muted chapter-time">
+                            {fmtDuration(group.chapter.start_sec)}
+                          </span>
+                        )}
+                      </button>
+                      <span className="muted chapter-count">
+                        {converted > 0
+                          ? `${converted}/${group.chunks.length} parts`
+                          : `${group.chunks.length} part${group.chunks.length === 1 ? '' : 's'}`}
+                      </span>
+                      {selectMode && (
+                        <button
+                          type="button"
+                          className="btn-sm ghost"
+                          onClick={() => selectChapter(group.chunks.map((c) => c.index))}
+                        >
+                          Select these
+                        </button>
+                      )}
+                    </div>
+                    {!groupCollapsed && (
+                      <ul className="parts">{group.chunks.map(renderRow)}</ul>
+                    )}
+                  </section>
+                );
+              })
+            : <ul className="parts">{data.chunks.map(renderRow)}</ul>}
         </>
       )}
     </section>
