@@ -19,7 +19,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../services/api';
-import type { TranscriptChunk, TranscriptResponse } from '../types/api';
+import type { TranscriptChunk, TranscriptResponse, TranscriptTrack } from '../types/api';
 import { IconAlert, IconChevronDown, IconChevronUp, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
 import { fmtDuration } from '../lib/format';
 import { useScriptConversion } from '../hooks/useScriptConversion';
@@ -255,6 +255,57 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     }
   }
 
+  //: Classify a track for the picker, using ONLY the two signals that are
+  //: reliable: the `-orig` suffix yt-dlp puts on an original-language track,
+  //: and `is_auto_generated`. They are not mutually exclusive — a
+  //: machine-transcribed video's only track is both (`hi-orig`, auto).
+  //:
+  //: A human-authored track that is NOT `-orig` is labelled "manual", not
+  //: "translated": we cannot tell an authored original from an authored
+  //: translation without knowing the video's own language per track, and
+  //: guessing "translated" would be confidently wrong on every original-
+  //: language human caption. What DOES protect the user is that a genuine
+  //: original sorts first and is marked, and the language code is on screen.
+  const trackBadges = (t: TranscriptTrack): string[] => {
+    const badges: string[] = [];
+    if (t.language.endsWith('-orig')) badges.push('original');
+    if (t.is_auto_generated) badges.push('auto-generated');
+    if (!badges.length) badges.push('manual');
+    return badges;
+  };
+  const trackLabel = (t: TranscriptTrack) =>
+    `${t.name ?? t.language} — ${trackBadges(t).join(', ')}`;
+  const sortedTracks = (tracks: TranscriptTrack[]) =>
+    [...tracks].sort((a, b) => {
+      const rank = (t: TranscriptTrack) =>
+        t.language.endsWith('-orig') ? 0 : t.is_auto_generated ? 2 : 1;
+      return rank(a) - rank(b);
+    });
+
+  //: Re-fetch with a specific track's language code. The ONLY place a language
+  //: code is chosen, and it happens with the real options on screen.
+  async function refetchWithTrack(trackLanguage: string) {
+    if (!url.trim()) return;
+    setLanguage(trackLanguage);
+    setLoading(true);
+    setError(null);
+    try {
+      conversion.reset();
+      setBatchIndexes([]);
+      setExpanded(new Set());
+      setSelected(new Set());
+      setSelectMode(false);
+      setCollapsedChapters(new Set());
+      const fetched = await api.fetchTranscript(url.trim(), trackLanguage);
+      parts.reset(fetched.chunks);
+      setData(fetched);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function copy(text: string, key: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -272,8 +323,8 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       </header>
 
       <p className="hint">
-        Fetches the video's own caption track. Auto-generated captions are a rough draft —
-        read it before you generate from it.
+        Picks the video's own caption track. Auto-generated captions are a rough draft —
+        read it before you generate from it. You can switch tracks after fetching.
       </p>
 
       <form className="transcript-form" onSubmit={fetchTranscript}>
@@ -285,16 +336,6 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
             placeholder="https://www.youtube.com/watch?v=…"
             inputMode="url"
             required
-          />
-        </label>
-        <label className="field transcript-lang">
-          <span className="field-label">Caption language</span>
-          <input
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            placeholder="auto"
-            maxLength={16}
-            aria-label="Preferred caption language code"
           />
         </label>
         <button type="submit" className="btn" disabled={loading || !url.trim()}>
@@ -330,6 +371,46 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
               <span className="tag warn">machine-written — expect errors</span>
             )}
           </div>
+
+          {/* TRACK PICKER — populated from the tracks the video actually has,
+              which only exist after a fetch. The user never types a language
+              code; they choose from real options with the original marked. */}
+          {data.available_tracks.length > 1 && (
+            <label className="field transcript-track">
+              <span className="field-label">
+                Caption track
+                {data.total_tracks > data.available_tracks.length && (
+                  <span className="muted">
+                    {' '}· {data.total_tracks} tracks total, showing the usable ones
+                  </span>
+                )}
+              </span>
+              <select
+                value={data.chosen_track.language}
+                disabled={loading}
+                onChange={(e) => void refetchWithTrack(e.target.value)}
+              >
+                {sortedTracks(data.available_tracks).map((t) => (
+                  <option key={t.language} value={t.language}>
+                    {trackLabel(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {/* A request that could not be honoured is stated, not left in the
+              badge to be decoded — the whole point of the picker is that a
+              translation never reaches a voice model unnoticed. */}
+          {language && language !== data.chosen_track.language && (
+            <div className="inline-error" role="status">
+              <IconAlert size={14} />
+              <span>
+                This video has no “{language}” track, so the{' '}
+                {data.chosen_track.language} one was used instead.
+              </span>
+            </div>
+          )}
 
           {/* NOT a warning about a failure — a statement about what is
               possible. No model here renders Devanagari (routing rejects it
