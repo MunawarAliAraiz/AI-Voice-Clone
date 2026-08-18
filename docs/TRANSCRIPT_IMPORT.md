@@ -90,11 +90,46 @@ owner can tune is honest; a guess wearing a spec field is not.** The upgrade pat
 `ends_on_sentence=False` is surfaced and badged in the UI — that is where a join artifact becomes
 audible, and hiding it would make a known defect look like a model failure.
 
+### Chapters (2026-08-18)
+
+yt-dlp already returns a video's chapters and they used to be dropped on the floor. They now drive
+**chunk-per-chapter**: `parse_chapters` (tolerant, never raises — third-party data) reads them,
+`group_cues` assigns each cue to a chapter by `start_sec` (`bisect_right`, half-open boundaries),
+and `cues_to_text` + `chunk_for_synthesis` run **per group**, so a part never straddles a chapter —
+a chapter boundary is a real content boundary and also the paragraph break (`"\n\n"`, ~380 ms of
+deliberate silence) that CLAUDE.md's newline rule is about.
+
+Non-obvious properties, each with a test:
+
+- **No chapters → byte-identical to before.** `group_cues(cues, []) == [(None, cues)]`, one group,
+  no join, so the `text` and `chunks` are exactly what they were. This is the invariant that keeps
+  chapters an enhancement rather than a new requirement.
+- **`index` is renumbered globally** across groups. `chunk_for_synthesis` numbers from 0 per call,
+  so per-chapter chunking would otherwise yield three parts all called `0` — and the UI keys
+  per-part state and conversion remaps on `chunk.index`, so a collision lands part 8's conversion on
+  part 1. The exact silent wrong-answer bug `batchIndexes` exists to prevent.
+- **No per-chunk `start_sec`.** The cheap version (stamp the chapter's start on all its parts) is a
+  precise-looking wrong number — `normalize_whitespace` destroys the newlines `cues_to_text` emitted,
+  so a chunk is not a substring of its group and offsets can't be recovered. Timestamps go on the
+  **chapter heading only**, where they are true.
+- **Script detected once, from the whole transcript**, and passed to every per-group call — an
+  English-heavy chapter must not pick a different terminator set than the one beside it.
+- **A short chapter still gets its own part.** `min_chars` merging is intra-call, so a 40-char
+  chapter the author wrote becomes an unmergeable 40-char part rather than being folded into its
+  neighbour and vanishing from the jump list. Surfaced, like `ends_on_sentence=False`, not hidden.
+- **Truncation is reported, not just logged.** `transcript_max_chars` is applied while walking groups
+  (not on the joined string, which would leave chunks referencing absent text) and sets
+  `truncated: True` so the UI can say so — the old behaviour was a `logger.warning` the user never saw.
+
 ### `frontend/src/components/TranscriptPanel.tsx` — the Import tab
 
-Ends at "put this in the editor", never at "generate this". The transcript box is **read-only**;
-the editable copy lives in the Composer, because two editable copies of one text is how they drift
-apart.
+Ends at "put this in the editor", never at "generate this". The imported **caption is read-only** —
+a conversion *under review* is editable (see "Where the two copies live" below), but the source it
+was derived from is not, because two editable copies of one text is how they drift apart.
+
+As of 2026-08-18 the tab renders parts as a collapsible table of contents (`TranscriptPartRow` +
+`useTranscriptParts`) grouped by chapter, with a jump list and a bulk-select bar, rather than one
+wall of fully-expanded parts. Actions live inside the one expanded part they can apply to.
 
 Text crosses tabs via a `pendingText` prop carrying `{text, token}` — a **monotonic token, not the
 string**. Keying the effect on the string would silently ignore sending the same chunk twice, which
@@ -146,14 +181,15 @@ it.
   the feature is still being validated. **That message is the truth, not a placeholder — do not
   remove it because the backend now works.** Every job result carries `source_script` for the same
   reason: a conversion produced by the ungated exemplar set must be identifiable as one.
-- **Any of it on a GPU.** The whole transliterator is tested against a fake scheduler; no pod has
-  ever had `.venv-gemma`.
+- **The Devanagari path on a GPU.** The `latin → perso_arabic` hop is GPU-verified and resident;
+  `.venv-gemma` was provisioned on the A40 pod 2026-08-17 and Gemma is now warmed at startup. What
+  remains unrun on a GPU is specifically the **Devanagari** arm's listening gate (above).
 
 ---
 
-## The Roman-draft question (owner deciding)
+## The Roman-draft question (DECIDED 2026-08-18)
 
-Proposal: type/import **Roman Urdu**, keep it as the readable editable draft, convert to
+Proposal was: type/import **Roman Urdu**, keep it as the readable editable draft, convert to
 Perso-Arabic for OmniVoice.
 
 Storing both is free — `generation_history.resolved_text` already exists for exactly this and is
@@ -163,10 +199,39 @@ golden rule 5's family.
 
 | Approach | Edit in | Cost |
 |---|---|---|
-| Roman is truth, re-convert every edit | Roman | ~78 s Gemma load per edit round |
+| Roman is truth, re-convert every edit | Roman | ~~~78 s Gemma load per edit round~~ **obsolete** — see below |
 | Convert once, then edit the Perso-Arabic | Perso-Arabic | none, but harder to read |
-| **Both kept; editing Roman marks Urdu stale and BLOCKS Generate** ← recommended | Roman | re-convert before generating |
+| **Both kept; editing Roman marks Urdu stale and BLOCKS Generate** ← chosen | Roman | re-convert before generating |
 
-Under the recommendation the workflow is: edit in Roman until happy → convert once → review →
-generate. Conversion is the last step before generating, not the first, so the ~78 s is paid once
-rather than per edit round.
+**Why the ~78 s objection is gone.** It assumed a load-convert-unload transliterator. Gemma has been
+**resident since 2026-08-17** (idle-killed, warmed at startup — `TransliteratorScheduler`), so a
+re-convert is **~5 s**, not ~78 s. That collapses the only cost the recommended row carried and is
+why "re-convert every edit round" is now nearly frictionless rather than a compromise.
+
+The chosen workflow: edit in Roman until happy → convert once → review → generate. Conversion is the
+last step before generating, not the first.
+
+### Where the two copies live, and why it is not one editable box
+
+The earlier "the transcript box is **read-only**" is still true of the *source*, but it is only half
+the picture now that conversions are edited in place:
+
+- The **caption is read-only** and never mutated — it is what makes a conversion checkable (you can
+  always see what it was derived from) and it is the one copy that must not drift.
+- A **conversion under review is editable**, but it is not a second copy of the transcript — it is a
+  suggestion being corrected before it leaves. `useTranscriptParts` keeps them apart:
+  `source` (readonly) vs `draft`/`converted`, with `outgoing = draft ?? converted ?? source` as the
+  single answer to "what does this part hand onward". Editing marks the part `edited`; a Perso-Arabic
+  under review that gets its Roman edited goes **stale** and is blocked from Generate until
+  re-converted (golden rule 5).
+
+### Convert-on-generate lives in the CLIENT, on purpose
+
+When the owner picks an Urdu-script-only model (OmniVoice declares only `(ur, ARABIC)`) and types
+Roman Urdu, `resolve()` returns `NoRouteError` and rightly refuses to swap the chosen model. The
+Composer handles this **client-side**: on Generate it runs the conversion job, shows the Perso-Arabic
+for review, and one more tap generates. `resolve()` and `TransformKind` are **not** taught about the
+transliterator — a `latin → perso_arabic` `TransformKind` would be exactly the routing-transform
+shortcut golden rules 4/5 forbid, and `jobs/handlers/transliterate.py`'s output is "editable text a
+human reads and corrects before generating — never a routing transform applied behind their back".
+Do not re-derive that shortcut; the sequencing belongs in the UI where the review step can exist.

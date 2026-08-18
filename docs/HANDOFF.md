@@ -39,19 +39,21 @@ created 2026-08-17 and is **mid-bootstrap**. Four things about it:
 | Generation titles, non-blocking Generate, retry button, merged Recent/History | ✅ shipped, browser-verified |
 | Clause/sentence/paragraph breaks (Urdu `،`, newlines) | ✅ shipped, tested |
 | YouTube transcript import — backend + Import tab | ✅ shipped, **browser-verified against a real video** |
-| Phase B: `exclusive_gpu`, validator, Gemma runtime, `TransliteratorScheduler` | ✅ written |
+| Import tab rework — chapters, collapsible parts, per-part editing, bulk bar, track picker | ✅ shipped & browser-verified (2026-08-18) |
+| Phase B: `exclusive_gpu`/`reserve_slot`, validator, Gemma runtime, `TransliteratorScheduler` | ✅ written |
 | Phase B: `POST /api/text/transliterate`, `JobKind.TRANSLITERATE`, handler, config, lifespan | ✅ wired & tested (CPU, fake scheduler) |
-| Phase B: **run on an actual GPU** | ❌ never — no pod has had `.venv-gemma` |
-| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** |
-| Composer UI for transliteration | ❌ not started — blocked on the Roman-draft decision |
+| Phase B: **run on an actual GPU** | ✅ `.venv-gemma` provisioned on the A40 pod 2026-08-17; Gemma **resident** (idle-killed, warmed at startup), `latin → perso_arabic` GPU-verified |
+| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** (Devanagari listening gate still unrun) |
+| Composer convert-on-generate (Roman Urdu → Urdu script, client-side, with review) | ✅ shipped 2026-08-18 (browser verify pending a warm pod) |
 
 ### The next three things, in order
 
-1. **GPU-verify Phase B.** Everything above the GPU line is done and nothing below it has ever run.
-   On the pod: check out `feature/roman-urdu-phase-a`, provision `.venv-gemma` (the bootstrap's
-   step 13b/13c), then confirm Gemma loads under `exclusive_gpu`, converts, and the worker is
-   **killed** — with `nvidia-smi` showing the VRAM actually returned and the audio models reloading
-   cold afterwards. That last part is the claim most likely to be wrong.
+1. **Browser-verify convert-on-generate end to end on a warm pod.** The client-side flow shipped
+   2026-08-18 (Composer: Urdu selected + OmniVoice default + Roman text → chip warns → Generate
+   converts → review banner → one tap → audio) but has only been proven by `npm run build` and code
+   reading. Bring up the pod backend over the SSH tunnel with Gemma warm and run the checklist in
+   the plan's "In the browser" section, including the Import-tab bulk convert landing on the right
+   parts and the 375px chapter jump list.
 2. **The Devanagari listening gate.** The path is built and reports `source_script` on every result
    so an ungated conversion is identifiable, but nothing has *heard* one. Add a Devanagari arm to
    `eval/run_roman_arabic_probe.py` and run the A3 protocol end to end. Synthesis is unseeded —
@@ -60,30 +62,30 @@ created 2026-08-17 and is **mid-bootstrap**. Four things about it:
    feature is still being validated. **That is correct and must stay true until the gate passes.**
    One thing the gate should settle that nothing has decided: what to do with an English loanword
    already spelled in Devanagari (मीटिंग). The exemplars deliberately say nothing about it.
-3. **The Roman-draft decision** (below) — the owner leaned toward keeping the Roman draft but has
-   not picked among the three shapes. The Composer UI is blocked on it.
+3. **Confirm Gemma's residency behaves under load.** `TransliteratorScheduler` idle-kills and warms
+   at startup; verify with `nvidia-smi` that it actually returns VRAM when idle-killed and that the
+   audio models reload cold afterwards. That reload claim is the one most likely to be wrong.
 
-### Open design question the owner is deciding
+### The Roman-draft question — DECIDED 2026-08-18
 
-The owner proposed: type/import **Roman Urdu**, keep it as the readable editable draft, convert to
+The owner's proposal — type/import **Roman Urdu**, keep it as the readable editable draft, convert to
 Perso-Arabic for OmniVoice (which has no `(ur, LATIN)` cell, and where VoxCPM2's direct Roman
-rendering is the A0 finding the owner heard as an English accent).
+rendering is the A0 finding the owner heard as an English accent) — was **adopted**, in the third
+shape: **both kept; editing the Roman marks the Urdu stale and blocks Generate until re-converted.**
 
-Storing both is free — `generation_history.resolved_text` already exists for exactly this ("the
-post-transform string the model actually received") and is simply **not exposed** in `HistoryItem`
-or `frontend/src/types/api.ts`. The real cost is **staleness**: edit the Roman after converting and
-the Perso-Arabic is stale, and silently synthesizing either one is golden rule 5's family.
+The one cost that shape carried (`~78 s` Gemma load per re-convert) is **obsolete**: Gemma is
+resident since 2026-08-17, so a re-convert is ~5 s. Implemented two ways:
 
-Three options were put to the owner; **the recommendation is the third**:
+- **Import tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
+  `outgoing = draft ?? converted ?? source`, edit marks the part stale/edited.
+- **Composer** (client-side convert-on-generate): Generate runs the conversion when the selected
+  model can't read Latin, shows the Perso-Arabic for review, one tap generates. `resolve()` and
+  `TransformKind` are untouched — the sequencing is in the UI so the review step can exist (golden
+  rules 4/5).
 
-| Approach | Edit in | Cost |
-|---|---|---|
-| Roman is truth, re-convert every edit | Roman | ~78 s Gemma load *per edit round* |
-| Convert once, then edit the Perso-Arabic | Perso-Arabic | none, but harder to read |
-| **Both kept; editing Roman marks Urdu stale and BLOCKS Generate** | Roman | re-convert before generating |
-
-Intended workflow under the third: edit in Roman until happy → convert once → review → generate.
-Conversion is the last step before generating, not the first.
+Still **not exposed**: `generation_history.resolved_text` ("the post-transform string the model
+actually received") in `HistoryItem`/`frontend/src/types/api.ts` — deferred, so history can't yet
+show the Roman a clip came from.
 
 ### Hindi: the fact that governs the whole transcript feature
 

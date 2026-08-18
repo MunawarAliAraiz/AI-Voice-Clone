@@ -117,7 +117,7 @@ transcript is stored server-side. Git is the backup — not `/workspace`.
 |---|---|
 | Wave 0 contracts; all of `domain/`, `api/`, `db/`, `config` | Phase A engine validation (R1–R4) |
 | The scheduler **and all its tests** (`FakeWorker`, no GPU by design) | The three real runtime implementations |
-| Entire frontend: build, Vitest, Playwright | `pytest -m gpu` |
+| Entire frontend: `npm run build` (tsc -b + check:css-vars + vite) — **no test runner exists**, the browser is the gate | `pytest -m gpu` |
 | `pytest -m "not gpu"` (~30 s) | 20-request VRAM soak, end-to-end audio checks |
 
 Engine experiments run in `/workspace/engines-lab/<name>/` with its own venv — **never in the repo tree**.
