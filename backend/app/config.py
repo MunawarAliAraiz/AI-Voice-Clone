@@ -127,6 +127,12 @@ class Settings(BaseSettings):
     #: Seconds before a caption fetch is abandoned. YouTube from a datacenter
     #: IP either answers quickly or is throttling.
     transcript_timeout_sec: float = 30.0
+    #: Path to a Netscape-format cookies.txt for yt-dlp. YouTube blocks datacenter
+    #: IPs with "Sign in to confirm you're not a bot" and demands a logged-in
+    #: session; without cookies, transcript import fails on a pod. Empty = no
+    #: cookies (fine for a residential IP). Export from a THROWAWAY Google account
+    #: — cookie use from a datacenter IP can get an account flagged.
+    yt_cookies_file: str = ""
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 

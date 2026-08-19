@@ -456,6 +456,12 @@ export VCS_QWEN_ANALYZER_PYTHON=${QWEN_VENV}/bin/python
 # transliterator_scheduler.py); it warms on startup via its own task and takes
 # the whole GPU slot when converting, so it never co-resides with audio models.
 export VCS_GEMMA_TRANSLITERATOR_PYTHON=${GEMMA_VENV}/bin/python
+# YouTube blocks datacenter IPs with "Sign in to confirm you're not a bot", so
+# transcript import needs a logged-in cookies.txt. Point at a fixed path that is
+# IGNORED if absent (the setting checks os.path.isfile), so a pod with no cookies
+# still starts and every other feature works — drop a Netscape cookies.txt here
+# (from a THROWAWAY Google account) and restart to enable import.
+export VCS_YT_COOKIES_FILE=/workspace/yt-cookies.txt
 export VCS_WORKER_CWD=${REPO_DIR}/backend
 cd ${REPO_DIR}/backend
 exec uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
