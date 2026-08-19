@@ -28,6 +28,7 @@ rather than a regex.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
@@ -70,13 +71,21 @@ logger = logging.getLogger(__name__)
 _SUB_FORMAT = "json3"
 
 
-def _fetch_info(video_id: str, timeout_sec: float) -> dict[str, Any]:
+def _fetch_info(
+    video_id: str, timeout_sec: float, cookies_file: str = ""
+) -> dict[str, Any]:
     """
     Ask yt-dlp what this video offers. BLOCKING — call via a threadpool.
 
     Imported inside the function, not at module scope: yt-dlp is a large
     dependency used by exactly one endpoint, and importing it at startup would
     put it in the critical path of every request the API serves.
+
+    `cookies_file` is the fix for YouTube's "Sign in to confirm you're not a
+    bot" wall, which every datacenter IP hits: with no cookies, `extract_info`
+    raises before it returns a single track. A missing file is IGNORED rather
+    than raised on — the same request works untouched from a residential IP, so
+    a stale path must degrade to "no cookies", not to a hard failure.
     """
     from yt_dlp import YoutubeDL
 
@@ -92,6 +101,8 @@ def _fetch_info(video_id: str, timeout_sec: float) -> dict[str, Any]:
         "writeautomaticsub": True,
         "subtitlesformat": _SUB_FORMAT,
     }
+    if cookies_file and os.path.isfile(cookies_file):
+        options["cookiefile"] = cookies_file
     with YoutubeDL(options) as ydl:
         # `download=False` is what keeps this a metadata call. The video's
         # media is never fetched — only the caption track is, below.
@@ -211,7 +222,9 @@ async def fetch_transcript(
         raise InvalidVideoUrlError(str(exc)) from exc
 
     try:
-        info = await run_in_threadpool(_fetch_info, video_id, settings.transcript_timeout_sec)
+        info = await run_in_threadpool(
+            _fetch_info, video_id, settings.transcript_timeout_sec, settings.yt_cookies_file
+        )
     except ImportError as exc:
         # BEFORE the broad clause below, and that order is the whole point. A
         # missing dependency is not an upstream failure, and reporting it as one

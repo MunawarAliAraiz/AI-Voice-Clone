@@ -237,6 +237,7 @@ settings):
 | `VCS_QWEN_ANALYZER_PYTHON` | *(empty)* | Runtime venv for Speech Direction's analyzer. Empty ⇒ only the "suggest emotion/tone" button is disabled. |
 | `VCS_CHATTERBOX_PYTHON` | *(empty)* | Runtime venv for Chatterbox (in catalog, not routable). |
 | `VCS_WARM_ON_STARTUP` | *(empty)* | Comma-separated model ids (e.g. `voxcpm2,omnivoice_urdu`) to start loading as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
+| `VCS_YT_COOKIES_FILE` | *(empty)* | Path to a Netscape `cookies.txt` for yt-dlp. **Required for YouTube transcript import from a datacenter/cloud IP** — YouTube blocks those with "Sign in to confirm you're not a bot". A missing file is ignored (import just fails with a bot-block error). Export from a **throwaway** Google account — cookie use from a datacenter IP can flag an account. |
 
 There is no `default_engine` setting. Routing decides per request from the declared language and the
 detected script.

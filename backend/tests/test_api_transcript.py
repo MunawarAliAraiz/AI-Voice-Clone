@@ -53,7 +53,9 @@ def _install_fakes(
     """Replace the two network calls. Returns a dict recording what was asked for."""
     seen: dict[str, Any] = {}
 
-    def fake_fetch_info(video_id: str, timeout_sec: float) -> dict[str, Any]:
+    def fake_fetch_info(
+        video_id: str, timeout_sec: float, cookies_file: str = ""
+    ) -> dict[str, Any]:
         seen["video_id"] = video_id
         return info if info is not None else {
             "title": "A talk",
@@ -295,7 +297,7 @@ def test_youtube_refusing_is_502_not_500(
     On a datacenter IP — which every pod has — a refusal is the EXPECTED
     outcome often enough that it must not read as an application bug.
     """
-    def boom(video_id: str, timeout_sec: float) -> dict[str, Any]:
+    def boom(video_id: str, timeout_sec: float, cookies_file: str = "") -> dict[str, Any]:
         raise RuntimeError("HTTP Error 429: Too Many Requests")
 
     monkeypatch.setattr("app.api.routers.transcript._fetch_info", boom)
@@ -563,3 +565,46 @@ def test_truncation_is_reported_rather_than_only_logged(
     # And no chunk quotes text that was cut away.
     for chunk in body["chunks"]:
         assert chunk["text"] in body["text"]
+
+
+def test_cookies_file_reaches_yt_dlp_only_when_it_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The fix for YouTube's datacenter bot-block: a real cookies path reaches
+    yt-dlp, a missing one is dropped SILENTLY (so the same request still works
+    untouched from a residential IP), and no cookies configured means no key."""
+    import sys
+    import types
+
+    from app.api.routers import transcript as transcript_router
+
+    captured: dict[str, Any] = {}
+
+    class FakeYDL:
+        def __init__(self, options: dict[str, Any]) -> None:
+            captured["options"] = options
+
+        def __enter__(self) -> FakeYDL:
+            return self
+
+        def __exit__(self, *_a: object) -> bool:
+            return False
+
+        def extract_info(self, url: str, download: bool = False) -> dict[str, Any]:
+            return {"id": "x"}
+
+    fake_mod = types.ModuleType("yt_dlp")
+    fake_mod.YoutubeDL = FakeYDL  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "yt_dlp", fake_mod)
+
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+
+    transcript_router._fetch_info("vid", 5.0, str(cookies))
+    assert captured["options"].get("cookiefile") == str(cookies)
+
+    transcript_router._fetch_info("vid", 5.0, str(tmp_path / "nope.txt"))
+    assert "cookiefile" not in captured["options"]
+
+    transcript_router._fetch_info("vid", 5.0, "")
+    assert "cookiefile" not in captured["options"]
