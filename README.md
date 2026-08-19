@@ -1,20 +1,22 @@
 # AI Voice Clone Studio
 
-Self-hosted zero-shot voice cloning and text-to-speech for **Urdu**, **Hindi**, and **English**.
-Web app — FastAPI backend, React frontend, open models running on your own GPU. No API keys, no
-external services, no per-character billing.
+Self-hosted zero-shot voice cloning and text-to-speech for **Urdu** (Perso-Arabic + Roman) and
+**English**. Web app — FastAPI backend, React frontend, open models running on your own GPU. No API
+keys, no external services, no per-character billing.
 
-> **Status:** the rewrite is functionally complete and validated end-to-end on GPU with real cloned
-> audio (VoxCPM 2). The F5 and Chatterbox runtimes remain in the catalog but are not yet wired into
-> the standard deployment.
+> **Status:** validated end-to-end on GPU with real cloned audio. **VoxCPM 2** (English + Roman Urdu)
+> and **OmniVoice** (native Urdu script) are the deployed models; an async job queue, Speech
+> Direction, a pronunciation dictionary, YouTube transcript import, and a Roman→Urdu-script
+> transliterator (Gemma-4-31B) have all landed.
+> **Hindi was fully removed as a target language** — it survives only as a *source format* for
+> transcript import (Devanagari captions get transliterated to Urdu, never spoken as Hindi).
 > Design and rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md).
 > Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 > Working agreements for contributors and agents: [CLAUDE.md](CLAUDE.md).
 > What's done / in progress / planned next: [docs/ROADMAP.md](docs/ROADMAP.md).
+> Transcript import + the Hindi question: [docs/TRANSCRIPT_IMPORT.md](docs/TRANSCRIPT_IMPORT.md).
 >
-> Base branch is `main`, which the rewrite was merged into on 2026-08-06. `dev` and
-> `feature/upgrade-tts-engines` are superseded. An async job queue, Recent tab, mobile, and perf
-> pass landed 2026-08-09 on `feature/jobs-mobile-perf` (not yet merged) — see the roadmap.
+> Base branch is `main`, which the rewrite was merged into on 2026-08-06.
 
 ## Languages
 
@@ -22,50 +24,60 @@ external services, no per-character billing.
 "Aap kaise hain" and "How are you" are both Latin — so it does not try. Every result carries a
 visible chip naming the model and any transformation applied, including whether it was lossy.
 
-The default deployment runs **VoxCPM 2**, which is tokenizer-free and renders romanized text
-directly — so Roman Urdu and Hinglish need **no transliteration step** (verified by ear, 2026-08):
+Two deployed models cover it. **VoxCPM 2** is tokenizer-free and renders romanized text directly, so
+Roman Urdu needs no transliteration step to be *routable*. **OmniVoice** serves native Urdu script
+(اردو), verified 2026-08-15:
 
 | You write | Script | Renders as |
 |---|---|---|
-| Roman Urdu (*"aap kaise hain"*) | Latin | VoxCPM 2, text passed through unchanged |
-| Hinglish / Roman Hindi (*"aaj main bahar ja raha hoon"*) | Latin | VoxCPM 2, unchanged |
+| Roman Urdu (*"aap kaise hain"*) | Latin | VoxCPM 2 — routable, but see the accent note below |
 | English | Latin | VoxCPM 2, unchanged |
-| हिन्दी | Devanagari | VoxCPM 2, unchanged |
-| اردو | Perso-Arabic | **No route yet** — see below |
+| اردو | Perso-Arabic | **OmniVoice** (pick it by name) — verified |
+| हिन्दी | Devanagari | **Refused (422)** as a *spoken* target; accepted only as a transcript-import source |
 
 Cloning is **cross-lingual**: the reference speaker need not have spoken the target language.
 
-**Native Urdu script (اردو) is not routable in the default deployment.** The only catalog cell that
-claims Perso-Arabic Urdu is an F5 Bible-domain checkpoint that is unverified and not deployed, so the
-request is *refused* (422) rather than mis-rendered. Use Roman Urdu today. VoxCPM 2 can almost
-certainly read Perso-Arabic directly — enabling it is a one-clip listening verification away, per the
-"never route on an unmeasured claim" rule.
+**Roman Urdu is routable but sounds accented.** VoxCPM 2 renders *"aap kaise hain"* as valid audio,
+but a native listener hears an English accent (measured finding A0). So the app offers a
+**Gemma-4-31B transliterator** that converts Roman Urdu → Urdu script, which OmniVoice reads
+properly — and it's **never silent**: it shows you the converted text to check first, because the
+model's failure mode is a real Urdu word that means something else. In the Composer this happens on
+Generate (one tap to confirm); in the Import tab it's per-part.
 
-If no model can render what you asked for, you get a 422 listing what *would* work — never
-substituted audio.
+**You declare the language; the app detects the script — it never guesses.** If no model can render
+what you asked for, you get a 422 listing what *would* work, never substituted audio. Every result
+carries a visible chip naming the model and any transformation applied.
 
 ## Models
 
-Three runtimes, four checkpoints, **permissive licenses only**. VoxCPM 2 is the deployed default;
-the F5 and Chatterbox runtimes are in the catalog but not wired up in the standard setup below.
+**Permissive by default; CC-BY-NC allowed for the owner's own use, badged "Non-commercial".** No
+paid tiers, ever. Each model's license is checked against its HF card separately from the repo's code
+license.
 
-| Runtime | Checkpoints | License | Status |
+| Model | Role | License | Status |
 |---|---|---|---|
-| VoxCPM | VoxCPM 2 | Apache-2.0 | **deployed default** — validated end-to-end on GPU |
-| Chatterbox | Multilingual v3 | MIT | catalog only |
-| F5 | OpenBible Urdu · IndicF5 | CC-BY-SA-4.0 · MIT | catalog only |
+| VoxCPM 2 | English + Roman Urdu, the default route | Apache-2.0 | **deployed** — validated end-to-end on GPU |
+| OmniVoice | native Urdu script (اردو), picked by name | CC-BY-NC | **deployed** — verified 2026-08-15, badged Non-commercial |
+| Gemma-4-31B | Roman/Devanagari → Perso-Arabic transliterator (not a voice) | Apache-2.0 | **deployed** — ~19 GB 4-bit, resident + idle-killed |
+| Qwen2.5-3B | Speech Direction analyzer ("suggest emotion/tone", not a voice) | Apache-2.0 | **deployed** |
+| Chatterbox | Multilingual v3 | MIT | in catalog, **not routable** — failed its identity listen (Phase 4c) |
 
-XTTS v2 (CPML) and Fish Speech (research license) were removed: both are non-commercial. So was
-ChatTTS — it never used the reference audio at all, so it was not cloning anything. OpenF5 English
-was dropped too: every permissively-*tagged* English F5 checkpoint traces back to CC-BY-NC weights.
+The transliterator and analyzer are **not** voice runtimes and are deliberately unreachable from
+routing — they transform *text*, which a human reviews before it's ever spoken. XTTS v2 (CPML) and
+Fish Speech (research license) stay banned as non-commercial; Higgs Audio v3 (research-only) is
+excluded even more strictly than CC-BY-NC.
 
 Model capability claims are not taken from README files. Each (model × language × script) pair must
-pass a measured gate — CER < 25 %, speaker similarity > 0.70, faster than realtime — or it is
-removed from the catalog rather than advertised.
+pass a measured gate — CER < 25 %, speaker similarity > 0.70, faster than realtime, **and** a human
+listen — or it is removed from the catalog rather than advertised.
 
 ## Requirements
 
-- **NVIDIA GPU, 12 GB+ VRAM** (developed on a 24 GB RTX A5000). CPU inference is not supported.
+- **NVIDIA GPU, 12 GB+ VRAM** for VoxCPM 2 alone (developed on a 24 GB RTX A5000). CPU inference is
+  not supported. The optional **Gemma-4-31B transliterator adds ~19 GB** (4-bit) — it's resident and
+  idle-killed, and takes the whole GPU slot while converting rather than co-residing with the voice
+  models, so it fits a 24 GB card but leaves little slack. Skip it and everything except
+  Roman→Urdu-script conversion still works.
 - **Python 3.12** and [`uv`](https://docs.astral.sh/uv/)
 - **Node 20+**
 - **ffmpeg** on `PATH`
@@ -125,8 +137,10 @@ believing it owns all your VRAM.
 cd frontend && npm install && npm run dev      # http://localhost:1420
 ```
 
-Dev talks to `http://localhost:8000` by default. To point it elsewhere, set `VITE_API_BASE` in
-`frontend/.env.local`. There is no in-app setting for the backend address — see
+The dev server proxies `/api` to `http://localhost:8000` by default. To point it at a backend
+elsewhere — e.g. a GPU pod reached over an SSH tunnel — set `VITE_PROXY_TARGET`:
+`VITE_PROXY_TARGET=http://127.0.0.1:8010 npm run dev`. This stays same-origin (the browser only talks
+to the vite server), so CORS never applies. There is no in-app setting for the backend address — see
 [Deploying](#deploying-frontend-on-cloudflare-backend-on-a-gpu-pod) for why.
 
 ### No-GPU smoke test
@@ -141,8 +155,11 @@ cd backend && VCS_ALLOW_FAKE_RUNTIME=1 uv run uvicorn app.main:app --port 8000
 ## Cloud / RunPod
 
 `scripts/pod-bootstrap.sh` rebuilds a fresh GPU pod from zero — clones the repo, redirects caches off
-the ephemeral overlay, builds the API venv **and the VoxCPM 2 runtime venv with the cu128 torch pin and
-weights**. The repo is public for read, so no token is needed. One command, from your laptop:
+the ephemeral overlay, and builds the API venv **plus every runtime venv (VoxCPM 2, OmniVoice,
+Chatterbox, the Qwen analyzer, and the Gemma transliterator) with the cu128 torch pin and pinned
+weights**. It also writes `/workspace/ctl.sh`, a one-command backend lifecycle
+(`ctl.sh up|start|restart|stop|status`). The repo is public for read, so no token is needed. One
+command, from your laptop:
 
 ```bash
 ssh -p PORT -i ~/.ssh/id_ed25519 root@HOST "bash -s" < scripts/pod-bootstrap.sh
@@ -215,8 +232,11 @@ settings):
 | `VCS_DATA_DIR` | `./data` | Voices, generations, database. |
 | `VCS_MEDIA_TOKEN_SECRET` | *(random per boot)* | Set in production so signed media URLs survive restarts. |
 | `VCS_BUDGET_MB` / `VCS_MAX_WORKERS` | `16000` / `2` | Scheduler capacity. The defaults were sized for a 24 GB card — lower `VCS_BUDGET_MB` on a smaller one (a 20 GB RTX 4000 Ada runs VoxCPM 2 alone fine, but has far less slack for a second model). |
-| `VCS_CHATTERBOX_PYTHON` / `VCS_F5_PYTHON` | *(empty)* | Runtime venvs for the other engines, when wired up. |
-| `VCS_WARM_ON_STARTUP` | *(empty)* | Model id (e.g. `voxcpm2`) to start loading as soon as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
+| `VCS_OMNIVOICE_PYTHON` | *(empty)* | Runtime venv for OmniVoice — **required** for native Urdu script; empty means `model_id=omnivoice_urdu` 422s. |
+| `VCS_GEMMA_TRANSLITERATOR_PYTHON` | *(empty)* | Runtime venv for the Roman→Urdu-script transliterator. Empty ⇒ `/api/system` reports script conversion unavailable and the "Convert to Urdu script" affordance stays hidden. Everything else works without it. |
+| `VCS_QWEN_ANALYZER_PYTHON` | *(empty)* | Runtime venv for Speech Direction's analyzer. Empty ⇒ only the "suggest emotion/tone" button is disabled. |
+| `VCS_CHATTERBOX_PYTHON` | *(empty)* | Runtime venv for Chatterbox (in catalog, not routable). |
+| `VCS_WARM_ON_STARTUP` | *(empty)* | Comma-separated model ids (e.g. `voxcpm2,omnivoice_urdu`) to start loading as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
 
 There is no `default_engine` setting. Routing decides per request from the declared language and the
 detected script.
