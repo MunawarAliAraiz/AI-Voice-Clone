@@ -515,39 +515,6 @@ directly). The UI lives at the frontend URL, which calls the ngrok URL under the
 
 ---
 
-## YouTube transcript import needs cookies on a pod
-
-YouTube blocks **datacenter / cloud IPs** — which every RunPod pod is — with *"Sign in to confirm
-you're not a bot."* yt-dlp gets this on every player client, so transcript import fails with a 502
-`TRANSCRIPT_FETCH_FAILED` even though the code and yt-dlp are fine. From a residential IP it works
-without any of this; on a pod it needs a logged-in **cookies file**.
-
-The backend reads `VCS_YT_COOKIES_FILE` (a Netscape `cookies.txt`) and hands it to yt-dlp. The
-bootstrap's `serve.sh` already points it at **`/workspace/yt-cookies.txt`**, and a missing file is
-ignored — so the pod starts fine without it and everything except import works. To enable import:
-
-1. **On your own machine**, in a browser signed into a **throwaway** Google account (never your main
-   one — cookie use from a datacenter IP can get an account flagged), export cookies for
-   `youtube.com` in Netscape format. The [Get cookies.txt](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp)
-   browser extensions do this; save it as `yt-cookies.txt`.
-2. **Copy it to the pod** at the path `serve.sh` expects:
-
-   ```bash
-   scp -P <PORT> -i ~/.ssh/id_ed25519 yt-cookies.txt root@<HOST>:/workspace/yt-cookies.txt
-   ```
-
-3. **Restart the backend** so it picks up the file:
-
-   ```bash
-   ssh root@<HOST> -p <PORT> -i ~/.ssh/id_ed25519 "/workspace/ctl.sh restart"
-   ```
-
-Cookies **expire** — when import starts failing with the bot-block again, re-export and re-copy.
-This is inherent to the approach, not a bug. The only alternative is routing the pod's traffic
-through a residential proxy, which the app does not manage.
-
----
-
 ## Doing it by hand
 
 The bootstrap script automates everything above. This section is a reference for when something in it

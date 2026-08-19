@@ -54,9 +54,16 @@ which is *why* the transcript lands in an editable field rather than going strai
 
 ---
 
-## What is built
+## What was built (the YouTube implementation — REMOVED 2026-08-19)
 
-### `backend/app/domain/youtube.py` — pure, no network
+> Everything in this section describes the **YouTube fetch that was removed** (see the note at the
+> top). It is kept for the *reasoning* — the SSRF argument, the newline-as-pause rule, why chapters
+> chunk the way they do — which still governs the code that replaced it. **What exists now** is
+> `POST /api/transcript/prepare`: it takes the pasted text directly, detects the script with
+> `profile_text`, and chunks it with `chunk_for_synthesis` (paragraphs preserved as pauses, `index`
+> global). `domain/youtube.py`, `parse_video_id`, the track picker, and chapter grouping are gone.
+
+### `backend/app/domain/youtube.py` — pure, no network *(removed)*
 
 `parse_video_id(url)` is **the SSRF guard**, and it is a separate pure function for that reason.
 The endpoint fetches server-side from a user-supplied string, which is that hole by default. So no

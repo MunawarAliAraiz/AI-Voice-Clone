@@ -70,7 +70,7 @@ shape: **both kept; editing the Roman marks the Urdu stale and blocks Generate u
 The one cost that shape carried (`~78 s` Gemma load per re-convert) is **obsolete**: Gemma is
 resident since 2026-08-17, so a re-convert is ~5 s. Implemented two ways:
 
-- **Import tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
+- **Convert tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
   `outgoing = draft ?? converted ?? source`, edit marks the part stale/edited.
 - **Composer** (client-side convert-on-generate): Generate runs the conversion when the selected
   model can't read Latin, shows the Perso-Arabic for review, one tap generates. `resolve()` and
