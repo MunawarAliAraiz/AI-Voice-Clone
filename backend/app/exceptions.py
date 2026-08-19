@@ -570,62 +570,6 @@ class UnsupportedConversionError(AppError):
         )
 
 
-class InvalidVideoUrlError(AppError):
-    """
-    Not a YouTube video URL. Also the SSRF rejection — see
-    `domain/youtube.parse_video_id`, which is the only thing permitted to
-    decide what gets fetched.
-    """
-
-    code = "INVALID_VIDEO_URL"
-    http_status = 422
-    title = "Invalid video URL"
-
-
-class TranscriptUnavailableError(AppError):
-    """The video exists but publishes no caption track this can use."""
-
-    code = "TRANSCRIPT_UNAVAILABLE"
-    http_status = 404
-    title = "No transcript available"
-
-
-class TranscriptToolMissingError(AppError):
-    """
-    `yt-dlp` is not installed in the API environment.
-
-    ITS OWN CLASS BECAUSE THE ALTERNATIVE ACTIVELY MISLEADS. This used to fall
-    into `TranscriptFetchFailedError`'s broad `except Exception`, which told the
-    user "could not reach YouTube — on a datacenter connection this is usually
-    rate limiting, try again shortly." Every clause of that was wrong: the pod
-    reached youtube.com fine (HTTP 200), nothing was rate limited, and trying
-    again shortly could never have worked. A wrong cause is worse than an
-    unknown one — it sends someone to wait instead of to `uv sync`.
-
-    503, not 502: nothing upstream failed. This deployment is missing a
-    dependency, which is the same shape as a transliterator with no
-    `.venv-gemma` and is reported the same way.
-    """
-
-    code = "TRANSCRIPT_TOOL_MISSING"
-    http_status = 503
-    title = "Transcript import is not set up"
-
-
-class TranscriptFetchFailedError(AppError):
-    """
-    YouTube could not be reached, or refused.
-
-    502 rather than 500 on purpose: this is an upstream failing, and on a
-    datacenter IP (which every pod has) a refusal is the expected outcome
-    often enough that it must not read as an application bug.
-    """
-
-    code = "TRANSCRIPT_FETCH_FAILED"
-    http_status = 502
-    title = "Could not fetch the transcript"
-
-
 class JobNotRetryableError(AppError):
     """
     Retry is for jobs that are DONE and went wrong. A queued or running job is

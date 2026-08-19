@@ -1,344 +1,84 @@
 """
-YouTube transcript import.
+Prepare pasted text for the Convert tab.
 
 WHY THIS IS SYNCHRONOUS AND NOT A JOB
 --------------------------------------
-Same argument as `routers/text.py`'s title endpoint, from the other side: the
-`jobs` table is the GPU QUEUE (golden rule 8), and this never touches the GPU.
-Putting a network fetch in it would make a caption download queue behind a
-60-second synthesis for no reason, and would report an ETA computed from
-VRAM residency for work that has nothing to do with VRAM.
+Same argument as `routers/text.py`'s title endpoint: the `jobs` table is the GPU
+QUEUE (golden rule 8), and this never touches the GPU. It splits text and detects
+a script — pure CPU work — so queueing it behind a 60-second synthesis, and
+reporting a VRAM-derived ETA for it, would both be wrong.
 
 WHAT THIS DOES NOT DO
 ---------------------
-It does not synthesize, and it does not convert scripts. A fetched transcript
-lands in an EDITABLE FIELD, because auto-generated captions — especially Urdu
-and Hindi ones — are a rough draft, not a script. Handing them straight to a
-model would be presenting a machine's guess as the user's words.
+It does not synthesize, and it does not convert scripts. The chunks land in an
+EDITABLE list, because the whole premise is that the user reviews and converts
+before generating. The conversion itself is `POST /api/text/transliterate`;
+this only gets the pasted text into review-sized units.
 
-THE SSRF BOUNDARY
------------------
-`domain/youtube.parse_video_id` is the only thing that decides what may be
-fetched, and it returns an 11-character id, not a URL. Everything below builds
-its own request from that id. A user-supplied URL is never passed to a fetcher
-— see that module's docstring for why the hostname check lives in `urlsplit`
-rather than a regex.
+(This module was YouTube transcript import until 2026-08-19. The fetch — yt-dlp,
+the SSRF guard, caption download, chapters — was removed when the input became
+text the user pastes; datacenter IPs are hard-blocked by YouTube's bot check, so
+manual paste is both simpler and more reliable. The chunking and script
+detection are all that survived.)
 """
 
 from __future__ import annotations
 
-import logging
-import os
-from typing import Annotated, Any
+import re
+from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from starlette.concurrency import run_in_threadpool
 
 from ...config import Settings
 from ...domain.language import Script, profile_text
 from ...domain.text import chunk_for_synthesis
-from ...domain.youtube import (
-    InvalidVideoUrl,
-    TranscriptChapter,
-    cues_to_text,
-    group_cues,
-    parse_chapters,
-    parse_json3,
-    parse_video_id,
-)
-from ...exceptions import (
-    InvalidVideoUrlError,
-    TranscriptFetchFailedError,
-    TranscriptToolMissingError,
-    TranscriptUnavailableError,
-)
 from ...inference.catalog import ModelCatalog
 from ..deps import get_catalog, get_settings
 from ..schemas.transcript import (
-    TranscriptChapterInfo,
+    PreparedTextResponse,
+    PrepareTextRequest,
     TranscriptChunk,
-    TranscriptRequest,
-    TranscriptResponse,
-    TranscriptTrack,
 )
 
-router = APIRouter(prefix="/transcript", tags=["transcript"])
-logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/transcript", tags=["convert"])
 
-#: `json3` over `vtt`/`srv3`: it is plain JSON with explicit millisecond
-#: timings, so `parse_json3` needs no subtitle-format parser and no regex over
-#: timestamp lines.
-_SUB_FORMAT = "json3"
-
-
-def _fetch_info(
-    video_id: str, timeout_sec: float, cookies_file: str = ""
-) -> dict[str, Any]:
-    """
-    Ask yt-dlp what this video offers. BLOCKING — call via a threadpool.
-
-    Imported inside the function, not at module scope: yt-dlp is a large
-    dependency used by exactly one endpoint, and importing it at startup would
-    put it in the critical path of every request the API serves.
-
-    `cookies_file` is the fix for YouTube's "Sign in to confirm you're not a
-    bot" wall, which every datacenter IP hits: with no cookies, `extract_info`
-    raises before it returns a single track. A missing file is IGNORED rather
-    than raised on — the same request works untouched from a residential IP, so
-    a stale path must degrade to "no cookies", not to a hard failure.
-    """
-    from yt_dlp import YoutubeDL
-
-    options = {
-        "skip_download": True,
-        "quiet": True,
-        "no_warnings": True,
-        "socket_timeout": timeout_sec,
-        # Ask for both. `subtitles` is human-authored; `automatic_captions` is
-        # YouTube's ASR. Which one we got is reported back rather than blurred,
-        # because the quality difference is large in Urdu and Hindi.
-        "writesubtitles": True,
-        "writeautomaticsub": True,
-        "subtitlesformat": _SUB_FORMAT,
-    }
-    if cookies_file and os.path.isfile(cookies_file):
-        options["cookiefile"] = cookies_file
-    with YoutubeDL(options) as ydl:
-        # `download=False` is what keeps this a metadata call. The video's
-        # media is never fetched — only the caption track is, below.
-        return ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+#: Split on one or more blank lines. A paragraph break the user typed is a real
+#: pause (`direction_analyze` reads a newline as the longest pause there is), so
+#: paragraphs are chunked SEPARATELY and rejoined with the break preserved —
+#: `chunk_for_synthesis` calls `normalize_whitespace`, which would otherwise
+#: flatten every newline the user meant as ~380 ms of silence.
+_PARAGRAPH_SPLIT = re.compile(r"\n\s*\n")
 
 
-def _tracks(info: dict[str, Any]) -> list[tuple[TranscriptTrack, str]]:
-    """
-    Flatten yt-dlp's two caption dicts into `(track, url)` pairs.
-
-    Authored tracks come first, so a video with both is read from the human
-    one by default.
-    """
-    out: list[tuple[TranscriptTrack, str]] = []
-    for key, is_auto in (("subtitles", False), ("automatic_captions", True)):
-        for lang, formats in (info.get(key) or {}).items():
-            entry = next(
-                (f for f in formats if f.get("ext") == _SUB_FORMAT),
-                None,
-            )
-            if entry and entry.get("url"):
-                out.append((
-                    TranscriptTrack(
-                        language=lang,
-                        name=entry.get("name") or None,
-                        is_auto_generated=is_auto,
-                    ),
-                    entry["url"],
-                ))
-    return out
-
-
-def _match(tracks: list[tuple[TranscriptTrack, str]], want: str | None):
-    """
-    First track whose language matches `want`, prefix-compared.
-
-    Prefix-matched (`ur` matches `ur-PK`) because YouTube tags regions
-    inconsistently and an exact match would miss the track plainly meant.
-    """
-    if not want:
-        return None
-    base = want.lower().split("-")[0]
-    for track, url in tracks:
-        if track.language.lower().split("-")[0] == base:
-            return track, url
-    return None
-
-
-def _choose(
-    tracks: list[tuple[TranscriptTrack, str]],
-    preferred: str | None,
-    video_language: str | None,
-) -> tuple[TranscriptTrack, str]:
-    """
-    Pick a track, in order: what was asked for, the video's OWN language,
-    English, the first authored track, anything.
-
-    THE VIDEO'S OWN LANGUAGE IS NOT A NICETY — it is the difference between a
-    transcript and a translation. A popular video carries dozens of
-    community-translated tracks, and "the first authored one" is then
-    effectively alphabetical: fetching an English lecture returned its ARABIC
-    translation, caught only by a real fetch because the unit fixture had a
-    single authored track. A translation is not what the speaker said, which
-    is the entire thing this feature exists to hand to a voice model.
-
-    English before "first authored" for the same reason, one step weaker: when
-    the original language is unknown, the source track is far more often
-    English than it is whichever locale sorts first.
-    """
-    for candidate in (
-        _match(tracks, preferred),
-        _match(tracks, video_language),
-        _match(tracks, "en"),
-    ):
-        if candidate is not None:
-            return candidate
-    for track, url in tracks:
-        if not track.is_auto_generated:
-            return track, url
-    return tracks[0]
-
-
-def _selectable_tracks(
-    tracks: list[tuple[TranscriptTrack, str]], chosen: TranscriptTrack
-) -> list[TranscriptTrack]:
-    """
-    The tracks worth offering back: authored ones, plus whichever was chosen.
-
-    A real video measured 4867 tracks — 4837 of them YouTube auto-translating
-    the same source into every language it supports, totalling 367 KB of JSON
-    for a list no UI can present and nothing here reads. The authored ones are
-    the meaningful choice (a person wrote each), and the chosen track is
-    included even when auto-generated so the response never describes a
-    selection missing from its own list.
-
-    Not a hard cap: this is a CONVENIENCE list, not the set of permitted
-    values. A caller can still name any language code in the request.
-    """
-    out = [t for t, _ in tracks if not t.is_auto_generated]
-    if not any(t.language == chosen.language and t.is_auto_generated == chosen.is_auto_generated
-               for t in out):
-        out.insert(0, chosen)
-    return out
-
-
-@router.post("/fetch", response_model=TranscriptResponse)
-async def fetch_transcript(
-    body: TranscriptRequest,
+@router.post("/prepare", response_model=PreparedTextResponse)
+async def prepare_text(
+    body: PrepareTextRequest,
     settings: Annotated[Settings, Depends(get_settings)],
     catalog: Annotated[ModelCatalog, Depends(get_catalog)],
-) -> TranscriptResponse:
-    try:
-        video_id = parse_video_id(body.url)
-    except InvalidVideoUrl as exc:
-        # The SSRF rejection surfaces here, as a 422 naming what was wrong —
-        # not a generic 400, and never by attempting the fetch to find out.
-        raise InvalidVideoUrlError(str(exc)) from exc
+) -> PreparedTextResponse:
+    paragraphs = [p.strip() for p in _PARAGRAPH_SPLIT.split(body.text.strip()) if p.strip()]
+    if not paragraphs:
+        paragraphs = [body.text.strip()]
 
-    try:
-        info = await run_in_threadpool(
-            _fetch_info, video_id, settings.transcript_timeout_sec, settings.yt_cookies_file
-        )
-    except ImportError as exc:
-        # BEFORE the broad clause below, and that order is the whole point. A
-        # missing dependency is not an upstream failure, and reporting it as one
-        # told the user to wait for rate limiting to clear on a box that was
-        # reaching YouTube perfectly well. Caught on the pod, whose API venv
-        # predated `yt-dlp` being added to pyproject.toml.
-        logger.exception("yt-dlp is not importable")
-        raise TranscriptToolMissingError(
-            "Transcript import needs yt-dlp, which is not installed in this "
-            "server's API environment. Run `uv sync` in backend/ and restart. "
-            "Nothing else on the server is affected."
-        ) from exc
-    except Exception as exc:
-        # Deliberately broad: yt-dlp raises a family of its own exception types
-        # plus whatever the network layer produces, and every one of them means
-        # the same thing to a caller. Logged in full so a real bug is still
-        # diagnosable from the server side.
-        logger.exception("yt-dlp failed for video %s", video_id)
-        raise TranscriptFetchFailedError(
-            "Could not reach YouTube for that video. On a datacenter connection "
-            "this is usually rate limiting — try again shortly."
-        ) from exc
-
-    tracks = _tracks(info or {})
-    if not tracks:
-        raise TranscriptUnavailableError(
-            "That video has no captions this can read. Paste the text in by hand, "
-            "or pick a video that publishes a transcript."
-        )
-
-    chosen, url = _choose(tracks, body.language, (info or {}).get("language"))
-
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=settings.transcript_timeout_sec) as client:
-            # `url` comes from yt-dlp's own response for a video id THIS
-            # validated — not from the caller. That is what keeps the SSRF
-            # boundary intact through the second request.
-            response = await client.get(url)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception as exc:
-        logger.exception("caption track fetch failed for %s", video_id)
-        raise TranscriptFetchFailedError(
-            "The caption track could not be downloaded."
-        ) from exc
-
-    cues = parse_json3(payload)
-    if not cues:
-        raise TranscriptUnavailableError(
-            "That caption track came back empty. It may be a placeholder track "
-            "with no text in it."
-        )
-
-    # ── Chapters ────────────────────────────────────────────────────────────
-    # Chunk PER CHAPTER so a part never straddles one. A chapter boundary is a
-    # real content boundary — the speaker changed topic — and `chunk_for_
-    # synthesis` has no way to know that from the text alone.
-    #
-    # With no chapters `group_cues` returns exactly one group, so everything
-    # below collapses to a single pass and the output is byte-identical to the
-    # pre-chapters behaviour. That equality is a test, not a hope.
-    chapters = parse_chapters((info or {}).get("chapters"))
-    groups = group_cues(cues, chapters)
-
-    # TRUNCATE WHILE WALKING THE GROUPS, not on the joined string afterwards.
-    # Cutting the join would leave chunks quoting text that is not in `text`.
-    kept: list[tuple[TranscriptChapter | None, str]] = []
-    budget = settings.transcript_max_chars
-    truncated = False
-    for chapter, group_cue_list in groups:
-        group_text = cues_to_text(group_cue_list)
-        if not group_text:
-            continue
-        if len(group_text) > budget:
-            group_text = group_text[:budget]
-            truncated = True
-        if group_text:
-            kept.append((chapter, group_text))
-        budget -= len(group_text)
-        if budget <= 0:
-            truncated = truncated or bool(groups[len(kept):])
-            break
-    if truncated:
-        logger.warning("transcript for %s truncated to the configured ceiling", video_id)
-
-    # A blank line between chapters: `direction_analyze` reads a newline as the
-    # longest pause there is, and a topic change is exactly where ~380 ms of
-    # silence belongs. ONE group means no join and therefore no newline.
-    text = "\n\n".join(group_text for _, group_text in kept)
-
-    # Same detector routing uses, so what this reports and what `resolve()`
-    # would decide cannot drift apart.
-    #
-    # Detected ONCE, from the whole transcript, and then handed to every
-    # per-chapter chunking call below. Detecting per chapter would let an
-    # English-heavy chapter pick a different sentence-terminator set than the
-    # chapter beside it. `jobs/handlers/transliterate.py` refuses the same
-    # thing for the same reason.
-    profile = profile_text(text, "ur")
+    # Detect ONCE, from the whole text, and hand the same script to every
+    # per-paragraph chunking call. Detecting per paragraph would let a
+    # Latin-heavy paragraph pick a different sentence-terminator set than the
+    # Devanagari one beside it — the same mistake the transliterate handler and
+    # the old per-chapter path both refuse.
+    profile = profile_text(body.text, "ur")
     script = profile.script
     needs_transliteration = script is Script.DEVANAGARI and not catalog.candidates(
         "hi", Script.DEVANAGARI
     )
 
-    # Chunk each chapter separately, then re-number GLOBALLY. `chunk_for_
-    # synthesis` numbers from 0 per call, and leaving those in place would give
-    # several parts the same index — which the UI keys conversion results off,
-    # so part 8's Urdu would land on part 1 and look entirely plausible there.
+    # Chunk each paragraph, then re-number GLOBALLY. `chunk_for_synthesis`
+    # numbers from 0 per call, and leaving those in place would give several
+    # parts the same index — which the UI keys conversion results off, so part
+    # 8's Urdu would land on part 1 and look entirely plausible there.
     api_chunks: list[TranscriptChunk] = []
-    for chapter, group_text in kept:
+    for paragraph in paragraphs:
         for chunk in chunk_for_synthesis(
-            group_text,
+            paragraph,
             script,
             max_chars=settings.transcript_chunk_chars,
             min_chars=settings.transcript_chunk_min_chars,
@@ -348,30 +88,12 @@ async def fetch_transcript(
                     index=len(api_chunks),
                     text=chunk.text,
                     ends_on_sentence=chunk.ends_on_sentence,
-                    chapter_index=chapter.index if chapter else None,
                 )
             )
 
-    return TranscriptResponse(
-        video_id=video_id,
-        title=(info or {}).get("title"),
-        duration_sec=(info or {}).get("duration"),
-        available_tracks=_selectable_tracks(tracks, chosen),
-        total_tracks=len(tracks),
-        chosen_track=chosen,
-        text=text,
+    return PreparedTextResponse(
+        text="\n\n".join(paragraphs),
         script=script.value,
         needs_transliteration=needs_transliteration,
-        chapters=[
-            TranscriptChapterInfo(
-                index=c.index, title=c.title,
-                start_sec=c.start_sec, end_sec=c.end_sec,
-            )
-            # Only the chapters that survived grouping and truncation — a
-            # heading with no parts under it reads as a broken transcript.
-            for c in chapters
-            if any(k[0] is not None and k[0].index == c.index for k in kept)
-        ],
-        truncated=truncated,
         chunks=api_chunks,
     )

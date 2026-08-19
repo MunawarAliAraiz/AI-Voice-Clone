@@ -69,3 +69,7 @@ eval/results/urdu_bakeoff/blind/
 # an over-broad `git add -A eval/` (2026-08-16); ignored so it cannot recur.
 eval/training/
 eval/fixtures/voice_urdu_female.wav
+
+# Exported YouTube cookies — session secrets, never commit
+yt-cookies.txt
+*cookies*.txt

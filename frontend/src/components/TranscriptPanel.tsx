@@ -1,27 +1,28 @@
 /**
- * Import a YouTube transcript, and hand pieces of it to the editor.
+ * The Convert tab: paste a script, convert its writing system, hand pieces to
+ * the editor.
  *
- * WHY THE TRANSCRIPT IS EDITABLE AND NOT SYNTHESIZED DIRECTLY
- * ------------------------------------------------------------
- * Auto-generated captions — especially Urdu and Hindi ones — are a rough
- * draft. They drop punctuation, mishear names, and run sentences together.
- * Sending one straight to a model would present a machine's guess as the
- * user's words, so everything here ends at "put this in the editor", never at
- * "generate this".
+ * WHAT THIS IS FOR
+ * ----------------
+ * You have a script in Hindi (Devanagari), Roman Urdu, or Urdu script, and you
+ * want it in a form an Urdu voice can speak well. Devanagari cannot be spoken at
+ * all; Roman Urdu is routable but a native listener hears an English accent
+ * (finding A0), so converting it to Urdu script is usually what you want. This
+ * splits the paste into review-sized parts and converts them through the Gemma
+ * transliterator — never silently, because its failure mode is a real word that
+ * means something else.
  *
- * WHY CHUNKS ARE A LIST YOU WORK THROUGH
- * ---------------------------------------
- * A one-hour video is tens of thousands of characters and every model here has
- * a frame limit. The server splits it with `chunk_for_synthesis`, which packs
- * whole sentences and only falls back to a clause or word boundary when a
- * sentence will not fit — chunks that were cut that way are BADGED, because
- * that is exactly where a join artifact becomes audible.
+ * WHY THE SOURCE IS DETECTED BUT NOT THE LANGUAGE
+ * -----------------------------------------------
+ * The server detects the SCRIPT (`profile_text`) — that is a fact about the
+ * characters. It does NOT guess whether Latin text is Roman Urdu or English;
+ * they are indistinguishable, and this codebase refuses that guess everywhere.
+ * (English→Urdu is TRANSLATION, a different operation, and a planned follow-up.)
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../services/api';
-import type { TranscriptChunk, TranscriptResponse, TranscriptTrack } from '../types/api';
-import { IconAlert, IconChevronDown, IconChevronUp, IconCopy, IconCheck, IconSearch, IconSpinner } from './icons';
-import { fmtDuration } from '../lib/format';
+import type { PreparedTextResponse } from '../types/api';
+import { IconAlert, IconCopy, IconCheck, IconSpinner, IconSpark } from './icons';
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { useTranscriptParts } from '../hooks/useTranscriptParts';
 import { TranscriptPartRow } from './TranscriptPartRow';
@@ -34,47 +35,89 @@ type Target = 'roman' | 'perso_arabic';
  *  refused with a reason rather than sent and 422'd. */
 const MAX_BATCH_CHUNKS = 200;
 
+/** The conversions the server actually supports for a given detected script —
+ *  `latin → roman` and `arabic → perso_arabic` are no-ops and absent, and
+ *  nothing converts INTO Devanagari (it is a source format only). Mirrors
+ *  `_CONVERSIONS` / `DEFAULT_TARGETS` in `backend/app/domain/transliterate.py`. */
+const TARGETS_FOR: Record<string, Target[]> = {
+  devanagari: ['roman', 'perso_arabic'],
+  latin: ['perso_arabic'],
+  arabic: ['roman'],
+};
+
+const TARGET_LABEL: Record<Target, { title: string; hint: string }> = {
+  roman: { title: 'Roman Urdu', hint: 'easier to read and fix before generating' },
+  perso_arabic: { title: 'Urdu script', hint: 'ready to generate, harder to proofread' },
+};
+
 interface Props {
   /** Puts text into the Composer and switches to it. */
   onSendToEditor: (text: string) => void;
 }
 
 export function TranscriptPanel({ onSendToEditor }: Props) {
-  const [url, setUrl] = useState('');
-  const [language, setLanguage] = useState('');
-  const [data, setData] = useState<TranscriptResponse | null>(null);
+  const [input, setInput] = useState('');
+  const [data, setData] = useState<PreparedTextResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  // Roman by default. A caption YouTube's ASR guessed at is a DRAFT, and the
-  // whole reason to convert a transcript is to read and fix it — going
-  // straight to Urdu script skips the step this feature exists for. The choice
-  // stays the user's, because a caption good enough to use unedited should not
-  // have to detour through a second conversion.
   const [target, setTarget] = useState<Target>('roman');
   const conversion = useScriptConversion();
   const system = useSystemStatus();
-  //: Which CHUNK indexes the running conversion covers, in submission order.
-  //:
-  //: Required because a result item's `index` is its position IN THE BATCH,
-  //: not in the transcript. Converting part 8 on its own returns index 0, and
-  //: without this map that result would be written onto part 1 — a silent
-  //: wrong-answer bug, since both are plausible Roman Urdu and nothing would
-  //: look broken.
+  //: Which CHUNK indexes the running conversion covers, in submission order. A
+  //: result item's `index` is its position IN THE BATCH, not in the paste;
+  //: without this map, converting part 8 alone (batch index 0) would land on
+  //: part 1 — a silent wrong-answer bug, both being plausible Urdu.
   const [batchIndexes, setBatchIndexes] = useState<number[]>([]);
-  //: The target the RUNNING conversion used, which is not always the picker's
-  //: current value — a per-part button chooses its own, and the summary below
-  //: must name what actually happened rather than what is selected now.
+  //: The target the RUNNING conversion used — not always the picker's current
+  //: value, since a per-part button chooses its own — so the summary can name
+  //: what actually happened.
   const [lastTarget, setLastTarget] = useState<Target>('roman');
-  //: Which parts are open. Controlled rather than native <details> because the
-  //: chapter jump list needs to open one programmatically, and nested native
-  //: disclosures fight that.
+  //: Which part a single-part conversion is for, so its own row shows the
+  //: progress instead of the panel-level control claiming to be busy.
+  const [busyIndex, setBusyIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
+  // ONE record per part — see useTranscriptParts for why status/outgoing are
+  // derived rather than stored.
+  const parts = useTranscriptParts();
+
+  const canConvert = system.data?.script_conversion?.available ?? null;
+  const cannotConvertReason = system.data?.script_conversion?.reason ?? null;
+
+  // Devanagari cannot be spoken at all (a blocker); Latin and Arabic are
+  // routable, so converting them is an OFFER. Every supported source has at
+  // least one target, so the panel shows whenever there is data to convert.
+  const needsConversion = data?.needs_transliteration ?? false;
+  const validTargets = data ? (TARGETS_FOR[data.script] ?? []) : [];
+  const offerConversion = validTargets.length > 0;
+
+  // Default the picker to the source's first valid target the moment a paste is
+  // prepared — Devanagari to Roman (readable), Roman Urdu to Urdu script.
+  useEffect(() => {
+    if (validTargets.length && !validTargets.includes(target)) {
+      setTarget(validTargets[0]!);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.script]);
+
+  useEffect(() => {
+    if (!conversion.result) return;
+    parts.applyConversion(batchIndexes, conversion.ok, conversion.rejected, lastTarget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
+
   const toggleExpanded = (index: number) =>
     setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(index)) next.add(index);
+      return next;
+    });
+
+  const toggleSelected = (index: number) =>
+    setSelected((prev) => {
       const next = new Set(prev);
       if (!next.delete(index)) next.add(index);
       return next;
@@ -90,9 +133,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       return !needsConversion || status === 'converted' || status === 'edited';
     }).length;
 
-  //: Joined in TRANSCRIPT order regardless of the order they were ticked, and
-  //: with a blank line between parts — `direction_analyze` reads that as the
-  //: longest pause, which is what a jump between parts should sound like.
+  //: Joined in PASTE order regardless of tick order, blank line between parts —
+  //: `direction_analyze` reads that as the longest pause, which is what a jump
+  //: between parts should sound like.
   const joinParts = (indexes: number[]) =>
     [...indexes]
       .sort((a, b) => a - b)
@@ -100,101 +143,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       .map((i) => parts.outgoing(i))
       .join('\n\n');
 
-  const toggleSelected = (index: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(index)) next.add(index);
-      return next;
-    });
-
-  //: Chapters default EXPANDED; a collapsed chapter would hide conversion
-  //: progress, and the parts are the volume problem, not the chapters.
-  const [collapsedChapters, setCollapsedChapters] = useState<Set<number>>(new Set());
-  //: The chapter <section> elements, so the jump list can scroll one into view.
-  const chapterRefs = useRef<Map<number, HTMLElement>>(new Map());
-
-  const toggleChapter = (key: number) =>
-    setCollapsedChapters((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
-
-  const selectChapter = (indexes: number[]) =>
-    setSelected((prev) => new Set([...prev, ...indexes]));
-
-  //: `chapter_index` is a real chapter number, so `null` (no chapters, or the
-  //: pre-chapter stretch) needs a sentinel key — -1, which no chapter uses.
-  const chapterGroups = useMemo(() => {
-    const chunks = data?.chunks ?? [];
-    const chapters = data?.chapters ?? [];
-    if (!chapters.length) return [{ chapter: null, chunks }];
-
-    const byKey = new Map<number, typeof chunks>();
-    const order: number[] = [];
-    for (const chunk of chunks) {
-      const key = chunk.chapter_index ?? -1;
-      if (!byKey.has(key)) {
-        byKey.set(key, []);
-        order.push(key);
-      }
-      byKey.get(key)!.push(chunk);
-    }
-    const chapterByIndex = new Map(chapters.map((c) => [c.index, c]));
-    return order.map((key) => ({
-      chapter: key === -1 ? null : (chapterByIndex.get(key) ?? null),
-      chunks: byKey.get(key)!,
-    }));
-  }, [data?.chunks, data?.chapters]);
-
-  const jumpToChapter = (key: number | null) => {
-    const target = key ?? -1;
-    // Ensure it is open before scrolling, or the row jumps to an empty header.
-    setCollapsedChapters((prev) => {
-      const next = new Set(prev);
-      next.delete(target);
-      return next;
-    });
-    // A frame later, so the just-expanded section has laid out.
-    requestAnimationFrame(() =>
-      chapterRefs.current.get(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-    );
-  };
-
-  //: One row, so the flat list and every chapter group render identically.
-  const renderRow = (chunk: TranscriptChunk) => (
-    <TranscriptPartRow
-      key={chunk.index}
-      chunk={chunk}
-      parts={parts}
-      expanded={expanded.has(chunk.index)}
-      onToggle={() => toggleExpanded(chunk.index)}
-      selected={selected.has(chunk.index)}
-      selectMode={selectMode}
-      onSelect={() => toggleSelected(chunk.index)}
-      onConvert={
-        offerConversion && canConvert
-          ? (target) => startConversion([chunk.index], target)
-          : undefined
-      }
-      converting={conversion.running && busyIndex === chunk.index}
-      convertingLabel={conversion.progressLabel}
-      onSendToEditor={onSendToEditor}
-      onCopy={(text, key) => void copy(text, key)}
-      copied={copied === `c${chunk.index}`}
-      requiresConversion={needsConversion}
-    />
-  );
-  //: Which part a single-part conversion is for, so its own row can show the
-  //: progress instead of the panel-level control claiming to be busy.
-  const [busyIndex, setBusyIndex] = useState<number | null>(null);
-
   const startConversion = (indexes: number[], to: Target = target) => {
     if (!data) return;
-    // Filtered, not asserted: an index with no chunk would otherwise send
-    // `undefined` to the server as a chunk, and the batch positions would then
-    // no longer line up with `batchIndexes` — which is exactly the misalignment
-    // this whole mechanism exists to prevent.
+    // Filtered, not asserted: an index with no chunk would send `undefined` as
+    // a chunk and desync the batch positions from `batchIndexes` — the exact
+    // misalignment this mechanism exists to prevent.
     const present = indexes.filter((i) => data.chunks[i] !== undefined);
     if (!present.length) return;
     setBatchIndexes(present);
@@ -206,35 +159,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     );
   };
 
-  // `null` while loading rather than `true`: offering a feature and then
-  // failing is worse than a control that appears a moment late.
-  // `script_conversion?` and not just `data?` — the frontend and backend deploy
-  // independently (a local UI against a pod), so a server that predates this
-  // field is a real case. Without the second `?` it throws and takes the panel
-  // down rather than merely hiding a button.
-  const canConvert = system.data?.script_conversion?.available ?? null;
-  const cannotConvertReason = system.data?.script_conversion?.reason ?? null;
-
-  // Devanagari cannot be spoken at all; Urdu script can, but is harder to
-  // proofread. One is a blocker and the other is an offer — the copy says so.
-  const needsConversion = data?.needs_transliteration ?? false;
-  const offerConversion = data != null && (needsConversion || data.script === 'arabic');
-
-  // ONE record per part, replacing the `converted` / `rejectedIndexes` /
-  // `busyIndex` maps that were drifting toward four parallel structures keyed
-  // by the same index. See useTranscriptParts for why, and for why `status`
-  // and `outgoing` are derived rather than stored.
-  const parts = useTranscriptParts();
-
-  useEffect(() => {
-    if (!conversion.result) return;
-    parts.applyConversion(batchIndexes, conversion.ok, conversion.rejected, lastTarget);
-    // `conversion.ok` is a fresh array per result, so this fires once per job.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversion.result, conversion.ok, conversion.rejected, batchIndexes]);
-
-  async function fetchTranscript(e: React.FormEvent) {
+  async function prepare(e: React.FormEvent) {
     e.preventDefault();
+    if (!input.trim()) return;
     setLoading(true);
     setError(null);
     try {
@@ -243,63 +170,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       setExpanded(new Set());
       setSelected(new Set());
       setSelectMode(false);
-      setCollapsedChapters(new Set());
-      const fetched = await api.fetchTranscript(url.trim(), language || undefined);
-      parts.reset(fetched.chunks);
-      setData(fetched);
+      const prepared = await api.prepareText(input.trim());
+      parts.reset(prepared.chunks);
+      setData(prepared);
     } catch (err) {
       setData(null);
-      setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  //: Classify a track for the picker, using ONLY the two signals that are
-  //: reliable: the `-orig` suffix yt-dlp puts on an original-language track,
-  //: and `is_auto_generated`. They are not mutually exclusive — a
-  //: machine-transcribed video's only track is both (`hi-orig`, auto).
-  //:
-  //: A human-authored track that is NOT `-orig` is labelled "manual", not
-  //: "translated": we cannot tell an authored original from an authored
-  //: translation without knowing the video's own language per track, and
-  //: guessing "translated" would be confidently wrong on every original-
-  //: language human caption. What DOES protect the user is that a genuine
-  //: original sorts first and is marked, and the language code is on screen.
-  const trackBadges = (t: TranscriptTrack): string[] => {
-    const badges: string[] = [];
-    if (t.language.endsWith('-orig')) badges.push('original');
-    if (t.is_auto_generated) badges.push('auto-generated');
-    if (!badges.length) badges.push('manual');
-    return badges;
-  };
-  const trackLabel = (t: TranscriptTrack) =>
-    `${t.name ?? t.language} — ${trackBadges(t).join(', ')}`;
-  const sortedTracks = (tracks: TranscriptTrack[]) =>
-    [...tracks].sort((a, b) => {
-      const rank = (t: TranscriptTrack) =>
-        t.language.endsWith('-orig') ? 0 : t.is_auto_generated ? 2 : 1;
-      return rank(a) - rank(b);
-    });
-
-  //: Re-fetch with a specific track's language code. The ONLY place a language
-  //: code is chosen, and it happens with the real options on screen.
-  async function refetchWithTrack(trackLanguage: string) {
-    if (!url.trim()) return;
-    setLanguage(trackLanguage);
-    setLoading(true);
-    setError(null);
-    try {
-      conversion.reset();
-      setBatchIndexes([]);
-      setExpanded(new Set());
-      setSelected(new Set());
-      setSelectMode(false);
-      setCollapsedChapters(new Set());
-      const fetched = await api.fetchTranscript(url.trim(), trackLanguage);
-      parts.reset(fetched.chunks);
-      setData(fetched);
-    } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
       setLoading(false);
@@ -317,32 +192,44 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   }
 
   return (
-    <section className="card" aria-labelledby="tr-h">
+    <section className="card" aria-labelledby="cv-h">
       <header className="card-head">
-        <h2 id="tr-h">Import from YouTube</h2>
+        <h2 id="cv-h">Convert a script</h2>
       </header>
 
       <p className="hint">
-        Picks the video's own caption track. Auto-generated captions are a rough draft —
-        read it before you generate from it. You can switch tracks after fetching.
+        Paste a script in Hindi (Devanagari), Roman Urdu, or Urdu script. It's split into parts you
+        can convert between writing systems and send to the editor. Read every part before you
+        generate — a conversion can turn a word into a real word that means something else.
       </p>
 
-      <form className="transcript-form" onSubmit={fetchTranscript}>
-        <label className="field">
-          <span className="field-label">Video URL</span>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=…"
-            inputMode="url"
+      <form className="transcript-form" onSubmit={prepare}>
+        <label className="field" style={{ flex: 1 }}>
+          <span className="field-label">Your script</span>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Paste Hindi, Roman Urdu, or Urdu-script text here…"
+            dir="auto"
+            rows={6}
             required
           />
         </label>
-        <button type="submit" className="btn" disabled={loading || !url.trim()}>
-          {loading ? <IconSpinner size={14} /> : <IconSearch size={14} />}
-          {loading ? 'Fetching…' : 'Fetch'}
-        </button>
       </form>
+      <div className="transcript-actions">
+        <button
+          type="button"
+          className="btn"
+          disabled={loading || !input.trim()}
+          onClick={(e) => void prepare(e)}
+        >
+          {loading ? <IconSpinner size={14} /> : <IconSpark size={14} />}
+          {loading ? 'Loading…' : data ? 'Reload parts' : 'Load parts'}
+        </button>
+        {input.trim() && (
+          <span className="muted">{input.trim().length.toLocaleString()} characters</span>
+        )}
+      </div>
 
       {error && (
         <div className="inline-error" role="alert">
@@ -352,95 +239,29 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
 
       {data && (
         <>
-          <div className="transcript-meta">
-            {data.title && <strong>{data.title}</strong>}
-            {data.duration_sec != null && (
-              <>
-                <span className="dot" />
-                <span>{fmtDuration(data.duration_sec)}</span>
-              </>
-            )}
-            <span className="dot" />
-            <span className="route-chip">
-              {data.chosen_track.language}
-              {data.chosen_track.is_auto_generated ? ' (auto)' : ''}
-            </span>
-            {/* Auto captions are materially worse in these languages, and
-                saying so is more useful than a quality score nobody can act on. */}
-            {data.chosen_track.is_auto_generated && (
-              <span className="tag warn">machine-written — expect errors</span>
-            )}
-          </div>
-
-          {/* TRACK PICKER — populated from the tracks the video actually has,
-              which only exist after a fetch. The user never types a language
-              code; they choose from real options with the original marked. */}
-          {data.available_tracks.length > 1 && (
-            <label className="field transcript-track">
-              <span className="field-label">
-                Caption track
-                {data.total_tracks > data.available_tracks.length && (
-                  <span className="muted">
-                    {' '}· {data.total_tracks} tracks total, showing the usable ones
-                  </span>
-                )}
-              </span>
-              <select
-                value={data.chosen_track.language}
-                disabled={loading}
-                onChange={(e) => void refetchWithTrack(e.target.value)}
-              >
-                {sortedTracks(data.available_tracks).map((t) => (
-                  <option key={t.language} value={t.language}>
-                    {trackLabel(t)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {/* A request that could not be honoured is stated, not left in the
-              badge to be decoded — the whole point of the picker is that a
-              translation never reaches a voice model unnoticed. */}
-          {language && language !== data.chosen_track.language && (
-            <div className="inline-error" role="status">
-              <IconAlert size={14} />
-              <span>
-                This video has no “{language}” track, so the{' '}
-                {data.chosen_track.language} one was used instead.
-              </span>
-            </div>
-          )}
-
-          {/* NOT a warning about a failure — a statement about what is
-              possible. No model here renders Devanagari (routing rejects it
-              deliberately), so this text needs converting before it can be
-              spoken at all. Decided server-side; the UI just reports it. */}
           {offerConversion && (
             <div className="convert-panel">
               <div className="convert-why">
                 <IconAlert size={14} />
                 <span>
-                  {needsConversion ? (
-                    <>
-                      This transcript is in Devanagari, which no voice here can read. Convert
-                      it before you generate from it.
-                    </>
+                  {data.script === 'devanagari' ? (
+                    <>This is Hindi (Devanagari), which no voice here can read. Convert it before you
+                    generate from it.</>
+                  ) : data.script === 'latin' ? (
+                    <>This is Roman Urdu. Convert it to Urdu script so an Urdu voice reads it
+                    properly — Roman Urdu can come out sounding accented.</>
                   ) : (
-                    <>
-                      This transcript is already in Urdu script and can be generated as-is.
-                      Convert it to Roman Urdu if you would rather read and edit it that way.
-                    </>
+                    <>This is already Urdu script and can be generated as-is. Convert it to Roman Urdu
+                    if you would rather read and edit it that way.</>
                   )}
                 </span>
               </div>
 
-              {/* The choice is between two different INTENTIONS, so the labels
-                  name the intention rather than the script. "Urdu script"
-                  alone does not tell you it skips the editing step. */}
+              {/* Only the targets this source can actually reach. A single valid
+                  target still renders as one option so the choice is legible. */}
               <fieldset className="convert-target" disabled={conversion.running}>
                 <legend className="field-label">Convert to</legend>
-                {(['roman', 'perso_arabic'] as Target[]).map((value) => (
+                {validTargets.map((value) => (
                   <label key={value} className="convert-option">
                     <input
                       type="radio"
@@ -450,12 +271,8 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                       onChange={() => setTarget(value)}
                     />
                     <span>
-                      <strong>{value === 'roman' ? 'Roman Urdu' : 'Urdu script'}</strong>
-                      <em>
-                        {value === 'roman'
-                          ? 'easier to read and fix before generating'
-                          : 'ready to generate, harder to proofread'}
-                      </em>
+                      <strong>{TARGET_LABEL[value].title}</strong>
+                      <em>{TARGET_LABEL[value].hint}</em>
                     </span>
                   </label>
                 ))}
@@ -474,19 +291,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                     ? conversion.progressLabel
                     : `Convert all ${data.chunks.length} parts`}
                 </button>
-                {/* One model load for the whole transcript is the entire point
-                    of doing this as a batch, and saying so sets the right
-                    expectation for a first run that takes minutes. */}
                 <span className="muted">
                   {conversion.running
                     ? 'All parts convert in one pass — the model loads at most once.'
-                    : /* The honest number, up front — a user who knows it is
-                         seven minutes will not read the spinner as a hang.
-                         MIRRORS app/jobs/estimate.py's two-term model; if that
-                         is re-solved, this must be too. Duplicated rather than
-                         fetched because it is needed BEFORE anything is
-                         enqueued, and a round-trip to price a button is worse
-                         than a constant with a pointer to its source. */
+                    : /* The honest number up front — MIRRORS app/jobs/estimate.py's
+                         two-term model; re-solve there, re-solve here. */
                       `About ${Math.max(
                         1,
                         Math.round((data.chunks.length * 7.03 + data.text.length * 0.0202) / 60),
@@ -494,9 +303,6 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 </span>
               </div>
 
-              {/* The server decided this at startup and composed the sentence.
-                  Rendering its words verbatim means the user is told what this
-                  card actually needs, not a generic "unavailable". */}
               {canConvert === false && (
                 <div className="inline-error" role="status">
                   <IconAlert size={14} />
@@ -508,18 +314,14 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   <IconAlert size={14} /> {conversion.error}
                 </div>
               )}
-              {/* Counts the WHOLE transcript, not the last batch. With
-                  per-part conversion the two diverge immediately: converting
-                  one part would otherwise report "1 of 1 converted" while 22
-                  parts sat untouched. */}
               {parts.convertedCount + parts.rejectedCount > 0 && !conversion.running && (
                 <div className="convert-summary" role="status">
                   {parts.convertedCount} of {data.chunks.length} parts converted to{' '}
                   {lastTarget === 'roman' ? 'Roman Urdu' : 'Urdu script'}
                   {parts.rejectedCount > 0 && (
                     <>
-                      {' '}— <strong>{parts.rejectedCount} could not be converted</strong> and
-                      are marked below; use each one's Convert button to retry
+                      {' '}— <strong>{parts.rejectedCount} could not be converted</strong> and are
+                      marked below; use each one's Convert button to retry
                     </>
                   )}
                   . Read every part before you generate from it.
@@ -528,10 +330,8 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
             </div>
           )}
 
-          {/* SELECTION + ONE ACTION BAR, rather than repeating actions on every
-              row. Reuses HistoryPanel's `.bulkbar` shape and CSS verbatim —
-              including the indeterminate select-all — because a second
-              implementation of the same control is a second set of bugs. */}
+          {/* SELECTION + ONE ACTION BAR — reuses HistoryPanel's `.bulkbar` shape
+              and CSS verbatim, including the indeterminate select-all. */}
           {data.chunks.length > 1 && (
             <div className="transcript-actions">
               <button
@@ -556,8 +356,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                   checked={selected.size > 0 && selected.size === data.chunks.length}
                   ref={(el) => {
                     if (el) {
-                      el.indeterminate =
-                        selected.size > 0 && selected.size < data.chunks.length;
+                      el.indeterminate = selected.size > 0 && selected.size < data.chunks.length;
                     }
                   }}
                   onChange={() =>
@@ -576,28 +375,19 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 <>
                   {offerConversion && canConvert && (
                     <>
-                      {/* ONE call for the whole selection. `convert_many` runs
-                          them against a single model residency, which from a
-                          cold start is the difference between one 19 GB load
-                          and N of them. Looping here would throw that away. */}
-                      <button
-                        type="button"
-                        className="btn-sm"
-                        disabled={conversion.running || selected.size > MAX_BATCH_CHUNKS}
-                        onClick={() => startConversion([...selected].sort((a, b) => a - b), 'roman')}
-                      >
-                        Convert {selected.size} → Roman
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-sm"
-                        disabled={conversion.running || selected.size > MAX_BATCH_CHUNKS}
-                        onClick={() =>
-                          startConversion([...selected].sort((a, b) => a - b), 'perso_arabic')
-                        }
-                      >
-                        Convert {selected.size} → Urdu script
-                      </button>
+                      {/* ONE call for the whole selection against a single model
+                          residency — looping would pay N cold loads. */}
+                      {validTargets.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          className="btn-sm"
+                          disabled={conversion.running || selected.size > MAX_BATCH_CHUNKS}
+                          onClick={() => startConversion([...selected].sort((a, b) => a - b), t)}
+                        >
+                          Convert {selected.size} → {TARGET_LABEL[t].title}
+                        </button>
+                      ))}
                     </>
                   )}
                   <button
@@ -627,9 +417,6 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                       {selected.size - MAX_BATCH_CHUNKS}.
                     </span>
                   )}
-                  {/* A multi-part conversion sets `busyIndex` to null, so no
-                      single row shows the spinner — the progress belongs here,
-                      on the bar that started it. */}
                   {conversion.running && busyIndex === null && (
                     <span className="muted chunk-progress">
                       <IconSpinner size={13} /> {conversion.progressLabel}
@@ -644,20 +431,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
             <button
               type="button"
               className="btn-sm"
-              onClick={() => void copy(data.text, 'all')}
-            >
-              {copied === 'all' ? <IconCheck size={13} /> : <IconCopy size={13} />}
-              {copied === 'all' ? 'Copied' : 'Copy all'}
-            </button>
-            <button
-              type="button"
-              className="btn-sm"
               onClick={() =>
                 onSendToEditor(
-                  // Whatever is actually usable: the converted parts if a
-                  // conversion has run, the original otherwise. Rejected parts
-                  // are LEFT OUT rather than silently passed through in a
-                  // script nothing can speak.
+                  // Whatever is actually usable: converted parts if a conversion
+                  // has run, the original otherwise. Rejected parts are LEFT OUT
+                  // rather than passed through in a script nothing can speak.
                   parts.convertedCount
                     ? data.chunks
                         .map((c) =>
@@ -666,9 +444,6 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                             : parts.outgoing(c.index),
                         )
                         .filter((t): t is string => Boolean(t))
-                        // A blank line between parts: `direction_analyze`
-                        // treats a newline as the longest pause there is, so
-                        // this is a real paragraph break, not formatting.
                         .join('\n\n')
                     : data.text,
                 )
@@ -677,113 +452,47 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
               title={
                 needsConversion && parts.convertedCount === 0
                   ? 'Devanagari cannot be generated — convert it first'
-                  : 'Put the whole transcript in the editor'
+                  : 'Put the whole script in the editor'
               }
             >
               Send all to editor
+            </button>
+            <button type="button" className="btn-sm" onClick={() => void copy(data.text, 'all')}>
+              {copied === 'all' ? <IconCheck size={13} /> : <IconCopy size={13} />}
+              {copied === 'all' ? 'Copied' : 'Copy all'}
             </button>
             <span className="muted">
               {data.text.length.toLocaleString()} characters · {data.chunks.length} parts
             </span>
           </div>
 
-          <textarea
-            className="transcript-text"
-            value={data.text}
-            readOnly
-            dir="auto"
-            rows={8}
-            aria-label="Full transcript"
-          />
-
-          {/* Jump list — only when there is more than one chapter to jump
-              between. Collapses to a <select> under 640px (CSS). */}
-          {chapterGroups.length > 1 && (
-            <nav className="chapter-jump" aria-label="Jump to chapter">
-              {chapterGroups.map((group, gi) =>
-                group.chapter ? (
-                  <button
-                    key={group.chapter.index}
-                    type="button"
-                    className="btn-sm ghost"
-                    onClick={() => jumpToChapter(group.chapter!.index)}
-                  >
-                    {group.chapter.title}
-                  </button>
-                ) : (
-                  <button
-                    key={`pre-${gi}`}
-                    type="button"
-                    className="btn-sm ghost"
-                    onClick={() => jumpToChapter(null)}
-                  >
-                    Intro
-                  </button>
-                ),
-              )}
-            </nav>
-          )}
-
           <h3 className="transcript-h3">Parts</h3>
-
-          {chapterGroups.length > 1
-            ? chapterGroups.map((group) => {
-                const key = group.chapter ? group.chapter.index : -1;
-                const groupCollapsed = collapsedChapters.has(key);
-                const converted = group.chunks.filter(
-                  (c) => parts.status(c.index) !== 'original',
-                ).length;
-                return (
-                  <section
-                    key={key}
-                    className="chapter"
-                    ref={(el) => {
-                      if (el) chapterRefs.current.set(key, el);
-                    }}
-                  >
-                    <div className="chapter-head">
-                      <button
-                        type="button"
-                        className="chapter-toggle"
-                        aria-expanded={!groupCollapsed}
-                        onClick={() => toggleChapter(key)}
-                      >
-                        {groupCollapsed ? (
-                          <IconChevronDown size={13} />
-                        ) : (
-                          <IconChevronUp size={13} />
-                        )}
-                        <span className="chapter-title">
-                          {group.chapter ? group.chapter.title : 'Before the first chapter'}
-                        </span>
-                        {group.chapter && (
-                          <span className="muted chapter-time">
-                            {fmtDuration(group.chapter.start_sec)}
-                          </span>
-                        )}
-                      </button>
-                      <span className="muted chapter-count">
-                        {converted > 0
-                          ? `${converted}/${group.chunks.length} parts`
-                          : `${group.chunks.length} part${group.chunks.length === 1 ? '' : 's'}`}
-                      </span>
-                      {selectMode && (
-                        <button
-                          type="button"
-                          className="btn-sm ghost"
-                          onClick={() => selectChapter(group.chunks.map((c) => c.index))}
-                        >
-                          Select these
-                        </button>
-                      )}
-                    </div>
-                    {!groupCollapsed && (
-                      <ul className="parts">{group.chunks.map(renderRow)}</ul>
-                    )}
-                  </section>
-                );
-              })
-            : <ul className="parts">{data.chunks.map(renderRow)}</ul>}
+          <ul className="parts">
+            {data.chunks.map((chunk) => (
+              <TranscriptPartRow
+                key={chunk.index}
+                chunk={chunk}
+                parts={parts}
+                expanded={expanded.has(chunk.index)}
+                onToggle={() => toggleExpanded(chunk.index)}
+                selected={selected.has(chunk.index)}
+                selectMode={selectMode}
+                onSelect={() => toggleSelected(chunk.index)}
+                onConvert={
+                  offerConversion && canConvert
+                    ? (to) => startConversion([chunk.index], to)
+                    : undefined
+                }
+                targets={validTargets}
+                converting={conversion.running && busyIndex === chunk.index}
+                convertingLabel={conversion.progressLabel}
+                onSendToEditor={onSendToEditor}
+                onCopy={(text, key) => void copy(text, key)}
+                copied={copied === `c${chunk.index}`}
+                requiresConversion={needsConversion}
+              />
+            ))}
+          </ul>
         </>
       )}
     </section>

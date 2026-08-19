@@ -1699,29 +1699,12 @@ textarea {
 
 .transcript-form .field { margin-bottom: 0; }
 
-.transcript-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  font-size: var(--text-base);
-  color: var(--muted);
-  margin-bottom: var(--space-3);
-}
-
 .transcript-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-bottom: var(--space-2);
-}
-
-/* Read-only on purpose: the editable copy lives in the Composer, and two
-   editable copies of the same text is how they drift apart. */
-.transcript-text {
-  background: var(--panel-inset);
-  margin-bottom: var(--space-4);
 }
 
 .transcript-h3 {
@@ -2004,69 +1987,3 @@ textarea {
   .part-status { display: none; }
 }
 
-/* ── Chapter grouping ───────────────────────────────────────────────────────
-   A long video groups its parts under the chapters the author wrote, so a
-   two-hour transcript is navigable rather than a flat wall of 120 rows. */
-.chapter-jump {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--line);
-}
-
-.chapter {
-  margin-bottom: var(--space-3);
-}
-
-.chapter-head {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: var(--space-2);
-}
-
-.chapter-toggle {
-  display: flex;
-  flex: 1;
-  gap: var(--space-2);
-  align-items: center;
-  min-height: 32px;
-  padding: 0;
-  font: inherit;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-  background: none;
-  border: 0;
-}
-
-.chapter-title {
-  font-size: var(--text-md);
-  font-weight: 600;
-}
-
-.chapter-time {
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.chapter-count {
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-@media (max-width: 640px) {
-  /* The jump row scrolls horizontally rather than wrapping into many lines on
-     a video with a lot of chapters. */
-  .chapter-jump {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .chapter-jump .btn-sm { flex: none; }
-}

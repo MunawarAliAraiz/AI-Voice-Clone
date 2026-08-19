@@ -1,6 +1,17 @@
-# Transcript import — design, decisions, and what is not built
+# The Convert tab — design, decisions, and what is not built
 
-Paste a YouTube link, get its captions, edit them, generate speech a part at a time.
+> **The YouTube fetch was removed 2026-08-19, and the tab renamed "Import" → "Convert".** YouTube
+> hard-blocks datacenter IPs (RunPod) with "Sign in to confirm you're not a bot", and getting past it
+> needs a fragile stack (a logged-in cookies file + Deno + the EJS challenge solver + new caption-format
+> handling) that breaks every time YouTube changes. Manual paste is simpler and reliable. So the tab now
+> takes text the user PASTES (`POST /api/transcript/prepare`, pure CPU: chunk + detect script) and the
+> yt-dlp fetch, the SSRF guard (`domain/youtube.py`), the track picker, and chapter grouping are all
+> gone. **Everything below about the transliterator, why Hindi is a source format, and the chunking
+> rules still applies** — only the *input* changed from a URL to pasted text. (English→Urdu
+> *translation*, a different operation, is a planned follow-up.)
+
+Paste a Hindi (Devanagari), Roman Urdu, or Urdu-script script; convert its writing system a part at a
+time; send it to the editor.
 
 Written up in-repo rather than left in a chat transcript or a plan file, because the *reasoning*
 here is what a future session needs and the code alone does not carry it.
@@ -43,9 +54,16 @@ which is *why* the transcript lands in an editable field rather than going strai
 
 ---
 
-## What is built
+## What was built (the YouTube implementation — REMOVED 2026-08-19)
 
-### `backend/app/domain/youtube.py` — pure, no network
+> Everything in this section describes the **YouTube fetch that was removed** (see the note at the
+> top). It is kept for the *reasoning* — the SSRF argument, the newline-as-pause rule, why chapters
+> chunk the way they do — which still governs the code that replaced it. **What exists now** is
+> `POST /api/transcript/prepare`: it takes the pasted text directly, detects the script with
+> `profile_text`, and chunks it with `chunk_for_synthesis` (paragraphs preserved as pauses, `index`
+> global). `domain/youtube.py`, `parse_video_id`, the track picker, and chapter grouping are gone.
+
+### `backend/app/domain/youtube.py` — pure, no network *(removed)*
 
 `parse_video_id(url)` is **the SSRF guard**, and it is a separate pure function for that reason.
 The endpoint fetches server-side from a user-supplied string, which is that hole by default. So no

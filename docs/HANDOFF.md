@@ -6,65 +6,59 @@ project lost a day of planning because the only copy lived on a pod that was ter
 
 ---
 
-## ⚡ Start here (state as of 2026-08-17, evening)
+## ⚡ Start here (state as of 2026-08-19)
 
 > **If you read only one section, read this one.** Everything below it is history explaining how
 > the current state came to be.
 
-**Branch:** `feature/roman-urdu-phase-a`. Push to the **`fork`** remote, not `origin`.
+**Branch/PRs.** Push to the **`fork`** remote (`MunawarAliAraiz/AI-Voice-Clone`), not `origin`.
+Merged into `main`: **#22** (Roman-Urdu Phase A: transcript import, chapters, transliterator,
+convert-on-generate) and **#23** (YouTube cookies — now superseded). **OPEN: #25** on
+`feat/convert-tab` — replaces YouTube import with a paste-and-convert **Convert** tab (see below).
 
-**Live pod:** `.claude/remote.local.md` (gitignored). A NEW pod (the third in three days) was
-created 2026-08-17 and is **mid-bootstrap**. Four things about it:
-- **It is an A40 with 45 GB, and that changes nothing.** The owner's instruction is to design for a
-  **24 GB** card: `budget_mb = 16000`, `max_workers = 2`, and Phase B's load-convert-unload all
-  stay. A Phase B measurement taken here is an UPPER bound on what fits, not proof that it fits —
-  anything that works only because of the extra 21 GB is a failure, not a pass.
-- `scripts/pod-bootstrap.sh` fetches **`main`**, so **`.venv-gemma` will not exist** when it
-  finishes — that section lives on the feature branch. Check the branch out and provision it, or
-  Phase B has nothing to run against.
-- **Watch the volume.** 41 GB used at step 8; a fully bootstrapped pod has measured 76 GB, and
-  Gemma's ~19 GB would put it near 95 GB. Check the size in the RunPod console *before* pulling it.
-  `df` reports the whole MooseFS cluster and will claim terabytes free on a full volume —
-  `du -sh /workspace`.
-- **The secrets did NOT survive** the pod before this one. `VCS_API_KEY` /
-  `VCS_MEDIA_TOKEN_SECRET` must be recreated by the owner; every request 401s until then.
-- Always launch the bootstrap with `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600` — `uv`'s 30 s
-  default killed a run outright.
+**Live pod:** `.claude/remote.local.md` (gitignored). Current pod **`194.68.245.87:22052`**, an
+**RTX A6000 (46 GB)**, fully bootstrapped, **backend UP**, all six venvs incl. `.venv-gemma`.
+- **The A6000's 46 GB changes nothing** — design for a **24 GB** card (`budget_mb = 16000`,
+  `max_workers = 2`). A Phase B measurement here is an UPPER bound, not proof it fits on 24 GB.
+- **Script conversion is AVAILABLE and verified** — Gemma wired via `VCS_GEMMA_TRANSLITERATOR_PYTHON`
+  (the bootstrap now exports it; it used to forget to — that was a real bug). A live transliterate
+  job returned correct Perso-Arabic (`"Aap kaise hain…"` → `"آپ کیسے ہیں…"`, ~5 s warm).
+- **Secrets** are minted in `/workspace/vcs-secrets.env` (survive restarts). Pod's `VCS_API_KEY`
+  differs from any local one — paste it into the frontend settings gear.
+- **Lifecycle:** `/workspace/ctl.sh {up|start|restart|stop|status}`. Bootstrap re-run needs no
+  `BRANCH=` now (main has everything except #25). Always pass
+  `UV_HTTP_TIMEOUT=600 HF_HUB_DOWNLOAD_TIMEOUT=600`.
+- **Pods die often** (three in three days earlier). Push at every checkpoint; `/workspace` has
+  arrived empty on every pod change.
 
 ### What is DONE and what is only WRITTEN
 
 | | State |
 |---|---|
-| Pronunciation dictionary (table, CRUD, tab, search) | ✅ shipped, browser-verified |
-| Generation titles, non-blocking Generate, retry button, merged Recent/History | ✅ shipped, browser-verified |
+| Pronunciation dictionary, generation titles, non-blocking Generate, merged Recent/History | ✅ shipped, browser-verified |
 | Clause/sentence/paragraph breaks (Urdu `،`, newlines) | ✅ shipped, tested |
-| YouTube transcript import — backend + Import tab | ✅ shipped, **browser-verified against a real video** |
-| Import tab rework — chapters, collapsible parts, per-part editing, bulk bar, track picker | ✅ shipped & browser-verified (2026-08-18) |
-| Phase B: `exclusive_gpu`/`reserve_slot`, validator, Gemma runtime, `TransliteratorScheduler` | ✅ written |
-| Phase B: `POST /api/text/transliterate`, `JobKind.TRANSLITERATE`, handler, config, lifespan | ✅ wired & tested (CPU, fake scheduler) |
-| Phase B: **run on an actual GPU** | ✅ `.venv-gemma` provisioned on the A40 pod 2026-08-17; Gemma **resident** (idle-killed, warmed at startup), `latin → perso_arabic` GPU-verified |
-| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** (Devanagari listening gate still unrun) |
-| Composer convert-on-generate (Roman Urdu → Urdu script, client-side, with review) | ✅ shipped 2026-08-18 (browser verify pending a warm pod) |
+| Phase B transliterator (Gemma-4-31B): scheduler, validator, `/api/text/transliterate`, lifespan | ✅ shipped; **GPU-verified** on the A6000 pod (`latin → perso_arabic` returns correct Urdu) |
+| Composer convert-on-generate (Roman Urdu → Urdu script, client-side, with review) | ✅ shipped; backend half GPU-verified. Frontend active path needs the pod API key pasted in the browser to exercise |
+| **Convert tab (was YouTube Import)** — paste a script, detect source, convert per-source, review, send to editor | 🟡 **PR #25 open.** YouTube fully removed. Browser-verified UI + degraded state locally; **real Gemma conversion not yet browser-verified on the pod** |
+| Devanagari as a source script (prompt, exemplars, detection, echo check) | ✅ wired & tested, ❌ **UNGATED** — the Devanagari listening gate has never been run |
+| English → Urdu **translation** (a different operation from transliteration) | ❌ not built — planned follow-up, both targets (Urdu script + Roman Urdu). Needs a source-language declaration (English is indistinguishable from Roman Urdu) and a translate path that does NOT reject a non-echo |
 
 ### The next three things, in order
 
-1. **Browser-verify convert-on-generate end to end on a warm pod.** The client-side flow shipped
-   2026-08-18 (Composer: Urdu selected + OmniVoice default + Roman text → chip warns → Generate
-   converts → review banner → one tap → audio) but has only been proven by `npm run build` and code
-   reading. Bring up the pod backend over the SSH tunnel with Gemma warm and run the checklist in
-   the plan's "In the browser" section, including the Import-tab bulk convert landing on the right
-   parts and the 375px chapter jump list.
+1. **Browser-verify the Convert tab's real conversion on the pod (PR #25).** The UI and degraded
+   state are checked, but the actual Gemma run through the tab is not. Deploy `feat/convert-tab` to
+   the pod, point the local frontend at it (tunnel `-L 8010:127.0.0.1:8000`, `VITE_PROXY_TARGET`),
+   paste the pod key, and confirm: paste Devanagari → Convert all → correct Urdu on the right parts →
+   Send to editor. Also finish the same check for Composer convert-on-generate.
 2. **The Devanagari listening gate.** The path is built and reports `source_script` on every result
    so an ungated conversion is identifiable, but nothing has *heard* one. Add a Devanagari arm to
    `eval/run_roman_arabic_probe.py` and run the A3 protocol end to end. Synthesis is unseeded —
-   sample repeatedly, listen blind, and remember the numbers can only fail a candidate.
-   The Import tab currently disables both send buttons on a Devanagari transcript and says the
-   feature is still being validated. **That is correct and must stay true until the gate passes.**
-   One thing the gate should settle that nothing has decided: what to do with an English loanword
-   already spelled in Devanagari (मीटिंग). The exemplars deliberately say nothing about it.
-3. **Confirm Gemma's residency behaves under load.** `TransliteratorScheduler` idle-kills and warms
-   at startup; verify with `nvidia-smi` that it actually returns VRAM when idle-killed and that the
-   audio models reload cold afterwards. That reload claim is the one most likely to be wrong.
+   sample repeatedly, listen blind; the numbers can only fail a candidate. The Convert tab correctly
+   blocks Send on an unconverted Devanagari part — keep that true until the gate passes.
+3. **English → Urdu translation** (the follow-up the owner asked for). See the last table row and
+   `docs/TRANSCRIPT_IMPORT.md`'s header note. It is TRANSLATION, not transliteration — a new Gemma
+   prompt/path whose validator must not reject a non-echo, plus a source-language selector in the
+   Convert tab (English can't be auto-detected from Roman Urdu).
 
 ### The Roman-draft question — DECIDED 2026-08-18
 
@@ -76,7 +70,7 @@ shape: **both kept; editing the Roman marks the Urdu stale and blocks Generate u
 The one cost that shape carried (`~78 s` Gemma load per re-convert) is **obsolete**: Gemma is
 resident since 2026-08-17, so a re-convert is ~5 s. Implemented two ways:
 
-- **Import tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
+- **Convert tab** (`useTranscriptParts`): `source` readonly vs editable `draft`/`converted`,
   `outgoing = draft ?? converted ?? source`, edit marks the part stale/edited.
 - **Composer** (client-side convert-on-generate): Generate runs the conversion when the selected
   model can't read Latin, shows the Perso-Arabic for review, one tap generates. `resolve()` and

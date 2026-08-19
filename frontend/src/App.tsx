@@ -20,7 +20,7 @@ import {
   useLanguages,
   useVoices,
 } from './hooks/queries';
-import { IconAlert, IconDownload, IconFileAudio, IconHistory, IconMic, IconSettings, IconX } from './components/icons';
+import { IconAlert, IconRoute, IconFileAudio, IconHistory, IconMic, IconSettings, IconX } from './components/icons';
 import './App.css';
 
 // 477 lines behind a tab most sessions never open — split out of the main bundle.
@@ -29,11 +29,11 @@ const AudioEditorTab = lazy(() =>
 );
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'recent' | 'import' | 'pronunciation' | 'editor';
+type Tab = 'studio' | 'recent' | 'convert' | 'pronunciation' | 'editor';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
   { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
-  { id: 'import', label: 'Import', icon: <IconDownload size={14} /> },
+  { id: 'convert', label: 'Convert', icon: <IconRoute size={14} /> },
   { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
   { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
 ];
@@ -339,13 +339,13 @@ export default function App() {
           />
         )}
         {/* HIDDEN, NOT UNMOUNTED — same rule as the Studio panel above, for a
-            worse version of the same reason. Unmounting discarded the fetched
-            transcript AND the id of an in-flight conversion job, so glancing at
+            worse version of the same reason. Unmounting discarded the pasted
+            script AND the id of an in-flight conversion job, so glancing at
             another tab mid-convert lost a 23-part result the GPU was still
             producing. The job itself survived on the server; only the client
             forgot it was waiting, which is the most annoying possible way to
             lose work. */}
-        <div className="tab-panel" hidden={activeTab !== 'import'}>
+        <div className="tab-panel" hidden={activeTab !== 'convert'}>
           <TranscriptPanel onSendToEditor={sendToEditor} />
         </div>
         {activeTab === 'pronunciation' && <PronunciationPanel />}

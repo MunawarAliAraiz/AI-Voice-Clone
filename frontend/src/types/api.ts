@@ -437,42 +437,16 @@ export interface ProblemJson {
   [k: string]: unknown;
 }
 
-/* ── YouTube transcript import ────────────────────────────────────────────── */
-
-export interface TranscriptTrack {
-  language: string;
-  name: string | null;
-  /** Auto-generated captions are markedly worse in Urdu and Hindi. Surfaced so
-   *  the UI can say so rather than passing a machine guess off as authored. */
-  is_auto_generated: boolean;
-}
-
-/** One chapter of the video.
- *
- *  Carries the only timestamps in this response, deliberately: a chunk gets no
- *  `start_sec`. Stamping a chapter's start on all twelve of its parts is free
- *  and would be a precise-looking wrong number, and the honest per-part version
- *  is not recoverable (whitespace normalization destroys the offsets). */
-export interface TranscriptChapterInfo {
-  index: number;
-  title: string;
-  start_sec: number;
-  /** Absent on description-derived chapters. Display only — boundaries are
-   *  decided by the NEXT chapter's start, never by this. */
-  end_sec: number | null;
-}
+/* ── Convert tab: prepare pasted text ─────────────────────────────────────── */
 
 export interface TranscriptChunk {
-  /** GLOBAL across the transcript, not per chapter. Safe to key conversion
-   *  results off — the server renumbers after chunking each chapter. */
+  /** GLOBAL across the paste, not per paragraph. Safe to key conversion results
+   *  off — the server renumbers after chunking each paragraph. */
   index: number;
   text: string;
   /** False means the chunk was cut at a clause or word boundary because a
    *  sentence would not fit — where a join artifact will be audible. */
   ends_on_sentence: boolean;
-  /** `null` when the video has no chapters, or for the stretch before the
-   *  first one starts. */
-  chapter_index: number | null;
 }
 
 /** Body for `POST /api/text/transliterate` (202 + poll on `GET /api/jobs/{id}`).
@@ -530,29 +504,19 @@ export interface TransliterateResult {
   gen_time_sec: number;
 }
 
-export interface TranscriptResponse {
-  video_id: string;
-  title: string | null;
-  duration_sec: number | null;
-  /** Authored tracks plus the chosen one — NOT every track. A real video had
-   *  4867, almost all machine auto-translations, at 367 KB of JSON. */
-  available_tracks: TranscriptTrack[];
-  /** How many existed before that trim, so the number is not silently lost. */
-  total_tracks: number;
-  chosen_track: TranscriptTrack;
+/** Body for `POST /api/transcript/prepare`. */
+export interface PrepareTextRequest {
+  text: string;
+}
+
+export interface PreparedTextResponse {
+  /** The pasted text as chunked (paragraph breaks preserved), so what the UI
+   *  shows and what it converts cannot drift apart. */
   text: string;
   /** `latin` | `arabic` | `devanagari` | ... — the same detector routing uses. */
   script: string;
   /** True when NOTHING in the catalog renders this script (Devanagari). Decided
    *  server-side so the UI never encodes routing rules. */
   needs_transliteration: boolean;
-  /** Empty when the video has no chapters — the common case, and it must stay
-   *  indistinguishable from the pre-chapters behaviour. May be `undefined`
-   *  against a pod that predates this field. */
-  chapters: TranscriptChapterInfo[];
-  /** True when the transcript hit the server ceiling and was cut. Previously
-   *  only a server-side log, so the user was handed a shortened transcript with
-   *  no indication. */
-  truncated: boolean;
   chunks: TranscriptChunk[];
 }
