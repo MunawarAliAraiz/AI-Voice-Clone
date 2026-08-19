@@ -1301,6 +1301,23 @@ textarea {
   font-size: var(--text-md);
 }
 
+/* On a narrow window the topbar wraps and the Settings button lands
+   bottom-left, so a popover anchored to the button (right: 0) ran off the left
+   edge and the API-key input was clipped off-screen. Below the wrap, show it as
+   a small centered dialog instead — always on-screen, capped to the viewport,
+   and independent of wherever the button ended up. */
+@media (max-width: 720px) {
+  .apikey-pop {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    width: min(320px, calc(100vw - 2 * var(--space-4)));
+    animation: fade var(--dur-base) var(--ease-out) both;
+  }
+}
+
 @media (pointer: coarse) {
   .icon-btn { min-width: 44px; min-height: 44px; }
   .icon-btn.tiny { min-width: 36px; min-height: 36px; }
