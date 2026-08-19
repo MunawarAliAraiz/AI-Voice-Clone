@@ -6,15 +6,14 @@ keys, no external services, no per-character billing.
 
 > **Status:** validated end-to-end on GPU with real cloned audio. **VoxCPM 2** (English + Roman Urdu)
 > and **OmniVoice** (native Urdu script) are the deployed models; an async job queue, Speech
-> Direction, a pronunciation dictionary, YouTube transcript import, and a Roman→Urdu-script
-> transliterator (Gemma-4-31B) have all landed.
-> **Hindi was fully removed as a target language** — it survives only as a *source format* for
-> transcript import (Devanagari captions get transliterated to Urdu, never spoken as Hindi).
+> Direction, a pronunciation dictionary, a **Convert tab** (paste a script, convert its writing
+> system), and a Roman/Devanagari→Urdu transliterator (Gemma-4-31B) have all landed.
+> **Hindi was fully removed as a target language** — it survives only as a *source format*: paste a
+> Devanagari script into the Convert tab and it transliterates to Urdu, never spoken as Hindi.
 > Design and rationale: [docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md).
 > Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 > Working agreements for contributors and agents: [CLAUDE.md](CLAUDE.md).
 > What's done / in progress / planned next: [docs/ROADMAP.md](docs/ROADMAP.md).
-> Transcript import + the Hindi question: [docs/TRANSCRIPT_IMPORT.md](docs/TRANSCRIPT_IMPORT.md).
 >
 > Base branch is `main`, which the rewrite was merged into on 2026-08-06.
 
@@ -42,7 +41,7 @@ but a native listener hears an English accent (measured finding A0). So the app 
 **Gemma-4-31B transliterator** that converts Roman Urdu → Urdu script, which OmniVoice reads
 properly — and it's **never silent**: it shows you the converted text to check first, because the
 model's failure mode is a real Urdu word that means something else. In the Composer this happens on
-Generate (one tap to confirm); in the Import tab it's per-part.
+Generate (one tap to confirm); in the **Convert tab** you paste a script and convert it per-part.
 
 **You declare the language; the app detects the script — it never guesses.** If no model can render
 what you asked for, you get a 422 listing what *would* work, never substituted audio. Every result
@@ -237,7 +236,6 @@ settings):
 | `VCS_QWEN_ANALYZER_PYTHON` | *(empty)* | Runtime venv for Speech Direction's analyzer. Empty ⇒ only the "suggest emotion/tone" button is disabled. |
 | `VCS_CHATTERBOX_PYTHON` | *(empty)* | Runtime venv for Chatterbox (in catalog, not routable). |
 | `VCS_WARM_ON_STARTUP` | *(empty)* | Comma-separated model ids (e.g. `voxcpm2,omnivoice_urdu`) to start loading as the backend boots, instead of the first `/generate` paying the ~20–60s cold-load cost. Backgrounded — `/api/health` still answers immediately either way. |
-| `VCS_YT_COOKIES_FILE` | *(empty)* | Path to a Netscape `cookies.txt` for yt-dlp. **Required for YouTube transcript import from a datacenter/cloud IP** — YouTube blocks those with "Sign in to confirm you're not a bot". A missing file is ignored (import just fails with a bot-block error). Export from a **throwaway** Google account — cookie use from a datacenter IP can flag an account. |
 
 There is no `default_engine` setting. Routing decides per request from the declared language and the
 detected script.

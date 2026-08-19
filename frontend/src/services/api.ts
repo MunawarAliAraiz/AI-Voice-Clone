@@ -17,7 +17,7 @@ import type {
   SystemStatus,
   TTSGenerateRequest,
   TitleResponse,
-  TranscriptResponse,
+  PreparedTextResponse,
   TransliterateRequest,
   VoiceProfile,
   VoiceProfileList,
@@ -200,15 +200,15 @@ export const api = {
    * unavailable.
    */
   /**
-   * Import a YouTube caption track. The URL is validated SERVER-SIDE by
-   * `domain/youtube.parse_video_id` — the SSRF guard lives there, in one
-   * tested place, and is deliberately not duplicated as a weaker regex here.
+   * Chunk a pasted script for the Convert tab. No network — the server splits
+   * the text, detects its script, and reports whether it needs converting
+   * before it can be spoken. Conversion itself is `transliterate` below.
    */
-  fetchTranscript: (url: string, language?: string) =>
-    request<TranscriptResponse>('/api/transcript/fetch', {
+  prepareText: (text: string) =>
+    request<PreparedTextResponse>('/api/transcript/prepare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, language: language || null }),
+      body: JSON.stringify({ text }),
     }),
 
   /**

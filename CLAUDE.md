@@ -9,10 +9,12 @@ The rewrite is complete and validated end-to-end on GPU with real cloned audio. 
 **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** — read it before changing anything in
 `backend/app/inference/`, `backend/app/domain/`, or the engine layer. This file is the operational summary.
 
-**Transcript import + the Hindi question:** **[docs/TRANSCRIPT_IMPORT.md](docs/TRANSCRIPT_IMPORT.md)** —
-YouTube caption import, the SSRF guard that governs it, and why **Hindi is a source format here and
-never a target language**. Read it before touching `domain/youtube.py`,
-`api/routers/transcript.py`, or anything that wants to make Devanagari routable.
+**The Convert tab + the Hindi question:** **[docs/TRANSCRIPT_IMPORT.md](docs/TRANSCRIPT_IMPORT.md)** —
+why **Hindi is a source format here and never a target language**, and the transliterator that makes
+it usable. **The YouTube fetch was removed 2026-08-19** (datacenter IPs are hard-blocked by YouTube's
+bot check); the tab now chunks text the user PASTES (`api/routers/transcript.py` → `/prepare`, pure
+CPU). `domain/youtube.py` and its SSRF guard are gone. Read the doc before touching
+`api/routers/transcript.py` or anything that wants to make Devanagari routable.
 
 **What's currently in flight, and what's next:** **[docs/ROADMAP.md](docs/ROADMAP.md)** —
 phase-by-phase status (done / in progress / designed-not-built), including the async job queue,
@@ -293,10 +295,6 @@ Run a single uvicorn worker. N workers = N schedulers = N × VRAM.
   `normalize_whitespace` (`" ".join(text.split())`) and destroys them. Two consequences worth
   knowing: prosody (emotion, rate) is scored on the **sentence**, not the clause — scoring a lone
   clause makes `_determine_rate`'s clause-density rule permanently unreachable — and anything that
-  *builds* text (e.g. `domain/youtube.cues_to_text`) must not emit newlines it does not mean, since
-  each one is now ~380 ms of real silence.
-- **Never fetch a user-supplied URL.** `domain/youtube.parse_video_id` extracts an 11-character
-  video id from a `urlsplit`-checked hostname and callers build their own request from that id.
-  A regex over the whole URL is not sufficient — it accepts `youtube.com.evil.test` and
-  `www.youtube.com@evil.test`. Tests assert not just the 422 but that **no fetch happened**.
+  *builds* text (e.g. the Convert tab's `/prepare` joining paragraphs with `"\n\n"`) must not emit
+  newlines it does not mean, since each one is now ~380 ms of real silence.
 - No `.catch(() => {})`. Ever.

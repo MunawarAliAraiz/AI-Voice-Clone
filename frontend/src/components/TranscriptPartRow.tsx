@@ -42,6 +42,10 @@ interface Props {
   /** Absent when this server cannot convert — the actions hide rather than
    *  appearing and then failing. */
   onConvert?: (target: 'roman' | 'perso_arabic') => void;
+  /** The targets this part's SOURCE script can actually reach — Roman Urdu is
+   *  not offered for a Roman-Urdu source (that hop is a no-op). Stable per
+   *  script, so the memo below can compare it by identity. */
+  targets: ('roman' | 'perso_arabic')[];
   converting: boolean;
   convertingLabel: string;
   onSendToEditor: (text: string) => void;
@@ -61,7 +65,7 @@ const STATUS_LABEL: Record<PartStatus, string> = {
 
 function TranscriptPartRowImpl({
   chunk, parts, expanded, onToggle, selected, selectMode, onSelect,
-  onConvert, converting, convertingLabel, onSendToEditor, onCopy, copied,
+  onConvert, targets, converting, convertingLabel, onSendToEditor, onCopy, copied,
   requiresConversion,
 }: Props) {
   const part = parts.get(chunk.index);
@@ -149,28 +153,23 @@ function TranscriptPartRowImpl({
           )}
 
           <div className="part-actions">
-            {onConvert && (
-              <>
+            {onConvert &&
+              targets.map((t) => (
                 <button
+                  key={t}
                   type="button"
                   className="btn-sm"
-                  onClick={() => onConvert('roman')}
+                  onClick={() => onConvert(t)}
                   disabled={converting}
-                  title="Convert only this part to Roman Urdu"
+                  title={
+                    t === 'roman'
+                      ? 'Convert only this part to Roman Urdu'
+                      : 'Convert only this part to Urdu script'
+                  }
                 >
-                  → Roman
+                  {t === 'roman' ? '→ Roman' : '→ Urdu script'}
                 </button>
-                <button
-                  type="button"
-                  className="btn-sm"
-                  onClick={() => onConvert('perso_arabic')}
-                  disabled={converting}
-                  title="Convert only this part to Urdu script"
-                >
-                  → Urdu script
-                </button>
-              </>
-            )}
+              ))}
             {status === 'edited' && (
               <button
                 type="button"
@@ -230,5 +229,6 @@ export const TranscriptPartRow = memo(TranscriptPartRowImpl, (a, b) =>
   a.copied === b.copied &&
   a.requiresConversion === b.requiresConversion &&
   Boolean(a.onConvert) === Boolean(b.onConvert) &&
+  a.targets === b.targets &&
   a.parts.get(a.chunk.index) === b.parts.get(b.chunk.index),
 );

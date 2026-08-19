@@ -120,19 +120,9 @@ class Settings(BaseSettings):
     #: emitting a two-word tail, which every one of these models renders with
     #: audibly clipped prosody.
     transcript_chunk_min_chars: int = 80
-    #: Hard ceiling on a fetched caption track before chunking. A three-hour
-    #: video's transcript is megabytes; refusing early beats chunking it into
-    #: thousands of pieces the UI then has to render.
+    #: Hard ceiling on a pasted script before chunking. Refusing early beats
+    #: chunking a novel into thousands of pieces the UI then has to render.
     transcript_max_chars: int = 200_000
-    #: Seconds before a caption fetch is abandoned. YouTube from a datacenter
-    #: IP either answers quickly or is throttling.
-    transcript_timeout_sec: float = 30.0
-    #: Path to a Netscape-format cookies.txt for yt-dlp. YouTube blocks datacenter
-    #: IPs with "Sign in to confirm you're not a bot" and demands a logged-in
-    #: session; without cookies, transcript import fails on a pod. Empty = no
-    #: cookies (fine for a residential IP). Export from a THROWAWAY Google account
-    #: — cookie use from a datacenter IP can get an account flagged.
-    yt_cookies_file: str = ""
     #: Directory workers start in (must contain the importable `app` package).
     worker_cwd: Path | None = None
 

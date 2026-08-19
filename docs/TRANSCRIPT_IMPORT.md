@@ -1,6 +1,17 @@
-# Transcript import — design, decisions, and what is not built
+# The Convert tab — design, decisions, and what is not built
 
-Paste a YouTube link, get its captions, edit them, generate speech a part at a time.
+> **The YouTube fetch was removed 2026-08-19, and the tab renamed "Import" → "Convert".** YouTube
+> hard-blocks datacenter IPs (RunPod) with "Sign in to confirm you're not a bot", and getting past it
+> needs a fragile stack (a logged-in cookies file + Deno + the EJS challenge solver + new caption-format
+> handling) that breaks every time YouTube changes. Manual paste is simpler and reliable. So the tab now
+> takes text the user PASTES (`POST /api/transcript/prepare`, pure CPU: chunk + detect script) and the
+> yt-dlp fetch, the SSRF guard (`domain/youtube.py`), the track picker, and chapter grouping are all
+> gone. **Everything below about the transliterator, why Hindi is a source format, and the chunking
+> rules still applies** — only the *input* changed from a URL to pasted text. (English→Urdu
+> *translation*, a different operation, is a planned follow-up.)
+
+Paste a Hindi (Devanagari), Roman Urdu, or Urdu-script script; convert its writing system a part at a
+time; send it to the editor.
 
 Written up in-repo rather than left in a chat transcript or a plan file, because the *reasoning*
 here is what a future session needs and the code alone does not carry it.
