@@ -72,8 +72,24 @@ export class ApiError extends Error {
 }
 
 function apiKey(): string {
-  return localStorage.getItem('vcs_api_key') ?? '';
+  return window.__VCS_DESKTOP_KEY__ ?? localStorage.getItem('vcs_api_key') ?? '';
 }
+
+export type RunpodEstimate = {
+  gpu_id: string;
+  gpu_name: string;
+  vram_gb: number;
+  availability: string;
+  hourly_gpu_usd: number;
+  warm_estimated_compute_usd: number;
+  cold_estimated_compute_usd: number;
+  calibration: string;
+};
+
+export type RunpodAnalytics = {
+  pods: { id: string; name: string; status: string; cost: number; gpu?: { id: string } }[];
+  volumes: { id: string; name: string; size: number; type: string }[];
+};
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const apiBase = getApiBase();
@@ -110,6 +126,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  runpodConnection: () => request<{ connected: boolean }>('/api/runpod/connection'),
+  connectRunpod: (apiKey: string) => request<{ connected: boolean }>('/api/runpod/connection', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey }),
+  }),
+  disconnectRunpod: () => request<void>('/api/runpod/connection', { method: 'DELETE' }),
+  runpodAnalytics: () => request<RunpodAnalytics>('/api/runpod/analytics'),
+  runpodEstimate: (modelId: string, text: string) =>
+    request<{ minimum_full_feature_vram_gb: number; estimates: RunpodEstimate[] }>(
+      `/api/runpod/estimate?model_id=${encodeURIComponent(modelId)}&text=${encodeURIComponent(text)}`,
+    ),
+  runpodPodUsage: (id: string) =>
+    request<{ totals: { totalAmount?: number; gpuAmount?: number; diskAmount?: number } }>(
+      `/api/runpod/analytics/pods/${encodeURIComponent(id)}`,
+    ),
+  runpodVolumeUsage: (id: string) =>
+    request<{ totals: { totalAmount?: number } }>(
+      `/api/runpod/analytics/volumes/${encodeURIComponent(id)}`,
+    ),
   // system
   health: () => request<{ status: string; version: string }>('/api/health'),
   system: () => request<SystemStatus>('/api/system'),

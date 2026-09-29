@@ -102,7 +102,10 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _exempt(path: str) -> bool:
-        return path in _EXEMPT_EXACT or path.startswith(_EXEMPT_PREFIXES)
+        # Desktop assets are served at / while every private operation remains
+        # under /api/. A webview cannot add X-API-Key to script/CSS requests.
+        return (not path.startswith("/api/") or path in _EXEMPT_EXACT
+                or path.startswith(_EXEMPT_PREFIXES))
 
 
 async def get_lexicon(db: Annotated[Database, Depends(get_db)]) -> dict[str, str]:

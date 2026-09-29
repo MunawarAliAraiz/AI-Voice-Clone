@@ -1,5 +1,40 @@
 # Handoff — current state
 
+## Desktop/Runpod implementation checkpoint — 2026-09-29
+
+The new Windows desktop + user-owned Runpod + MCP work is on branch
+`codex/desktop-runpod-mcp` in a managed worktree. Read
+[DESKTOP_ARCHITECTURE.md](DESKTOP_ARCHITECTURE.md) and [DESKTOP.md](DESKTOP.md)
+before continuing. Root `AGENTS.md` is the project index.
+
+Implemented in source: loopback static serving and session-key API, Tauri shell
+source, a Windows build script, a stdio MCP adapter, authenticated Pod TTS
+worker, remote scheduler, pinned-model install API, Runpod REST v2 client,
+Windows DPAPI management-key storage, GPU cost preview, and read-only Pod/volume
+analytics in a desktop-only tab. **No installer has been built. No real Runpod
+generation, model download, or billing call has been tested.** The current
+desktop app does not yet connect its inference scheduler dynamically when a
+Runpod account is added.
+
+Checks: frontend `npm run build` passed using a temporary link to existing
+dependencies; Python Ruff passed for new modules. The full backend suite ran:
+one contract allowlist test failed because the new `remote_scheduler` module
+was absent from its explicit list; that list was updated and the failing test
+then passed. All other backend tests passed on that full run. DPAPI tests need
+a normal Windows user profile; the sandbox profile returned Win32 error 2,
+and those tests passed outside it. MCP SDK protocol, Rust/Tauri, PyInstaller,
+Pod image, and GPU paths remain untested here.
+
+Next: publish and pin a real Pod worker image, validate its pinned runtime
+environments, then add safe Pod/volume provisioning and a persisted Pod
+connection that the local scheduler can use. After that, run a real GPU TTS
+smoke test, inspect audio, record actual cost/timing, and build a clean Windows
+NSIS installer. Scripted dialogue and one-hour three-speaker conversion still
+need implementation and listening gates. Existing full-feature capacity is
+43,548 MiB, so 48 GB is the first supported tier under current residency.
+
+---
+
 Written so a fresh session (or a fresh pod, or a different person) can resume without
 reconstructing anything. **Update this at every checkpoint.** The previous incarnation of this
 project lost a day of planning because the only copy lived on a pod that was terminated.

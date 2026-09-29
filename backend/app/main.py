@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -22,6 +23,8 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
@@ -33,6 +36,7 @@ from .api.routers import (
     media,
     models,
     pronunciations,
+    runpod,
     system,
     text,
     transcript,
@@ -265,6 +269,7 @@ def create_app(
     app.include_router(models.router, prefix="/api")
     app.include_router(models.languages_router, prefix="/api")
     app.include_router(system.router, prefix="/api")
+    app.include_router(runpod.router, prefix="/api")
     app.include_router(voice.router, prefix="/api")
     app.include_router(tts.router, prefix="/api")
     app.include_router(direction.router, prefix="/api")
@@ -275,6 +280,27 @@ def create_app(
     app.include_router(text.router, prefix="/api")
     app.include_router(transcript.router, prefix="/api")
     _assert_no_duplicate_routes(app)
+
+    if settings.desktop_static_dir is not None:
+        static_dir = settings.desktop_static_dir.resolve()
+        index = static_dir / "index.html"
+        if not index.is_file():
+            raise ValueError(f"Desktop frontend index.html is missing: {index}")
+
+        @app.get("/", include_in_schema=False)
+        async def desktop_index() -> HTMLResponse:
+            html = index.read_text(encoding="utf-8")
+            # The launcher creates a fresh session key on each start. Static
+            # assets have no secret; only this local HTML response carries it.
+            bootstrap = (
+                "<script>window.__VCS_DESKTOP_KEY__="
+                + json.dumps(settings.api_key)
+                + ";</script></head>"
+            )
+            return HTMLResponse(html.replace("</head>", bootstrap, 1),
+                                headers={"Cache-Control": "no-store"})
+
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="desktop")
 
     # Middleware order is load-bearing. add_middleware makes the LAST-added the
     # OUTERMOST, so: API-key added FIRST (innermost), CORS added LAST (outermost).
@@ -299,7 +325,11 @@ def create_app(
 def _build_scheduler(settings: Settings) -> SchedulerProtocol:
     """Construct the real InferenceScheduler. Imported lazily so a fake-injected
     app (and its tests) never even imports the scheduler implementation."""
-    from .inference.catalog import CATALOG
+    if settings.remote_worker_url:
+        from .inference.remote_scheduler import RemoteScheduler
+
+        return RemoteScheduler(settings.remote_worker_url, settings.remote_worker_token, CATALOG)
+
     from .inference.factory import make_worker_factory
     from .inference.scheduler import InferenceScheduler, SchedulerConfig
 

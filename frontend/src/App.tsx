@@ -8,6 +8,7 @@ import { EnrollCard } from './components/EnrollCard';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ActiveJobRow } from './components/ActiveJobRow';
 import { PronunciationPanel } from './components/PronunciationPanel';
+import { RunpodPanel } from './components/RunpodPanel';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
@@ -29,13 +30,14 @@ const AudioEditorTab = lazy(() =>
 );
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'recent' | 'convert' | 'pronunciation' | 'editor';
+type Tab = 'studio' | 'recent' | 'convert' | 'pronunciation' | 'editor' | 'runpod';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
   { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
   { id: 'convert', label: 'Convert', icon: <IconRoute size={14} /> },
   { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
   { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
+  ...(window.__VCS_DESKTOP_KEY__ ? [{ id: 'runpod' as Tab, label: 'Runpod', icon: <IconSettings size={14} /> }] : []),
 ];
 
 export default function App() {
@@ -349,6 +351,7 @@ export default function App() {
           <TranscriptPanel onSendToEditor={sendToEditor} />
         </div>
         {activeTab === 'pronunciation' && <PronunciationPanel />}
+        {activeTab === 'runpod' && <RunpodPanel />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>
             <AudioEditorTab onEnrolled={invalidateVoices} />

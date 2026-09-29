@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     #: Root for all mutable state — reference audio, generated clips, the db.
     data_dir: Path = Path("data")
 
+    #: Built React assets served by the local API in the Windows desktop app.
+    #: Unset for the existing web deployment and API tests.
+    desktop_static_dir: Path | None = None
+
+    #: Explicit connection to a user-owned Pod worker. Empty keeps the legacy
+    #: local-GPU path for the existing web/pod deployment.
+    remote_worker_url: str = ""
+    remote_worker_token: str = ""
+
     #: HMAC secret for signed media URLs. Auto-generated per process if unset, so
     #: dev works out of the box; set it in production so tokens survive restarts.
     media_token_secret: str = ""

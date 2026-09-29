@@ -609,7 +609,10 @@ def test_no_stray_modules_in_contract_packages() -> None:
         # Whether this card can afford the resident models, and what to tell
         # the user when it cannot. No torch (it shells out to nvidia-smi) —
         # which is the point, since app.main imports it.
-        "capacity",
+            "capacity",
+            # Desktop adapter to the authenticated Pod worker. It implements
+            # SchedulerProtocol without importing any GPU runtime locally.
+            "remote_scheduler",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected
