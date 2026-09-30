@@ -3,8 +3,9 @@
 ## Desktop continuation checkpoint — 2026-09-30
 
 Worktree: `C:/Users/abdus/.codex/worktrees/desktop-runpod-mcp/AI-Voice-Clone`,
-branch `codex/desktop-runpod-mcp`. Baseline scaffold commit `25f1187`; continuation
-changes are being validated before the next commit. Original checkout is preserved.
+branch `codex/desktop-runpod-mcp`. Baseline scaffold commit `25f1187`; validated
+source continuation is saved as `1f62386`. Native build/test refinements remain
+under verification. Original checkout is preserved. No push or release has occurred.
 
 Implemented since the previous checkpoint: encrypted dynamic Pod pairing,
 user-triggered pinned downloads and completion markers; remote Qwen Speech
