@@ -101,7 +101,7 @@ class RunpodClient:
             "mounts": {"network": [{"volumeId": volume_id, "path": "/workspace"}]},
             "ports": ["8000/http"],
             "env": {"POD_WORKER_TOKEN": worker_token, "HF_HOME": "/workspace/hf-cache",
-                    "VCS_DATA_DIR": "/workspace/runtime"},
+                    "VCS_DATA_DIR": "/tmp/vcs-worker"},  # noqa: S108 - ephemeral Pod data, no weights
         })
 
     async def pod_action(self, pod_id: str, action: str) -> dict[str, Any]:

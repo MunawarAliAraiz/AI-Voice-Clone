@@ -9,6 +9,7 @@ from pathlib import Path
 import uvicorn
 
 from .config import Settings
+from .desktop_session import DesktopSession, DesktopSessionStore
 from .main import create_app
 
 
@@ -29,8 +30,15 @@ def main() -> None:
         raise SystemExit("VCS_DESKTOP_PORT must be an integer") from exc
     if not 1 <= port <= 65535:
         raise SystemExit("VCS_DESKTOP_PORT must be between 1 and 65535")
-    uvicorn.run(create_app(settings=settings), host="127.0.0.1", port=port,
-                workers=1, access_log=False)
+    session = DesktopSession(port=port, api_key=settings.api_key, pid=os.getpid())
+    store = DesktopSessionStore(settings.data_dir / "secrets" / "mcp-session.dpapi")
+    store.save(session)
+    try:
+        uvicorn.run(
+            create_app(settings=settings), host="127.0.0.1", port=port, workers=1, access_log=False
+        )
+    finally:
+        store.clear_if_current(session)
 
 
 if __name__ == "__main__":

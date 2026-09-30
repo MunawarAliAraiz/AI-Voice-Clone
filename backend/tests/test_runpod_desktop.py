@@ -69,7 +69,7 @@ def test_runpod_desktop_connection_never_returns_secret(tmp_path: Path, monkeypa
             assert key == "runpod-test-token"
 
         async def list_gpu_types(self) -> list[dict[str, object]]:
-            return [{"id": "test-gpu", "memory": 48,
+            return [{"id": "NVIDIA test-gpu", "memory": 48,
                      "price": {"secure": 1.0}, "availability": "HIGH"}]
 
         async def list_pods(self) -> list[dict[str, object]]:
@@ -98,4 +98,36 @@ def test_runpod_desktop_connection_never_returns_secret(tmp_path: Path, monkeypa
         estimates = client.get("/api/runpod/estimate", headers=headers,
                                params={"model_id": "voxcpm2", "text": "Hello world"})
         assert estimates.status_code == 200
-        assert estimates.json()["estimates"][0]["gpu_id"] == "test-gpu"
+        assert estimates.json()["estimates"][0]["gpu_id"] == "NVIDIA test-gpu"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows DPAPI only")
+def test_worker_pair_is_validated_encrypted_and_unpaired(tmp_path: Path, monkeypatch) -> None:
+    class FakeRemote:
+        def __init__(self, url: str, token: str, catalog) -> None:
+            assert url == "https://abc123xyz-8000.proxy.runpod.net"
+            assert token == "w" * 32
+
+        async def status(self) -> tuple:
+            return ()
+
+        async def shutdown(self) -> None:
+            pass
+
+    monkeypatch.setattr("app.api.routers.runpod.RemoteScheduler", FakeRemote)
+    assets = tmp_path / "dist"
+    assets.mkdir()
+    (assets / "index.html").write_text("<html><head></head></html>")
+    settings = Settings(data_dir=tmp_path / "data", desktop_static_dir=assets,
+                        api_key="session", allow_fake_runtime=True)
+    with TestClient(create_app(settings=settings)) as client:
+        headers = {"X-API-Key": "session"}
+        assert client.get("/api/models", headers=headers).status_code == 200
+        body = {"pod_id": "abc123xyz", "worker_token": "w" * 32}
+        assert client.put("/api/runpod/worker", headers=headers, json=body).status_code == 200
+        pair = client.get("/api/runpod/worker", headers=headers).json()
+        assert pair == {"paired": True, "pod_id": "abc123xyz"}
+        secret = settings.data_dir / "secrets" / "worker-pair.dpapi"
+        assert b"w" * 32 not in secret.read_bytes()
+        assert client.delete("/api/runpod/worker", headers=headers).status_code == 204
+        assert client.get("/api/runpod/worker", headers=headers).json()["paired"] is False

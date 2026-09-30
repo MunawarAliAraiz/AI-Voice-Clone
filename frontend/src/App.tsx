@@ -28,11 +28,15 @@ import './App.css';
 const AudioEditorTab = lazy(() =>
   import('./components/AudioEditorTab').then((m) => ({ default: m.AudioEditorTab })),
 );
+const DialoguePanel = lazy(() =>
+  import('./components/DialoguePanel').then((m) => ({ default: m.DialoguePanel })),
+);
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'recent' | 'convert' | 'pronunciation' | 'editor' | 'runpod';
+type Tab = 'studio' | 'dialogue' | 'recent' | 'convert' | 'pronunciation' | 'editor' | 'runpod';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
+  { id: 'dialogue', label: 'Dialogue', icon: <IconMic size={14} /> },
   { id: 'recent', label: 'Recent', icon: <IconHistory size={14} /> },
   { id: 'convert', label: 'Convert', icon: <IconRoute size={14} /> },
   { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
@@ -238,7 +242,7 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
-          <ApiKeyControl onSaved={onApiKeySaved} />
+          {!window.__VCS_DESKTOP_KEY__ && <ApiKeyControl onSaved={onApiKeySaved} />}
           <div className={`status ${online === null ? '' : online ? 'ok' : 'down'}`}>
             <span className="status-dot" aria-hidden="true" />
             {online === null ? 'connecting' : online ? 'online' : 'offline'}
@@ -351,6 +355,12 @@ export default function App() {
           <TranscriptPanel onSendToEditor={sendToEditor} />
         </div>
         {activeTab === 'pronunciation' && <PronunciationPanel />}
+        <div className="tab-panel" hidden={activeTab !== 'dialogue'}>
+          <Suspense fallback={<p>Loading dialogue editor…</p>}>
+            <DialoguePanel voices={voicesQ.data?.profiles ?? []} languages={languagesQ.data?.languages ?? []}
+              onJobQueued={onJobQueued} onOpenRecent={() => setActiveTab('recent')} />
+          </Suspense>
+        </div>
         {activeTab === 'runpod' && <RunpodPanel />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>

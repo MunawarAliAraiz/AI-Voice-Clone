@@ -4,8 +4,9 @@
 
 The Windows app keeps reference voices, the SQLite database, edit projects, and
 finished audio under the user's AppData directory. A user-owned Runpod Pod keeps
-only model weights, runtime environments, and temporary inference data on its
-network volume. The app must remain useful for local editing when the Pod is
+only model weights and runtime caches on its network volume. Uploaded audio
+and temporary inference data use ephemeral Pod storage and are cleaned per job.
+The app must remain useful for local editing when the Pod is
 stopped. The web build continues to work during migration.
 
 The shell is Tauri 2. It launches a loopback-only Python FastAPI sidecar on a
@@ -28,6 +29,46 @@ belongs in the installer or frontend storage. Pod-side temporary audio must be
 cleaned after each job.
 
 ## Capacity and costs
+
+### User decision: automatic compute lifecycle (2026-09-30)
+
+Desktop users enter only their Runpod management key. Local API authentication
+is automatic; the web-only API-key settings control is hidden in desktop mode.
+Manual Pod IDs, worker tokens and GPU selection are implementation tools, not
+the intended normal desktop setup flow.
+
+After connecting, discover network volumes. Ask the user to select an eligible
+existing volume or approve creation with the quoted ongoing storage charge.
+Verify the app's complete versioned model manifest, including pinned revisions,
+required files and checksums; the mere existence of a volume is not readiness.
+An existing verified installation should skip downloading. Otherwise download
+missing files to persistent storage and show actual file/byte progress. Keep
+model-dependent generation/conversion unavailable until its required manifest
+is verified. Local projects, references and outputs remain on the PC.
+
+Automatically select the least expensive currently available, compatible GPU
+that meets the qualified memory requirement in the volume's region. Refresh
+availability/rates before provisioning; retry bounded compatible alternatives
+without silently increasing an approved cost limit. GPU choice and speech model
+choice are different: the user may choose voices/models, while compute selection
+is automatic. Startup, model loading, generation and upload/download may all
+contribute to billable worker lifetime. Release compute only after the complete
+queued batch succeeds/fails and actual output is safely saved locally. Preserve
+the network volume. App shutdown or disconnection cannot be the sole shutdown
+protection; the provider must enforce maximum runtime.
+
+The preferred design to qualify is Serverless flex (zero active workers), with
+FlashBoot and a short idle window for a dialogue batch. This is a proposed
+adapter, not an implemented endpoint. Ephemeral GPU Pods with automatic
+termination are a fallback. Neither preserves guaranteed GPU residency at zero
+idle compute cost. Persistent weights avoid repeated downloads but still need
+to be loaded into VRAM on a fresh worker. Download/verification should use a
+temporary CPU worker if available, not reserve an idle GPU throughout setup.
+See [CLOUD_LIFECYCLE.md](CLOUD_LIFECYCLE.md) for the API research and constraints.
+
+The 48 GB requirement below belongs to the current all-feature residency design;
+task-specific sequential loading may reduce it, but requires a scheduler change
+and measured qualification. It must not be advertised by lowering the UI label.
 
 The existing capacity check reserves 16,000 MiB for audio, 19,500 MiB for
 Gemma, 6,000 MiB for Qwen, and 2,048 MiB headroom: **43,548 MiB total** when
@@ -67,3 +108,19 @@ provisioning methods are not exposed because no tested worker image digest is
 published. These have not yet produced an installer or generated real audio
 through Runpod. Dynamic Pod pairing, deployment, scripted dialogue, and
 recorded-audio conversion remain open.
+
+## Checkpoint 2026-09-30
+
+Dynamic DPAPI Pod pairing and model download controls are implemented.
+Speech Direction and Gemma conversion now have authenticated remote endpoints
+and desktop adapters with revision checks. Scripted dialogue uses individually
+durable generation jobs, saved local drafts, and an assembly manifest containing
+clip hashes, original routes and editable spans. Recorded-audio plans and real
+WAV mixing validate the one-hour/three-overlap limits; automatic separation and
+GPU voice conversion are still qualification/integration work.
+
+MCP discovers the current desktop session through a DPAPI descriptor. Its
+standalone executable passed stdio/API bridge tests. The Pod image recipe and
+isolated hashed dependencies exist, but the image has not been built/published.
+The live Runpod account was checked read-only: no Pods, one existing 50 GB video
+volume (not used for this app). No paid resource was created.

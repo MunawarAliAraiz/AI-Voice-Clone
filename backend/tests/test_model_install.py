@@ -18,12 +18,18 @@ def test_install_is_pinned_and_recovers_from_cache(tmp_path: Path, monkeypatch) 
     def download(repo: str, revision: str, cache: Path) -> str:
         seen.append((repo, revision))
         snapshot = cache / ("models--" + repo.replace("/", "--")) / "snapshots" / revision
-        snapshot.mkdir(parents=True)
+        snapshot.mkdir(parents=True, exist_ok=True)
         (snapshot / "config.json").write_text("{}")
         return str(snapshot)
 
     spec = CATALOG.get("voxcpm2")
     assert spec is not None
+
+    # A partially populated snapshot alone must never be called installed.
+    partial = tmp_path / ("models--" + spec.hf_repo.replace("/", "--")) / "snapshots" / spec.hf_revision
+    partial.mkdir(parents=True)
+    (partial / "incomplete.bin").write_bytes(b"partial")
+    assert ModelInstaller(tmp_path).status(spec.id)["state"] == "not_started"
 
     async def run() -> None:
         installer = ModelInstaller(tmp_path, downloader=download)

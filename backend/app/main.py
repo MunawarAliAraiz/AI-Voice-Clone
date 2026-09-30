@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
 from .api.routers import (
+    dialogue,
     direction,
     health,
     history,
@@ -270,6 +271,7 @@ def create_app(
     app.include_router(models.languages_router, prefix="/api")
     app.include_router(system.router, prefix="/api")
     app.include_router(runpod.router, prefix="/api")
+    app.include_router(dialogue.router, prefix="/api")
     app.include_router(voice.router, prefix="/api")
     app.include_router(tts.router, prefix="/api")
     app.include_router(direction.router, prefix="/api")
@@ -330,6 +332,11 @@ def _build_scheduler(settings: Settings) -> SchedulerProtocol:
 
         return RemoteScheduler(settings.remote_worker_url, settings.remote_worker_token, CATALOG)
 
+    if settings.desktop_static_dir is not None:
+        from .inference.paired_remote_scheduler import PairedRemoteScheduler
+
+        return PairedRemoteScheduler(settings.data_dir, CATALOG)
+
     from .inference.factory import make_worker_factory
     from .inference.scheduler import InferenceScheduler, SchedulerConfig
 
@@ -349,6 +356,12 @@ def _build_analyzer(settings: Settings) -> AnalyzerScheduler:
     """Construct the real AnalyzerScheduler. Imported lazily, same reason as
     `_build_scheduler`: a fake-injected app (and its tests) never even
     imports the analyzer scheduler implementation."""
+    if settings.desktop_static_dir is not None or settings.remote_worker_url:
+        from .inference.remote_features import RemoteAnalyzer, RemoteFeatures
+
+        return RemoteAnalyzer(RemoteFeatures(settings.data_dir, url=settings.remote_worker_url,
+                                             token=settings.remote_worker_token))
+
     from .inference.analyzer_scheduler import AnalyzerScheduler
 
     env = dict(os.environ)
@@ -384,6 +397,12 @@ def _build_transliterator(settings: Settings, scheduler):
     allocation spike. It has to be the SAME slot, not a second one that knows
     nothing about the first.
     """
+    if settings.desktop_static_dir is not None or settings.remote_worker_url:
+        from .inference.remote_features import RemoteFeatures, RemoteTransliterator
+
+        return RemoteTransliterator(RemoteFeatures(settings.data_dir, url=settings.remote_worker_url,
+                                                   token=settings.remote_worker_token)), None
+
     if not settings.gemma_transliterator_python:
         return None, (
             "Script conversion is not set up on this server. It needs the "
@@ -427,6 +446,10 @@ async def _warm_transliterator(app: FastAPI) -> None:
     transliterator = getattr(app.state, "transliterator", None)
     if transliterator is None:
         return
+    from .inference.remote_features import RemoteTransliterator
+
+    if isinstance(transliterator, RemoteTransliterator):
+        return  # Pod helpers load only on an explicit user operation.
     try:
         sec = await transliterator.warm()
         logger.info("script conversion warmed in %.0fs", sec)

@@ -33,8 +33,11 @@ Pod. Read the documents below before changing behavior.
 
 - [Architecture](docs/ARCHITECTURE.md): current design and invariants.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
+- [Cloud lifecycle](docs/CLOUD_LIFECYCLE.md): automatic storage verification, GPU selection and compute release plan.
 - [Pod worker](docs/POD_WORKER.md): worker contract and deployment gaps.
 - [MCP](docs/MCP.md): local tool surface and host configuration.
+- [Speech pipeline](docs/SPEECH_PIPELINE.md): reviewed plans and audio assembly.
+- [Speech models](docs/SPEECH_MODELS.md): conversion adapter, separation research and qualification gaps.
 - [Handoff](docs/HANDOFF.md): current state and the next verification step.
 - [Roadmap](docs/ROADMAP.md): completed and planned work.
 

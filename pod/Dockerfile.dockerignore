@@ -1,0 +1,11 @@
+# Only the worker's source and dependency manifests belong in the build context.
+**
+!backend/
+!backend/app/
+!backend/app/**
+!pod/
+!pod/**
+**/__pycache__/**
+**/*.pyc
+**/.env*
+**/*.dpapi

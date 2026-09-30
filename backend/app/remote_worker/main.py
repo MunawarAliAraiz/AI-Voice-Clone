@@ -8,6 +8,7 @@ import json
 import os
 import tempfile
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -17,10 +18,14 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.background import BackgroundTask
 
 from ..config import Settings
+from ..domain.transliterate import MAX_BATCH_CHUNKS, SUPPORTED_PAIRS
+from ..inference.analyzer_scheduler import QWEN_ANALYZER_MODEL_ID
 from ..inference.catalog import CATALOG
 from ..inference.protocol import SchedulerProtocol, SynthRequest
-from ..main import _build_scheduler
+from ..inference.transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
+from ..main import _build_analyzer, _build_scheduler, _build_transliterator
 from .model_install import ModelInstaller
+from .model_pins import AUXILIARY_PINS
 
 PROTOCOL_VERSION = 1
 MAX_REFERENCE_BYTES = 50 * 1024 * 1024
@@ -34,16 +39,33 @@ class RemoteSynthRequest(BaseModel):
     sample_rate: int = Field(default=44_100, ge=8000, le=192_000)
 
 
+class RemoteAnalyzeRequest(BaseModel):
+    language: str = Field(min_length=2, max_length=16)
+    sentences: list[str] = Field(min_length=1, max_length=512)
+
+
+class RemoteTransliterateRequest(BaseModel):
+    texts: list[str] = Field(min_length=1, max_length=MAX_BATCH_CHUNKS)
+    instruction: str = Field(default="", max_length=2000)
+    source_script: str
+    target_script: str
+
+
 def create_worker_app(
     *,
     scheduler: SchedulerProtocol | None = None,
     settings: Settings | None = None,
     token: str | None = None,
+    analyzer: Any = None,
+    transliterator: Any = None,
 ) -> FastAPI:
     settings = settings or Settings()
     token = token if token is not None else os.environ.get("POD_WORKER_TOKEN", "")
     if not token:
         raise ValueError("POD_WORKER_TOKEN is required")
+    if settings.desktop_static_dir is not None or settings.remote_worker_url:
+        raise ValueError("Pod worker requires local GPU runtimes, not a remote scheduler")
+    require_installed = scheduler is None
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -53,12 +75,23 @@ def create_worker_app(
         app.state.installer = ModelInstaller(
             Path(os.environ.get("HF_HUB_CACHE", str(hf_home / "hub")))
         )
+        app.state.analyzer = analyzer or _build_analyzer(settings)
+        if transliterator is not None:
+            app.state.transliterator, app.state.transliterator_reason = transliterator, None
+        else:
+            app.state.transliterator, app.state.transliterator_reason = _build_transliterator(
+                settings, app.state.scheduler
+            )
         try:
             yield
         finally:
             await app.state.installer.shutdown()
             if scheduler is None:
                 await app.state.scheduler.shutdown()
+            if analyzer is None:
+                await app.state.analyzer.shutdown()
+            if transliterator is None and app.state.transliterator is not None:
+                await app.state.transliterator.shutdown()
 
     app = FastAPI(title="Voice Clone Pod Worker", lifespan=lifespan)
 
@@ -77,15 +110,79 @@ def create_worker_app(
         return {
             "protocol_version": PROTOCOL_VERSION,
             "models": [
-                {"id": status.spec.id, "state": status.state.value,
-                 "revision": status.spec.hf_revision,
-                 "install": app.state.installer.status(status.spec.id)}
+                {
+                    "id": status.spec.id,
+                    "state": (
+                        status.state.value
+                        if app.state.installer.status(status.spec.id)["state"] == "installed"
+                        else "not_downloaded"
+                    ),
+                    "revision": status.spec.hf_revision,
+                    "install": app.state.installer.status(status.spec.id),
+                }
                 for status in statuses
+            ]
+            + [
+                {
+                    "id": model_id,
+                    "revision": pin[1],
+                    "state": "available"
+                    if app.state.installer.status(model_id)["state"] == "installed"
+                    else "not_downloaded",
+                    "install": app.state.installer.status(model_id),
+                }
+                for model_id, pin in AUXILIARY_PINS.items()
             ],
         }
 
-    @app.post("/v1/models/{model_id}/install", status_code=202,
-              dependencies=[Depends(authenticate)])
+    def require_helper(model_id: str) -> None:
+        if require_installed and app.state.installer.status(model_id)["state"] != "installed":
+            raise HTTPException(409, "Download this helper model first")
+
+    @app.post("/v1/analyze", dependencies=[Depends(authenticate)])
+    async def analyze(body: RemoteAnalyzeRequest) -> dict[str, Any]:
+        require_helper(QWEN_ANALYZER_MODEL_ID)
+        if sum(map(len, body.sentences)) > 5000 or any(not s.strip() for s in body.sentences):
+            raise HTTPException(
+                422, "Analysis requires nonempty sentences totaling at most 5000 characters"
+            )
+        result = await app.state.analyzer.classify(
+            language=body.language, sentences=tuple(body.sentences)
+        )
+        return {
+            "protocol_version": PROTOCOL_VERSION,
+            "model_id": QWEN_ANALYZER_MODEL_ID,
+            "revision": AUXILIARY_PINS[QWEN_ANALYZER_MODEL_ID][1],
+            **asdict(result),
+        }
+
+    @app.post("/v1/transliterate", dependencies=[Depends(authenticate)])
+    async def transliterate(body: RemoteTransliterateRequest) -> dict[str, Any]:
+        require_helper(GEMMA_TRANSLITERATOR_MODEL_ID)
+        if (body.source_script, body.target_script) not in SUPPORTED_PAIRS:
+            raise HTTPException(422, "Unsupported script conversion pair")
+        if any(not text.strip() or len(text) > 6000 for text in body.texts):
+            raise HTTPException(422, "Conversion passages must contain 1 to 6000 characters")
+        if app.state.transliterator is None:
+            raise HTTPException(
+                409, app.state.transliterator_reason or "Script conversion unavailable"
+            )
+        results = await app.state.transliterator.convert_many(
+            texts=body.texts,
+            instruction=body.instruction,
+            source_script=body.source_script,
+            target_script=body.target_script,
+        )
+        return {
+            "protocol_version": PROTOCOL_VERSION,
+            "model_id": GEMMA_TRANSLITERATOR_MODEL_ID,
+            "revision": AUXILIARY_PINS[GEMMA_TRANSLITERATOR_MODEL_ID][1],
+            "results": [asdict(result) for result in results],
+        }
+
+    @app.post(
+        "/v1/models/{model_id}/install", status_code=202, dependencies=[Depends(authenticate)]
+    )
     async def install_model(model_id: str) -> dict[str, str]:
         try:
             return app.state.installer.start(model_id)
@@ -105,6 +202,8 @@ def create_worker_app(
     async def warm_model(model_id: str) -> dict[str, str]:
         if CATALOG.get(model_id) is None:
             raise HTTPException(status_code=404, detail="Unknown model ID")
+        if require_installed and app.state.installer.status(model_id)["state"] != "installed":
+            raise HTTPException(status_code=409, detail="Download this model first")
         await app.state.scheduler.warm(model_id)
         return {"status": "warm", "model_id": model_id}
 
@@ -119,8 +218,15 @@ def create_worker_app(
             raise HTTPException(status_code=422, detail="Invalid synthesis request") from exc
         if CATALOG.get(payload.model_id) is None:
             raise HTTPException(status_code=404, detail="Unknown model ID")
+        if (
+            require_installed
+            and app.state.installer.status(payload.model_id)["state"] != "installed"
+        ):
+            raise HTTPException(status_code=409, detail="Download this model first")
 
-        work = Path(tempfile.mkdtemp(prefix="vcs-worker-", dir=settings.data_dir))
+        # Reference clips and rendered audio are ephemeral on the Pod. The
+        # network volume is reserved for model weights and runtime caches.
+        work = Path(tempfile.mkdtemp(prefix="vcs-worker-"))
         reference = work / "reference.wav"
         output = work / "output.wav"
         try:

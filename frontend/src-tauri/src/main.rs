@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use rand::RngCore;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -33,30 +35,65 @@ fn wait_for_api(port: u16) -> bool {
 
 fn main() {
     tauri::Builder::default()
+        // A second process must not replace the first process's MCP session.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let port = free_port()?;
             let mut key = [0u8; 32];
             rand::rngs::OsRng.fill_bytes(&mut key);
             let session_key: String = key.iter().map(|byte| format!("{byte:02x}")).collect();
-            let data_dir = app.path().app_data_dir()?;
+            let data_dir = match std::env::var_os("VCS_DESKTOP_DATA_DIR") {
+                Some(value) => {
+                    let path = std::path::PathBuf::from(value);
+                    if !path.is_absolute() {
+                        return Err("VCS_DESKTOP_DATA_DIR must be an absolute path".into());
+                    }
+                    path
+                }
+                None => app.path().app_data_dir()?,
+            };
             std::fs::create_dir_all(&data_dir)?;
-            let (_, child) = app
+            let executable = std::env::current_exe()?;
+            let install_dir = executable.parent().ok_or("Cannot locate install directory")?;
+            let mut search_paths = vec![install_dir.to_path_buf()];
+            if let Some(existing) = std::env::var_os("PATH") {
+                search_paths.extend(std::env::split_paths(&existing));
+            }
+            let process_path = std::env::join_paths(search_paths)?;
+            let url = format!("http://127.0.0.1:{port}/").parse()?;
+            let (mut events, child) = app
                 .shell()
                 .sidecar("voice-clone-api")?
                 .env("VCS_DESKTOP_PORT", port.to_string())
                 .env("VCS_API_KEY", session_key)
                 .env("VCS_DATA_DIR", data_dir.to_string_lossy().to_string())
+                .env("PATH", process_path.to_string_lossy().to_string())
                 .spawn()?;
-            app.manage(Sidecar(Arc::new(Mutex::new(Some(child)))));
+            // Drain stdout/stderr so pipe backpressure cannot stall the API.
+            // Do not copy potentially sensitive diagnostics into UI logs.
+            tauri::async_runtime::spawn(async move {
+                while events.recv().await.is_some() {}
+            });
             if !wait_for_api(port) {
+                let _ = child.kill();
                 return Err("The local Voice Clone Studio service did not start".into());
             }
-            let url = format!("http://127.0.0.1:{port}/").parse()?;
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            if let Err(error) = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("AI Voice Clone Studio")
+                .data_directory(data_dir.join("webview"))
                 .inner_size(1200.0, 800.0)
-                .build()?;
+                .build()
+            {
+                let _ = child.kill();
+                return Err(error.into());
+            }
+            app.manage(Sidecar(Arc::new(Mutex::new(Some(child)))));
             Ok(())
         })
         .on_window_event(|window, event| {

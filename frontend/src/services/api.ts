@@ -132,6 +132,21 @@ export const api = {
     body: JSON.stringify({ api_key: apiKey }),
   }),
   disconnectRunpod: () => request<void>('/api/runpod/connection', { method: 'DELETE' }),
+  runpodWorker: () => request<{ paired: boolean; pod_id: string | null }>('/api/runpod/worker'),
+  pairRunpodWorker: (podId: string, workerToken: string) =>
+    request<{ paired: boolean; pod_id: string }>('/api/runpod/worker', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pod_id: podId, worker_token: workerToken }),
+    }),
+  unpairRunpodWorker: () => request<void>('/api/runpod/worker', { method: 'DELETE' }),
+  runpodWorkerModels: () => request<{ models: { id: string; revision: string; state: string }[] }>(
+    '/api/runpod/worker/models',
+  ),
+  installRunpodModel: (modelId: string) =>
+    request<{ model_id: string; state: string }>(
+      `/api/runpod/worker/models/${encodeURIComponent(modelId)}/install`,
+      { method: 'POST' },
+    ),
   runpodAnalytics: () => request<RunpodAnalytics>('/api/runpod/analytics'),
   runpodEstimate: (modelId: string, text: string) =>
     request<{ minimum_full_feature_vram_gb: number; estimates: RunpodEstimate[] }>(
@@ -161,6 +176,16 @@ export const api = {
     request<{ preview_url: string; duration_sec?: number; peak_dbfs?: number; is_clipped?: boolean }>('/api/voices/preview-edit', { method: 'POST', body: form }),
 
   // synthesis — POST /generate is async now: 202 with a job to poll, not a
+  assembleDialogue: (body: { lines: { job_id: number; pause_after_sec: number }[] }) =>
+    request<{ id: string; audio_url: string; duration_sec: number; sha256: string;
+      spans: { job_id: number; start_sec: number; end_sec: number }[] }>(
+      '/api/dialogue/assemble', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body) },
+    ),
+  dialogueDraft: () => request<{ draft: unknown | null }>('/api/dialogue/draft'),
+  saveDialogueDraft: (body: { draft: unknown }) =>
+    request<{ saved: boolean }>('/api/dialogue/draft', { method: 'PUT',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
   // completed generation. See job() / jobs() / cancelJob() below.
   generate: (body: TTSGenerateRequest) =>
     request<JobStatusResponse>('/api/generate', {

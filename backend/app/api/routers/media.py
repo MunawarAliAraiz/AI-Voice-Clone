@@ -21,6 +21,7 @@ server-side attachment path there is no way to force a save.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Annotated
@@ -75,6 +76,10 @@ async def get_media(
         path = row["output_path"]
     elif kind == "voice_edit":
         path = str(settings.voices_dir / f"{item_id}.wav")
+    elif kind == "dialogue":
+        if not re.fullmatch(r"[0-9a-f]{32}", item_id):
+            raise MediaTokenError("Invalid dialogue ID")
+        path = str(settings.generated_dir / "dialogue" / f"{item_id}.wav")
     else:
         raise MediaTokenError(f"Unknown media kind {kind!r}.")
 

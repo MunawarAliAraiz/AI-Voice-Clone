@@ -19,6 +19,9 @@ def estimate_tts_costs(
     render_sec = audio_sec * (spec.est_rtf if spec.est_rtf is not None else 1.0)
     rows: list[dict[str, Any]] = []
     for gpu in gpu_types:
+        # Current isolated runtimes ship CUDA wheels, not ROCm environments.
+        if not str(gpu.get("id", "")).startswith("NVIDIA "):
+            continue
         vram = int(gpu.get("memory", 0))
         if vram < MIN_FULL_FEATURE_VRAM_GB:
             continue

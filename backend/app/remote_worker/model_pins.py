@@ -1,0 +1,17 @@
+"""Download pins for non-audio helpers, kept outside synthesis routing."""
+
+from ..inference.analyzer_scheduler import (
+    QWEN_ANALYZER_HF_REPO,
+    QWEN_ANALYZER_HF_REVISION,
+    QWEN_ANALYZER_MODEL_ID,
+)
+from ..inference.transliterator_scheduler import (
+    GEMMA_TRANSLITERATOR_HF_REPO,
+    GEMMA_TRANSLITERATOR_HF_REVISION,
+    GEMMA_TRANSLITERATOR_MODEL_ID,
+)
+
+AUXILIARY_PINS = {
+    QWEN_ANALYZER_MODEL_ID: (QWEN_ANALYZER_HF_REPO, QWEN_ANALYZER_HF_REVISION),
+    GEMMA_TRANSLITERATOR_MODEL_ID: (GEMMA_TRANSLITERATOR_HF_REPO, GEMMA_TRANSLITERATOR_HF_REVISION),
+}

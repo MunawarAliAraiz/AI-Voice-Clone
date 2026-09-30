@@ -8,10 +8,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ...config import Settings
+from ...exceptions import GenerationError
 from ...inference.catalog import CATALOG
+from ...inference.remote_scheduler import RemoteScheduler
+from ...remote_worker.model_pins import AUXILIARY_PINS
 from ...runpod.client import RunpodApiError, RunpodClient
 from ...runpod.estimate import estimate_tts_costs
 from ...runpod.secrets import RunpodKeyStore
+from ...runpod.worker_pair import WorkerPair, WorkerPairStore
 from ..deps import get_settings
 
 router = APIRouter(prefix="/runpod", tags=["runpod"])
@@ -19,6 +23,11 @@ router = APIRouter(prefix="/runpod", tags=["runpod"])
 
 class ConnectionInput(BaseModel):
     api_key: str = Field(min_length=8, max_length=512)
+
+
+class WorkerPairInput(BaseModel):
+    pod_id: str = Field(min_length=6, max_length=32)
+    worker_token: str = Field(min_length=24, max_length=512)
 
 
 def _store(settings: Settings) -> RunpodKeyStore:
@@ -67,6 +76,88 @@ async def connect(
 @router.delete("/connection", status_code=204)
 async def disconnect(settings: Annotated[Settings, Depends(get_settings)]) -> None:
     _store(settings).clear()
+
+
+@router.get("/worker")
+async def worker_connection(
+    settings: Annotated[Settings, Depends(get_settings)]
+) -> dict[str, object]:
+    _store(settings)  # Desktop-only guard.
+    try:
+        pair = WorkerPairStore(settings.data_dir).get()
+    except (OSError, ValueError, KeyError) as exc:
+        raise HTTPException(503, "Cannot unlock the saved Pod connection") from exc
+    return {"paired": pair is not None, "pod_id": pair.pod_id if pair else None}
+
+
+@router.put("/worker")
+async def pair_worker(
+    body: WorkerPairInput, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict[str, object]:
+    _store(settings)
+    try:
+        pair = WorkerPair(body.pod_id, body.worker_token)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    remote = RemoteScheduler(pair.url, pair.token, CATALOG)
+    try:
+        await remote.status()  # Confirms authentication and protocol version.
+    except GenerationError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    finally:
+        await remote.shutdown()
+    try:
+        WorkerPairStore(settings.data_dir).set(pair)
+    except OSError as exc:
+        raise HTTPException(503, "Cannot protect the Pod connection on this PC") from exc
+    return {"paired": True, "pod_id": pair.pod_id}
+
+
+@router.delete("/worker", status_code=204)
+async def unpair_worker(settings: Annotated[Settings, Depends(get_settings)]) -> None:
+    _store(settings)
+    WorkerPairStore(settings.data_dir).clear()
+
+
+def _paired(settings: Settings) -> WorkerPair:
+    _store(settings)
+    try:
+        pair = WorkerPairStore(settings.data_dir).get()
+    except (OSError, ValueError, KeyError) as exc:
+        raise HTTPException(503, "Cannot unlock the saved Pod connection") from exc
+    if pair is None:
+        raise HTTPException(409, "Pair a generation Pod first")
+    return pair
+
+
+@router.get("/worker/models")
+async def worker_models(
+    settings: Annotated[Settings, Depends(get_settings)]
+) -> dict[str, object]:
+    pair = _paired(settings)
+    remote = RemoteScheduler(pair.url, pair.token, CATALOG)
+    try:
+        return {"models": await remote.model_installs()}
+    except GenerationError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    finally:
+        await remote.shutdown()
+
+
+@router.post("/worker/models/{model_id}/install", status_code=202)
+async def install_worker_model(
+    model_id: str, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict[str, str]:
+    if CATALOG.get(model_id) is None and model_id not in AUXILIARY_PINS:
+        raise HTTPException(404, "Unknown model")
+    pair = _paired(settings)
+    remote = RemoteScheduler(pair.url, pair.token, CATALOG)
+    try:
+        return await remote.install(model_id)
+    except GenerationError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    finally:
+        await remote.shutdown()
 
 
 @router.get("/estimate")

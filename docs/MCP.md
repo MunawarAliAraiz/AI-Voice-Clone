@@ -7,11 +7,22 @@ scheduler. Install `backend/requirements-mcp.txt` alongside the backend API
 dependencies, then configure an MCP host to launch the absolute Python path
 with module `app.mcp` and working directory `backend`.
 
-Set `VCS_MCP_API_BASE` to the local desktop sidecar URL and `VCS_MCP_API_KEY`
-to its current session key. The desktop shell chooses a new port and key on
-each start. Automatic discovery and a packaged `voice-clone-mcp.exe` are still
-required before this is convenient for nondeveloper installations. Do not put
-the key into a checked-in MCP config file.
+The desktop saves its port and session key in a Windows DPAPI-encrypted
+descriptor at `%APPDATA%/studio.voiceclone.desktop/secrets/mcp-session.dpapi`.
+MCP reads it on every request, so it follows desktop restarts without copying
+keys into host configuration. Open the desktop studio before invoking tools.
+For development only, set both `VCS_MCP_API_BASE` and `VCS_MCP_API_KEY`; the base
+must be an HTTP loopback address with an explicit port. `VCS_MCP_SESSION_FILE`
+can select a development descriptor. Remote hosts, embedded credentials and
+redirects are refused.
+
+The Windows build bundles `voice-clone-mcp.exe` beside the desktop/API
+executables. Configure your MCP host to launch its absolute installed path,
+with no arguments or environment secrets. A standalone executable was built
+and tested using MCP SDK 2.2.0/PyInstaller 6.19.0. Real stdio tests covered
+initialization, all eight tools, authenticated loopback requests, DPAPI
+discovery, session replacement and missing-app errors. The test generation
+endpoint was an HTTP fixture, not GPU inference.
 
 Tools provided: health, list voices, list models, queue TTS generation, get or
 cancel a job, list recent jobs, and list completed history. `generate_speech`

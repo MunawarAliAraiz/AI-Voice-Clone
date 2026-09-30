@@ -89,7 +89,7 @@ class CapacityReport:
             f"Script conversion needs about {self.required_mb} MiB of GPU memory "
             f"({breakdown}) and this GPU has {self.total_mb} MiB — "
             f"{self.shortfall_mb()} MiB short. Everything else still works; "
-            f"a card of about 32 GB or more enables it."
+            f"choose a GPU with at least {self.required_mb} MiB of usable memory."
         )
 
 

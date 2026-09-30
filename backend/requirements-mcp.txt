@@ -1,2 +1,2 @@
 # Optional stdio adapter for Codex and Claude. Keep the v2 API contract.
-mcp>=2,<3
+mcp==2.2.0

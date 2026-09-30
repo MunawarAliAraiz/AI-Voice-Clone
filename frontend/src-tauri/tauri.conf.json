@@ -16,7 +16,12 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "externalBin": ["binaries/voice-clone-api"],
+    "externalBin": ["binaries/voice-clone-api", "binaries/voice-clone-mcp", "binaries/ffmpeg"],
+    "resources": {
+      "binaries/ffmpeg-license.txt": "licenses/ffmpeg-license.txt",
+      "binaries/ffmpeg-build-info.txt": "licenses/ffmpeg-build-info.txt"
+    },
+    "icon": ["icons/icon.ico"],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper" },
       "nsis": { "installMode": "currentUser" }

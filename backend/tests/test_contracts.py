@@ -613,6 +613,8 @@ def test_no_stray_modules_in_contract_packages() -> None:
             # Desktop adapter to the authenticated Pod worker. It implements
             # SchedulerProtocol without importing any GPU runtime locally.
             "remote_scheduler",
+            "paired_remote_scheduler",
+            "remote_features",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}
     unexpected = found - expected

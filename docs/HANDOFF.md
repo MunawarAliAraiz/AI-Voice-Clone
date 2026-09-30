@@ -1,5 +1,106 @@
 # Handoff — current state
 
+## Desktop continuation checkpoint — 2026-09-30
+
+Worktree: `C:/Users/abdus/.codex/worktrees/desktop-runpod-mcp/AI-Voice-Clone`,
+branch `codex/desktop-runpod-mcp`. Baseline scaffold commit `25f1187`; continuation
+changes are being validated before the next commit. Original checkout is preserved.
+
+Implemented since the previous checkpoint: encrypted dynamic Pod pairing,
+user-triggered pinned downloads and completion markers; remote Qwen Speech
+Direction and Gemma conversion; automatic DPAPI MCP session discovery;
+standalone MCP executable packaging; three-voice Dialogue editor and local
+draft/assembly API; validated one-hour/three-overlap speech plans and actual
+PCM WAV assembly/mixing; Docker worker recipe and isolated hashed dependency
+locks. Read [SPEECH_PIPELINE.md](SPEECH_PIPELINE.md), [POD_WORKER.md](POD_WORKER.md)
+and [MCP.md](MCP.md).
+
+Verified: **484 backend regression tests passed** with plugin autoload disabled,
+the async pytest plugin enabled, a normal Windows profile for DPAPI, and the
+verified FFmpeg 9.0.2 on a temporary PATH. Frontend production build passed.
+Real stdio MCP SDK and frozen executable protocol tests passed (eight tools),
+including encrypted descriptor replacement across sessions. The frozen API
+executable passed health, static UI, authenticated API, SQLite and DPAPI checks.
+Browser QA caught missing JSON request headers on the new draft/assembly client;
+these were fixed and rebuilt. Dialogue drafts now survive reload via local API
+storage. Live GPU estimate rows and connected account state were observed.
+API fixtures and tone WAVs in tests are not real voice generations.
+
+The user explicitly allowed reading the Runpod key from the video project's
+`.env`. Use it in-process without printing or copying it into source/docs.
+Read-only live requests succeeded: no Pods, one 50 GB video network volume,
+and live GPU pricing (A40 48 GB secure $0.49/hour at this check). Do not reuse
+the video volume for this app. No new Pod/volume or paid generation has occurred.
+
+Build progress: MCP `voice-clone-mcp.exe` was built with SDK 2.2.0 and PyInstaller
+6.19.0 and tested. Task-local Rust MSVC is installed; Microsoft C++ Build Tools/
+Windows SDK installation and the native shell build are underway. API and MCP
+sidecars have both been rebuilt and smoke tested against the current source. A complete
+NSIS installer has not yet passed a clean-install check. Docker is unavailable;
+the Pod image is not built/published. F5 lacks a runtime backend in the current
+code. Automatic diarization/separation and production voice conversion remain
+open, including real listening/cost tests. A pinned standalone Chatterbox VC
+adapter has 11 passing contract tests, but has no worker/queue integration or
+real GPU test. The user explicitly requested **alternatives without model
+access gates** for speaker separation; do not assume pyannote terms acceptance.
+
+Native build reached Rust build scripts; the first link failed with
+`LNK1181: kernel32.lib` because Windows SDK import libraries were absent.
+Build Tools then completed successfully without a reboot, and the SDK import
+libraries appeared. The packaging task is retrying from cached dependencies with
+the latest frontend (including API-key prompt removal) and a disposable data-dir
+override. No successful native shell/NSIS result yet.
+
+Next: finish native desktop build/toolchain and clean-install verification,
+commit the checkpoint. Research ungated overlapping-speaker models in parallel.
+Then build/publish a tested Pod image and implement
+safe provisioning, qualify real English/Urdu TTS and voice conversion, and
+complete recorded-audio review/chunk/reassembly APIs and UI. Existing full
+feature residency requires 43,548 MiB (48 GB tier); 200 GB storage is recommended,
+150 GB is provisional and still needs a measured all-model manifest.
+
+The sections below are historical checkpoints, not current readiness claims.
+
+### Latest user steering: one-key setup and automatic GPU lifecycle
+
+The user rejected the web API-key settings prompt in the desktop UI. It is now
+hidden when the shell session key is present; desktop authentication remains
+automatic and the web build retains its existing control. Production frontend
+build and a live browser reload passed after the change. The screenshot proof
+is stored in the task's local visualization directory.
+
+The intended flow is now: Runpod key -> discover/select/create persistent model
+volume -> verify/adopt existing pinned models or download with actual progress
+-> unlock model-dependent operations -> choose the cheapest compatible available
+GPU automatically -> run the queued batch -> save output locally -> release
+compute while retaining weights. Manual worker pairing in the current UI is a
+temporary implementation flow, not the accepted final product. See
+[DESKTOP_ARCHITECTURE.md](DESKTOP_ARCHITECTURE.md) and
+[CLOUD_LIFECYCLE.md](CLOUD_LIFECYCLE.md).
+
+Serverless flex with zero active workers, explicit FlashBoot, max one worker,
+short idle timeout and provider execution timeouts is the proposed default to
+qualify. It still bills startup/model loading. Network-volume storage remains
+billable without GPU compute and constrains GPU availability to its region.
+No production Serverless adapter or endpoint has been created. Current install
+status reports states only; complete checksum adoption and real download-byte
+progress are still required. Any installer built from an earlier source snapshot
+must be rebuilt with this UX change before release.
+
+Pure lifecycle planning contracts now exist in `runpod/lifecycle_plan.py`;
+16 focused tests passed, with Ruff clean. They validate complete pinned-file
+evidence, setup states, byte/file progress, regional compatible GPU ranking,
+budget filtering and safe queue-drain release conditions. They do not perform
+transfers/provisioning, and no route or job runner uses them yet.
+
+Ungated overlap research is documented in [SPEECH_MODELS.md](SPEECH_MODELS.md).
+Anonymous binary range downloads succeeded for pinned NVIDIA Sortformer,
+SpeechBrain Libri3Mix and ECAPA checkpoints. This removes the proposed access
+gate, not the qualification work: Libri3Mix is 8 kHz and trained on English
+synthetic mixtures; source-count handling, long-recording identity stitching,
+Urdu quality, complete dependency graphs and GPU cost/memory remain untested.
+Gated pyannote is retained only as excluded historical research.
+
 ## Desktop/Runpod implementation checkpoint — 2026-09-29
 
 The new Windows desktop + user-owned Runpod + MCP work is on branch

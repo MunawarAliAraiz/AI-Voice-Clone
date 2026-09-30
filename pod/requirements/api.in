@@ -1,0 +1,12 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+python-multipart==0.0.32
+pydantic==2.13.4
+pydantic-settings==2.14.2
+aiosqlite==0.22.1
+aiofiles==25.1.0
+httpx==0.28.1
+yt-dlp==2026.7.4
+soundfile==0.14.0
+nvidia-ml-py==13.610.43
+huggingface-hub==1.26.0
