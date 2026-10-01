@@ -1,6 +1,74 @@
 # Handoff — current state
 
+## Local installer and automatic setup checkpoint — 2026-10-01
+
+The Windows NSIS installer is now built. Disposable installation/upgrade,
+native API/frontend/auth/SQLite, installed MCP (eight tools), single-instance
+behavior, normal close and uninstall passed. A shutdown regression left the
+onefile API child running; the shell now terminates its owned process tree.
+Read [DESKTOP.md](DESKTOP.md) for the baseline hash/receipt. A rebuild with the
+new cloud source/UI is running; its final hash and repeated installed smoke
+must be recorded before calling that artifact qualified.
+
+Automatic setup is now integrated in source: one Runpod management key;
+account credit via authenticated GraphQL; regional GPU/CPU discovery; 200 GB
+Standard storage quote and explicit purchase; existing-volume selection;
+CPU-only pinned model download/adoption with actual byte progress; complete
+graph evidence gating; user-approved per-session/hourly compute limits;
+cheapest regional eligible 48 GB NVIDIA GPU; disposable HTTP Pod sessions;
+provider-side terminateAfter atomically included in GraphQL creation; queue
+drain grace; retained model volume; ownership checks and uncertain-operation
+reconciliation. Status/picker requests never create compute. Desktop GPU
+requests and text helpers refuse admission until storage is verified and a
+compute policy is approved. Manual Pod ID/token controls were removed from
+the normal desktop setup panel. Legacy pairing APIs remain for development.
+
+Current CPU installer graph: five model IDs across six pinned repositories,
+including OmniVoice's embedded codec and Whisper; 49,014,734,674 bytes of
+public pinned repository files. The Arabic VoxCPM alias shares base evidence.
+F5 has no runtime and remains unsupported. Generation processes use offline
+Hub/Transformers settings; Omni now resolves exact local snapshots and its
+embedded Whisper locally. Fresh-worker full checksum verification reads
+about 49 GB; reduced startup time has not been qualified. See
+[MODEL_STORAGE.md](MODEL_STORAGE.md).
+
+Verified this checkpoint: full backend/Pod regression suite passed (two
+Windows symlink privilege skips), plus eleven new cloud controller/provider
+tests passed; frontend production build passed. Real readonly account/storage
+discovery and a 200 GB/$14 monthly quote were observed in the updated browser
+preview. No volume, Pod, endpoint or paid generation was created. These tests
+do not establish actual GPU audio quality or shutdown billing.
+
+Cloud image build source is ready: pinned bases/Actions, CPU installer + GPU
+targets, hash locks, CPU container smoke and immutable digest/size artifacts;
+eight deployment tests and actionlint passed. Local Docker is absent. The
+GitHub connector reads the public fork but tree writes returned integration
+403. Automatic approval review then rejected normal Git publication because
+implementation authorization did not explicitly authorize public publishing.
+An explicit publication question is pending. Do not bypass that rejection.
+No commit/push/image publication occurred in that rejected command. The
+controller intentionally refuses paid provisioning while
+backend/app/runpod/release.json with reviewed immutable image digests is
+absent. The build script now includes that file when a valid release exists.
+
+Next: finish current local installer rebuild and repeat installed tests;
+save the local checkpoint. With explicit public publication approval, push
+the development source/workflow to MunawarAliAraiz/AI-Voice-Clone, inspect
+both hosted builds, qualify anonymous image pulls, and add release digests.
+Then obtain concrete bounded storage/compute authorization for a real
+English/Urdu voice test, listen to outputs and reconcile provider billing.
+Serverless adapter/automatic mode comparison, cold-start optimization and
+recorded-audio conversion remain unfinished. Dialogue is Beta and its
+generation tests are deferred at the user's request. No production readiness
+claim is warranted from the current local installer.
+
 ## Desktop continuation checkpoint — 2026-09-30
+
+**Latest priority:** the user requested Dialogue be marked **Beta** and deferred
+its generation tests. The tab and panel now carry Beta labels. Complete the
+existing desktop app and accepted Runpod setup/lifecycle first; do not make
+dialogue listening tests a prerequisite for this checkpoint. Recorded-audio
+overlap research remains documented but is not the current implementation focus.
 
 Worktree: `C:/Users/abdus/.codex/worktrees/desktop-runpod-mcp/AI-Voice-Clone`,
 branch `codex/desktop-runpod-mcp`. Baseline scaffold commit `25f1187`; validated

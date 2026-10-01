@@ -24,7 +24,7 @@ from ..inference.catalog import CATALOG
 from ..inference.protocol import SchedulerProtocol, SynthRequest
 from ..inference.transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
 from ..main import _build_analyzer, _build_scheduler, _build_transliterator
-from .model_install import ModelInstaller
+from .model_install import REQUIRED_MODEL_IDS, ModelInstaller, release_manifest_id
 from .model_pins import AUXILIARY_PINS
 
 PROTOCOL_VERSION = 1
@@ -135,6 +135,21 @@ def create_worker_app(
             ],
         }
 
+    @app.get("/v1/setup", dependencies=[Depends(authenticate)])
+    async def setup_status() -> dict[str, object]:
+        return {
+            "protocol_version": PROTOCOL_VERSION,
+            "manifest_id": release_manifest_id(),
+            "required_model_ids": list(REQUIRED_MODEL_IDS),
+            **app.state.installer.setup_status(),
+        }
+
+    @app.post("/v1/setup", dependencies=[Depends(authenticate)], status_code=202)
+    async def start_setup() -> dict[str, object]:
+        for model_id in REQUIRED_MODEL_IDS:
+            app.state.installer.start(model_id)
+        return await setup_status()
+
     def require_helper(model_id: str) -> None:
         if require_installed and app.state.installer.status(model_id)["state"] != "installed":
             raise HTTPException(409, "Download this helper model first")
@@ -183,7 +198,7 @@ def create_worker_app(
     @app.post(
         "/v1/models/{model_id}/install", status_code=202, dependencies=[Depends(authenticate)]
     )
-    async def install_model(model_id: str) -> dict[str, str]:
+    async def install_model(model_id: str) -> dict[str, Any]:
         try:
             return app.state.installer.start(model_id)
         except KeyError as exc:
@@ -192,7 +207,7 @@ def create_worker_app(
             raise HTTPException(409, str(exc)) from exc
 
     @app.get("/v1/models/{model_id}/install", dependencies=[Depends(authenticate)])
-    async def install_status(model_id: str) -> dict[str, str]:
+    async def install_status(model_id: str) -> dict[str, Any]:
         try:
             return app.state.installer.status(model_id)
         except KeyError as exc:

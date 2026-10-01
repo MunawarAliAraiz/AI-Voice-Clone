@@ -23,6 +23,26 @@ import type {
   VoiceProfileList,
 } from '../types/api';
 
+export interface CloudVolume { id: string; name: string; size: number; dataCenter: string; type: string }
+export interface CloudModelInstall { state: string; progress_pct?: number | null; current_file?: string; detail?: string }
+export interface CloudSetup {
+  connected: boolean; stage: string; ready: boolean; release_available: boolean;
+  volume: CloudVolume | null; models: Record<string, CloudModelInstall>;
+  progress_pct: number | null; bytes_completed: number; bytes_total: number | null; detail: string;
+  compute: { pod_id: string | null; kind: string; status: string; hourly_usd: number; deadline: string } | null;
+  policy: { max_session_usd: number; max_hourly_usd: number } | null;
+}
+export interface CloudDiscovery {
+  volumes: CloudVolume[];
+  regions: { id: string; name: string; gpu_hourly_from_usd: number; installer_hourly_from_usd: number }[];
+  balance_usd: number | null; account_hourly_spend_usd: number | null; funding_url: string;
+}
+export interface StorageQuote {
+  id: string; region: string; storage_gb: number; monthly_usd: number;
+  expires_at: number; balance_usd: number | null; can_purchase: boolean;
+  required_credit_reserve_usd: number; installer_budget_usd: number;
+}
+
 /**
  * Backend URL precedence:
  * 1. import.meta.env.VITE_API_BASE — build-time, for dev against a non-default
@@ -126,6 +146,23 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  cloudSetup: () => request<CloudSetup>('/api/runpod/setup'),
+  cloudDiscover: () => request<CloudDiscovery>('/api/runpod/setup/discover'),
+  cloudQuote: (region: string) => request<StorageQuote>('/api/runpod/setup/storage/quote', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ region }),
+  }),
+  cloudPurchase: (quoteId: string) => request<CloudVolume>('/api/runpod/setup/storage/purchase', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }),
+  }),
+  cloudSelectStorage: (volumeId: string) => request<CloudVolume>('/api/runpod/setup/storage', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ volume_id: volumeId }),
+  }),
+  cloudInstall: () => request<CloudSetup>('/api/runpod/setup/install', { method: 'POST' }),
+  cloudRelease: () => request<void>('/api/runpod/setup/release', { method: 'POST' }),
+  cloudPolicy: (session: number, hourly: number) => request<void>('/api/runpod/setup/policy', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_session_usd: session, max_hourly_usd: hourly }),
+  }),
   runpodConnection: () => request<{ connected: boolean }>('/api/runpod/connection'),
   connectRunpod: (apiKey: string) => request<{ connected: boolean }>('/api/runpod/connection', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },

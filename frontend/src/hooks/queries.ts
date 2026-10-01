@@ -35,6 +35,11 @@ export function useModels() {
   return useQuery({ queryKey: queryKeys.models, queryFn: api.models, staleTime: 15_000 });
 }
 
+export function useCloudReadiness() {
+  return useQuery({ queryKey: ['cloud-setup'], queryFn: api.cloudSetup,
+    enabled: !!window.__VCS_DESKTOP_KEY__, refetchInterval: 3000 });
+}
+
 export function useVoices() {
   return useQuery({ queryKey: queryKeys.voices, queryFn: api.listVoices });
 }

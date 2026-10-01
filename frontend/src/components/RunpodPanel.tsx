@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { CloudSetupPanel } from './CloudSetupPanel';
 import { api, type RunpodAnalytics, type RunpodEstimate } from '../services/api';
 import type { ModelListResponse } from '../types/api';
 
@@ -8,12 +8,7 @@ function money(value: number | undefined, digits = 4): string {
 }
 
 export function RunpodPanel() {
-  const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
-  const [pairedPodId, setPairedPodId] = useState<string | null>(null);
-  const [podId, setPodId] = useState('');
-  const [workerToken, setWorkerToken] = useState('');
-  const [installStates, setInstallStates] = useState<Record<string, string>>({});
   const [key, setKey] = useState('');
   const [models, setModels] = useState<ModelListResponse['models']>([]);
   const [modelId, setModelId] = useState('');
@@ -27,25 +22,12 @@ export function RunpodPanel() {
   useEffect(() => {
     void api.runpodConnection().then((result) => setConnected(result.connected))
       .catch((cause) => setError(String(cause)));
-    void api.runpodWorker().then((result) => setPairedPodId(result.pod_id))
-      .catch((cause) => setError(String(cause)));
     void api.models().then((result) => {
-      setModels(result.models);
-      setModelId((current) => current || result.models[0]?.id || '');
+      const supported = result.models.filter(model => model.runtime !== 'f5');
+      setModels(supported);
+      setModelId((current) => current || supported[0]?.id || '');
     }).catch((cause) => setError(String(cause)));
   }, []);
-
-  useEffect(() => {
-    if (!pairedPodId) return;
-    const refresh = () => {
-      void api.runpodWorkerModels().then((result) => {
-        setInstallStates(Object.fromEntries(result.models.map((model) => [model.id, model.state])));
-      }).catch((cause) => setError(String(cause)));
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 10000);
-    return () => window.clearInterval(timer);
-  }, [pairedPodId]);
 
   async function connect() {
     setBusy(true);
@@ -54,34 +36,6 @@ export function RunpodPanel() {
       await api.connectRunpod(key);
       setKey('');
       setConnected(true);
-    } catch (cause) {
-      setError(String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pairWorker() {
-    setBusy(true);
-    setError('');
-    try {
-      const result = await api.pairRunpodWorker(podId.trim(), workerToken.trim());
-      setPairedPodId(result.pod_id);
-      setWorkerToken('');
-      await queryClient.invalidateQueries({ queryKey: ['models'] });
-    } catch (cause) {
-      setError(String(cause));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function installModel(modelIdToInstall: string) {
-    setBusy(true);
-    setError('');
-    try {
-      const result = await api.installRunpodModel(modelIdToInstall);
-      setInstallStates((current) => ({ ...current, [modelIdToInstall]: result.state }));
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -148,41 +102,7 @@ export function RunpodPanel() {
       {error && <p role="alert" className="hint">{error}</p>}
     </section>
 
-    <section className="card">
-      <header className="card-head"><h2>Generation Pod</h2></header>
-      {pairedPodId ? <>
-        <p>Paired with Pod {pairedPodId}. New generations use this worker.</p>
-        <button className="btn sm" disabled={busy} onClick={() => {
-          void api.unpairRunpodWorker().then(async () => {
-            setPairedPodId(null);
-            setInstallStates({});
-            await queryClient.invalidateQueries({ queryKey: ['models'] });
-          }).catch((cause) => setError(String(cause)));
-        }}>Unpair Pod</button>
-        <h3>Models on persistent Pod storage</h3>
-        <p className="hint">Downloads use catalog-pinned revisions. The Pod needs free space and access to each model's terms.</p>
-        {[...models.map((model) => ({ id: model.id, name: model.display_name })),
-          { id: 'qwen2.5-3b-instruct-analyzer', name: 'Speech Direction (Qwen)' },
-          { id: 'gemma-4-31b-it-transliterator', name: 'Script conversion (Gemma)' },
-        ].map((model) => <p key={model.id}>
-          {model.name} · {installStates[model.id] ?? 'checking'}{' '}
-          <button className="btn sm" disabled={busy || installStates[model.id] === 'installed' || installStates[model.id] === 'downloading'}
-            onClick={() => void installModel(model.id)}>Download to Pod</button>
-        </p>)}
-      </> : <>
-        <p className="hint">Pair an existing Pod running the Voice Clone worker on port 8000. The Pod must be running for the connection check.</p>
-        <div className="runpod-controls">
-          <label className="field"><span className="field-label">Runpod Pod ID</span>
-            <input value={podId} onChange={(event) => setPodId(event.target.value)}
-              autoComplete="off" /></label>
-          <label className="field"><span className="field-label">Worker token</span>
-            <input type="password" value={workerToken}
-              onChange={(event) => setWorkerToken(event.target.value)} autoComplete="off" /></label>
-          <button className="btn primary sm" disabled={busy || podId.length < 6 || workerToken.length < 24}
-            onClick={() => void pairWorker()}>Pair generation Pod</button>
-        </div>
-      </>}
-    </section>
+    <CloudSetupPanel connected={connected} />
 
     {connected && <>
       <section className="card">
@@ -208,7 +128,7 @@ export function RunpodPanel() {
             <td>{money(row.cold_estimated_compute_usd, 6)}</td>
           </tr>)}</tbody>
         </table></div>}
-        {estimates.length === 0 && <p className="hint">Full existing feature set: 48 GB VRAM minimum. Recommended persistent volume: 200 GB; 150 GB is a provisional floor.</p>}
+        {estimates.length === 0 && <p className="hint">Current full feature residency: 48 GB VRAM. Recommended persistent volume: 200 GB. Estimates use global stock; generation rechecks availability beside your selected storage.</p>}
       </section>
 
       <section className="card">

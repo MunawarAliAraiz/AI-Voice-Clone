@@ -1,0 +1,101 @@
+name: Build Runpod images
+
+on:
+  push:
+    branches: [codex/desktop-runpod-mcp]
+    paths:
+      - 'backend/app/**'
+      - 'pod/**'
+      - '.github/workflows/pod-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pod-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_IMAGE: docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a
+  UV_IMAGE: ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5
+
+jobs:
+  image:
+    # Never grant package publication to PRs or an upstream/fork copy.
+    if: github.repository == 'MunawarAliAraiz/AI-Voice-Clone'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [installer, gpu]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Prepare dedicated hosted runner disk
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          # These SDK directories belong to the disposable GitHub Linux runner.
+          # They are unused by this Python/container-only job.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          python3 pod/ci.py disk --target "$TARGET"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute image name
+        id: name
+        env:
+          REPOSITORY: ${{ github.repository }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          python3 pod/ci.py name --repository "$REPOSITORY" --target "$TARGET" >> "$GITHUB_OUTPUT"
+      - name: Build and publish immutable source tag
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          file: pod/Dockerfile
+          target: ${{ matrix.target }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.name.outputs.image }}:${{ github.sha }}
+          build-args: |
+            PYTHON_IMAGE=${{ env.PYTHON_IMAGE }}
+            UV_IMAGE=${{ env.UV_IMAGE }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=pod-${{ matrix.target }}
+          cache-to: type=gha,mode=min,scope=pod-${{ matrix.target }}
+      - name: Qualify CPU installer container
+        if: matrix.target == 'installer'
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: python3 pod/ci.py smoke --image "$IMAGE"
+      - name: Record published digest, sizes and locks
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TARGET: ${{ matrix.target }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 pod/ci.py evidence --image "$IMAGE" --digest "$DIGEST" --target "$TARGET" --source-commit "$SOURCE_COMMIT" --run-url "$RUN_URL" --output "release-${TARGET}.json"
+          cat "release-${TARGET}.json" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: runpod-image-${{ matrix.target }}-${{ github.sha }}
+          path: release-${{ matrix.target }}.json
+          if-no-files-found: error
+          retention-days: 90

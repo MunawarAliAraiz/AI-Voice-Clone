@@ -1,17 +1,41 @@
-"""Download catalog-pinned weights into a persistent Pod cache."""
+"""Pinned, checksum-verified model installation with actual byte progress.
+
+The worker never treats a directory or historical completion marker as proof.
+Start hashes existing files, adopts matching snapshots, and resumes missing bytes.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import hashlib
 import json
 import shutil
+import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from ..inference.catalog import CATALOG
+from .model_manifest import (
+    MANIFEST_VERSION,
+    atomic_json,
+    atomic_text,
+    bound_path,
+    hub_manifest,
+    manifest_payload,
+    transfer_file,
+    validate_pin,
+    verify_file,
+)
 from .model_pins import AUXILIARY_PINS
 
-MIN_FREE_GB_BEFORE_DOWNLOAD = 20
+# Resolved through the public Hub API on 2026-09-30; optional-reference ASR.
+WHISPER_PIN = ("openai/whisper-large-v3-turbo", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9")
+MIN_FREE_GB_BEFORE_DOWNLOAD = 2
+ACTIVE_STATES = {"discovering", "verifying", "downloading"}
+MODEL_ALIASES = {"voxcpm2_urdu_arabic": "voxcpm2"}
+REQUIRED_MODEL_IDS = ("voxcpm2", "chatterbox_ml_v3", "omnivoice_urdu", *AUXILIARY_PINS)
 
 
 def model_pin(model_id: str) -> tuple[str, str]:
@@ -23,11 +47,17 @@ def model_pin(model_id: str) -> tuple[str, str]:
     raise KeyError(model_id)
 
 
-def _download(repo_id: str, revision: str, cache_dir: Path) -> str:
-    # The Pod image installs this dependency; the Windows sidecar never needs it.
-    from huggingface_hub import snapshot_download
+def model_graph(model_id: str) -> tuple[tuple[str, str], ...]:
+    pin = model_pin(model_id)
+    return (pin, WHISPER_PIN) if model_id == "omnivoice_urdu" else (pin,)
 
-    return snapshot_download(repo_id=repo_id, revision=revision, cache_dir=str(cache_dir))
+
+def release_manifest_id() -> str:
+    payload = {
+        "version": MANIFEST_VERSION,
+        "models": {model_id: model_graph(model_id) for model_id in REQUIRED_MODEL_IDS},
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
 class ModelInstaller:
@@ -35,70 +65,230 @@ class ModelInstaller:
         self,
         cache_dir: Path,
         *,
-        downloader: Callable[[str, str, Path], str] = _download,
+        manifest_loader: Callable = hub_manifest,
+        transfer: Callable = transfer_file,
+        graph: Callable = model_graph,
     ) -> None:
         self.cache_dir = cache_dir
-        self.downloader = downloader
-        self._tasks: dict[str, asyncio.Task[None]] = {}
-        self._states: dict[str, dict[str, str]] = {}
+        self.manifest_loader = manifest_loader
+        self.transfer = transfer
+        self.graph = graph
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._states: dict[str, dict[str, Any]] = {}
+        self._cancels: dict[str, threading.Event] = {}
+        self._lock = threading.RLock()
+        # Serial transfers prevent shared snapshot races and unbounded I/O.
+        self._download_lock = asyncio.Lock()
 
-    def _marker(self, model_id: str, revision: str) -> Path:
-        return self.cache_dir / ".vcs-installed" / f"{model_id}-{revision}.json"
+    def status(self, model_id: str) -> dict[str, Any]:
+        _, revision = model_pin(model_id)
+        canonical = MODEL_ALIASES.get(model_id)
+        if canonical is not None:
+            if model_pin(canonical) != model_pin(model_id):
+                raise ValueError("Alias checkpoint differs from canonical model")
+            state = self.status(canonical)
+            state["alias_of"] = canonical
+            if "evidence" in state:
+                state["evidence"] = {**state["evidence"], "model_id": model_id}
+            return state
+        with self._lock:
+            if model_id in self._states:
+                return dict(self._states[model_id])
+        unsupported = model_id == "f5_openbible_urdu"
+        return {
+            "state": "unsupported" if unsupported else "not_started",
+            "revision": revision,
+            "bytes_total": None,
+            "bytes_completed": 0,
+            "files_total": None,
+            "files_verified": 0,
+            "progress_pct": None,
+            "detail": "F5 runtime is not included in this worker" if unsupported else None,
+        }
 
-    def status(self, model_id: str) -> dict[str, str]:
-        if model_id in self._states:
-            return self._states[model_id]
-        repo, revision = model_pin(model_id)
-        repo_path = "models--" + repo.replace("/", "--")
-        snapshot = self.cache_dir / repo_path / "snapshots" / revision
-        # A failed/interrupted Hugging Face download may leave a nonempty
-        # snapshot directory. Only our post-download marker proves completion.
-        if self._marker(model_id, revision).is_file() and snapshot.is_dir():
-            return {"state": "installed", "revision": revision}
-        return {"state": "not_started", "revision": revision}
+    def _update(self, model_id: str, **changes: Any) -> None:
+        with self._lock:
+            self._states[model_id].update(changes)
+            state = self._states[model_id]
+            total = state.get("bytes_total")
+            state["progress_pct"] = (
+                round(100 * state["bytes_completed"] / total, 2) if total else None
+            )
 
-    def start(self, model_id: str) -> dict[str, str]:
-        repo, revision = model_pin(model_id)
-        if self.status(model_id)["state"] in {"downloading", "installed"}:
+    def start(self, model_id: str) -> dict[str, Any]:
+        if model_id in MODEL_ALIASES:
+            self.status(model_id)  # Assert this alias still points at the exact same pin.
+            self.start(MODEL_ALIASES[model_id])
             return self.status(model_id)
-        if len(revision) != 40 or any(char not in "0123456789abcdef" for char in revision.lower()):
-            raise ValueError("Model revision is not pinned to a commit")
+        state = self.status(model_id)
+        if state["state"] in ACTIVE_STATES | {"installed", "unsupported"}:
+            return state
+        for repo, revision in self.graph(model_id):
+            validate_pin(repo, revision)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        free_gb = shutil.disk_usage(self.cache_dir).free / 1024**3
-        if free_gb < MIN_FREE_GB_BEFORE_DOWNLOAD:
-            raise OSError("Less than 20 GB remains on the model volume")
-        self._states[model_id] = {"state": "downloading", "revision": revision}
-        self._tasks[model_id] = asyncio.create_task(self._run(model_id, repo, revision))
+        cancel = threading.Event()
+        self._cancels[model_id] = cancel
+        with self._lock:
+            self._states[model_id] = {
+                "state": "discovering",
+                "revision": state["revision"],
+                "detail": None,
+                "bytes_total": None,
+                "bytes_completed": 0,
+                "files_total": None,
+                "files_verified": 0,
+                "progress_pct": None,
+                "current_file": None,
+            }
+        self._tasks[model_id] = asyncio.create_task(self._run(model_id, cancel))
         return self.status(model_id)
 
-    async def _run(self, model_id: str, repo: str, revision: str) -> None:
+    async def _run(self, model_id: str, cancel: threading.Event) -> None:
         try:
-
-            def download_and_validate() -> None:
-                path = self.downloader(repo, revision, self.cache_dir)
-                resolved = Path(path).resolve()
-                if not resolved.is_relative_to(self.cache_dir.resolve()):
-                    raise ValueError("Downloaded snapshot escaped the model cache")
-                marker = self._marker(model_id, revision)
-                marker.parent.mkdir(parents=True, exist_ok=True)
-                temporary = marker.with_suffix(".tmp")
-                temporary.write_text(json.dumps({"model_id": model_id, "revision": revision}))
-                temporary.replace(marker)
-
-            await asyncio.to_thread(download_and_validate)
-            self._states[model_id] = {"state": "installed", "revision": revision}
+            async with self._download_lock:
+                # Shield the async handle so external cancellation cannot release
+                # the snapshot lock while its OS thread is still writing files.
+                work = asyncio.create_task(asyncio.to_thread(self._install_sync, model_id, cancel))
+                try:
+                    await asyncio.shield(work)
+                except asyncio.CancelledError:
+                    cancel.set()
+                    with contextlib.suppress(Exception):
+                        await work
+                    raise
+        except asyncio.CancelledError:
+            cancel.set()
+            self._update(model_id, state="failed", detail="Installation stopped; retry to resume")
+            raise
         except Exception:
-            # Hugging Face errors can include private URLs, tokens or account
-            # details; the public status is deliberately stable.
-            self._states[model_id] = {
-                "state": "failed",
-                "revision": revision,
-                "detail": "Download failed; check Pod logs and model access",
-            }
+            # Never include signed URLs, access tokens, raw HTTP errors or user paths.
+            self._update(
+                model_id, state="failed", detail="Model verification or download failed; retry"
+            )
+
+    def _install_sync(self, model_id: str, cancel: threading.Event) -> None:
+        if cancel.is_set():
+            raise InterruptedError("Installation cancelled")
+        manifests = [
+            (repo, rev, self.manifest_loader(repo, rev)) for repo, rev in self.graph(model_id)
+        ]
+        total = sum(entry.size_bytes for _, _, entries in manifests for entry in entries)
+        count = sum(len(entries) for _, _, entries in manifests)
+        self._update(
+            model_id,
+            state="verifying",
+            bytes_total=total,
+            bytes_completed=0,
+            files_total=count,
+            files_verified=0,
+        )
+        completed = 0
+        verified = 0
+        evidence: list[dict] = []
+        missing: list[tuple] = []
+        for repo, revision, entries in manifests:
+            repo_folder = "models--" + repo.replace("/", "--")
+            snapshot = bound_path(self.cache_dir, f"{repo_folder}/snapshots/{revision}")
+            snapshot.mkdir(parents=True, exist_ok=True)
+            atomic_json(snapshot / ".vcs-manifest.json", manifest_payload(repo, revision, entries))
+            for entry in entries:
+                if cancel.is_set():
+                    raise InterruptedError("Installation cancelled")
+                self._update(model_id, current_file=entry.path)
+                path = bound_path(snapshot, entry.path, allowed_root=self.cache_dir)
+                try:
+                    digest = verify_file(path, entry, cancel)
+                except ValueError:
+                    missing.append((repo, revision, snapshot, entry))
+                    continue
+                completed += entry.size_bytes
+                verified += 1
+                evidence.append(
+                    {
+                        "repo": repo,
+                        "revision": revision,
+                        "path": entry.path,
+                        "size_bytes": entry.size_bytes,
+                        "sha256": digest,
+                    }
+                )
+                self._update(model_id, bytes_completed=completed, files_verified=verified)
+        needed = sum(entry.size_bytes for _, _, _, entry in missing)
+        reserve = MIN_FREE_GB_BEFORE_DOWNLOAD * 1024**3
+        if needed and shutil.disk_usage(self.cache_dir).free < needed + reserve:
+            raise OSError("Insufficient model storage")
+        self._update(model_id, state="downloading" if missing else "verifying")
+        for repo, revision, snapshot, entry in missing:
+            self._update(model_id, current_file=entry.path)
+            base = completed
+            digest = self.transfer(
+                repo,
+                revision,
+                entry,
+                snapshot,
+                progress=lambda amount, base=base: self._update(
+                    model_id, bytes_completed=base + amount
+                ),
+                cancel=cancel,
+                cache_root=self.cache_dir,
+            )
+            completed += entry.size_bytes
+            verified += 1
+            evidence.append(
+                {
+                    "repo": repo,
+                    "revision": revision,
+                    "path": entry.path,
+                    "size_bytes": entry.size_bytes,
+                    "sha256": digest,
+                }
+            )
+            self._update(model_id, bytes_completed=completed, files_verified=verified)
+        # Embedded packages using an unqualified default model name resolve these
+        # exact cached refs when the generation container enforces offline mode.
+        for repo, revision, _ in manifests:
+            refs = bound_path(self.cache_dir, "models--" + repo.replace("/", "--") + "/refs")
+            refs.mkdir(parents=True, exist_ok=True)
+            atomic_text(refs / "main", revision)
+        _, revision = model_pin(model_id)
+        record = {
+            "version": MANIFEST_VERSION,
+            "model_id": model_id,
+            "revision": revision,
+            "bytes_total": total,
+            "files": evidence,
+        }
+        marker = bound_path(self.cache_dir, f".vcs-installed/{model_id}-{revision}.json")
+        atomic_json(marker, record)
+        self._update(
+            model_id,
+            state="installed",
+            bytes_completed=total,
+            files_verified=count,
+            current_file=None,
+            evidence=record,
+            detail=None,
+        )
+
+    def setup_status(self) -> dict[str, Any]:
+        models = {model_id: self.status(model_id) for model_id in REQUIRED_MODEL_IDS}
+        known = all(row["bytes_total"] is not None for row in models.values())
+        total = sum(row["bytes_total"] or 0 for row in models.values()) if known else None
+        completed = sum(row["bytes_completed"] for row in models.values())
+        return {
+            "ready": all(row["state"] == "installed" for row in models.values()),
+            "manifest_id": release_manifest_id(),
+            "required_model_ids": list(REQUIRED_MODEL_IDS),
+            "models": models,
+            "bytes_total": total,
+            "bytes_completed": completed,
+            "progress_pct": round(100 * completed / total, 2) if total else None,
+        }
 
     async def shutdown(self) -> None:
+        for cancel in self._cancels.values():
+            cancel.set()
+        # Do not abandon a to_thread transfer and delete its volume underneath it.
         tasks = [task for task in self._tasks.values() if not task.done()]
-        for task in tasks:
-            task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)

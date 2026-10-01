@@ -22,7 +22,7 @@ from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner, JobStatus, job_record_from_row
 from ...jobs.estimate import estimate_remaining_for_running, estimate_wait_seconds, queue_position
 from ...jobs.types import JobRecord
-from ..deps import get_db, get_job_runner, get_scheduler, get_settings
+from ..deps import get_db, get_job_runner, get_scheduler, get_settings, require_cloud_ready
 from ..media_tokens import make_media_url
 from ..schemas.jobs import JobList, JobStatusResponse
 from ..schemas.tts import RouteInfo, TTSGenerateResponse
@@ -157,7 +157,10 @@ def _build_list_item(
 
 
 async def build_job_status_response(
-    job: JobRecord, db: Database, settings: Settings, scheduler: SchedulerProtocol,
+    job: JobRecord,
+    db: Database,
+    settings: Settings,
+    scheduler: SchedulerProtocol,
     response: Response,
 ) -> JobStatusResponse:
     """
@@ -231,7 +234,12 @@ async def get_job(
     return await build_job_status_response(job, db, settings, scheduler, response)
 
 
-@router.post("/{job_id}/retry", response_model=JobStatusResponse, status_code=202)
+@router.post(
+    "/{job_id}/retry",
+    response_model=JobStatusResponse,
+    status_code=202,
+    dependencies=[Depends(require_cloud_ready)],
+)
 async def retry_job(
     job_id: int,
     response: Response,

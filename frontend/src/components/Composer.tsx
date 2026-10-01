@@ -12,7 +12,7 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
+import { isTerminal, useCloudReadiness, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
@@ -157,6 +157,8 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   const cancelMutation = useCancelJobMutation();
   const { data: job } = useJob(jobId);
   const { data: modelsData } = useModels();
+  const cloudQ = useCloudReadiness();
+  const cloudReady = !window.__VCS_DESKTOP_KEY__ || (cloudQ.data?.ready && !!cloudQ.data.policy);
   const invalidateAfterSuccess = useInvalidateAfterJobSuccess();
   const settledJobId = useRef<number | null>(null);
 
@@ -635,7 +637,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
     }
   }
 
-  const disabled = busy || !voices.length;
+  const disabled = busy || !voices.length || !cloudReady;
   const aiSuggestBusy =
     analyzeLlmMutation.isPending || (llmJob != null && !isTerminal(llmJob.status));
 
@@ -644,6 +646,8 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
       <header className="card-head">
         <h2 id="composer-h">Generate speech</h2>
       </header>
+
+      {!cloudReady && <p role="status" className="hint">Open Runpod to prepare model storage and approve automatic compute limits. Generation and cloud text helpers unlock when setup is ready.</p>}
 
       <div className="editor-bar">
         <label className="field editor-title">
@@ -664,7 +668,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
           type="button"
           className="btn-sm ghost editor-title-suggest"
           onClick={() => void suggestTitleNow()}
-          disabled={titling || !text.trim()}
+          disabled={titling || !text.trim() || !cloudReady}
           title={
             title.trim()
               ? 'Ask the analyzer for a name. Yours is kept — the suggestion is shown for you to take or ignore.'
@@ -924,7 +928,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
               type="button"
               className="btn-sm ghost"
               onClick={() => conversion.start([text.trim()], 'perso_arabic')}
-              disabled={conversion.running || !text.trim()}
+              disabled={conversion.running || !text.trim() || !cloudReady}
               title="Convert this Roman Urdu to Urdu script, which the Urdu voices read properly"
             >
               {conversion.running ? <IconSpinner size={13} /> : null}
@@ -986,7 +990,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
           onResetSegment={handleResetSegment}
           onResetAllEdits={handleResetAllEdits}
           onSuggestAi={handleSuggestAi}
-          aiSuggestLoading={aiSuggestBusy}
+          aiSuggestLoading={aiSuggestBusy || !cloudReady}
           aiSuggestError={aiSuggestErr}
         />
       )}

@@ -3,6 +3,8 @@ param(
     [string]$Ffmpeg = "",
     [string]$FfmpegLicense = "",
     [string]$FfmpegBuildInfo = "",
+    [string]$TauriCli = "",
+    [ValidateRange(1, 64)][int]$BuildJobs = 2,
     [switch]$UseExistingFrontendDependencies,
     [switch]$CheckOnly
 )
@@ -44,6 +46,16 @@ if (-not $CheckOnly) {
     }
 }
 if ($missing.Count) { throw ($missing -join [Environment]::NewLine) }
+if ($TauriCli) {
+    if (-not (Test-Path -LiteralPath $TauriCli -PathType Leaf)) {
+        throw "Cached Tauri CLI JavaScript entry point was not found: $TauriCli"
+    }
+    $TauriCli = (Resolve-Path -LiteralPath $TauriCli).Path
+    $cachedCliVersion = & node $TauriCli --version
+    if ($LASTEXITCODE -ne 0 -or $cachedCliVersion -notmatch "^tauri-cli $([regex]::Escape($cliVersion))$") {
+        throw "The supplied cached CLI must be Tauri $cliVersion."
+    }
+}
 if ($CheckOnly) {
     Write-Output "Python imports, Node.js, and Rust commands are available. MSVC build tools and Windows SDK must also be installed."
     return
@@ -94,12 +106,17 @@ $commonArgs = @("--noconfirm", "--clean", "--onefile", "--noupx", "--paths", $ba
     "--specpath", $buildRoot, "--exclude-module", "torch", "--exclude-module", "torchaudio")
 Push-Location $repoRoot
 try {
+    $cloudRelease = Join-Path $backend "app\runpod\release.json"
+    $cloudDataArgs = @()
+    if (Test-Path -LiteralPath $cloudRelease -PathType Leaf) {
+        $cloudDataArgs = @("--add-data", "${cloudRelease};app/runpod")
+    }
     & $Python -m PyInstaller @commonArgs --name voice-clone-api --console `
         --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto `
         --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto `
         --hidden-import uvicorn.lifespan.on --collect-all _soundfile_data `
         --add-data "$(Join-Path $backend 'app\db\schema.sql');app/db" `
-        --add-data "${dist};web" (Join-Path $backend "desktop_entry.py")
+        --add-data "${dist};web" @cloudDataArgs (Join-Path $backend "desktop_entry.py")
     if ($LASTEXITCODE -ne 0) { throw "Python API sidecar build failed" }
     # Stdio must remain attached for Codex/Claude MCP clients.
     & $Python -m PyInstaller @commonArgs --name voice-clone-mcp --console `
@@ -121,7 +138,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $tauriRoot "Cargo.lock"))) {
 }
 Push-Location $frontend
 try {
-    npx --yes "@tauri-apps/cli@$cliVersion" build --target $target --bundles nsis -- --locked
+    if ($TauriCli) {
+        & node $TauriCli build --target $target --bundles nsis -- --locked --jobs $BuildJobs
+    } else {
+        npx --yes "@tauri-apps/cli@$cliVersion" build --target $target --bundles nsis -- --locked --jobs $BuildJobs
+    }
     if ($LASTEXITCODE -ne 0) { throw "Tauri NSIS build failed" }
 } finally { Pop-Location }
 

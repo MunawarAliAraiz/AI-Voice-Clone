@@ -63,7 +63,7 @@ from ...domain.transliterate import (
 from ...exceptions import TransliteratorUnavailableError, UnsupportedConversionError
 from ...inference.protocol import SchedulerProtocol
 from ...jobs import JobKind, JobRunner
-from ..deps import get_db, get_job_runner, get_scheduler, get_settings
+from ..deps import get_db, get_job_runner, get_scheduler, get_settings, require_cloud_ready
 from ..schemas.jobs import JobStatusResponse
 from ..schemas.text import TitleRequest, TitleResponse, TransliterateRequest
 from .jobs import build_job_status_response
@@ -83,7 +83,12 @@ def fallback_title(text: str) -> str:
     return " ".join(words[:_FALLBACK_WORDS])
 
 
-@router.post("/transliterate", response_model=JobStatusResponse, status_code=202)
+@router.post(
+    "/transliterate",
+    response_model=JobStatusResponse,
+    status_code=202,
+    dependencies=[Depends(require_cloud_ready)],
+)
 async def transliterate(
     body: TransliterateRequest,
     request: Request,
@@ -151,7 +156,7 @@ async def transliterate(
     return await build_job_status_response(job, db, settings, scheduler, response)
 
 
-@router.post("/title", response_model=TitleResponse)
+@router.post("/title", response_model=TitleResponse, dependencies=[Depends(require_cloud_ready)])
 async def suggest_title(body: TitleRequest, request: Request) -> TitleResponse:
     analyzer = getattr(request.app.state, "analyzer", None)
     if analyzer is None:

@@ -10,6 +10,26 @@ use tauri_plugin_shell::{process::CommandChild, ShellExt};
 
 struct Sidecar(Arc<Mutex<Option<CommandChild>>>);
 
+fn stop_sidecar(child: CommandChild) {
+    // PyInstaller's onefile bootloader starts another process. Killing only the
+    // bootloader leaves its API child and pipe readers alive on Windows.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let taskkill = std::path::PathBuf::from(
+            std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()),
+        )
+        .join("System32\\taskkill.exe");
+        let _ = std::process::Command::new(taskkill)
+            .args(["/PID", &child.pid().to_string(), "/T", "/F"])
+            .creation_flags(0x0800_0000)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    let _ = child.kill();
+}
+
 fn free_port() -> Result<u16, Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     Ok(listener.local_addr()?.port())
@@ -38,8 +58,10 @@ fn main() {
         // A second process must not replace the first process's MCP session.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                if std::env::var_os("VCS_DESKTOP_TEST_HIDE").is_none() {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
             }
         }))
         .plugin(tauri_plugin_shell::init())
@@ -81,27 +103,31 @@ fn main() {
                 while events.recv().await.is_some() {}
             });
             if !wait_for_api(port) {
-                let _ = child.kill();
+                stop_sidecar(child);
                 return Err("The local Voice Clone Studio service did not start".into());
             }
             if let Err(error) = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("AI Voice Clone Studio")
                 .data_directory(data_dir.join("webview"))
+                .visible(std::env::var_os("VCS_DESKTOP_TEST_HIDE").is_none())
                 .inner_size(1200.0, 800.0)
                 .build()
             {
-                let _ = child.kill();
+                stop_sidecar(child);
                 return Err(error.into());
             }
             app.manage(Sidecar(Arc::new(Mutex::new(Some(child)))));
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+            if matches!(
+                event,
+                tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
+            ) {
                 if let Some(sidecar) = window.app_handle().try_state::<Sidecar>() {
                     if let Ok(mut child) = sidecar.0.lock() {
                         if let Some(child) = child.take() {
-                            let _ = child.kill();
+                            stop_sidecar(child);
                         }
                     }
                 }

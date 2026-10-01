@@ -41,6 +41,10 @@ def prepare() -> None:
     # call huggingface_hub.login(), which would write it to the network volume.
     os.environ["HF_TOKEN_PATH"] = str(runtime / "hf-token")
     os.environ["HF_STORED_TOKENS_PATH"] = str(runtime / "hf-stored-tokens")
+    # CPU setup downloads and verifies the complete pinned graph first.
+    # GPU runtimes must never fetch a moving default checkpoint during generation.
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
     os.environ["VCS_ALLOW_FAKE_RUNTIME"] = "false"
     verify_imports(require_cuda=True)
 

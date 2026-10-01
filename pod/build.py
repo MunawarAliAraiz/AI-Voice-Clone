@@ -24,6 +24,8 @@ def main() -> None:
     parser.add_argument("--uv-image", type=digest_ref, required=True,
                         help="Digest of ghcr.io/astral-sh/uv:0.11.32")
     parser.add_argument("--tag", required=True, help="Local image tag to build")
+    parser.add_argument("--target", choices=("installer", "gpu"), default="gpu",
+                        help="Cheap CPU model installer or complete GPU runtime")
     args = parser.parse_args()
     docker = shutil.which("docker")
     if docker is None:
@@ -34,6 +36,7 @@ def main() -> None:
     # Validated references are argv values; no shell or command text interpolation.
     subprocess.run([  # noqa: S603
         docker, "build", "--platform", "linux/amd64", "--file", str(root / "pod/Dockerfile"),
+        "--target", args.target,
         "--build-arg", f"PYTHON_IMAGE={args.python_image}",
         "--build-arg", f"UV_IMAGE={args.uv_image}", "--tag", args.tag, str(root),
     ], check=True)

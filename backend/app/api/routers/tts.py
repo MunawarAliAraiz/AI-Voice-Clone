@@ -52,6 +52,7 @@ from ..deps import (
     get_lexicon,
     get_scheduler,
     get_settings,
+    require_cloud_ready,
 )
 from ..schemas.jobs import JobStatusResponse
 from ..schemas.tts import (
@@ -119,7 +120,12 @@ def _route_info(plan: RoutePlan, catalog: ModelCatalog) -> RouteInfo:
     )
 
 
-@router.post("/generate", response_model=JobStatusResponse, status_code=202)
+@router.post(
+    "/generate",
+    response_model=JobStatusResponse,
+    status_code=202,
+    dependencies=[Depends(require_cloud_ready)],
+)
 async def generate(
     body: TTSGenerateRequest,
     response: Response,
@@ -140,8 +146,12 @@ async def generate(
     # — all mapped to problem+json, none a silent fallback.
     text_profile = profile_text(body.text, body.language)
     plan = resolve(
-        text_profile, body.model_id, catalog, _urdu_strategy(body.urdu_strategy),
-        allow_experimental=body.allow_experimental, lexicon=lexicon,
+        text_profile,
+        body.model_id,
+        catalog,
+        _urdu_strategy(body.urdu_strategy),
+        allow_experimental=body.allow_experimental,
+        lexicon=lexicon,
     )
 
     spec = catalog.get(plan.model_id)

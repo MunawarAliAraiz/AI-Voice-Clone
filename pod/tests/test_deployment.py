@@ -1,6 +1,7 @@
 """Credential transport and storage checks without a container or GPU."""
 
 import importlib.util
+import json
 import os
 import sys
 import threading
@@ -98,3 +99,66 @@ def test_health_probe_refuses_redirect():
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+def test_release_size_ignores_attestation_manifests():
+    ci = load("ci")
+    reference = "ghcr.io/owner/worker@sha256:" + "a" * 64
+    index = {"manifests": [
+        {"digest": "sha256:" + "b" * 64,
+         "platform": {"os": "linux", "architecture": "amd64"}},
+        {"digest": "sha256:" + "c" * 64,
+         "platform": {"os": "unknown", "architecture": "unknown"}},
+    ]}
+    manifest = {"layers": [{"size": 10}, {"size": 20}]}
+    with patch.object(ci, "docker", side_effect=[json.dumps(index), json.dumps(manifest)]):
+        result = ci.published_sizes(reference)
+    assert result["compressed_layer_bytes"] == 30
+    assert result["platform_manifest_digest"] == "sha256:" + "b" * 64
+    assert result["expanded_disk_bytes"] is None
+
+
+def test_release_rejects_ambiguous_platform_and_mutable_reference():
+    ci = load("ci")
+    with pytest.raises(ValueError, match="immutable"):
+        ci.immutable_image("ghcr.io/owner/worker", "latest")
+    with patch.object(ci, "docker", return_value=json.dumps({"manifests": []})):
+        with pytest.raises(ValueError, match="one linux/amd64"):
+            ci.published_sizes("ghcr.io/owner/worker@sha256:" + "a" * 64)
+
+
+def test_installer_smoke_restores_environment_and_passes_secret_without_argv():
+    ci = load("ci")
+    calls = []
+
+    def fake_docker(*args):
+        calls.append(args)
+        return "container-id\n" if args[0] == "run" else ""
+
+    with patch.dict(os.environ, {"POD_WORKER_TOKEN": "previous-secret"}), \
+            patch.object(ci, "docker", side_effect=fake_docker):
+        ci.smoke("ghcr.io/owner/installer@sha256:" + "a" * 64)
+        assert os.environ["POD_WORKER_TOKEN"] == "previous-secret"  # noqa: S105 -- fixture
+    run = next(args for args in calls if args[0] == "run")
+    assert run[run.index("--env") + 1] == "POD_WORKER_TOKEN"
+    assert not any("previous-secret" in item for args in calls for item in args)
+    assert ("rm", "--force", "container-id") in calls
+
+
+def test_installer_smoke_cleans_failed_container():
+    ci = load("ci")
+    calls = []
+
+    def fake_docker(*args):
+        calls.append(args)
+        if args[0] == "run":
+            return "container-id\n"
+        if args[:2] == ("exec", "container-id"):
+            raise ci.subprocess.CalledProcessError(1, "docker")
+        return ""
+
+    with patch.object(ci, "docker", side_effect=fake_docker), \
+            patch.object(ci.time, "sleep"):
+        with pytest.raises(ValueError, match="did not become healthy"):
+            ci.smoke("ghcr.io/owner/installer@sha256:" + "a" * 64)
+    assert ("rm", "--force", "container-id") in calls

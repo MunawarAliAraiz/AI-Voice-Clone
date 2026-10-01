@@ -40,6 +40,7 @@ from ..deps import (
     get_lexicon,
     get_scheduler,
     get_settings,
+    require_cloud_ready,
 )
 from ..schemas.direction import (
     CapabilityReportOut,
@@ -71,8 +72,11 @@ async def analyze_direction(
     # mapped to problem+json by the installed handler.
     text_profile = profile_text(body.text, body.language)
     plan = resolve(
-        text_profile, body.model_id, catalog,
-        allow_experimental=body.allow_experimental, lexicon=lexicon,
+        text_profile,
+        body.model_id,
+        catalog,
+        allow_experimental=body.allow_experimental,
+        lexicon=lexicon,
     )
 
     spec = catalog.get(plan.model_id)
@@ -95,7 +99,12 @@ async def analyze_direction(
     )
 
 
-@router.post("/analyze-llm", response_model=JobStatusResponse, status_code=202)
+@router.post(
+    "/analyze-llm",
+    response_model=JobStatusResponse,
+    status_code=202,
+    dependencies=[Depends(require_cloud_ready)],
+)
 async def analyze_direction_llm(
     body: DirectionAnalyzeRequest,
     response: Response,

@@ -364,7 +364,7 @@ export function DialoguePanel({ voices, languages, onJobQueued, onOpenRecent }: 
 
   if (!loaded) return (
     <section className="card" aria-labelledby="dialogue-heading" style={{ padding: 'var(--space-5)' }}>
-      <header className="card-head"><h2 id="dialogue-heading">Scripted dialogue</h2></header>
+      <header className="card-head"><h2 id="dialogue-heading">Scripted dialogue · Beta</h2></header>
       {loadError ? <>
         <p className="inline-error" role="alert">{loadError}</p>
         <button className="btn-sm" style={buttonStyle} onClick={() => setLoadAttempt((value) => value + 1)}>Retry loading draft</button>
@@ -375,7 +375,8 @@ export function DialoguePanel({ voices, languages, onJobQueued, onOpenRecent }: 
   return (
     <section aria-labelledby="dialogue-heading" style={{ display: 'grid', gap: 'var(--space-4)' }}>
       <div className="card" style={{ padding: 'var(--space-5)' }}>
-        <header className="card-head"><h2 id="dialogue-heading">Scripted dialogue</h2></header>
+        <header className="card-head"><h2 id="dialogue-heading">Scripted dialogue · Beta</h2></header>
+        <p className="hint">Beta: dialogue generation and assembled voice quality are awaiting testing.</p>
         <p className="muted">Assign voices, write the conversation, then generate each line. You can revise one line and keep the others.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
           {SPEAKERS.map((speaker) => (

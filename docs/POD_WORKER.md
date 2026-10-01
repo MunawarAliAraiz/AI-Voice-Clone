@@ -47,6 +47,10 @@ is removed. Recreating the Pod retains weights but does not retain user audio.
 
 Docker with Linux containers is required. This Windows development session has
 no Docker engine, so the image has **not** been built or GPU-tested.
+The committed [hosted image workflow](POD_IMAGE_RELEASE.md) builds/publishes
+the CPU installer and GPU targets independently and captures digest/size
+evidence. Publishing must pass that workflow before either image is configured
+for provider provisioning.
 
 1. Resolve the current `linux/amd64` digests of `python:3.12-slim-bookworm` and
    `ghcr.io/astral-sh/uv:0.11.32` using `docker buildx imagetools inspect`.

@@ -11,7 +11,7 @@ import hmac
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
@@ -59,6 +59,20 @@ def get_job_runner(request: Request) -> JobRunner:
     return request.app.state.jobs
 
 
+def require_cloud_ready(request: Request) -> None:
+    """Desktop generation admission; local editing/history remain available."""
+    settings = request.app.state.settings
+    if settings.desktop_static_dir is None:
+        return
+    from ..runpod.controller import controller
+
+    cloud = controller(settings)
+    if not cloud.is_ready(cloud.read()):
+        raise HTTPException(409, "Finish model storage setup in the Runpod tab first")
+    if not cloud.read().get("policy"):
+        raise HTTPException(409, "Approve automatic compute limits in the Runpod tab first")
+
+
 #: Paths reachable without the API key. Media authenticates with its own signed
 #: token (an `<audio>` tag cannot send `X-API-Key`); health and docs are open.
 _EXEMPT_EXACT = frozenset({"/", "/api/health", "/health", "/openapi.json", "/docs", "/redoc"})
@@ -104,8 +118,11 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     def _exempt(path: str) -> bool:
         # Desktop assets are served at / while every private operation remains
         # under /api/. A webview cannot add X-API-Key to script/CSS requests.
-        return (not path.startswith("/api/") or path in _EXEMPT_EXACT
-                or path.startswith(_EXEMPT_PREFIXES))
+        return (
+            not path.startswith("/api/")
+            or path in _EXEMPT_EXACT
+            or path.startswith(_EXEMPT_PREFIXES)
+        )
 
 
 async def get_lexicon(db: Annotated[Database, Depends(get_db)]) -> dict[str, str]:

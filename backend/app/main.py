@@ -83,9 +83,7 @@ async def _warm_synth(app: FastAPI, settings: Settings, model_id: str) -> None:
 
     profiles = await app.state.db.list_profiles()
     if not profiles:
-        logger.info(
-            "skipping warm synth for %r: no voice profiles to use as a reference", model_id
-        )
+        logger.info("skipping warm synth for %r: no voice profiles to use as a reference", model_id)
         return
 
     out_path = Path(settings.data_dir) / "tmp" / f"warm-{model_id}.wav"
@@ -152,8 +150,8 @@ def create_app(
         # the reason". `is None` cannot tell that apart from "nobody set it",
         # and would overwrite the injected reason with a computed one.
         if not hasattr(app.state, "transliterator"):
-            app.state.transliterator, app.state.transliterator_reason = (
-                _build_transliterator(settings, app.state.scheduler)
+            app.state.transliterator, app.state.transliterator_reason = _build_transliterator(
+                settings, app.state.scheduler
             )
             app.state.owns_transliterator = app.state.transliterator is not None
         if getattr(app.state, "db", None) is None:
@@ -167,7 +165,10 @@ def create_app(
         # app/jobs/__init__.py.
         if getattr(app.state, "jobs", None) is None:
             app.state.jobs = JobRunner(
-                app.state.db, app.state.scheduler, CATALOG, settings,
+                app.state.db,
+                app.state.scheduler,
+                CATALOG,
+                settings,
                 analyzer=app.state.analyzer,
                 transliterator=app.state.transliterator,
             )
@@ -179,6 +180,21 @@ def create_app(
             # injected scheduler or db.
             await app.state.jobs.reap_stale()
             await app.state.jobs.start()
+
+        if settings.desktop_static_dir is not None:
+            from .runpod.controller import controller
+
+            async def pending_cloud_jobs() -> int:
+                return sum(
+                    await asyncio.gather(
+                        *(
+                            app.state.db.count_pending(kind)
+                            for kind in ("synthesize", "analyze_llm", "transliterate")
+                        )
+                    )
+                )
+
+            controller(settings).pending = pending_cloud_jobs
 
         # Fire-and-forget: kicks off the ~20-60s cold load immediately instead of
         # waiting for the first /generate to pay it. Backgrounded rather than
@@ -299,8 +315,9 @@ def create_app(
                 + json.dumps(settings.api_key)
                 + ";</script></head>"
             )
-            return HTMLResponse(html.replace("</head>", bootstrap, 1),
-                                headers={"Cache-Control": "no-store"})
+            return HTMLResponse(
+                html.replace("</head>", bootstrap, 1), headers={"Cache-Control": "no-store"}
+            )
 
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="desktop")
 
@@ -333,9 +350,10 @@ def _build_scheduler(settings: Settings) -> SchedulerProtocol:
         return RemoteScheduler(settings.remote_worker_url, settings.remote_worker_token, CATALOG)
 
     if settings.desktop_static_dir is not None:
-        from .inference.paired_remote_scheduler import PairedRemoteScheduler
+        from .inference.managed_remote_scheduler import ManagedRemoteScheduler
+        from .runpod.controller import controller
 
-        return PairedRemoteScheduler(settings.data_dir, CATALOG)
+        return ManagedRemoteScheduler(controller(settings))
 
     from .inference.factory import make_worker_factory
     from .inference.scheduler import InferenceScheduler, SchedulerConfig
@@ -347,7 +365,8 @@ def _build_scheduler(settings: Settings) -> SchedulerProtocol:
         interpreters=settings.interpreters(), env=env, cwd=settings.worker_cwd
     )
     return InferenceScheduler(
-        CATALOG, factory,
+        CATALOG,
+        factory,
         SchedulerConfig(budget_mb=settings.budget_mb, max_workers=settings.max_workers),
     )
 
@@ -358,9 +377,16 @@ def _build_analyzer(settings: Settings) -> AnalyzerScheduler:
     imports the analyzer scheduler implementation."""
     if settings.desktop_static_dir is not None or settings.remote_worker_url:
         from .inference.remote_features import RemoteAnalyzer, RemoteFeatures
+        from .runpod.controller import controller
 
-        return RemoteAnalyzer(RemoteFeatures(settings.data_dir, url=settings.remote_worker_url,
-                                             token=settings.remote_worker_token))
+        return RemoteAnalyzer(
+            RemoteFeatures(
+                settings.data_dir,
+                url=settings.remote_worker_url,
+                token=settings.remote_worker_token,
+                cloud=controller(settings) if settings.desktop_static_dir else None,
+            )
+        )
 
     from .inference.analyzer_scheduler import AnalyzerScheduler
 
@@ -399,9 +425,16 @@ def _build_transliterator(settings: Settings, scheduler):
     """
     if settings.desktop_static_dir is not None or settings.remote_worker_url:
         from .inference.remote_features import RemoteFeatures, RemoteTransliterator
+        from .runpod.controller import controller
 
-        return RemoteTransliterator(RemoteFeatures(settings.data_dir, url=settings.remote_worker_url,
-                                                   token=settings.remote_worker_token)), None
+        return RemoteTransliterator(
+            RemoteFeatures(
+                settings.data_dir,
+                url=settings.remote_worker_url,
+                token=settings.remote_worker_token,
+                cloud=controller(settings) if settings.desktop_static_dir else None,
+            )
+        ), None
 
     if not settings.gemma_transliterator_python:
         return None, (

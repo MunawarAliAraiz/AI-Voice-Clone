@@ -66,16 +66,27 @@ class OmniVoiceBackend:
     def load(self, model_id: str, hf_repo: str, hf_revision: str) -> float:
         t0 = time.time()
         import torch
+        from huggingface_hub import snapshot_download
         from omnivoice import OmniVoice
 
+        # omnivoice 0.2.1 resolves repository names using main; load an exact
+        # snapshot path so its resolver cannot ignore the catalog revision.
+        checkpoint = snapshot_download(repo_id=hf_repo, revision=hf_revision,
+                                       local_files_only=True)
+        whisper = snapshot_download(
+            repo_id="openai/whisper-large-v3-turbo",
+            revision="41f01f3fe87f28c78e2fbf8b568835947dd65ed9", local_files_only=True,
+        )
         self._model = OmniVoice.from_pretrained(
-            hf_repo,
-            revision=hf_revision,
+            checkpoint,
+            load_asr=True,
+            asr_model_name=whisper,
             device_map="cuda:0" if torch.cuda.is_available() else "cpu",
             dtype=torch.float16,
         )
         self._sr = int(
-            getattr(self._model, "sample_rate", None)
+            getattr(self._model, "sampling_rate", None)
+            or getattr(self._model, "sample_rate", None)
             or getattr(self._model, "sr", None)
             or 24000
         )

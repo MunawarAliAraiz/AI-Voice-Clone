@@ -33,6 +33,9 @@ Pod. Read the documents below before changing behavior.
 
 - [Architecture](docs/ARCHITECTURE.md): current design and invariants.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
+- [Windows desktop build](docs/DESKTOP.md): packaging, installer and native test evidence.
+- [Model storage](docs/MODEL_STORAGE.md): complete pinned graphs, checksums and measured disk use.
+- [Cloud image release](docs/POD_IMAGE_RELEASE.md): hosted builds and immutable image qualification.
 - [Cloud lifecycle](docs/CLOUD_LIFECYCLE.md): automatic storage verification, GPU selection and compute release plan.
 - [Pod worker](docs/POD_WORKER.md): worker contract and deployment gaps.
 - [MCP](docs/MCP.md): local tool surface and host configuration.

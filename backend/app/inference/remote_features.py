@@ -15,11 +15,16 @@ from .transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
 
 
 class RemoteFeatures:
-    def __init__(self, data_dir: Path, *, url: str = "", token: str = "") -> None:
+    def __init__(self, data_dir: Path, *, url: str = "", token: str = "", cloud=None) -> None:
         self.store = WorkerPairStore(data_dir)
         self.url, self.token = url, token
+        self.cloud = cloud
 
     async def call(self, path: str, model_id: str, body: dict) -> dict:
+        if self.cloud is not None:
+            async with self.cloud.session() as remote:
+                response = await remote._response("POST", path, json=body)
+                return self.validate(response.json(), model_id)
         try:
             if self.url:
                 url, token = self.url, self.token
@@ -31,18 +36,21 @@ class RemoteFeatures:
             remote = RemoteScheduler(url, token, CATALOG)
             try:
                 response = await remote._response("POST", path, json=body)
-                value = response.json()
-                if (
-                    value.get("protocol_version") != 1
-                    or value.get("model_id") != model_id
-                    or value.get("revision") != AUXILIARY_PINS[model_id][1]
-                ):
-                    raise GenerationError("remote", "Pod helper model or protocol does not match")
-                return value
+                return self.validate(response.json(), model_id)
             finally:
                 await remote.shutdown()
         except (OSError, KeyError, ValueError) as exc:
             raise GenerationError("remote", "Invalid Pod helper response or connection") from exc
+
+    @staticmethod
+    def validate(value: dict, model_id: str) -> dict:
+        if (
+            value.get("protocol_version") != 1
+            or value.get("model_id") != model_id
+            or value.get("revision") != AUXILIARY_PINS[model_id][1]
+        ):
+            raise GenerationError("remote", "Pod helper model or protocol does not match")
+        return value
 
 
 class RemoteAnalyzer:

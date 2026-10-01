@@ -614,6 +614,9 @@ def test_no_stray_modules_in_contract_packages() -> None:
             # SchedulerProtocol without importing any GPU runtime locally.
             "remote_scheduler",
             "paired_remote_scheduler",
+            # Automatic Runpod lifecycle adapter: delegates resolved work to
+            # authenticated remote workers, with no local Torch/runtime import.
+            "managed_remote_scheduler",
             "remote_features",
     }
     found = {m.name for m in pkgutil.iter_modules([str(APP_ROOT / "inference")])}

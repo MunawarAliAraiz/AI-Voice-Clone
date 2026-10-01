@@ -155,3 +155,27 @@ actual peaks on target hardware before enabling that strategy.
    measured GPU peaks, and actual provider billing reconciliation.
 
 No paid resources or GPU generation were created by this planning module.
+# Implemented desktop adapters — 2026-10-01
+
+`app/runpod/controller.py` now owns storage quotes/purchase reconciliation,
+CPU installer progress, persisted model evidence, account-bound setup,
+approved session limits and disposable GPU sessions. `managed_remote_scheduler`
+and remote text helpers use the same controller/lock. The normal panel removes
+manual pairing; `/api/runpod/setup*` exposes discovery, quote, selection,
+explicit purchase/install, policy, status and compute release. Readonly status
+never provisions. Generation admission refuses incomplete storage or missing
+compute approval. The current runtime mode is a terminated HTTP Pod with a
+five-second queue grace; no automatic Serverless comparison is claimed.
+
+REST v2 currently has no Pod expiry in its create schema. The managed adapter
+uses authenticated GraphQL `PodFindAndDeployOnDemandInput.terminateAfter` in
+the atomic create request. This guard's behavior, CPU placement/actual pricing,
+image disk size and cloud termination billing still require live qualification.
+Status errors preserve ownership for reconciliation. Ambiguous purchase/Pod
+creates are not replayed, and automatic cleanup only deletes the exact named
+app-owned Pod; model storage is retained.
+
+The app requires `app/runpod/release.json` with reviewed `gpu`/`installer`
+immutable image references before renting resources. Hosted publication awaits
+explicit user authorization after automatic review rejected public Git push.
+The missing release is an honest setup block, not fabricated readiness.

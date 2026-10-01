@@ -13,6 +13,7 @@ from ...inference.catalog import CATALOG
 from ...inference.remote_scheduler import RemoteScheduler
 from ...remote_worker.model_pins import AUXILIARY_PINS
 from ...runpod.client import RunpodApiError, RunpodClient
+from ...runpod.controller import CloudSetupError, controller
 from ...runpod.estimate import estimate_tts_costs
 from ...runpod.secrets import RunpodKeyStore
 from ...runpod.worker_pair import WorkerPair, WorkerPairStore
@@ -28,6 +29,84 @@ class ConnectionInput(BaseModel):
 class WorkerPairInput(BaseModel):
     pod_id: str = Field(min_length=6, max_length=32)
     worker_token: str = Field(min_length=24, max_length=512)
+
+
+class StorageChoice(BaseModel):
+    volume_id: str = Field(min_length=1, max_length=64)
+
+
+class StorageQuoteRequest(BaseModel):
+    region: str = Field(min_length=1, max_length=64)
+
+
+class StoragePurchase(BaseModel):
+    quote_id: str = Field(min_length=32, max_length=32)
+
+
+class ComputePolicy(BaseModel):
+    max_session_usd: float = Field(ge=0.1, le=20, allow_inf_nan=False)
+    max_hourly_usd: float = Field(ge=0.1, le=10, allow_inf_nan=False)
+
+
+async def _cloud(settings: Settings, method: str, *args):
+    _store(settings)
+    try:
+        return await getattr(controller(settings), method)(*args)
+    except (CloudSetupError, ValueError) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except RunpodApiError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except OSError as exc:
+        raise HTTPException(503, "Cannot access protected cloud settings on this PC") from exc
+
+
+@router.get("/setup")
+async def cloud_setup(settings: Annotated[Settings, Depends(get_settings)]) -> dict:
+    return await _cloud(settings, "snapshot")
+
+
+@router.get("/setup/discover")
+async def discover_storage(settings: Annotated[Settings, Depends(get_settings)]) -> dict:
+    return await _cloud(settings, "discover")
+
+
+@router.post("/setup/storage/quote")
+async def storage_quote(
+    body: StorageQuoteRequest, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    return await _cloud(settings, "quote_storage", body.region)
+
+
+@router.post("/setup/storage/purchase", status_code=201)
+async def storage_purchase(
+    body: StoragePurchase, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    return await _cloud(settings, "purchase_storage", body.quote_id)
+
+
+@router.put("/setup/storage")
+async def storage_select(
+    body: StorageChoice, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    return await _cloud(settings, "select_storage", body.volume_id)
+
+
+@router.put("/setup/policy", status_code=204)
+async def compute_policy(
+    body: ComputePolicy, settings: Annotated[Settings, Depends(get_settings)]
+) -> None:
+    await _cloud(settings, "set_policy", body.max_session_usd, body.max_hourly_usd)
+
+
+@router.post("/setup/install", status_code=202)
+async def auto_install(settings: Annotated[Settings, Depends(get_settings)]) -> dict:
+    await _cloud(settings, "start_setup")
+    return await _cloud(settings, "snapshot")
+
+
+@router.post("/setup/release", status_code=204)
+async def release_compute(settings: Annotated[Settings, Depends(get_settings)]) -> None:
+    await _cloud(settings, "release")
 
 
 def _store(settings: Settings) -> RunpodKeyStore:
@@ -64,6 +143,9 @@ async def connection(settings: Annotated[Settings, Depends(get_settings)]) -> di
 async def connect(
     body: ConnectionInput, settings: Annotated[Settings, Depends(get_settings)]
 ) -> dict[str, bool]:
+    state = await _cloud(settings, "snapshot")
+    if state.get("compute"):
+        raise HTTPException(409, "Release this app's cloud compute before changing the API key")
     client = RunpodClient(body.api_key)
     await _call(client, "list_gpu_types")  # Validate before saving.
     try:
@@ -75,12 +157,15 @@ async def connect(
 
 @router.delete("/connection", status_code=204)
 async def disconnect(settings: Annotated[Settings, Depends(get_settings)]) -> None:
+    state = await _cloud(settings, "snapshot")
+    if state.get("compute"):
+        raise HTTPException(409, "Release this app's cloud compute before disconnecting")
     _store(settings).clear()
 
 
 @router.get("/worker")
 async def worker_connection(
-    settings: Annotated[Settings, Depends(get_settings)]
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, object]:
     _store(settings)  # Desktop-only guard.
     try:
@@ -131,9 +216,7 @@ def _paired(settings: Settings) -> WorkerPair:
 
 
 @router.get("/worker/models")
-async def worker_models(
-    settings: Annotated[Settings, Depends(get_settings)]
-) -> dict[str, object]:
+async def worker_models(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, object]:
     pair = _paired(settings)
     remote = RemoteScheduler(pair.url, pair.token, CATALOG)
     try:
@@ -170,8 +253,11 @@ async def estimate(
     if spec is None:
         raise HTTPException(404, "Unknown model")
     gpus = await _call(RunpodClient(_key(settings)), "list_gpu_types")
-    return {"model_id": model_id, "minimum_full_feature_vram_gb": 48,
-            "estimates": estimate_tts_costs(gpus, spec=spec, text=text)}
+    return {
+        "model_id": model_id,
+        "minimum_full_feature_vram_gb": 48,
+        "estimates": estimate_tts_costs(gpus, spec=spec, text=text),
+    }
 
 
 @router.get("/analytics")
@@ -181,12 +267,14 @@ async def analytics(settings: Annotated[Settings, Depends(get_settings)]) -> dic
     volumes = await _call(RunpodClient(key), "list_volumes")
     # The provider Pod object may contain env (including worker tokens), SSH
     # addresses and other account details. Only return fields used by the UI.
-    safe_pods = [{field: pod.get(field) for field in
-                  ("id", "name", "status", "cost", "dataCenterId", "gpu")}
-                 for pod in pods]
-    safe_volumes = [{field: volume.get(field) for field in
-                     ("id", "name", "size", "dataCenter", "type")}
-                    for volume in volumes]
+    safe_pods = [
+        {field: pod.get(field) for field in ("id", "name", "status", "cost", "dataCenterId", "gpu")}
+        for pod in pods
+    ]
+    safe_volumes = [
+        {field: volume.get(field) for field in ("id", "name", "size", "dataCenter", "type")}
+        for volume in volumes
+    ]
     return {"pods": safe_pods, "volumes": safe_volumes}
 
 
@@ -197,8 +285,11 @@ async def pod_usage(
     if not pod_id.isalnum():
         raise HTTPException(400, "Invalid Pod ID")
     result = await _call(RunpodClient(_key(settings)), "pod_billing", pod_id)
-    return {"pod_id": pod_id, "records": result.get("records", []),
-            "totals": result.get("metadata", {}).get("totals", {})}
+    return {
+        "pod_id": pod_id,
+        "records": result.get("records", []),
+        "totals": result.get("metadata", {}).get("totals", {}),
+    }
 
 
 @router.get("/analytics/volumes/{volume_id}")
@@ -208,5 +299,8 @@ async def volume_usage(
     if not volume_id.isalnum():
         raise HTTPException(400, "Invalid volume ID")
     result = await _call(RunpodClient(_key(settings)), "volume_billing", volume_id)
-    return {"volume_id": volume_id, "records": result.get("records", []),
-            "totals": result.get("metadata", {}).get("totals", {})}
+    return {
+        "volume_id": volume_id,
+        "records": result.get("records", []),
+        "totals": result.get("metadata", {}).get("totals", {}),
+    }
