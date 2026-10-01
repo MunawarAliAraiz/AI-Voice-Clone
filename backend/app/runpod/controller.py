@@ -74,14 +74,22 @@ def gpu_candidates(gpus: list[dict], region: str, max_hourly: float) -> list[dic
 
 
 def verified_models(value: dict) -> bool:
+    if not isinstance(value, dict):
+        return False
     if value.get("manifest_id") != release_manifest_id():
         return False
     models = value.get("models", {})
+    if not isinstance(models, dict):
+        return False
     for model_id in REQUIRED_MODELS:
         item = models.get(model_id, {})
+        if not isinstance(item, dict):
+            return False
         spec = CATALOG.get(model_id)
         repo, revision = (spec.hf_repo, spec.hf_revision) if spec else AUXILIARY_PINS[model_id]
         evidence = item.get("evidence", {})
+        if not isinstance(evidence, dict):
+            return False
         files = evidence.get("files", [])
         expected_graph = set(model_graph(model_id))
         if not isinstance(files, list) or any(not isinstance(f, dict) for f in files):
@@ -414,8 +422,13 @@ class CloudController:
         remote = self.remote_factory(pair.url, pair.token, CATALOG)
         try:
             value = (await remote._response(method, path)).json()
-            if value.get("protocol_version") != 1:
+            if not isinstance(value, dict) or value.get("protocol_version") != 1:
                 raise CloudSetupError("Cloud worker protocol does not match this app")
+            if path == "/v1/setup" and (
+                not isinstance(value.get("models"), dict)
+                or any(not isinstance(item, dict) for item in value["models"].values())
+            ):
+                raise CloudSetupError("Cloud worker returned invalid model evidence")
             return value
         finally:
             await remote.shutdown()

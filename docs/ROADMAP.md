@@ -1,5 +1,16 @@
 # Roadmap
 
+## Desktop work — current checkpoint 2026-10-01
+
+Desktop work is on `codex/desktop-runpod-mcp`, not merged or publicly published.
+The local Windows installer, automatic Runpod setup source and MCP integration
+are implemented; see [HANDOFF.md](HANDOFF.md) for verification and blockers.
+Worker image publication, live English/Urdu generation and billing qualification,
+Serverless mode comparison, and automatic recorded-audio conversion remain open.
+Dialogue is Beta with generation tests deferred by the user.
+
+## Earlier web application roadmap
+
 Durable copy of the plan approved 2026-08-09 for the "async jobs / mobile / perf" work. The
 original plan lived only in a local Claude Code plan file (`~/.claude/plans/...`), which is not
 readable by any other machine or agent — this file is the copy that survives. **Update the status

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -152,6 +153,17 @@ async def connect(
         _store(settings).set_key(body.api_key)
     except OSError as exc:
         raise HTTPException(503, "Cannot protect the Runpod key on this PC") from exc
+    cloud = controller(settings)
+    saved = cloud.read()
+    fingerprint = hashlib.sha256(body.api_key.strip().encode()).hexdigest()
+    if saved.get("account") and saved["account"] != fingerprint:
+        # No app-owned compute exists (checked above). A rotated/new key starts
+        # local setup again; discover and explicitly adopt its existing volume.
+        cloud.write({})
+        cloud.progress = {}
+        cloud.detail = "Select persistent storage to verify this account's models"
+        cloud.quote = None
+        WorkerPairStore(settings.data_dir).clear()
     return {"connected": True}
 
 

@@ -28,15 +28,12 @@ except the existing health/media exemptions require it.
 The web API-key settings prompt is hidden in desktop mode; local authentication
 is managed automatically by the shell.
 
-The desktop-only Runpod tab can validate and save the owner's management API
-key with Windows DPAPI, compare live GPU rate estimates (48 GB and larger),
-and show Pod/volume billing returned by Runpod. The pricing list includes only
-NVIDIA GPUs because the runtimes use CUDA. Pair a deployed worker using its
-Pod ID and distinct inference token; authentication/protocol are checked
-before saving the pairing with DPAPI. Pairing takes effect without restarting.
-Download buttons request the pinned catalog and Qwen/Gemma helper snapshots
-into the Pod volume; partial snapshots are not reported installed. Deployment
-is described in [POD_WORKER.md](POD_WORKER.md).
+The desktop-only Runpod tab validates and saves the owner's management API
+key with Windows DPAPI, compares live GPU rate estimates (48 GB and larger),
+and shows Pod/volume billing returned by Runpod. The pricing list includes only
+NVIDIA GPUs because the runtimes use CUDA. Internal worker credentials are
+managed by the cloud controller. Deployment is described in
+[POD_WORKER.md](POD_WORKER.md).
 
 The desktop source now uses a Runpod-key-only setup panel: credit/storage
 discovery, reviewed volume quote, pinned checksum verification/download progress,
@@ -56,7 +53,29 @@ The standalone MCP executable passed real stdio and DPAPI tests. Real Runpod
 audio qualification and a clean Windows machine check remain release gates;
 check [HANDOFF.md](HANDOFF.md) for current cloud results.
 
-## Native packaging checkpoint — 2026-10-01
+## Final local development installer — 2026-10-01
+
+The latest cloud source/UI and backend fixes were frozen and bundled. A fresh
+disposable installation passed native startup, frontend/auth/SQLite, cloud setup
+status and generation admission gating, installed MCP, single-instance behavior,
+normal close API cleanup and uninstall. Final artifact:
+
+```text
+Bytes: 87,190,893
+SHA256: 5257E69307627431BA5BBC30AE0849AD09C4315D281CDAF7DB16F76E5C3C48F6
+Signature: NotSigned
+```
+
+`native-final-receipt.json` beside the build artifact records hashes of the actual
+installed shell/API/MCP/FFmpeg executables. A development copy and receipt are at
+`D:/Projects/AI-Voice-Clone/dist/desktop/`. This proves local packaging integration;
+it does not prove live Runpod generation, model loading performance or billing.
+The worker release configuration is absent and paid provisioning stays locked.
+FFmpeg notices are included, but complete corresponding source/source-offer
+preparation remains required before public redistribution. A separate clean
+Windows-machine test and code signing are also not yet completed.
+
+## Earlier native packaging baseline — 2026-10-01
 
 The NSIS build succeeded with cached Rust MSVC, Tauri CLI 2.12.0, two build jobs,
 the existing frozen API/MCP sidecars, and verified FFmpeg 9.0.2. Artifact:
@@ -100,6 +119,7 @@ no session keys. `VCS_DESKTOP_TEST_HIDE` and the absolute
 app and use its normal AppData location.
 
 This proof covers packaging and local integration, not actual voice generation,
-cloud setup, GPU costs or listening quality. The final release needs freshly
-frozen cloud source, repeat native smoke checks, and the redistribution source
-and notices required by the bundled FFmpeg build. Code signing is not configured.
+cloud setup, GPU costs or listening quality. The final source freeze and repeated
+native smoke checks are recorded above. The public release still needs the
+redistribution source and notices required by the bundled FFmpeg build.
+Code signing is not configured.

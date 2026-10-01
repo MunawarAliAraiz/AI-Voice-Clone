@@ -6,9 +6,14 @@ The Windows NSIS installer is now built. Disposable installation/upgrade,
 native API/frontend/auth/SQLite, installed MCP (eight tools), single-instance
 behavior, normal close and uninstall passed. A shutdown regression left the
 onefile API child running; the shell now terminates its owned process tree.
-Read [DESKTOP.md](DESKTOP.md) for the baseline hash/receipt. A rebuild with the
-new cloud source/UI is running; its final hash and repeated installed smoke
-must be recorded before calling that artifact qualified.
+The final source/UI bundle was rebuilt and independently installed in a fresh
+isolated data directory. Native startup, frontend/auth/SQLite, cloud setup and
+generation admission gating, installed MCP, single-instance behavior, window
+close API cleanup and uninstall all passed. Final installer: 87,190,893 bytes;
+SHA256 `5257E69307627431BA5BBC30AE0849AD09C4315D281CDAF7DB16F76E5C3C48F6`;
+unsigned. `native-final-receipt.json` records hashes of all installed executables.
+The development installer and receipt are copied to
+`D:/Projects/AI-Voice-Clone/dist/desktop/`. Read [DESKTOP.md](DESKTOP.md).
 
 Automatic setup is now integrated in source: one Runpod management key;
 account credit via authenticated GraphQL; regional GPU/CPU discovery; 200 GB
@@ -34,7 +39,8 @@ about 49 GB; reduced startup time has not been qualified. See
 
 Verified this checkpoint: full backend/Pod regression suite passed (two
 Windows symlink privilege skips), plus eleven new cloud controller/provider
-tests passed; frontend production build passed. Real readonly account/storage
+tests passed; the final focused Runpod/controller suite passed all 16 tests;
+frontend production build passed. Real readonly account/storage
 discovery and a 200 GB/$14 monthly quote were observed in the updated browser
 preview. No volume, Pod, endpoint or paid generation was created. These tests
 do not establish actual GPU audio quality or shutdown billing.
@@ -51,8 +57,14 @@ controller intentionally refuses paid provisioning while
 backend/app/runpod/release.json with reviewed immutable image digests is
 absent. The build script now includes that file when a valid release exists.
 
-Next: finish current local installer rebuild and repeat installed tests;
-save the local checkpoint. With explicit public publication approval, push
+Local source checkpoint `aa0341c` contains the native installer and automatic
+setup implementation. Subsequent credential-account reset, malformed response
+guards, installed gate checks and documentation are saved in the final local
+checkpoint. Packaging audit found no bundled .env, DPAPI, database or weight
+files. Public redistribution still needs complete corresponding FFmpeg source
+or a compliant source offer; notices/README alone do not satisfy that gate.
+
+Next: with explicit public publication approval, push
 the development source/workflow to MunawarAliAraiz/AI-Voice-Clone, inspect
 both hosted builds, qualify anonymous image pulls, and add release digests.
 Then obtain concrete bounded storage/compute authorization for a real

@@ -78,11 +78,12 @@ but the existing code deliberately disables Gemma script conversion there.
 Any lower full-feature requirement needs an explicit sequential residency
 design and real GPU measurements, not a changed label in the picker.
 
-Offer a 200 GB network volume by default. A 150 GB minimum is provisional:
-the previous Pod occupied roughly 76 GB before the complete new model set;
-each pinned snapshot, environment, and scratch budget must be measured before
-the all-model install is advertised as fitting. Storage remains billable while
-the Pod is stopped. Show live Runpod GPU rates and volume rate separately.
+Offer a 200 GB Standard network volume. The current pinned download graph is
+49,014,734,674 bytes, with scratch/cache headroom checked by the installer.
+See [MODEL_STORAGE.md](MODEL_STORAGE.md) for the measured graph and verification
+contract. Actual Pod runtime disk and VRAM use still require qualification.
+Storage remains billable after compute is terminated. Show live Runpod GPU
+rates and volume rate separately.
 Per-generation cost is an estimate from measured active time times the chosen
 GPU's hourly rate; actual Pod/volume billing is shown separately because idle
 time cannot honestly be assigned to one generation.
@@ -98,7 +99,25 @@ speakers require listening tests in Urdu and English before release. The
 diarization, separation, and conversion models need their own dependency
 environments and pinned, license-checked weights.
 
-## Checkpoint 2026-09-29
+## Current checkpoint 2026-10-01
+
+The Windows installer is built and local native integration is being verified
+against the final bundle. Runpod setup now uses one management key, account
+credit/storage discovery, a reviewed storage purchase quote, CPU model
+download/verification progress, and automatic regional GPU selection for
+bounded disposable Pod sessions. Generation admission requires verified model
+storage and an approved compute policy. Provider-side termination is included
+atomically in creation; completed output remains local and model storage remains
+on the network volume. See [CLOUD_LIFECYCLE.md](CLOUD_LIFECYCLE.md).
+
+No worker image has been published and no new live generation is qualified.
+Public source publication approval is pending, and paid operations require
+reviewed immutable worker image references. Serverless comparison and automatic
+recorded-audio conversion remain open. Dialogue is Beta and its generation tests
+are deferred. [HANDOFF.md](HANDOFF.md) is the current execution checkpoint;
+the dated sections below describe earlier states.
+
+## Historical checkpoint 2026-09-29
 
 Implemented in source: local static frontend, session-key API, Tauri shell,
 packaging script, stdio MCP adapter, authenticated Pod TTS worker, remote
@@ -109,7 +128,7 @@ published. These have not yet produced an installer or generated real audio
 through Runpod. Dynamic Pod pairing, deployment, scripted dialogue, and
 recorded-audio conversion remain open.
 
-## Checkpoint 2026-09-30
+## Historical checkpoint 2026-09-30
 
 Dynamic DPAPI Pod pairing and model download controls are implemented.
 Speech Direction and Gemma conversion now have authenticated remote endpoints

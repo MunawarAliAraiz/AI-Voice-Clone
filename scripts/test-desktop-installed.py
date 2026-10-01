@@ -156,6 +156,17 @@ def main():
             assert html.status_code == 200 and "__VCS_DESKTOP_KEY__" in html.text
             client.headers["X-API-Key"] = discovered.api_key
             assert client.get("/api/voices").status_code == 200
+            setup = client.get("/api/runpod/setup")
+            assert setup.status_code == 200
+            assert setup.json()["connected"] is False
+            assert setup.json()["ready"] is False
+            assert setup.json()["compute"] is None
+            assert (
+                client.post(
+                    "/api/generate", json={"text": "Setup gate test"}
+                ).status_code
+                == 409
+            )
         assert (data / "voiceclone.db").is_file()
         assert (data / "webview").is_dir()
         print(
@@ -199,6 +210,7 @@ def main():
                     "checks": [
                         "native startup",
                         "frontend/auth/sqlite",
+                        "cloud setup status and generation admission gate",
                         "installed MCP bridge",
                         "single-instance session",
                         "window close API cleanup",
