@@ -40,10 +40,12 @@ FROM api AS gpu
 # Identical CUDA 12.8 wheels can be hardlinked between immutable environments
 # only while uv's cache and all installations share this same build layer.
 # Keep interpreter isolation; remove the download cache after all envs exist.
+# Five pinned VoxCPM dependencies have no Python 3.12 Linux wheels. Permit
+# only their hashed source archives; all other dependencies remain wheel-only.
 RUN export UV_LINK_MODE=hardlink \
     && uv venv /opt/venvs/voxcpm --python /usr/local/bin/python \
     && uv pip sync --python /opt/venvs/voxcpm/bin/python --require-hashes --only-binary :all: /opt/vcs/requirements/build.lock \
-    && uv pip sync --python /opt/venvs/voxcpm/bin/python --torch-backend cu128 --require-hashes --no-build-isolation --only-binary :all: --no-binary argbind,oss2 /opt/vcs/requirements/voxcpm.lock \
+    && uv pip sync --python /opt/venvs/voxcpm/bin/python --torch-backend cu128 --require-hashes --no-build-isolation --only-binary :all: --no-binary antlr4-python3-runtime,argbind,crcmod,jieba,oss2 /opt/vcs/requirements/voxcpm.lock \
     && uv venv /opt/venvs/chatterbox --python /usr/local/bin/python \
     && uv pip sync --python /opt/venvs/chatterbox/bin/python --torch-backend cu124 --require-hashes --only-binary :all: /opt/vcs/requirements/chatterbox.lock \
     && uv venv /opt/venvs/omnivoice --python /usr/local/bin/python \

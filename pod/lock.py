@@ -24,7 +24,8 @@ def main() -> None:
             "--output-file", str(requirements / f"{name}.lock"),
         ]
         if name == "voxcpm":
-            command += ["--no-binary", "argbind,oss2"]
+            # These pinned releases have no usable Python 3.12 Linux wheels.
+            command += ["--no-binary", "antlr4-python3-runtime,argbind,crcmod,jieba,oss2"]
         if name not in {"api", "build"}:
             command += ["--torch-backend", "cu124" if name == "chatterbox" else "cu128"]
         subprocess.run(command, check=True)  # noqa: S603 -- fixed resolver arguments, no shell
