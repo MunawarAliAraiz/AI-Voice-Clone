@@ -12,9 +12,11 @@ API_BASE = "https://api.runpod.io/v2"
 
 
 class RunpodApiError(RuntimeError):
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(self, message: str, status_code: int | None = None,
+                 *, request_rejected: bool = False) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.request_rejected = request_rejected
 
 
 class RunpodClient:
@@ -66,8 +68,31 @@ class RunpodClient:
             "https://api.runpod.io/graphql",
             body={"query": query, "variables": variables or {}},
         )
-        if data.get("errors") or not isinstance(data.get("data"), dict):
-            raise RunpodApiError("Runpod GraphQL request failed; check API key permissions")
+        if data.get("errors"):
+            errors = data["errors"]
+            codes = set()
+            if isinstance(errors, list):
+                for item in errors:
+                    if isinstance(item, dict) and isinstance(item.get("extensions"), dict):
+                        code = item["extensions"].get("code")
+                        if isinstance(code, str):
+                            codes.add(code)
+            if (codes and codes <= {"GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED"}
+                    and not data.get("data")):
+                raise RunpodApiError(
+                    "Runpod rejected the app's setup request before starting a machine. "
+                    "Check for an app update.",
+                    400, request_rejected=True)
+            if codes & {"UNAUTHENTICATED", "FORBIDDEN"}:
+                raise RunpodApiError(
+                    "Runpod denied this request. Check that your API key allows managing Pods, "
+                    "then reconnect.")
+            raise RunpodApiError(
+                "Runpod could not complete the cloud request. Check Runpod for service "
+                "or availability issues, then retry setup.")
+        if not isinstance(data.get("data"), dict):
+            raise RunpodApiError("Runpod returned an incomplete cloud response; "
+                                 "check the pending machine before retrying")
         return data["data"]
 
     async def balance(self) -> dict[str, float | None]:

@@ -1,5 +1,40 @@
 # Handoff — current state
 
+## Simple setup and truthful progress — 2026-10-02
+
+The user's screenshots showed an indeterminate progress strip continuing after
+a GraphQL setup failure, with an unconfirmed installer creation displayed like
+an active rental. A read-only account check found no Pod matching that pending
+name. Creation was never confirmed (`pod_id` is null); absence alone does not
+clear an ambiguous deployment fence. No existing cloud resource/profile was
+changed during investigation. The underlying resolver failure is not diagnosed;
+the older generic message incorrectly blamed API-key permissions universally.
+
+0.1.3 source now shows three simple steps: model storage, model setup, voice
+generation. It chooses compatible storage/region defaults and the cheapest
+eligible available GPU; purchases and generation spending approval remain
+explicit. Custom limits, region controls, file details and mode comparisons
+live in closed native Advanced settings disclosures. The Voice Studio model
+picker is collapsed too, with existing recommended language defaults and
+model/license warnings retained. Urdu Arabic cannot safely use the existing
+Auto route because it has no verified permissive candidate; routing was not
+broadened or silently switched to an experimental/noncommercial model.
+
+Setup exposes durable phases/errors, running state, cleanup pending and actual
+creation confirmation. No animated unknown progress remains. Download rows use
+friendly model names and actual reported byte percentages. A failed or restarted
+attempt shows a terminal explanation and next action. Requested rate/deadline
+are labeled estimates for an unconfirmed start. Confirmed rentals retain their
+ID during failed termination. Verified files cannot unlock generation until
+installer cleanup is confirmed. A definitive GraphQL parse/schema rejection
+clears its pre-execution creation record; unknown/transport/resolver errors keep
+the reconciliation fence. Provider messages/credentials are not echoed.
+
+40 focused cloud-controller checks and Ruff passed; frontend 0.1.3 build and
+27 generation-gate checks passed. Native installer packaging is underway.
+The user continues operating the computer: no native windows are launched,
+closed or updated by the agent. Paid provisioning/generation remains untested.
+
 ## Desktop 0.1.2 built and verified — 2026-10-02
 
 The signed Windows x64 NSIS installer is ready locally:

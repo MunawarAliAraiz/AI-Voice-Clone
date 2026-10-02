@@ -366,3 +366,151 @@ async def test_pod_deadline_is_atomic_with_creation_and_secret_not_in_url():
     assert seen[0]["terminateAfter"] == deadline
     assert seen[0]["networkVolumeId"] == "volume"
     assert seen[0]["computeType"] == "GPU"
+
+
+@pytest.mark.asyncio
+async def test_interrupted_installer_is_failed_not_downloading(cloud):
+    cloud.write({"volume": {"id": "storage"}, "compute": {
+        "kind": "installer", "pod_id": None, "status": "provisioning"}})
+    snapshot = await cloud.snapshot()
+    assert snapshot["setup_phase"] == "failed"
+    assert snapshot["setup_running"] is False
+    assert snapshot["setup_error"]
+    assert snapshot["cleanup_pending"] is True
+    assert snapshot["compute"]["creation_confirmed"] is False
+    assert snapshot["progress_pct"] is None
+
+
+@pytest.mark.asyncio
+async def test_failed_setup_error_survives_controller_restart(cloud, monkeypatch):
+    async def fail(**kwargs):
+        raise CloudSetupError("Worker could not start")
+
+    monkeypatch.setattr(cloud, "_provision", fail)
+    await cloud._setup()
+    recovered = CloudController(cloud.settings)
+    snapshot = await recovered.snapshot()
+    assert snapshot["setup_phase"] == "failed"
+    assert snapshot["setup_error"] == "Worker could not start"
+    assert snapshot["setup_running"] is False
+    assert snapshot["cleanup_pending"] is False
+
+
+@pytest.mark.asyncio
+async def test_verified_setup_only_reports_ready_after_worker_stops(cloud, monkeypatch):
+    async def provision(**kwargs):
+        cloud.write({"compute": {"kind": "installer", "pod_id": "abcdef123"}})
+        return WorkerPair("abcdef123", "w" * 32)
+
+    async def worker(*args):
+        return evidence()
+
+    async def release():
+        snapshot = await cloud.snapshot()
+        assert snapshot["setup_phase"] == "stopping_worker"
+        assert snapshot["ready"] is False
+        state = cloud.read()
+        state.pop("compute")
+        cloud.write(state)
+
+    monkeypatch.setattr(cloud, "_provision", provision)
+    monkeypatch.setattr(cloud, "_worker_call", worker)
+    monkeypatch.setattr(cloud, "_release", release)
+    cloud.setup_task = asyncio.create_task(cloud._setup())
+    await cloud.setup_task
+    snapshot = await cloud.snapshot()
+    assert snapshot["setup_phase"] == "ready"
+    assert snapshot["ready"] is True
+    assert snapshot["compute"] is None
+    assert snapshot["setup_error"] is None
+
+
+@pytest.mark.parametrize("code,rejected", [
+    ("GRAPHQL_VALIDATION_FAILED", True), ("FORBIDDEN", False), (None, False)])
+@pytest.mark.asyncio
+async def test_graphql_rejection_is_classified_without_exposing_provider_body(code, rejected):
+    def respond(request):
+        return httpx.Response(200, json={"errors": [{
+            "message": "private-provider-details", "extensions": {"code": code}}]})
+
+    client = RunpodClient("private-key", transport=httpx.MockTransport(respond))
+    try:
+        with pytest.raises(RunpodApiError) as failure:
+            await client.graphql("query { myself { clientBalance } }")
+        assert failure.value.request_rejected is rejected
+        assert "private-provider-details" not in str(failure.value)
+        assert "private-key" not in str(failure.value)
+        if code is None:
+            assert "API key" not in str(failure.value)
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize("rejected", [True, False])
+@pytest.mark.asyncio
+async def test_deployment_rejection_clears_only_proven_pre_execution_failures(cloud, rejected):
+    attempts = []
+
+    class Provider:
+        def __init__(self, key):
+            pass
+
+        async def list_gpu_types(self):
+            return [{"id": "NVIDIA test", "memory": 48, "price": {"secure": 1.0},
+                     "dataCenters": [{"id": "EU", "availability": "HIGH"}]}]
+
+        async def balance(self):
+            return {"balance_usd": 9.0}
+
+        async def create_guarded_pod(self, **kwargs):
+            attempts.append(kwargs)
+            raise RunpodApiError("Deployment failed", request_rejected=rejected)
+
+        async def close(self):
+            pass
+
+    cloud.client_factory = Provider
+    cloud.write({"volume": {"id": "volume", "dataCenter": "EU"},
+                 "policy": {"max_session_usd": 1.0, "max_hourly_usd": 2.0}})
+    with pytest.raises(RunpodApiError):
+        await cloud._provision(installer=False)
+    assert bool(cloud.read().get("compute")) is not rejected
+    if not rejected:
+        with pytest.raises(CloudSetupError, match="cleanup"):
+            await cloud._provision(installer=False)
+        assert len(attempts) == 1
+
+
+@pytest.mark.asyncio
+async def test_restart_before_deployment_record_shows_retryable_error(cloud):
+    cloud._setup_status("starting_worker")
+    snapshot = await cloud.snapshot()
+    assert snapshot["setup_phase"] == "failed"
+    assert snapshot["setup_running"] is False
+    assert snapshot["setup_error"]
+    assert snapshot["compute"] is None
+    assert snapshot["cleanup_pending"] is False
+
+
+@pytest.mark.asyncio
+async def test_installer_cleanup_failure_cannot_unlock_generation(cloud, monkeypatch):
+    async def provision(**kwargs):
+        cloud.write({"compute": {"kind": "installer", "pod_id": "abcdef123"}})
+        return WorkerPair("abcdef123", "w" * 32)
+
+    async def worker(*args):
+        return evidence()
+
+    async def release():
+        raise CloudSetupError("Termination not confirmed")
+
+    monkeypatch.setattr(cloud, "_provision", provision)
+    monkeypatch.setattr(cloud, "_worker_call", worker)
+    monkeypatch.setattr(cloud, "_release", release)
+    cloud.setup_task = asyncio.create_task(cloud._setup())
+    await cloud.setup_task
+    snapshot = await cloud.snapshot()
+    assert snapshot["setup_phase"] == "failed"
+    assert snapshot["ready"] is False
+    assert snapshot["cleanup_pending"] is True
+    assert snapshot["compute"]["creation_confirmed"] is True

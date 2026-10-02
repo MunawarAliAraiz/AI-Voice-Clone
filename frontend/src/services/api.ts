@@ -29,7 +29,9 @@ export interface CloudSetup {
   connected: boolean; stage: string; ready: boolean; release_available: boolean;
   volume: CloudVolume | null; models: Record<string, CloudModelInstall>;
   progress_pct: number | null; bytes_completed: number; bytes_total: number | null; detail: string;
-  compute: { pod_id: string | null; kind: string; status: string; hourly_usd: number; deadline: string } | null;
+  setup_phase?: 'idle' | 'starting_worker' | 'checking_files' | 'downloading' | 'verifying' | 'stopping_worker' | 'ready' | 'failed';
+  setup_error?: string | null; setup_running?: boolean; cleanup_pending?: boolean;
+  compute: { pod_id: string | null; kind: string; status: string; hourly_usd: number; deadline: string; creation_confirmed?: boolean } | null;
   policy: { max_session_usd: number; max_hourly_usd: number } | null;
 }
 export interface CloudDiscovery {

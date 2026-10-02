@@ -1,5 +1,26 @@
 # Runpod setup from the desktop
 
+## Simplified setup in 0.1.3
+
+The upcoming update uses three cards: **Model storage**, **Set up models**, and
+**Voice generation**. Advanced settings are collapsed. The app chooses the
+cheapest compatible available GPU; saving spending limits does not start it.
+The default limits are visible and require a click to approve. Custom values
+stay in Advanced settings and reflect previously saved limits.
+
+Model setup separately identifies starting the download machine/software,
+checking existing storage, downloading named models, verifying files, and
+stopping the machine. Download percentages appear only with actual byte totals.
+A failure stops progress and shows the next action. An unconfirmed start is
+not presented as a billed rental or as downloaded models. Use **Check pending
+start** to reconcile; an uncertain attempt cannot be retried until cleared or
+its requested deadline has passed. This avoids duplicate machine creation.
+
+The Voice Studio model override is also collapsed. Existing recommended model
+choices remain; noncommercial/experimental warnings remain visible. Explicit
+Auto is still available, but unsupported Urdu Arabic requires an informed
+model choice rather than silently selecting a different model.
+
 ## Applying the worker-enabled release
 
 Desktop 0.1.1 does not include a verified cloud worker release. Connecting the

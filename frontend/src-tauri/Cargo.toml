@@ -1,6 +1,6 @@
 [package]
 name = "voice-clone-desktop"
-version = "0.1.2"
+version = "0.1.3"
 description = "AI Voice Clone Studio desktop shell"
 authors = ["AI Voice Clone Studio"]
 edition = "2021"

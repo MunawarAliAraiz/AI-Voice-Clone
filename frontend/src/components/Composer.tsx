@@ -78,12 +78,10 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
   // honored or refused server-side — never silently swapped for something
   // else (same rule routing itself follows, see domain/routing.py::resolve).
-  // Pre-filled per language (see DEFAULT_MODEL_BY_LANGUAGE/handleLanguageChange
-  // below) rather than left on Auto — still just an explicit pick, not a
-  // change to auto-routing semantics.
-  const [modelId, setModelId] = useState<string | null>(
-    DEFAULT_MODEL_BY_LANGUAGE['ur'] ?? null
-  );
+  // Preserve the recommended language default: automatic routing alone has
+  // no permissive verified Urdu-script route. The picker remains an explicit
+  // choice, with its licensing warning visible even while settings are closed.
+  const [modelId, setModelId] = useState<string | null>(DEFAULT_MODEL_BY_LANGUAGE['ur'] ?? null);
   const [speed, setSpeed] = useState<number>(1.0);
   const [stability, setStability] = useState<number>(() => {
     try {
@@ -188,6 +186,11 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
     m.languages.some((l) => l.language === language)
   );
   const selectedModel = modelId ? compatibleModels.find((m) => m.id === modelId) : undefined;
+  const automaticModel = modelId === null && detect?.routable
+    ? compatibleModels.find(m => m.id === detect.would_route_to?.model_id) : undefined;
+  const displayedModel = selectedModel ?? automaticModel;
+  const automaticUrduScriptUnavailable = modelId === null && language === 'ur'
+    && detect?.script === 'arabic' && !detect.routable;
 
   // CONVERT-ON-GENERATE, decided here on the CLIENT — routing stays pure and is
   // never asked to substitute (golden rules 4/5). The picker filters by
@@ -222,8 +225,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
   useEffect(() => {
     // Wait for the real list before judging compatibility — otherwise this
     // fires on mount against an empty compatibleModels (modelsData still
-    // loading) and wipes the language-default pre-selection before the
-    // fetch even resolves.
+    // loading) and wipes a manual selection before the fetch resolves.
     if (!modelsData) return;
     if (modelId !== null && !compatibleModels.some((m) => m.id === modelId)) {
       setModelId(null);
@@ -263,11 +265,6 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
     } else if (speed === 0.9) {
       setSpeed(1.0);
     }
-    // Pre-fill the Model dropdown with the best option for the language
-    // instead of leaving it on Auto — still just an explicit `model_id` pick
-    // like a manual click (allow_experimental flows through the existing
-    // selectedModel?.experimental derivation in generate(), unchanged), so
-    // this is a UI convenience only and never widens auto-routing itself.
     setModelId(DEFAULT_MODEL_BY_LANGUAGE[newLang] ?? null);
   }
 
@@ -767,36 +764,6 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
         </label>
 
         <label className="field">
-          <span className="field-label">Model</span>
-          <div className="select-wrap">
-            <select
-              value={modelId ?? ''}
-              onChange={(e) => setModelId(e.target.value || null)}
-              disabled={!compatibleModels.length}
-              title={
-                modelId === null
-                  ? detect?.would_route_to?.rationale ?? 'Picked automatically for this language and text.'
-                  : undefined
-              }
-            >
-              <option value="">
-                {compatibleModels.length
-                  ? `Auto${detect?.routable && detect.would_route_to ? ` — ${detect.would_route_to.model_display_name}` : ''} (Recommended)`
-                  : 'Auto (Recommended)'}
-              </option>
-              {compatibleModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.id === detect?.would_route_to?.model_id
-                    ? `${m.display_name} (Recommended)`
-                    : `${m.display_name}${modelSuffix(m)}`}
-                </option>
-              ))}
-            </select>
-          </div>
-          {selectedModel?.caveat && <p className="hint muted">{selectedModel.caveat}</p>}
-        </label>
-
-        <label className="field">
           <span className="field-label">Speed</span>
           <div className="select-wrap">
             <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
@@ -827,6 +794,44 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
           </div>
         </label>
       </div>
+
+      <p className="hint" aria-live="polite">
+        Voice model: <strong>{modelId === null ? 'Automatic' : selectedModel?.display_name ?? modelId}</strong>
+        {selectedModel && modelId === DEFAULT_MODEL_BY_LANGUAGE[language] && ' (Recommended)'}
+        {modelId === null && detect?.routable && detect.would_route_to && ` · ${detect.would_route_to.model_display_name}`}
+      </p>
+      {automaticUrduScriptUnavailable && <p className="hint" role="status">
+        No automatic model is available for Urdu script. Open Advanced model settings to choose a model explicitly, or use Roman Urdu.
+      </p>}
+      {displayedModel && !displayedModel.commercial_use && <p className="hint" role="status">
+        Personal use only: this model's weights do not permit commercial use.
+      </p>}
+      {displayedModel?.experimental && <p className="hint" role="status">
+        Experimental model: accuracy may be lower. Review the model details before generating.
+      </p>}
+      <details className="runpod-advanced">
+        <summary>Advanced model settings</summary>
+        <p className="hint">The recommended voice model is chosen for your language. Change it here if needed.</p>
+        <label className="field">
+          <span className="field-label">Voice model</span>
+          <div className="select-wrap">
+            <select
+              value={modelId ?? ''}
+              onChange={(e) => setModelId(e.target.value || null)}
+              disabled={!compatibleModels.length}
+              title={modelId === null ? detect?.would_route_to?.rationale ?? 'Picked automatically for this language and text.' : undefined}
+            >
+              <option value="">Automatic{detect?.routable && detect.would_route_to ? ` — ${detect.would_route_to.model_display_name}` : ''}</option>
+              {compatibleModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}{m.id === detect?.would_route_to?.model_id ? ' (Recommended)' : ''}{modelSuffix(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedModel?.caveat && <p className="hint muted">{selectedModel.caveat}</p>}
+        </label>
+      </details>
 
       <div className="editor-toolbar">
         {/* Directly on top of the textarea, and labelled, because these act on
@@ -1174,11 +1179,10 @@ const PLACEHOLDER: Record<string, string> = {
   ur: 'Aap kaise hain? Aaj mausam bohat acha hai.',
 };
 
-// Pre-fills the Model dropdown per language instead of leaving it on Auto —
-// ur -> OmniVoice (best pronunciation, still explicitly experimental), en ->
-// VoxCPM 2 (the verified default). Still just an explicit model_id pick, same
-// as a manual click; see handleLanguageChange and modelId's initial state.
+// These explicit language defaults preserve the existing model behavior.
+// Auto remains available in Advanced settings and uses the server's router.
 const DEFAULT_MODEL_BY_LANGUAGE: Record<string, string> = {
   ur: 'omnivoice_urdu',
   en: 'voxcpm2',
 };
+

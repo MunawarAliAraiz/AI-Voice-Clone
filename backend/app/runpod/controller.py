@@ -199,6 +199,13 @@ class CloudController:
             raise CloudSetupError("Cloud worker release evidence is incomplete")
         return images
 
+    def _setup_status(self, phase: str, *, error: str | None = None,
+                      cleanup_pending: bool = False) -> None:
+        state = self.read()
+        state.update(setup_phase=phase, setup_error=error, cleanup_pending=cleanup_pending,
+                     setup_detail=self.detail)
+        self.write(state)
+
     async def snapshot(self) -> dict:
         state = self.read()
         connected = RunpodKeyStore(self.settings.data_dir).has_key()
@@ -207,6 +214,20 @@ class CloudController:
             stage = "ready" if self.is_ready(state) else "download_models"
         if self.setup_task and not self.setup_task.done():
             stage = "download_models"
+        running = bool(self.setup_task and not self.setup_task.done())
+        phase = state.get("setup_phase", "ready" if self.is_ready(state) else "idle")
+        error = state.get("setup_error")
+        active_phases = {"starting_worker", "checking_files", "downloading",
+                         "verifying", "stopping_worker"}
+        if not running and (phase in active_phases or (
+                (state.get("compute") or {}).get("kind") == "installer"
+                and not self.is_ready(state))):
+            phase = "failed"
+            error = error or (
+                "The last model setup did not finish. Check the pending machine before retrying.")
+        compute = state.get("compute")
+        if compute:
+            compute = {**compute, "creation_confirmed": bool(compute.get("pod_id"))}
         return {
             "connected": connected,
             "stage": stage,
@@ -216,8 +237,13 @@ class CloudController:
             "progress_pct": self.progress.get("progress_pct"),
             "bytes_completed": self.progress.get("bytes_completed", 0),
             "bytes_total": self.progress.get("bytes_total"),
-            "detail": self.detail,
-            "compute": state.get("compute"),
+            "detail": self.detail or state.get("setup_detail", ""),
+            "setup_phase": phase,
+            "setup_error": error,
+            "setup_running": running,
+            "cleanup_pending": bool(
+                state.get("cleanup_pending") or (phase == "failed" and compute)),
+            "compute": compute,
             "policy": state.get("policy"),
             "release_available": Path(__file__).with_name("release.json").is_file(),
         }
@@ -237,6 +263,11 @@ class CloudController:
             state.get("ready")
             and state.get("manifest_id") == release_manifest_id()
             and state.get("evidence_version") == EVIDENCE_VERSION
+            and not state.get("cleanup_pending")
+            and (state.get("compute") or {}).get("kind") != "installer"
+            and state.get("setup_phase") not in {
+                "starting_worker", "checking_files", "downloading",
+                "verifying", "stopping_worker", "failed"}
         )
 
     async def discover(self) -> dict:
@@ -439,10 +470,13 @@ class CloudController:
                 raise CloudSetupError("A generation is still active")
             state = self.read()
             state["ready"] = False
+            state["models_verified"] = False
             self.write(state)
             self.detail = (
                 "Starting a temporary CPU worker to verify storage and download missing files"
             )
+            self.progress = {}
+            self._setup_status("starting_worker")
             self.setup_task = asyncio.create_task(self._setup())
 
     async def _worker_call(self, pair: WorkerPair, method: str, path: str) -> dict:
@@ -521,15 +555,23 @@ class CloudController:
                 "status": "provisioning",
             }
             self.write(state)
-            pod = await client.create_guarded_pod(
-                name=name,
-                image=self.images()["installer" if installer else "gpu"],
-                data_center=volume["dataCenter"],
-                volume_id=volume["id"],
-                worker_token=token,
-                terminate_at=deadline,
-                gpu_id=gpu_id,
-            )
+            try:
+                pod = await client.create_guarded_pod(
+                    name=name,
+                    image=self.images()["installer" if installer else "gpu"],
+                    data_center=volume["dataCenter"],
+                    volume_id=volume["id"],
+                    worker_token=token,
+                    terminate_at=deadline,
+                    gpu_id=gpu_id,
+                )
+            except RunpodApiError as exc:
+                # Parse/schema rejection proves the deployment resolver never ran.
+                # Transport or resolver errors remain ambiguous and keep the fence.
+                if exc.request_rejected:
+                    state.pop("compute", None)
+                    self.write(state)
+                raise
             pair = WorkerPair(pod["id"], token)
             WorkerPairStore(self.settings.data_dir).set(pair)
             state["compute"].update(pod_id=pair.pod_id, status="starting")
@@ -558,17 +600,30 @@ class CloudController:
             await client.close()
 
     async def _setup(self) -> None:
+        setup_error = None
         try:
             async with self.lock:
                 pair = await self._provision(installer=True)
+            self.detail = "Download worker is ready. Checking which stored model files are missing."
+            self._setup_status("checking_files")
             await self._worker_call(pair, "POST", "/v1/setup")
             for _ in range(8 * 3600 // 2):
                 self.progress = await self._worker_call(pair, "GET", "/v1/setup")
-                self.detail = "Checking checksums and downloading missing models"
+                states = {model.get("state") for model in self.progress.get("models", {}).values()}
+                phase = "downloading" if "downloading" in states else (
+                    "verifying" if "verifying" in states else "checking_files")
+                self.detail = {
+                    "downloading": "Downloading missing models to your Runpod storage.",
+                    "verifying": "Checking model files before voice generation can start.",
+                    "checking_files": "Checking which model files are already on your storage.",
+                }[phase]
+                if self.read().get("setup_phase") != phase:
+                    self._setup_status(phase)
                 if verified_models(self.progress):
                     state = self.read()
                     state.update(
-                        ready=True,
+                        ready=False,
+                        models_verified=True,
                         evidence_version=EVIDENCE_VERSION,
                         manifest_id=release_manifest_id(),
                         models=self.progress["models"],
@@ -590,15 +645,40 @@ class CloudController:
                 )
         except (CloudSetupError, RunpodApiError, GenerationError, OSError, ValueError) as exc:
             self.detail = str(exc)
+            setup_error = self.detail
+            self._setup_status("failed", error=setup_error,
+                               cleanup_pending=bool(self.read().get("compute")))
+        except asyncio.CancelledError:
+            setup_error = "Model setup was interrupted. Retry to resume from stored files."
+            self.detail = setup_error
+            self._setup_status("failed", error=setup_error,
+                               cleanup_pending=bool(self.read().get("compute")))
+            raise
+        except Exception:
+            setup_error = "Model setup stopped unexpectedly. Check the pending machine, then retry."
+            self.detail = setup_error
+            self._setup_status("failed", error=setup_error,
+                               cleanup_pending=bool(self.read().get("compute")))
         finally:
             async with self.lock:
+                if not setup_error:
+                    self.detail = "Models verified. Stopping the temporary download worker."
+                    self._setup_status("stopping_worker",
+                                       cleanup_pending=bool(self.read().get("compute")))
                 try:
                     await self._release()
                 except (CloudSetupError, RunpodApiError):
-                    self.detail += (
-                        " Cloud release is pending; refresh or use Release compute."
-                        " The provider deadline remains set."
-                    )
+                    self.detail = setup_error or (
+                        "The rented machine could not be stopped yet. "
+                        "Check the pending machine and retry.")
+                    self._setup_status("failed", error=self.detail, cleanup_pending=True)
+                else:
+                    self.detail = setup_error or "Models are ready. The download worker is off."
+                    if not setup_error:
+                        state = self.read()
+                        state["ready"] = True
+                        self.write(state)
+                    self._setup_status("failed" if setup_error else "ready", error=setup_error)
 
     async def _release(self) -> None:
         state = self.read()
@@ -632,6 +712,9 @@ class CloudController:
                     pod = {"name": compute["name"], "status": "TERMINATED"}
                 if pod.get("name") != compute["name"]:
                     raise CloudSetupError("Session ownership changed; automatic deletion refused")
+                compute.update(pod_id=pod_id, status="stopping")
+                state["compute"] = compute
+                self.write(state)
                 await client.terminate_pod(pod_id)
                 # Provider reports termination asynchronously. Retain ownership until confirmed.
                 for _ in range(12):
@@ -648,6 +731,7 @@ class CloudController:
                     raise CloudSetupError("Provider termination is still pending")
             state["last_compute"] = compute
             state.pop("compute", None)
+            state["cleanup_pending"] = False
             self.write(state)
             WorkerPairStore(self.settings.data_dir).clear()
         finally:
@@ -660,6 +744,13 @@ class CloudController:
             if self.pending and await self.pending():
                 raise CloudSetupError("Wait for queued jobs before releasing compute")
             await self._release()
+            self.detail = "Pending machine cleared. Model files remain on your storage."
+            state = self.read()
+            if state.get("models_verified") and verified_models({**state, "ready": True}):
+                state.update(ready=True, setup_phase="ready", setup_error=None)
+                self.detail = "Models are ready. The download worker is off."
+            state["setup_detail"] = self.detail
+            self.write(state)
 
     @contextlib.asynccontextmanager
     async def session(self) -> AsyncIterator[RemoteScheduler]:

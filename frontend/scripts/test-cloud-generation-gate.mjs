@@ -32,7 +32,9 @@ assert.match(gate({ ...ready, ready: false, models: { voice: { state: 'verifying
 assert.match(gate({ ...ready, compute: { kind: 'installer' }, progress_pct: 42 }).reason, /42%/);
 assert.match(gate({ ...ready, compute: { kind: 'installer' }, progress_pct: 120 }).reason, /100%/);
 assert.doesNotMatch(gate({ ...ready, compute: { kind: 'installer' }, progress_pct: NaN }).reason, /NaN/);
-assert.match(gate({ ...ready, policy: null }).reason, /spending limits/);
+assert.match(gate({ ...ready, policy: null }).reason, /spending limit/);
+assert.match(gate({ ...ready, setup_phase: 'failed', setup_error: 'Start failed' }).reason, /failed/);
+assert.match(gate({ ...ready, ready: false, setup_phase: 'starting_worker' }).reason, /worker is starting/);
 assert.equal(gate(ready).blocked, false);
 assert.equal(gate({ ...ready, compute: { kind: 'generation', status: 'starting' } }).blocked, false);
 assert.equal(exports.deriveCloudGenerationGate({ desktop: false, error: true }).blocked, false);
@@ -41,4 +43,4 @@ assert.equal(audioBlocked.blocked, true);
 assert.match(audioBlocked.reason, /Audio download failed.*retry/);
 assert.equal(audioBlocked.action, null);
 assert.equal(exports.deriveCloudGenerationGate({ desktop: true, setup: ready, audioTools: { ready: true } }).blocked, false);
-console.log('25 cloud generation readiness/action checks passed.');
+console.log('27 cloud generation readiness/action checks passed.');

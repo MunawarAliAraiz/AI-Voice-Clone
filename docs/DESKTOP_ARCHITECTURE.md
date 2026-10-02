@@ -1,5 +1,23 @@
 # Desktop and Runpod architecture
 
+## Simple setup and progress state
+
+The Runpod UI presents storage, model preparation and voice generation as
+separate steps. Native collapsed disclosures hold technical controls; visible
+cost summaries and explicit purchase/spending approval remain outside them.
+GPU selection is automatic within the stored region, capacity and price limits.
+Voice model overrides are collapsed without widening license or experimental
+routing eligibility. Recommended language defaults are unchanged.
+
+The controller persists model setup phase/error and distinguishes an actual
+provider Pod ID from a merely recorded start attempt. UI progress uses measured
+bytes and never animates an unknown percentage or a failed task. On restart,
+orphaned active phases become interrupted errors. Model evidence is retained
+before cleanup, but generation stays unavailable until installer termination
+is confirmed. Reconciled ownership is persisted before requesting deletion.
+Only proven pre-execution GraphQL rejection may discard a creation record;
+ambiguous creation still requires reconciliation or expiry.
+
 ## Agent, update and first-launch boundaries
 
 The local MCP executable discovers the current DPAPI session descriptor and
