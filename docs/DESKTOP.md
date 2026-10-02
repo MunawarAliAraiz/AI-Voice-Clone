@@ -1,5 +1,22 @@
 # Windows desktop build
 
+## Current 0.1.1 release — 2026-10-02
+
+The installer is available in the shared project `dist/desktop/` and the
+[approved public release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.1).
+Actual isolated installation/startup/auth/SQLite, audio readiness admission,
+agent status, ten MCP tools, update preparation/cancel, single-instance and
+normal-close listener cleanup passed. It contains the status/alignment fixes,
+blocked-generation explanations, Agents screen, Convert changes and updater.
+
+65,740,268 bytes; SHA256
+`367fa3d3ffc1dc83ddedced34443cdeae40ff25ad634ff4b54dbd676fab088d5`.
+The updater signature and signed version verified; Authenticode is absent.
+Actual previous-version update/apply/restart and live Runpod GPU audio/cost
+qualification are incomplete. See [Desktop updates](DESKTOP_UPDATES.md).
+
+## Build instructions
+
 A native installer has passed the packaging checks below. It is a **test build**,
 not the completed Runpod release: its sidecars must be rebuilt after the automatic
 cloud setup implementation is complete. The desktop shell uses

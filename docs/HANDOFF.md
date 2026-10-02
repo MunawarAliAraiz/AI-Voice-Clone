@@ -1,5 +1,41 @@
 # Handoff — current state
 
+## Installed 0.1.1 and approved publication — 2026-10-02
+
+0.1.1 was built, installed into a disposable TEMP directory and tested with
+a separate profile. Native startup, frontend/session auth/SQLite, audio-tool
+admission, agent status, ten real MCP stdio tools, idempotent update preparation,
+mutation blocking/cancellation, second-instance behavior and normal close
+API/listener cleanup passed. 123 integrated backend checks, 29 release verifier
+checks, frontend production build and the native release build passed.
+
+Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.1-setup.exe`.
+65,740,268 bytes; SHA256
+`367fa3d3ffc1dc83ddedced34443cdeae40ff25ad634ff4b54dbd676fab088d5`.
+The actual installer Ed25519 updater signature and signed version/filename
+verified. Windows Authenticode is absent. The user explicitly approved this
+exact installer and update feed; they were published at
+https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.1.
+Local signature/feed/native receipts are beside the installer.
+Anonymous public feed and installer downloads also passed, with exact byte
+size/SHA256 verified in `publication-0.1.1-receipt.json`.
+
+Visible native checks confirmed "Runpod not connected" with no key, aligned
+Runpod form controls, gray generation with a visible reason/setup link, and
+working native updater IPC with an honest unpublished-feed error. The user
+pressed Escape to stop Computer Use; no further UI automation is permitted
+in that turn. A local prerelease fixture build was started for a real update
+test; that test remains incomplete. Do not claim actual restart/apply proof.
+
+Local source `8ac243d0588211b25268d3ffec12e1c03623f2bd` contains integration.
+Automatic approval review rejected pushing the entire branch because earlier
+public permission covered worker source/workflow, while the new payload also
+contains desktop UI/updater/agent source. Application-source publication
+approval is pending; this was not bypassed. Binary/feed publication was
+separately approved and succeeded. Worker rebuild and live GPU qualification
+remain open. The normal user installation/profile has not been replaced by
+the isolated test. The visual test uses a disposable profile.
+
 ## Desktop integration checkpoint — 2026-10-02
 
 The user explicitly approved public worker source/workflow publication.

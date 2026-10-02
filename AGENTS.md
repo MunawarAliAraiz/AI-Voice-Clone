@@ -34,11 +34,14 @@ Pod. Read the documents below before changing behavior.
 - [Architecture](docs/ARCHITECTURE.md): current design and invariants.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
 - [Windows desktop build](docs/DESKTOP.md): packaging, installer and native test evidence.
+- [Desktop updates](docs/DESKTOP_UPDATES.md): signed update flow, local feed preparation and publication gates.
+- [FFmpeg redistribution](docs/FFMPEG_REDISTRIBUTION.md): exact runtime/source evidence and remaining source requirements.
 - [Model storage](docs/MODEL_STORAGE.md): complete pinned graphs, checksums and measured disk use.
 - [Cloud image release](docs/POD_IMAGE_RELEASE.md): hosted builds and immutable image qualification.
 - [Cloud lifecycle](docs/CLOUD_LIFECYCLE.md): automatic storage verification, GPU selection and compute release plan.
 - [Pod worker](docs/POD_WORKER.md): worker contract and deployment gaps.
 - [MCP](docs/MCP.md): local tool surface and host configuration.
+- [Convert](docs/CONVERT.md): pasted scripts, public YouTube captions and explicit Urdu translation drafts.
 - [Speech pipeline](docs/SPEECH_PIPELINE.md): reviewed plans and audio assembly.
 - [Speech models](docs/SPEECH_MODELS.md): conversion adapter, separation research and qualification gaps.
 - [Handoff](docs/HANDOFF.md): current state and the next verification step.

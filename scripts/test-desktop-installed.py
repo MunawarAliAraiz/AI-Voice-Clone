@@ -106,11 +106,15 @@ async def check_mcp(env):
 def main():
     assert shell.is_file(), shell
     assert not data.exists(), "Use a fresh isolated test data directory"
+    assert not (install / "ffmpeg.exe").exists(), (
+        "Audio tools must not be bundled in this installer"
+    )
     env = dict(os.environ)
     env.update(
         VCS_DESKTOP_DATA_DIR=str(data),
         VCS_DESKTOP_TEST_HIDE="1",
         VCS_MCP_SESSION_FILE=str(descriptor),
+        VCS_DESKTOP_AUDIO_TOOLS_AUTOSTART="false",
     )
     env.pop("VCS_MCP_API_BASE", None)
     env.pop("VCS_MCP_API_KEY", None)
@@ -150,12 +154,19 @@ def main():
             assert html.status_code == 200 and "__VCS_DESKTOP_KEY__" in html.text
             client.headers["X-API-Key"] = discovered.api_key
             assert client.get("/api/voices").status_code == 200
+            assert client.get("/api/agents").status_code == 200
+            audio = client.get("/api/audio-tools/status")
+            assert audio.status_code == 200
+            assert audio.json()["ready"] is False and audio.json()["stage"] == "idle"
+            assert audio.json()["bytes_completed"] == 0
             setup = client.get("/api/runpod/setup")
             assert setup.status_code == 200
             assert setup.json()["connected"] is False
             assert setup.json()["ready"] is False
             assert setup.json()["compute"] is None
-            assert client.post("/api/generate", json={"text": "Setup gate test"}).status_code == 409
+            generation = client.post("/api/generate", json={"text": "Setup gate test"})
+            assert generation.status_code == 409
+            assert "audio tools" in generation.json()["detail"].lower()
             # Quiesce only this disposable test profile; cancellation restores
             # normal API mutation admission without starting an installer.
             assert client.post("/api/desktop/updates/prepare").json() == {"prepared": True}
@@ -206,6 +217,7 @@ def main():
                     "checks": [
                         "native startup",
                         "frontend/auth/sqlite",
+                        "agent status and missing audio tools admission gate",
                         "cloud setup status and generation admission gate",
                         "idle updater quiesce, idempotent prepare and cancel",
                         "installed MCP bridge",

@@ -1,5 +1,31 @@
 # Desktop and Runpod architecture
 
+## Agent, update and first-launch boundaries
+
+The local MCP executable discovers the current DPAPI session descriptor and
+uses the same authenticated API/job queue as the desktop. Client configuration
+is an explicit user action, with backup and atomic replacement; discovery does
+not establish a live client handshake. Shared queue polling lets the desktop
+observe agent jobs and issue in-app/native notifications.
+
+Native updater commands accept no user-provided URL, signature or key. Only
+the current exact loopback origin/main window receives those command grants.
+The fixed HTTPS feed points to an installer signed by the embedded Ed25519
+public key and requires a matching signed version. Before restart, a shared
+mutation lock checks pending jobs/cloud lifecycle work and fences new mutations.
+Installer launch failure restores the owned API and admission.
+
+FFmpeg is excluded from the installer. A CPU-only first-launch controller
+downloads a pinned publisher archive, checks archive/file hashes and adopts
+only verified cached files. Audio imports/processing and generation remain
+blocked until this local runtime is ready. Pod model setup is separate.
+
+Generation availability derives from cloud/model/policy and audio-tool state,
+not local API health. Disabled controls provide accessible explanations and
+setup links; backend admission enforces the same restrictions. Contracts and
+runbooks: [MCP](MCP.md), [updates](DESKTOP_UPDATES.md), [Convert](CONVERT.md)
+and [audio-tool delivery](FFMPEG_REDISTRIBUTION.md).
+
 ## Product decisions
 
 The Windows app keeps reference voices, the SQLite database, edit projects, and
