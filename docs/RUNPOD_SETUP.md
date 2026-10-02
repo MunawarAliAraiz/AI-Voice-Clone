@@ -1,6 +1,11 @@
 # Runpod setup from the desktop
 
-## Guided setup in 0.1.5 (verified installer; publication approval pending)
+## Guided setup in 0.1.5
+
+The approved [0.1.5 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.5)
+is published. Its public feed and full installer match the verified bytes.
+Open **Updates**, check/download, then **Restart and update** once cloud work
+is stopped. The current local installer is also in `dist/desktop`.
 
 1. **Account**: enter the Runpod key and connect. The app checks the account.
 2. **Storage**: use the saved voice-app volume, or review a new volume's size

@@ -35,9 +35,16 @@ Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.5-
 Build/sidecar/release evidence, feed and notes are alongside it. The frozen API's
 embedded worker manifest was extracted and matched source byte-for-byte (SHA256
 `f14cc8bebf134bb675196072a6a1b93365627abe91e27c5701837c7bbd4a43d4`).
-Exact 0.1.5 installer/feed/notes publication was approved; upload is underway.
-Public 0.1.4 remains current until then. Broader app-source publication is
-unapproved. Do not operate
+Exact 0.1.5 installer/feed/notes publication was approved and completed:
+[v0.1.5](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.5).
+Anonymous latest-feed bytes matched the verified feed; the full public installer
+matched the approved size/SHA256. Publication receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.5-receipt.json`.
+Qualification checkpoint: `2984f1c`. The public latest feed is now 0.1.5.
+Paid model download/GPU generation, listening and installed close/reopen/update
+remain untested. Next: the user applies 0.1.5; live qualification must use an
+approved budget and preserve ambiguous-start/cleanup fences. Broader app-source
+publication is unapproved. Do not operate
 the user's app or run paid cloud work as part of these packaging checks.
 
 ## Cancellation, update recovery and automatic required models — 2026-10-02
