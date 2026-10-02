@@ -41,12 +41,23 @@ class RunpodClient:
         *,
         params: dict[str, Any] | None = None,
         body: dict[str, Any] | None = None,
+        allow_graphql_errors: bool = False,
     ) -> dict[str, Any]:
         try:
             response = await self._client.request(method, path, params=params, json=body)
         except httpx.HTTPError as exc:
             raise RunpodApiError("Cannot reach Runpod") from exc
         if response.is_error:
+            # Apollo commonly sends parse/schema failures as HTTP 400. Inspect
+            # only structured GraphQL errors through the same secret-safe code
+            # classifier as HTTP 200; never infer rejection from HTTP alone.
+            if allow_graphql_errors and response.status_code == 400:
+                try:
+                    rejected = response.json()
+                except ValueError:
+                    rejected = None
+                if isinstance(rejected, dict) and rejected.get("errors"):
+                    return rejected
             # Runpod responses may include account details. Keep the public
             # error stable and do not echo arbitrary provider bodies or keys.
             raise RunpodApiError(
@@ -67,6 +78,7 @@ class RunpodClient:
             "POST",
             "https://api.runpod.io/graphql",
             body={"query": query, "variables": variables or {}},
+            allow_graphql_errors=True,
         )
         if data.get("errors"):
             errors = data["errors"]
@@ -149,6 +161,7 @@ class RunpodClient:
         worker_token: str,
         terminate_at: str,
         gpu_id: str | None = None,
+        cpu_instance_id: str | None = None,
     ) -> dict:
         """GraphQL creation atomically includes the provider termination deadline.
 
@@ -157,12 +170,14 @@ class RunpodClient:
         """
         if not re.fullmatch(r"[a-zA-Z0-9./_-]+@sha256:[0-9a-f]{64}", image):
             raise ValueError("Worker image must have an immutable digest")
+        if not gpu_id and (
+            not cpu_instance_id or not re.fullmatch(r"[A-Za-z0-9_-]+", cpu_instance_id)
+        ):
+            raise ValueError("CPU installer requires a quoted instance configuration")
         body = {
             "name": name,
             "imageName": image,
             "cloudType": "SECURE",
-            "computeType": "GPU" if gpu_id else "CPU",
-            "gpuCount": 1 if gpu_id else 0,
             "containerDiskInGb": 30 if gpu_id else 10,
             "networkVolumeId": volume_id,
             "volumeMountPath": "/workspace",
@@ -178,15 +193,17 @@ class RunpodClient:
             ],
         }
         if gpu_id:
-            body.update(gpuTypeId=gpu_id, minCudaVersion="12.8")
+            body.update(gpuTypeId=gpu_id, minCudaVersion="12.8", computeType="GPU", gpuCount=1)
+            input_type, mutation = "PodFindAndDeployOnDemandInput", "podFindAndDeployOnDemand"
         else:
-            body.update(minVcpuCount=2, minMemoryInGb=4)
+            body["instanceId"] = cpu_instance_id
+            input_type, mutation = "deployCpuPodInput", "deployCpuPod"
         data = await self.graphql(
-            "mutation($input: PodFindAndDeployOnDemandInput!) { "
-            "podFindAndDeployOnDemand(input: $input) { id costPerHr } }",
+            f"mutation($input: {input_type}!) {{ "
+            f"{mutation}(input: $input) {{ id costPerHr }} }}",
             {"input": body},
         )
-        pod = data.get("podFindAndDeployOnDemand")
+        pod = data.get(mutation)
         if not isinstance(pod, dict) or not pod.get("id"):
             raise RunpodApiError("Runpod did not return a Pod ID; reconcile before retrying")
         return pod

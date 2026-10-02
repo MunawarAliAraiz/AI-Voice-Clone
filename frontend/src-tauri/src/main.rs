@@ -128,6 +128,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             updates::updater_check,
             updates::updater_download,
+            updates::updater_cancel_download,
             updates::updater_install,
             updates::desktop_version,
             updates::desktop_notify
@@ -167,7 +168,7 @@ fn main() {
                 r#"{{"identifier":"desktop-update-session",
                 "windows":["main"],"local":false,
                 "remote":{{"urls":["http://127.0.0.1:{port}"]}},
-                "permissions":["allow-updater-check","allow-updater-download",
+                "permissions":["allow-updater-check","allow-updater-download","allow-updater-cancel-download",
                     "allow-updater-install","allow-desktop-version","allow-desktop-notify"]}}"#
             ))?;
             let (mut events, child) = app

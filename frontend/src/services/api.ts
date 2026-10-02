@@ -24,13 +24,16 @@ import type {
 } from '../types/api';
 
 export interface CloudVolume { id: string; name: string; size: number; dataCenter: string; type: string }
-export interface CloudModelInstall { state: string; progress_pct?: number | null; current_file?: string; detail?: string }
+export interface CloudModelInstall { state: string; progress_pct?: number | null; current_file?: string; detail?: string; bytes_completed?: number; bytes_total?: number | null }
 export interface CloudSetup {
   connected: boolean; stage: string; ready: boolean; release_available: boolean;
   volume: CloudVolume | null; models: Record<string, CloudModelInstall>;
+  required_model_ids?: string[];
   progress_pct: number | null; bytes_completed: number; bytes_total: number | null; detail: string;
-  setup_phase?: 'idle' | 'starting_worker' | 'checking_files' | 'downloading' | 'verifying' | 'stopping_worker' | 'ready' | 'failed';
+  setup_phase?: 'idle' | 'starting_worker' | 'checking_files' | 'downloading' | 'verifying' | 'stopping_worker' | 'ready' | 'failed' | 'cancelling' | 'cancelled';
   setup_error?: string | null; setup_running?: boolean; cleanup_pending?: boolean;
+  auto_setup_enabled?: boolean | null; auto_setup_waiting?: boolean; auto_setup_retry_at?: string | null;
+  auto_setup_requires_resume?: boolean;
   compute: { pod_id: string | null; kind: string; status: string; hourly_usd: number; deadline: string; creation_confirmed?: boolean } | null;
   policy: { max_session_usd: number; max_hourly_usd: number } | null;
 }
@@ -168,6 +171,10 @@ export const api = {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ volume_id: volumeId }),
   }),
   cloudInstall: () => request<CloudSetup>('/api/runpod/setup/install', { method: 'POST' }),
+  cloudCancel: () => request<CloudSetup>('/api/runpod/setup/cancel', { method: 'POST' }),
+  cloudAutoSetup: (enabled: boolean) => request<CloudSetup>('/api/runpod/setup/auto', {
+    method: 'PUT', body: JSON.stringify({ enabled }),
+  }),
   cloudRelease: () => request<void>('/api/runpod/setup/release', { method: 'POST' }),
   cloudPolicy: (session: number, hourly: number) => request<void>('/api/runpod/setup/policy', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },

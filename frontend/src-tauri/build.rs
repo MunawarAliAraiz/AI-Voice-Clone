@@ -3,6 +3,7 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "updater_check",
             "updater_download",
+            "updater_cancel_download",
             "updater_install",
             "desktop_version",
             "desktop_notify",

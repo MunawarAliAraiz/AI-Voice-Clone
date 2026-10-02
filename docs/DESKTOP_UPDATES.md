@@ -9,6 +9,57 @@ transferred bytes. The embedded updater public key validates the installer
 before installation, including the signed version. Only a verified installer
 is eligible to install.
 
+### Download recovery and cancellation (next desktop build)
+
+The update dialog offers **Cancel download** while an installer transfers.
+Cancellation aborts the HTTP request, including a stalled response, then
+shows the saved byte count. Closing the dialog leaves the download running;
+cancel explicitly to pause it. These controls are separate from canceling
+Runpod model setup or a generation.
+
+Installer bytes and metadata live under `update-cache` inside the local
+desktop data directory. A completed installer survives an app close/reopen
+and a failed restart check. Checking the fixed release feed restores the
+**Restart and update** action for the matching cached release. Every restored
+installer is cryptographically verified again; cache flags alone cannot
+grant installation. Installation repeats verification immediately before use.
+
+Partial files resume only when their metadata matches the checked feed's
+version, URL and signature, and the server supplies a strong ETag and known
+size. The next request uses `Range` and `If-Range`. Appending requires a valid
+206 response with the exact offset, remaining length, total size and same
+ETag. A changed file, ignored Range, missing entity validator or unsupported
+resume response triggers a fresh full download. A fully saved partial file
+is checked and promoted locally without transferring it again. Invalid
+signatures are rejected and their partial bytes discarded.
+
+The public key is embedded in the app, and both the artifact signature and
+the global signature over the trusted comment must pass before the signed
+version is read. This reproduces the pinned updater's verification rules;
+the update's unsigned feed version cannot substitute a different installer.
+Only the configured GitHub repository's HTTPS release asset location is
+accepted. No URL, filename, key or signature can be supplied through IPC.
+Downloads are bounded to 250 MiB and metadata to 64 KiB.
+
+Older installed versions through 0.1.3 kept installers in process memory.
+Bytes already lost by closing those versions cannot be recovered by this
+change. Network access to check the release feed is still required to
+restore an update's install action after reopening the app.
+
+Focused Rust tests use an independent test signing key and real loopback
+HTTP responses to check stalled-response cancellation, byte-range resume,
+changed ETags, ignored ranges, completed-cache reuse after reconstructing
+state, complete-partial recovery, and rejection of modified bytes/version/
+global comment. These tests do not launch the user's installed app or prove
+a live previous-version installer/restart cycle.
+
+Verification for this change: 10 native tests passed, the frontend production
+build passed, and the updater SSR checks passed with native calls prohibited.
+Run the native checks with `cargo test --locked --offline --jobs 2 --target
+x86_64-pc-windows-msvc --bin voice-clone-desktop updates::cache::tests --
+--nocapture` and the view checks with `node
+frontend/scripts/test-desktop-updates-view.mjs`.
+
 Installing quiesces new API mutations, checks that local jobs and cloud
 compute are idle, stops the owned API process tree, starts the per-user NSIS
 installer and restarts the app. Failed preparation/installer launch restores

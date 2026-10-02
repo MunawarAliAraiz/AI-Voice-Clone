@@ -202,7 +202,10 @@ def create_app(
                     )
                 )
 
-            controller(settings).pending = pending_cloud_jobs
+            cloud = controller(settings)
+            cloud.pending = pending_cloud_jobs
+            app.state.cloud_setup = cloud
+            await cloud.resume_auto_setup()
 
         # Fire-and-forget: kicks off the ~20-60s cold load immediately instead of
         # waiting for the first /generate to pay it. Backgrounded rather than
@@ -265,6 +268,10 @@ def create_app(
                 await app.state.jobs.stop(drain_timeout_sec=settings.job_drain_timeout_sec)
             if getattr(app.state, "owns_scheduler", False):
                 await app.state.scheduler.shutdown()
+            if getattr(app.state, "cloud_setup", None) is not None:
+                # Injected schedulers do not own the automatic setup task;
+                # always stop that app-owned lifecycle on API shutdown.
+                await app.state.cloud_setup.shutdown()
             if getattr(app.state, "owns_analyzer", False):
                 await app.state.analyzer.shutdown()
             # Only what we built. It now holds a ~19 GB worker that must not

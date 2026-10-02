@@ -29,10 +29,12 @@ async def prepare_update(request: Request) -> dict:
         (await cloud.snapshot())["compute"]
         or cloud.active
         or any(
-            task is not None and not task.done() for task in (cloud.setup_task, cloud.release_task)
+            (task := getattr(cloud, name, None)) is not None and not task.done()
+            for name in ("setup_task", "release_task", "auto_task", "cancel_task")
         )
     ):
-        raise HTTPException(409, "Wait for the current cloud session to finish before restarting.")
+        raise HTTPException(
+            409, "Cancel model setup or finish the current cloud session before restarting.")
     # ApiKeyMiddleware holds the shared mutation lock until this flag is set.
     request.app.state.desktop_updating = True
     return {"prepared": True}

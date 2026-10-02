@@ -66,7 +66,7 @@ const failed = render({
   models: { voxcpm2: { state: 'downloading', progress_pct: 12.5, current_file: 'weights/model.safetensors' } },
 });
 assert.doesNotMatch(failed, /<progress\b/);
-assert.match(failed, /Model setup stopped before it finished/);
+assert.match(failed, /Automatic model preparation needs attention/);
 assert.match(failed, /Runpod start failed/);
 assert.match(failed, /Machine start not confirmed/);
 assert.match(failed, /Estimated rate: \$0\.06/);
@@ -75,7 +75,7 @@ assert.doesNotMatch(failed, /Automatic stop-by time:/);
 assert.match(failed, /Check pending start/);
 assert.match(failed, /<strong>VoxCPM 2<\/strong> · Stopped · Last reported: 12\.5%/);
 assert.doesNotMatch(failed, /<strong>VoxCPM 2<\/strong> · Downloading/);
-assert.match(failed, /<button[^>]*disabled=""[^>]*>Retry model setup/);
+assert.match(failed, /<button[^>]*disabled=""[^>]*>Resume after resolving the error/);
 closedAdvanced(failed);
 
 const starting = render({ setup_phase: 'starting_worker', setup_running: true, compute: machine });
@@ -83,6 +83,7 @@ assert.doesNotMatch(starting, /<progress\b/);
 assert.match(starting, /downloading its software\. Model files have not started downloading yet/);
 assert.match(starting, /Storage connected/);
 assert.match(starting, /Current: Start machine/);
+assert.match(starting, />Cancel model setup<\/button>/);
 closedAdvanced(starting);
 
 const transfer = {
@@ -103,5 +104,25 @@ closedAdvanced(downloading);
 // Unknown totals and non-finite percentages cannot produce a fake moving bar.
 assert.doesNotMatch(render({ ...transfer, bytes_total: null }), /<progress\b/);
 assert.doesNotMatch(render({ ...transfer, progress_pct: NaN }), /<progress\b/);
+const cancelled = render({ ...transfer, setup_phase: 'cancelled', setup_running: false, compute: null, auto_setup_enabled: false });
+assert.doesNotMatch(cancelled, /<progress\b/);
+assert.match(cancelled, /Model setup cancelled/);
+assert.match(cancelled, /valid downloaded files are reused/);
+assert.match(cancelled, /Resume automatic downloads/);
+assert.match(cancelled, /Stopped · Last reported: 40\.0%/);
+assert.doesNotMatch(cancelled, />Cancel model setup<\/button>/);
+const cancelling = render({ ...transfer, setup_phase: 'cancelling' });
+assert.doesNotMatch(cancelling, /<progress\b/);
+assert.match(cancelling, /Stopping model setup and releasing its temporary machine/);
+assert.doesNotMatch(cancelling, />Cancel model setup<\/button>/);
+const pendingCleanup = render({ ...transfer, setup_phase: 'cancelled', setup_running: false,
+  cleanup_pending: true, setup_error: 'Machine stop still pending' });
+assert.match(pendingCleanup, /Runpod has not confirmed that the rented machine stopped/);
+assert.doesNotMatch(pendingCleanup, />Resume automatic downloads/);
+assert.match(pendingCleanup, /Machine stop still pending/);
+const waiting = render({ auto_setup_enabled: true, auto_setup_waiting: true });
+assert.match(waiting, /check again automatically/);
+assert.match(waiting, />Cancel model setup<\/button>/);
+assert.doesNotMatch(waiting, /Retry model setup|Resume automatic downloads|<progress\b/);
 assert.equal(apiCalls, 0);
 console.log('Cloud setup SSR checks passed: failed/pending, startup, real transfer, collapsed advanced settings and saved budgets; no API calls.');

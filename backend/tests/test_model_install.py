@@ -154,6 +154,37 @@ def test_range_download_resumes_and_verifies(tmp_path):
     assert digest == ENTRY.digest and (tmp_path / ENTRY.path).read_bytes() == DATA
 
 
+def test_cancelled_transfer_keeps_partial_bytes_and_retry_resumes(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.remote_worker.model_manifest.CHUNK_BYTES", 8)
+    cancel = threading.Event()
+
+    def progress(amount):
+        if amount >= 8:
+            cancel.set()
+
+    with pytest.raises(InterruptedError):
+        transfer_file(
+            "owner/repo", "a" * 40, ENTRY, tmp_path, progress=progress, cancel=cancel,
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, content=DATA)))
+    partial_file = tmp_path / (ENTRY.path + ".vcs-incomplete")
+    assert partial_file.read_bytes() == DATA[:8]
+    assert not (tmp_path / ENTRY.path).exists()
+    requests = []
+
+    def resumed(request):
+        requests.append(request)
+        return httpx.Response(206, content=DATA[8:], headers={
+            "Content-Range": f"bytes 8-{len(DATA) - 1}/{len(DATA)}"})
+
+    digest = transfer_file(
+        "owner/repo", "a" * 40, ENTRY, tmp_path, progress=lambda _: None,
+        cancel=threading.Event(), transport=httpx.MockTransport(resumed))
+    assert requests[0].headers["range"] == "bytes=8-"
+    assert digest == ENTRY.digest
+    assert (tmp_path / ENTRY.path).read_bytes() == DATA
+    assert not partial_file.exists()
+
+
 def test_ignored_range_restarts_cleanly(tmp_path):
     (tmp_path / (ENTRY.path + ".vcs-incomplete")).write_bytes(DATA[:4])
     transfer_file(

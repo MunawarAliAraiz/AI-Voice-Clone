@@ -1,5 +1,74 @@
 # Automatic cloud lifecycle
 
+## Stop model setup and retry — 2026-10-02
+
+After selecting existing storage or purchasing storage, the frontend explicitly
+enables `PUT /api/runpod/setup/auto` with `{ "enabled": true }`. This persists
+the user's automatic-download intent and returns the normal setup snapshot.
+Existing legacy storage has a null `auto_setup_enabled` until this one-time
+intent migration; a previous confirmed paid attempt requires an explicit
+Resume. Saved enabled intent resumes at API startup. Status/discovery reads
+do not start paid resources.
+
+Model setup checks **CPU** availability beside the selected volume; available
+GPU stock is not needed to download files. Missing CPU capacity retries once
+a minute, for at most ten retries, without creating any resource. The snapshot
+exposes `auto_setup_waiting` and `auto_setup_retry_at` (ISO UTC). A creation
+attempt, unknown result or failed paid session disables automatic retries and
+sets `auto_setup_requires_resume`; it never automatically spends another
+installation budget after a failed paid attempt. The CPU request now uses the
+dedicated `deployCpuPod` mutation and `deployCpuPodInput!` input, with a
+catalog-derived instance ID such as `cpu3c-2-4` (two vCPUs, four GB RAM) and
+the atomic `terminateAfter` deadline. GPU-specific fields are excluded from
+the CPU request. The deadline is bounded by both the $1 installation budget
+and a two-hour operational limit, including worker startup; it no longer
+extends to 16 hours merely because a small CPU is inexpensive.
+
+This matches the provider schema and official SDK's CPU path; no paid CPU
+launch was performed to establish end-to-end success. Sources:
+[Runpod schema](https://graphql-spec.runpod.io/),
+[official SDK CPU deployment](https://github.com/runpod/runpod-python/blob/main/runpod/api/ctl_commands.py).
+
+`POST /api/runpod/setup/cancel` returns the normal cloud setup snapshot. It
+first stops the local provisioning/download monitoring task, then reconciles
+and terminates only the temporary installer Pod owned by that setup record.
+It never deletes persistent storage, cached complete files, partial download
+files, saved voices, or output. It refuses to stop a generation session or a
+session with queued generation jobs. The operation continues if the HTTP
+client disconnects during cleanup.
+
+The durable phases are `cancelling` and `cancelled`. A cancelled download may
+still have `cleanup_pending=true` and a `compute` record: that means Runpod
+has not confirmed the temporary machine is off. An absent Pod in a single
+account listing before its requested deadline does not establish that an
+ambiguous creation failed. The record remains fenced against new compute and
+updates until reconciliation succeeds. A discovered Pod must match the
+recorded unique name before automatic deletion. A failed termination or
+changed ownership retains the record and explains the required cleanup.
+
+Retry starts a new verification session on the same selected storage. The
+installer hashes pinned existing files and reuses only those whose exact
+size and digest match. Missing or invalid files are fetched. Partial
+`.vcs-incomplete` files use HTTP Range to request the remaining bytes; if the
+source ignores Range, that individual file restarts cleanly. A full checksum
+check is required before publishing a downloaded file. Model weights and
+the desktop updater have separate download lifecycles.
+
+Offline fixtures exercise cancellation during in-flight creation, late
+owned-Pod reconciliation, termination failure, ownership mismatch, unchanged
+storage/cache bytes and preserved progress after restart. The existing model
+transfer fixtures exercise completed-file adoption without downloading,
+corrupt-file repair, partial Range resume, ignored Range and invalid ranges.
+These are offline evidence, not a live Runpod download or GPU qualification.
+
+The original legacy error cannot be reconstructed from its generic stored
+message. A concrete source issue was found: GraphQL schema/parse rejection
+bodies returned with HTTP 400 were discarded before the safe error-code
+classifier. They are now classified the same way as HTTP 200 GraphQL errors.
+Only proven pre-execution parse/schema rejection clears a creation record;
+an unknown HTTP 400 or resolver/network failure remains ambiguous. This
+does not establish the cause of the user's original deployment failure.
+
 ## User direction, 2026-09-30
 
 Desktop setup asks for the Runpod management key. The desktop session key is

@@ -49,6 +49,10 @@ class ComputePolicy(BaseModel):
     max_hourly_usd: float = Field(ge=0.1, le=10, allow_inf_nan=False)
 
 
+class AutoSetupInput(BaseModel):
+    enabled: bool
+
+
 async def _cloud(settings: Settings, method: str, *args):
     _store(settings)
     try:
@@ -108,6 +112,18 @@ async def auto_install(settings: Annotated[Settings, Depends(get_settings)]) -> 
 @router.post("/setup/release", status_code=204)
 async def release_compute(settings: Annotated[Settings, Depends(get_settings)]) -> None:
     await _cloud(settings, "release")
+
+
+@router.post("/setup/cancel")
+async def cancel_model_setup(settings: Annotated[Settings, Depends(get_settings)]) -> dict:
+    return await _cloud(settings, "cancel_setup")
+
+
+@router.put("/setup/auto")
+async def automatic_model_setup(
+    body: AutoSetupInput, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    return await _cloud(settings, "set_auto_setup", body.enabled)
 
 
 def _store(settings: Settings) -> RunpodKeyStore:

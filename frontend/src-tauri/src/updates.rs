@@ -1,16 +1,25 @@
+use futures_util::future::{AbortHandle, Abortable};
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{ipc::Channel, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
+#[path = "update_cache.rs"]
+mod cache;
 
 #[derive(Default)]
-pub struct UpdateState(tauri::async_runtime::Mutex<PendingUpdate>);
+pub struct UpdateState {
+    pending: tauri::async_runtime::Mutex<PendingUpdate>,
+    downloading: AtomicBool,
+    cancel: AtomicBool,
+    abort: Mutex<Option<AbortHandle>>,
+}
 
 #[derive(Default)]
 struct PendingUpdate {
     update: Option<Update>,
-    bytes: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Serialize)]
@@ -18,6 +27,8 @@ struct PendingUpdate {
 pub struct UpdateInfo {
     pub version: String,
     pub notes: Option<String>,
+    #[serde(flatten)]
+    pub cache: cache::CacheStatus,
 }
 
 #[derive(Clone, Serialize)]
@@ -37,7 +48,10 @@ pub async fn updater_check(
     app: tauri::AppHandle,
     state: State<'_, UpdateState>,
 ) -> Result<Option<UpdateInfo>, String> {
-    let mut pending = state.0.lock().await;
+    let mut pending = state.pending.lock().await;
+    if state.downloading.load(Ordering::Acquire) {
+        return Err("Wait for the update download to pause or finish before checking again".into());
+    }
     let exit_handle = app.clone();
     let updater = app
         .updater_builder()
@@ -55,38 +69,91 @@ pub async fn updater_check(
     if let Some(value) = update.as_mut() {
         value.timeout = Some(Duration::from_secs(900));
     }
+    let root = app
+        .state::<super::BackendContext>()
+        .data_dir
+        .join("update-cache");
     let info = update.as_ref().map(|u| UpdateInfo {
         version: u.version.clone(),
         notes: u.body.clone(),
+        cache: cache::status(&root, u),
     });
-    *pending = PendingUpdate {
-        update,
-        bytes: None,
-    };
+    *pending = PendingUpdate { update };
     Ok(info)
 }
 
 #[tauri::command]
 pub async fn updater_download(
+    app: tauri::AppHandle,
     state: State<'_, UpdateState>,
     progress: Channel<DownloadProgress>,
-) -> Result<(), String> {
-    let mut pending = state.0.lock().await;
-    pending.bytes = None;
+) -> Result<cache::CacheStatus, String> {
+    // Serialize admission with updater_check without holding the lock across
+    // network reads: cancel is a separate command and must remain callable.
+    let pending = state.pending.lock().await;
     let update = pending
         .update
         .as_ref()
-        .ok_or("Check for an app update first")?;
-    let mut downloaded = 0u64;
-    // The plugin verifies the mandatory embedded-key signature before returning bytes.
-    let bytes = update.download(|length, total| {
-        downloaded += length as u64;
-        let _ = progress.send(DownloadProgress { downloaded, total });
-    }, || {}).await.map_err(|_| {
-        "The update could not be downloaded or its signature could not be verified. The app has not changed.".to_string()
-    })?;
-    pending.bytes = Some(bytes);
-    Ok(())
+        .ok_or("Check for an app update first")?
+        .clone();
+    if state.downloading.swap(true, Ordering::AcqRel) {
+        return Err("An update download is already running".into());
+    }
+    state.cancel.store(false, Ordering::Release);
+    struct DownloadGuard<'a>(&'a AtomicBool, &'a Mutex<Option<AbortHandle>>);
+    impl Drop for DownloadGuard<'_> {
+        fn drop(&mut self) {
+            if let Ok(mut abort) = self.1.lock() {
+                abort.take();
+            }
+            self.0.store(false, Ordering::Release);
+        }
+    }
+    let _guard = DownloadGuard(&state.downloading, &state.abort);
+    let (abort, registration) = AbortHandle::new_pair();
+    if state.cancel.load(Ordering::Acquire) {
+        abort.abort();
+    }
+    *state
+        .abort
+        .lock()
+        .map_err(|_| "Update cancellation state is unavailable")? = Some(abort);
+    // Cancel may race admission before the handle is registered.
+    if state.cancel.load(Ordering::Acquire) {
+        if let Ok(abort) = state.abort.lock() {
+            if let Some(abort) = abort.as_ref() {
+                abort.abort();
+            }
+        }
+    }
+    drop(pending);
+    let root = app
+        .state::<super::BackendContext>()
+        .data_dir
+        .join("update-cache");
+    let result = Abortable::new(
+        cache::download(root.clone(), update.clone(), &state.cancel, progress),
+        registration,
+    )
+    .await;
+    if state.cancel.load(Ordering::Acquire) {
+        return Ok(cache::status(&root, &update));
+    }
+    result.map_err(|_| "Update download was stopped unexpectedly".to_string())?
+}
+
+#[tauri::command]
+pub fn updater_cancel_download(state: State<'_, UpdateState>) -> bool {
+    let running = state.downloading.load(Ordering::Acquire);
+    if running {
+        state.cancel.store(true, Ordering::Release);
+        if let Ok(abort) = state.abort.lock() {
+            if let Some(abort) = abort.as_ref() {
+                abort.abort();
+            }
+        }
+    }
+    running
 }
 
 #[tauri::command]
@@ -94,18 +161,19 @@ pub async fn updater_install(
     app: tauri::AppHandle,
     state: State<'_, UpdateState>,
 ) -> Result<(), String> {
-    let pending = state.0.lock().await;
-    let bytes = pending
-        .bytes
-        .as_ref()
-        .ok_or("Download and verify the update first")?
-        .clone();
+    let pending = state.pending.lock().await;
+    if state.downloading.load(Ordering::Acquire) {
+        return Err("Pause or finish the update download before installing".into());
+    }
     let update = pending
         .update
         .as_ref()
         .ok_or("Check for an app update first")?
         .clone();
     let context = app.state::<super::BackendContext>().inner().clone();
+    // Reverify cached bytes, including the signed version, immediately before
+    // use. A persisted completion flag alone never grants installation.
+    let bytes = cache::checked_bytes(&context.data_dir.join("update-cache"), &update)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(60))

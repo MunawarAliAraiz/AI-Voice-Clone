@@ -1,5 +1,47 @@
 # Handoff — current state
 
+## Cancellation, update recovery and automatic required models — 2026-10-02
+
+The user requested cloud-session termination before applying 0.1.3. The active
+API was still 0.1.1 in the normal AppData profile. Its release guard confirmed
+no active local work; two successful REST and GraphQL account listings found
+no matching Pod for the unconfirmed start. The exact stale compute record was
+backed up and cleared under explicit user authorization. Update preparation
+then passed and its temporary admission fence was cancelled. Storage, models,
+credentials and the native window were preserved. After the user's own 0.1.3
+update, a second failed CPU start was similarly reconciled and cleared; restart
+admission passed again. The latest backup is
+`%APPDATA%/studio.voiceclone.desktop/cloud-state.before-cancel-20261002-voice-clone-install-6fae037b4452a14d.json`.
+Neither attempt had a confirmed Pod ID or a matching machine in either list.
+No provider DELETE or paid deployment was performed by the agent.
+
+The CPU setup request used the GPU deployment mutation and discarded the
+selected CPU configuration. Official SDK evidence and guaranteed-invalid,
+non-executing schema probes confirmed the dedicated `deployCpuPod` route,
+case-sensitive `deployCpuPodInput!`, and support for the worker image, volume
+and atomic termination deadline. See [CPU investigation](CPU_SETUP_INVESTIGATION.md).
+Read-only stock showed `cpu3c-2-4` in US-NE-1 at $0.06/hour. Current source uses
+the matching CPU instance and limits the installer deadline to two hours as
+well as its $1 budget. This request correction is not live worker qualification.
+
+Implemented, under integration: explicit model-setup cancel, durable automatic
+setup intent and bounded availability-only retries; no repeated paid/ambiguous
+attempt without explicit resume. Required model preparation starts automatically
+when selected storage is connected; valid stored files are reused and partial
+files resume where supported. Cancel disables automatic setup. CPU installer
+stock is independent of generation GPU stock. Setup steps now use a responsive
+grid, and the normal manual retry button is removed. Failures requiring action
+and cancellation still have an explicit resume path.
+
+Updater source now keeps partial and verified installers on disk, aborts
+cancelled network requests, validates Range/strong ETag before appending, and
+rechecks artifact/global-comment/version signatures before installing. Completed
+cache recovery and cancellation/transport/cryptographic tamper tests passed
+(10 Rust tests); frontend/updater SSR checks passed. Older memory-only downloads
+cannot be recovered retroactively. Backend lifecycle/transfer tests passed;
+final update-admission guard tests and packaging are pending. No 0.1.4 artifact
+or publication approval exists yet. The user operates their own native app.
+
 ## Simple setup and truthful progress — 2026-10-02
 
 The user's screenshots showed an indeterminate progress strip continuing after

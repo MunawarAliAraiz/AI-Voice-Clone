@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-updater-cancel-download"
+description = "Enables the updater_cancel_download command without any pre-configured scope."
+commands.allow = ["updater_cancel_download"]
+
+[[permission]]
+identifier = "deny-updater-cancel-download"
+description = "Denies the updater_cancel_download command without any pre-configured scope."
+commands.deny = ["updater_cancel_download"]

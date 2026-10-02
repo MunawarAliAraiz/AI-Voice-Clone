@@ -26,6 +26,11 @@ export function deriveCloudGenerationGate({ desktop, setup, error = false, audio
   if (!setup.release_available) {
     return block('This app does not have a published cloud worker release yet. Check app updates to enable model setup.', 'updates');
   }
+  if (setup.setup_phase === 'cancelling') return block('Stopping model setup and its temporary machine. Open Runpod to check cleanup.');
+  if (setup.setup_phase === 'cancelled') return block(setup.cleanup_pending
+    ? 'Model setup was cancelled, but Runpod machine cleanup is pending. Open Runpod to check it.'
+    : 'Model setup was cancelled. Open Runpod to resume using your stored files.');
+  if (setup.auto_setup_waiting) return block('Waiting for an available model download machine. The app will check again automatically.');
   if (setup.setup_error || setup.setup_phase === 'failed' || Object.values(setup.models).some(model => model.state === 'failed') || setup.compute?.status === 'failed') {
     return block('Model setup failed. Open Runpod to see the error and retry setup.');
   }

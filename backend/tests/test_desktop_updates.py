@@ -5,11 +5,12 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from fastapi import FastAPI
+
 from app.api.deps import ApiKeyMiddleware
 from app.api.routers import desktop_updates
 from app.config import Settings
 from app.jobs.types import JobKind
-from fastapi import FastAPI
 
 
 @pytest.fixture
@@ -102,7 +103,8 @@ async def test_each_pending_job_kind_blocks_preparation(update_app, kind):
         assert (await http.post("/api/mutate")).status_code == 200
 
 
-@pytest.mark.parametrize("busy", ["compute", "active", "setup_task", "release_task"])
+@pytest.mark.parametrize("busy", [
+    "compute", "active", "setup_task", "release_task", "auto_task", "cancel_task"])
 @pytest.mark.asyncio
 async def test_cloud_compute_and_inflight_lifecycle_block_preparation(update_app, busy):
     cloud = update_app.state.cloud

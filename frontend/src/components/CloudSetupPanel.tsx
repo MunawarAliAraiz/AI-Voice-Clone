@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CloudDiscovery, type StorageQuote } from '../services/api';
+import { api, type CloudDiscovery, type StorageQuote, type CloudModelInstall } from '../services/api';
 
 const money = (v: number | null | undefined) => v == null ? 'Unknown' : `$${v.toFixed(2)}`;
 const gb = (v: number) => `${(v / 1e9).toFixed(2)} GB`;
@@ -26,6 +26,7 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
   const [error, setError] = useState('');
   const [sessionLimit, setSessionLimit] = useState(String(DEFAULT_SESSION_LIMIT));
   const [hourlyLimit, setHourlyLimit] = useState(String(DEFAULT_HOURLY_LIMIT));
+  const automaticAttempt = useRef<string | null>(null);
   async function action(work: () => Promise<unknown>) {
     setBusy(true); setError('');
     try { await work(); await client.invalidateQueries({ queryKey: ['cloud-setup'] }); }
@@ -42,20 +43,35 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
   }
   useEffect(() => {
     if (connected) void action(refresh);
-    else { setDiscovery(null); setQuote(null); setVolumeId(''); setRegion(''); }
+    else { setDiscovery(null); setQuote(null); setVolumeId(''); setRegion(''); automaticAttempt.current = null; }
   }, [connected]);
   useEffect(() => { if (setup?.ready) void client.invalidateQueries({ queryKey: ['models'] }); }, [setup?.ready, client]);
   useEffect(() => {
     setSessionLimit(String(setup?.policy?.max_session_usd ?? DEFAULT_SESSION_LIMIT));
     setHourlyLimit(String(setup?.policy?.max_hourly_usd ?? DEFAULT_HOURLY_LIMIT));
   }, [setup?.policy?.max_session_usd, setup?.policy?.max_hourly_usd]);
+  useEffect(() => {
+    if (!connected || !setup || busy || setup.ready || setup.compute || !setup.release_available
+        || setup.auto_setup_enabled != null) return;
+    const volume = setup.volume ?? suitableVolumes(discovery)[0];
+    if (!volume || automaticAttempt.current === volume.id) return;
+    automaticAttempt.current = volume.id;
+    void action(async () => {
+      if (!setup.volume) await api.cloudSelectStorage(volume.id);
+      const value = await api.cloudAutoSetup(true);
+      client.setQueryData(['cloud-setup'], value);
+    });
+  }, [connected, setup, discovery, busy, client]);
 
   const suitable = suitableVolumes(discovery);
   const chosenVolume = suitable.find(v => v.id === volumeId);
   const chosenRegion = discovery?.regions.find(r => r.id === region);
   const installing = setup?.compute?.kind === 'installer';
   const creationConfirmed = setup?.compute?.creation_confirmed ?? !!setup?.compute?.pod_id;
-  const failed = !!setup && (
+  const cancelled = setup?.setup_phase === 'cancelled';
+  const cancelling = setup?.setup_phase === 'cancelling';
+  const waiting = !!setup?.auto_setup_waiting;
+  const failed = !!setup && !cancelled && !cancelling && !waiting && (
     !!setup.setup_error || setup.setup_phase === 'failed'
     || /failed|could not|couldn't|release is pending|release needs retry|reached its time limit|needs cleanup/i.test(setup.detail)
     || setup.compute?.status === 'failed'
@@ -63,22 +79,24 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
   );
   const releasePending = !!setup?.compute && (setup.cleanup_pending
     || /release is pending|release needs retry|release compute|needs cleanup/i.test(setup.detail));
-  const installingActive = !failed && (setup?.setup_running ?? installing);
+  const installingActive = !failed && !cancelled && (setup?.setup_running ?? installing);
   const expired = quote != null && Date.now() / 1000 > quote.expires_at;
   const validLimits = Number.isFinite(Number(sessionLimit)) && Number(sessionLimit) >= .1 && Number(sessionLimit) <= 20
     && Number.isFinite(Number(hourlyLimit)) && Number(hourlyLimit) >= .1 && Number(hourlyLimit) <= 10;
-  const retryDisabled = busy || !!setup?.compute || installingActive || !setup?.release_available;
-  const retryLabel = failed ? 'Retry model setup (up to $1)' : 'Download and check models (up to $1)';
-  const failureMessage = 'Model setup stopped before it finished. Your storage is kept. Check the error details below, then retry.';
+  const retryDisabled = busy || !!setup?.compute || installingActive || cancelling || !setup?.release_available;
+  const failureMessage = 'Automatic model preparation needs attention. Your storage and downloaded files are kept. Resolve the issue below to continue.';
   const phase = setup?.setup_phase ?? (installingActive ? (setup?.bytes_completed ? 'downloading' : 'starting_worker') : setup?.ready ? 'ready' : 'idle');
   const activity = ({ starting_worker: 'Starting a temporary machine and downloading its software. Model files have not started downloading yet.',
     checking_files: 'Checking which model files are already on your storage.', downloading: 'Downloading missing model files to your storage.',
     verifying: 'Checking the downloaded files before generation is enabled.', stopping_worker: 'Stopping the temporary machine. Your downloaded models stay on storage.',
-    idle: setup?.volume ? 'Download and check the required models to enable voice generation.' : 'Choose or purchase storage above to get started.',
+    cancelling: 'Stopping model setup and releasing its temporary machine. Your storage and downloaded files are kept.',
+    cancelled: 'Model setup cancelled. Resume when ready: valid downloaded files are reused and incomplete files resume where supported.',
+    idle: setup?.volume ? 'Required models are prepared automatically on your storage.' : 'Connect storage above to get started.',
     ready: 'Your models are downloaded and checked.', failed: failureMessage,
   })[phase];
-  const models = Object.entries(setup?.models ?? {});
-  const hasTransfer = !failed && phase === 'downloading' && (setup?.bytes_total ?? 0) > 0
+  const models: [string, CloudModelInstall][] = (setup?.required_model_ids ?? Object.keys(setup?.models ?? {}))
+    .map(id => [id, setup?.models[id] ?? { state: 'pending' }]);
+  const hasTransfer = !failed && !cancelled && !cancelling && phase === 'downloading' && (setup?.bytes_total ?? 0) > 0
     && setup?.progress_pct != null && Number.isFinite(setup.progress_pct);
 
   if (!connected) return null;
@@ -96,10 +114,7 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
         <p className="hint">Storage is billed while you keep it, even when no machine is running. A 200 GB volume costs about $14/month.</p>
       </> : chosenVolume ? <>
         <p><strong>Existing storage found</strong> · {chosenVolume.size} GB · {chosenVolume.dataCenter}</p>
-        <p className="hint">Use your existing storage to avoid buying another volume. Downloading and checking missing models may use up to $1 of temporary machine time.</p>
-        <button type="button" className="btn primary sm" disabled={retryDisabled} onClick={() => void action(async () => {
-          await api.cloudSelectStorage(chosenVolume.id); await api.cloudInstall();
-        })}>Use this storage and set up models (up to $1)</button>
+        <p className="hint">Connecting this storage and preparing required models automatically. Temporary download-machine time is limited to $1 per setup attempt.</p>
       </> : <>
         <p>{discovery ? 'You need 200 GB of storage for the models, cache and updates.' : 'Checking your storage…'}</p>
         <p className="hint">About $14/month while kept. The app selects an available region with a low GPU rate. Review the price before purchasing.</p>
@@ -114,7 +129,7 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
           {!quote.can_purchase && <p>{quote.balance_usd == null ? 'We could not check your balance. Check the API key permissions and refresh.' : 'Add funds, then refresh and review the purchase again.'}</p>}
           {expired && <p>The price check expired. Review the purchase again.</p>}
           <button type="button" className="btn primary sm" disabled={busy || !quote.can_purchase || expired || !setup?.release_available || !!setup?.compute} onClick={() => void action(async () => {
-            await api.cloudPurchase(quote.id); setQuote(null); await api.cloudInstall(); await refresh();
+            await api.cloudPurchase(quote.id); setQuote(null); await api.cloudAutoSetup(true); await refresh();
           })}>Purchase storage and download models</button>
         </div>}
       </>}
@@ -147,27 +162,35 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
         <li><strong>{(phase === 'checking_files' || phase === 'verifying') && !failed ? 'Current: ' : ''}Check files</strong></li>
         <li><strong>{setup?.ready ? '✓ ' : ''}Ready</strong></li>
       </ol>
-      <p aria-live="polite">{failed ? failureMessage : activity}</p>
-      {failed && (setup?.setup_error || setup?.detail) && <p role="alert">{setup.setup_error || setup.detail}</p>}
+      <p aria-live="polite">{waiting ? 'Waiting for an available download machine in your storage region. The app will check again automatically; model downloading has not started yet.' : failed ? failureMessage : activity}</p>
+      {!setup?.ready && !cancelled && <p className="hint">Required models download automatically. Temporary setup compute is limited to $1 per attempt; storage is billed separately.</p>}
+      {(failed || cancelled) && (setup?.setup_error || setup?.detail) && <p role={setup?.setup_error ? 'alert' : 'status'}>{setup.setup_error || setup.detail}</p>}
       {releasePending && <p role="alert">{creationConfirmed
-        ? 'Runpod has not confirmed that the rented machine stopped. Click “Stop rented machine” before retrying setup.'
-        : 'Runpod has not confirmed that a machine started. Click “Check pending start”. If it is still uncertain, wait until the requested stop-by time before retrying.'}</p>}
+        ? 'Runpod has not confirmed that the rented machine stopped. Check the pending machine before retrying setup.'
+        : 'Runpod has not confirmed whether the machine started. Check the pending machine; another setup attempt stays blocked until this one is reconciled.'}</p>}
+      {(installingActive || waiting || setup?.auto_setup_enabled) && !cancelling && phase !== 'stopping_worker' && !setup?.ready && <div>
+        <button type="button" className="btn sm" disabled={busy} onClick={() => void action(api.cloudCancel)}>Cancel model setup</button>
+        <p className="hint">Stops the download and releases the temporary machine. Your model storage is kept.</p>
+      </div>}
       {hasTransfer && <>
         <progress aria-label="Model download progress" max={100} value={Math.max(0, Math.min(100, setup!.progress_pct!))} />
         <p className="hint">{setup!.progress_pct!.toFixed(1)}% downloaded · {gb(setup?.bytes_completed ?? 0)} / {gb(setup!.bytes_total!)}</p>
       </>}
       {!setup?.ready && models.length > 0 && <ul className="runpod-model-status">
-        {models.map(([id, m]) => <li key={id}><strong>{modelName(id)}</strong> · {failed && ['downloading', 'verifying', 'discovering'].includes(m.state)
-          ? 'Stopped' : ({ ready: 'Downloaded and checked', installed: 'Downloaded and checked', downloading: 'Downloading', verifying: 'Checking files', discovering: 'Finding required files', resolving: 'Checking required files', idle: 'Waiting', pending: 'Waiting', failed: 'Failed', unsupported: 'Unavailable' })[m.state] ?? m.state}
-          {m.state === 'downloading' && m.progress_pct != null && Number.isFinite(m.progress_pct) && ` · ${failed ? 'Last reported: ' : ''}${Math.max(0, Math.min(100, m.progress_pct)).toFixed(1)}%`}</li>)}
+        {models.map(([id, m]) => <li key={id}><strong>{modelName(id)}</strong> · {(failed || cancelled || cancelling) && ['downloading', 'verifying', 'discovering'].includes(m.state)
+          ? 'Stopped' : ({ ready: 'Downloaded and checked', installed: 'Downloaded and checked', downloading: 'Downloading', verifying: 'Checking files', discovering: 'Finding required files', resolving: 'Checking required files', idle: 'Waiting', pending: 'Waiting', failed: 'Failed', cancelled: 'Stopped', unsupported: 'Unavailable' })[m.state] ?? m.state}
+          {m.state === 'downloading' && m.progress_pct != null && Number.isFinite(m.progress_pct) && ` · ${failed || cancelled || cancelling ? 'Last reported: ' : ''}${Math.max(0, Math.min(100, m.progress_pct)).toFixed(1)}%`}
+          {m.bytes_total != null && m.bytes_total > 0 && ` · ${gb(m.bytes_completed ?? 0)} / ${gb(m.bytes_total)}`}</li>)}
       </ul>}
-      {setup?.volume && !setup.ready && !installingActive && <button type="button" className="btn primary sm" disabled={retryDisabled}
-        onClick={() => void action(api.cloudInstall)}>{retryLabel}</button>}
+      {setup?.volume && !setup.ready && setup.auto_setup_enabled === false && !setup.compute && <button type="button" className="btn sm" disabled={retryDisabled}
+        onClick={() => void action(() => api.cloudAutoSetup(true))}>Resume automatic downloads (up to $1)</button>}
       {!setup?.ready && <p className="hint">Generation stays disabled until the required models are fully checked.</p>}
+      {!setup?.ready && <p className="hint">Retrying checks stored files first. Valid files are skipped; partial downloads resume if supported. Only corrupt or changed files need downloading again.</p>}
       {setup?.compute && <div className="runpod-machine">
         <p><strong>{creationConfirmed ? (installing ? 'Model setup machine' : 'Voice generation machine') : 'Machine start not confirmed'}</strong> · {creationConfirmed ? '' : 'Estimated rate: '}{money(setup.compute.hourly_usd)}/hour.</p>
         <p className="hint">{creationConfirmed ? 'It is billed until Runpod confirms it has stopped. Automatic stop-by time: ' : 'This is a pending start attempt, not a confirmed rental. Requested stop-by time: '}{new Date(setup.compute.deadline).toLocaleString()}.</p>
-        <button type="button" className="btn sm" disabled={busy} onClick={() => void action(api.cloudRelease)}>{creationConfirmed ? 'Stop rented machine' : 'Check pending start'}</button>
+        {!(installingActive || cancelling) && <button type="button" className="btn sm" disabled={busy}
+          onClick={() => void action(installing ? api.cloudCancel : api.cloudRelease)}>{creationConfirmed ? 'Stop rented machine' : 'Check pending start'}</button>}
       </div>}
       <details className="runpod-advanced">
         <summary>{failed ? 'Error details and model status' : 'Advanced model details'}</summary>
@@ -176,6 +199,8 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
         {models.map(([id, m]) => <p key={id}>{id} · {m.state}
           {m.current_file && <span className="hint"> · {m.current_file}</span>}{m.detail && <span className="hint"> · {m.detail}</span>}</p>)}
         {setup?.ready && <button type="button" className="btn sm" disabled={retryDisabled} onClick={() => void action(api.cloudInstall)}>Check stored models again (up to $1)</button>}
+        {!setup?.ready && failed && setup.auto_setup_enabled !== false && <button type="button" className="btn sm" disabled={retryDisabled}
+          onClick={() => void action(() => api.cloudAutoSetup(true))}>Resume after resolving the error (up to $1)</button>}
       </details>
     </section>
     <section className="card">
