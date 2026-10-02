@@ -136,7 +136,7 @@ async def transliterate(
     texts = body.as_list()
     source = source_script_of(" ".join(texts))
     target = body.target or target_script_for(source)
-    if (source, target) not in SUPPORTED_PAIRS:
+    if body.source_language not in {"en", "hi"} and (source, target) not in SUPPORTED_PAIRS:
         raise UnsupportedConversionError(source, target)
 
     job = await runner.enqueue(
@@ -149,6 +149,7 @@ async def transliterate(
             # at enqueue" -- a job that decides what it is at claim time can
             # decide differently than what the client was told.
             "target": target,
+            "source_language": body.source_language,
         },
         route=None,
         profile_id=None,

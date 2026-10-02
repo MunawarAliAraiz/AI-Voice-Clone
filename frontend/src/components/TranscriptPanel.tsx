@@ -1,6 +1,5 @@
 /**
- * The Convert tab: paste a script, convert its writing system, hand pieces to
- * the editor.
+ * The Convert tab: pasted scripts or public YouTube captions, reviewed in parts.
  *
  * WHAT THIS IS FOR
  * ----------------
@@ -17,7 +16,7 @@
  * The server detects the SCRIPT (`profile_text`) — that is a fact about the
  * characters. It does NOT guess whether Latin text is Roman Urdu or English;
  * they are indistinguishable, and this codebase refuses that guess everywhere.
- * (English→Urdu is TRANSLATION, a different operation, and a planned follow-up.)
+ * Explicit English/Hindi selections use translation; Urdu uses script conversion.
  */
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../services/api';
@@ -26,7 +25,8 @@ import { IconAlert, IconCopy, IconCheck, IconSpinner, IconSpark } from './icons'
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { useTranscriptParts } from '../hooks/useTranscriptParts';
 import { TranscriptPartRow } from './TranscriptPartRow';
-import { useSystemStatus } from '../hooks/queries';
+import { useGenerationGate, useSystemStatus } from '../hooks/queries';
+import { CloudGenerationGate, DisabledAction } from './CloudGenerationGate';
 
 type Target = 'roman' | 'perso_arabic';
 
@@ -34,6 +34,7 @@ type Target = 'roman' | 'perso_arabic';
  *  `schemas/text.py` enforces. Checked here so an oversized selection is
  *  refused with a reason rather than sent and 422'd. */
 const MAX_BATCH_CHUNKS = 200;
+const TRANSLATION_TARGETS: Target[] = ['perso_arabic', 'roman'];
 
 /** The conversions the server actually supports for a given detected script —
  *  `latin → roman` and `arabic → perso_arabic` are no-ops and absent, and
@@ -57,6 +58,9 @@ interface Props {
 
 export function TranscriptPanel({ onSendToEditor }: Props) {
   const [input, setInput] = useState('');
+  const [inputMode, setInputMode] = useState<'paste' | 'youtube'>('paste');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [sourceLanguage, setSourceLanguage] = useState<'en' | 'hi' | 'ur'>('en');
   const [data, setData] = useState<PreparedTextResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +68,8 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   const [target, setTarget] = useState<Target>('roman');
   const conversion = useScriptConversion();
   const system = useSystemStatus();
+  const gate = useGenerationGate();
+  const cloudReady = !gate.blocked;
   //: Which CHUNK indexes the running conversion covers, in submission order. A
   //: result item's `index` is its position IN THE BATCH, not in the paste;
   //: without this map, converting part 8 alone (batch index 0) would land on
@@ -84,14 +90,16 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   // derived rather than stored.
   const parts = useTranscriptParts();
 
-  const canConvert = system.data?.script_conversion?.available ?? null;
+  const canConvert = cloudReady && (system.data?.script_conversion?.available ?? false);
   const cannotConvertReason = system.data?.script_conversion?.reason ?? null;
 
   // Devanagari cannot be spoken at all (a blocker); Latin and Arabic are
   // routable, so converting them is an OFFER. Every supported source has at
   // least one target, so the panel shows whenever there is data to convert.
-  const needsConversion = data?.needs_transliteration ?? false;
-  const validTargets = data ? (TARGETS_FOR[data.script] ?? []) : [];
+  const loadedLanguage = data?.source_language;
+  const translating = loadedLanguage === 'en' || loadedLanguage === 'hi';
+  const needsConversion = translating || (data?.needs_transliteration ?? false);
+  const validTargets = data ? (translating ? TRANSLATION_TARGETS : (TARGETS_FOR[data.script] ?? [])) : [];
   const offerConversion = validTargets.length > 0;
 
   // Default the picker to the source's first valid target the moment a paste is
@@ -101,7 +109,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       setTarget(validTargets[0]!);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.script]);
+  }, [data?.script, loadedLanguage]);
 
   useEffect(() => {
     if (!conversion.result) return;
@@ -139,12 +147,12 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
   const joinParts = (indexes: number[]) =>
     [...indexes]
       .sort((a, b) => a - b)
-      .filter((i) => parts.status(i) !== 'rejected')
+      .filter((i) => parts.status(i) !== 'rejected' && (!needsConversion || parts.status(i) === 'converted' || parts.status(i) === 'edited'))
       .map((i) => parts.outgoing(i))
       .join('\n\n');
 
   const startConversion = (indexes: number[], to: Target = target) => {
-    if (!data) return;
+    if (!data || conversion.running) return;
     // Filtered, not asserted: an index with no chunk would send `undefined` as
     // a chunk and desync the batch positions from `batchIndexes` — the exact
     // misalignment this mechanism exists to prevent.
@@ -156,12 +164,13 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
     conversion.start(
       present.map((i) => data.chunks[i]!.text),
       to,
+      loadedLanguage ?? undefined,
     );
   };
 
   async function prepare(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!(inputMode === 'paste' ? input.trim() : youtubeUrl.trim()) || conversion.running) return;
     setLoading(true);
     setError(null);
     try {
@@ -170,7 +179,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       setExpanded(new Set());
       setSelected(new Set());
       setSelectMode(false);
-      const prepared = await api.prepareText(input.trim());
+      const prepared = inputMode === 'paste'
+        ? await api.prepareText(input.trim(), sourceLanguage)
+        : await api.importYoutubeTranscript(youtubeUrl.trim(), sourceLanguage);
       parts.reset(prepared.chunks);
       setData(prepared);
     } catch (err) {
@@ -198,35 +209,57 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
       </header>
 
       <p className="hint">
-        Paste a script in Hindi (Devanagari), Roman Urdu, or Urdu script. It's split into parts you
-        can convert between writing systems and send to the editor. Read every part before you
-        generate — a conversion can turn a word into a real word that means something else.
+        Paste English, Hindi or Urdu text, or import available YouTube captions. Choose the source
+        language, then convert to Urdu or Roman Urdu. Review and edit each draft before generating.
       </p>
 
-      <form className="transcript-form" onSubmit={prepare}>
-        <label className="field" style={{ flex: 1 }}>
+      <form className="transcript-form" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }} onSubmit={prepare}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <label className="field">
+            <span className="field-label">Import from</span>
+            <select value={inputMode} disabled={loading || conversion.running} onChange={(e) => setInputMode(e.target.value as 'paste' | 'youtube')}>
+              <option value="paste">Pasted script</option>
+              <option value="youtube">YouTube captions</option>
+            </select>
+          </label>
+          <label className="field">
+            <span className="field-label">{inputMode === 'youtube' ? 'Caption language' : 'Source language'}</span>
+            <select value={sourceLanguage} disabled={loading || conversion.running} onChange={(e) => setSourceLanguage(e.target.value as 'en' | 'hi' | 'ur')}>
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="ur">{inputMode === 'paste' ? 'Urdu / Roman Urdu' : 'Urdu'}</option>
+            </select>
+          </label>
+        </div>
+        {inputMode === 'paste' ? <label className="field">
           <span className="field-label">Your script</span>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Paste Hindi, Roman Urdu, or Urdu-script text here…"
+            placeholder="Paste your script in the selected source language…"
             dir="auto"
             rows={6}
             required
+            maxLength={200000}
+            disabled={loading || conversion.running}
           />
-        </label>
+        </label> : <label className="field">
+          <span className="field-label">YouTube video URL</span>
+          <input value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" maxLength={2048} disabled={loading || conversion.running} required />
+          <span className="hint">Available captions only. If YouTube blocks access or has no captions, paste the transcript instead.</span>
+        </label>}
       </form>
       <div className="transcript-actions">
         <button
           type="button"
           className="btn"
-          disabled={loading || !input.trim()}
+          disabled={loading || conversion.running || !(inputMode === 'paste' ? input.trim() : youtubeUrl.trim())}
           onClick={(e) => void prepare(e)}
         >
           {loading ? <IconSpinner size={14} /> : <IconSpark size={14} />}
-          {loading ? 'Loading…' : data ? 'Reload parts' : 'Load parts'}
+          {loading ? 'Loading…' : inputMode === 'youtube' ? 'Import captions' : data ? 'Reload parts' : 'Load parts'}
         </button>
-        {input.trim() && (
+        {inputMode === 'paste' && input.trim() && (
           <span className="muted">{input.trim().length.toLocaleString()} characters</span>
         )}
       </div>
@@ -239,12 +272,15 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
 
       {data && (
         <>
+          {data.video_id && <p className="hint">Imported {data.caption_language_code} captions · {data.captions_generated ? 'automatically generated — check transcription errors' : 'uploaded caption track'}.</p>}
           {offerConversion && (
             <div className="convert-panel">
               <div className="convert-why">
                 <IconAlert size={14} />
                 <span>
-                  {data.script === 'devanagari' ? (
+                  {translating ? (
+                    <>This {loadedLanguage === 'en' ? 'English' : 'Hindi'} script will be translated into Urdu. Translation drafts need your review; correct names, meaning and wording before generating.</>
+                  ) : data.script === 'devanagari' ? (
                     <>This is Hindi (Devanagari), which no voice here can read. Convert it before you
                     generate from it.</>
                   ) : data.script === 'latin' ? (
@@ -279,10 +315,11 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
               </fieldset>
 
               <div className="convert-actions">
+                <DisabledAction reason={gate.blocked ? gate.reason : !canConvert ? (cannotConvertReason ?? 'Script conversion is not available here.') : null}>
                 <button
                   type="button"
                   className="btn"
-                  disabled={conversion.running || canConvert === false || canConvert === null}
+                  disabled={conversion.running || !canConvert || data.chunks.length > MAX_BATCH_CHUNKS}
                   onClick={() => startConversion(data.chunks.map((_, i) => i))}
                   title={canConvert === false ? (cannotConvertReason ?? '') : undefined}
                 >
@@ -291,8 +328,9 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                     ? conversion.progressLabel
                     : `Convert all ${data.chunks.length} parts`}
                 </button>
+                </DisabledAction>
                 <span className="muted">
-                  {conversion.running
+                  {translating && !conversion.running ? 'Translation timing depends on script length and model startup.' : conversion.running
                     ? 'All parts convert in one pass — the model loads at most once.'
                     : /* The honest number up front — MIRRORS app/jobs/estimate.py's
                          two-term model; re-solve there, re-solve here. */
@@ -303,10 +341,12 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 </span>
               </div>
 
-              {canConvert === false && (
+              <CloudGenerationGate gate={gate} />
+
+              {!canConvert && (
                 <div className="inline-error" role="status">
                   <IconAlert size={14} />
-                  <span>{cannotConvertReason ?? 'Script conversion is not available here.'}</span>
+                  <span>{!cloudReady ? 'Finish Runpod model setup and approve compute limits before converting.' : (cannotConvertReason ?? 'Script conversion is not available here.')}</span>
                 </div>
               )}
               {conversion.error && (
@@ -432,30 +472,18 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
               type="button"
               className="btn-sm"
               onClick={() =>
-                onSendToEditor(
-                  // Whatever is actually usable: converted parts if a conversion
-                  // has run, the original otherwise. Rejected parts are LEFT OUT
-                  // rather than passed through in a script nothing can speak.
-                  parts.convertedCount
-                    ? data.chunks
-                        .map((c) =>
-                          parts.status(c.index) === 'rejected'
-                            ? undefined
-                            : parts.outgoing(c.index),
-                        )
-                        .filter((t): t is string => Boolean(t))
-                        .join('\n\n')
-                    : data.text,
-                )
+                onSendToEditor(joinParts(data.chunks.map((chunk) => chunk.index)))
               }
-              disabled={needsConversion && parts.convertedCount === 0}
+              disabled={!sendableCount(data.chunks.map((chunk) => chunk.index))}
               title={
                 needsConversion && parts.convertedCount === 0
-                  ? 'Devanagari cannot be generated — convert it first'
+                  ? 'Convert these parts to Urdu before sending to the editor'
                   : 'Put the whole script in the editor'
               }
             >
-              Send all to editor
+              {sendableCount(data.chunks.map((chunk) => chunk.index)) === data.chunks.length
+                ? 'Send all to editor'
+                : `Send ${sendableCount(data.chunks.map((chunk) => chunk.index))} ready parts to editor`}
             </button>
             <button type="button" className="btn-sm" onClick={() => void copy(data.text, 'all')}>
               {copied === 'all' ? <IconCheck size={13} /> : <IconCopy size={13} />}
@@ -485,6 +513,7 @@ export function TranscriptPanel({ onSendToEditor }: Props) {
                 }
                 targets={validTargets}
                 converting={conversion.running && busyIndex === chunk.index}
+                conversionLocked={conversion.running}
                 convertingLabel={conversion.progressLabel}
                 onSendToEditor={onSendToEditor}
                 onCopy={(text, key) => void copy(text, key)}

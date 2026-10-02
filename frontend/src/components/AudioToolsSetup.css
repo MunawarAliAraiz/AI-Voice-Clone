@@ -1,0 +1,10 @@
+.audio-tools-setup {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-md);
+  background: var(--panel-inset); color: var(--text);
+}
+.audio-tools-setup > div { flex: 1 1 260px; min-width: 0; }
+.audio-tools-setup p { margin: var(--space-1) 0; color: var(--muted); }
+.audio-tools-setup progress { display: block; width: 100%; margin: var(--space-2) 0; }
+.audio-tools-setup small { display: block; margin-top: var(--space-2); color: var(--muted); }

@@ -2,6 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from './services/api';
 import { fmtDuration } from './lib/format';
+import { headerStatus } from './lib/cloudStatus';
+import { notifyDesktop } from './lib/desktopNotifications';
 import type { JobStatusResponse } from './types/api';
 import { Composer } from './components/Composer';
 import { EnrollCard } from './components/EnrollCard';
@@ -9,11 +11,15 @@ import { HistoryPanel } from './components/HistoryPanel';
 import { ActiveJobRow } from './components/ActiveJobRow';
 import { PronunciationPanel } from './components/PronunciationPanel';
 import { RunpodPanel } from './components/RunpodPanel';
+import { DesktopUpdates } from './components/DesktopUpdates';
+import { AgentsPanel } from './components/AgentsPanel';
+import { AudioToolsSetup } from './components/AudioToolsSetup';
 import { TranscriptPanel } from './components/TranscriptPanel';
 import { ToastStack, type ToastItem } from './components/Toast';
 import { VoiceLibrary } from './components/VoiceLibrary';
 import {
   useCancelJobMutation,
+  useCloudReadiness,
   useHistory,
   useInvalidateHistory,
   useInvalidateVoices,
@@ -33,7 +39,7 @@ const DialoguePanel = lazy(() =>
 );
 
 const PAGE_SIZE = 20;
-type Tab = 'studio' | 'dialogue' | 'recent' | 'convert' | 'pronunciation' | 'editor' | 'runpod';
+type Tab = 'studio' | 'dialogue' | 'recent' | 'convert' | 'pronunciation' | 'editor' | 'runpod' | 'agents';
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'studio', label: 'Voice Studio', icon: <IconMic size={14} /> },
   { id: 'dialogue', label: 'Dialogue (Beta)', icon: <IconMic size={14} /> },
@@ -41,7 +47,10 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'convert', label: 'Convert', icon: <IconRoute size={14} /> },
   { id: 'pronunciation', label: 'Pronunciation', icon: <IconSettings size={14} /> },
   { id: 'editor', label: 'Audio Editor', icon: <IconFileAudio size={14} /> },
-  ...(window.__VCS_DESKTOP_KEY__ ? [{ id: 'runpod' as Tab, label: 'Runpod', icon: <IconSettings size={14} /> }] : []),
+  ...(window.__VCS_DESKTOP_KEY__ ? [
+    { id: 'runpod' as Tab, label: 'Runpod', icon: <IconSettings size={14} /> },
+    { id: 'agents' as Tab, label: 'Agents', icon: <IconRoute size={14} /> },
+  ] : []),
 ];
 
 export default function App() {
@@ -56,11 +65,18 @@ export default function App() {
   const toastId = useRef(0);
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    const openRunpod = () => { if (window.__VCS_DESKTOP_KEY__) setActiveTab('runpod'); };
+    window.addEventListener('vcs-open-runpod', openRunpod);
+    return () => window.removeEventListener('vcs-open-runpod', openRunpod);
+  }, []);
+
   const languagesQ = useLanguages();
   const voicesQ = useVoices();
   const historyQ = useHistory(1, PAGE_SIZE * pageCount);
   const jobsQ = useJobsList(1, PAGE_SIZE);
   const cancelJob = useCancelJobMutation();
+  const cloudQ = useCloudReadiness();
 
   // RECENT shows every job with no history row — queued, running, failed and
   // cancelled — because a failure is exactly what history structurally cannot
@@ -106,6 +122,7 @@ export default function App() {
   const anyError = languagesQ.error ?? voicesQ.error ?? historyQ.error;
   const anySuccess = languagesQ.isSuccess && voicesQ.isSuccess && historyQ.isSuccess;
   const online = anyError ? false : anySuccess ? true : null;
+  const connectionStatus = headerStatus(!!window.__VCS_DESKTOP_KEY__, online, cloudQ.data, !!cloudQ.error);
   const error = anyError ? (anyError instanceof ApiError ? anyError.message : String(anyError)) : null;
 
   const loadMore = useCallback(() => setPageCount((p) => p + 1), []);
@@ -132,9 +149,23 @@ export default function App() {
   // the app would toast every historical failure still inside the retention
   // window at once.
   const announcedJobs = useRef<Set<number> | null>(null);
+  const observedJobs = useRef<Set<number> | null>(null);
   useEffect(() => {
     const items = jobsQ.data?.items;
     if (!items) return;
+
+    if (observedJobs.current === null) {
+      observedJobs.current = new Set(items.map(job => job.id));
+    } else {
+      for (const job of items) {
+        if (observedJobs.current.has(job.id)) continue;
+        observedJobs.current.add(job.id);
+        if (job.status === 'queued' || job.status === 'running') {
+          const name = job.title || job.input_text?.slice(0, 40);
+          addToast('info', name ? `“${name}” was added to the queue.` : 'A new job was added to the queue.');
+        }
+      }
+    }
 
     const terminal = items.filter(
       (j) => j.status === 'failed' || j.status === 'cancelled' || j.status === 'succeeded',
@@ -153,10 +184,12 @@ export default function App() {
       if (job.status === 'succeeded') {
         anySucceeded = true;
         addToast('success', name ? `“${name}” is ready.` : 'Generation complete.');
+        notifyDesktop('Studio job ready', `${job.title || 'Job #' + job.id} is ready. Open Recent for the result.`);
       } else if (job.status === 'failed') {
         const why =
           (job.error?.detail as string | undefined) ?? 'Generation failed.';
         addToast('error', name ? `“${name}” failed — ${why}` : why);
+        notifyDesktop('Studio job failed', `${job.title || 'Job #' + job.id} failed. Open Recent for details.`);
       }
       // 'cancelled' stays silent: the user clicked Cancel, they know.
     }
@@ -177,6 +210,7 @@ export default function App() {
   // quietly appearing in a list further down the page.
   const onJobQueued = useCallback(
     (job: JobStatusResponse) => {
+      observedJobs.current?.add(job.id);
       const name = job.title || job.input_text?.slice(0, 40);
       addToast(
         'info',
@@ -242,13 +276,16 @@ export default function App() {
         </div>
 
         <div className="topbar-right">
+          {!!window.__VCS_DESKTOP_KEY__ && <DesktopUpdates />}
           {!window.__VCS_DESKTOP_KEY__ && <ApiKeyControl onSaved={onApiKeySaved} />}
-          <div className={`status ${online === null ? '' : online ? 'ok' : 'down'}`}>
+          <div className={`status ${connectionStatus.tone}`} role="status" title={connectionStatus.detail}>
             <span className="status-dot" aria-hidden="true" />
-            {online === null ? 'connecting' : online ? 'online' : 'offline'}
+            {connectionStatus.label}
           </div>
         </div>
       </header>
+
+      <AudioToolsSetup />
 
       {error && (
         <div className="banner error" role="alert">
@@ -362,6 +399,7 @@ export default function App() {
           </Suspense>
         </div>
         {activeTab === 'runpod' && <RunpodPanel />}
+        {activeTab === 'agents' && <AgentsPanel voices={voicesQ.data?.profiles ?? []} onOpenRecent={() => setActiveTab('recent')} />}
         {activeTab === 'editor' && (
           <Suspense fallback={<p className="hint center">Loading editor…</p>}>
             <AudioEditorTab onEnrolled={invalidateVoices} />

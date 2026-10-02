@@ -15,11 +15,10 @@ EDITABLE list, because the whole premise is that the user reviews and converts
 before generating. The conversion itself is `POST /api/text/transliterate`;
 this only gets the pasted text into review-sized units.
 
-(This module was YouTube transcript import until 2026-08-19. The fetch — yt-dlp,
-the SSRF guard, caption download, chapters — was removed when the input became
-text the user pastes; datacenter IPs are hard-blocked by YouTube's bot check, so
-manual paste is both simpler and more reliable. The chunking and script
-detection are all that survived.)
+Public caption import was restored in 2026-10 through a bounded local caption
+client. It downloads no audio/video and provides no sign-in or bot-check bypass.
+Pasted scripts remain available when captions cannot be retrieved. The caller
+declares English/Hindi/Urdu; script detection never guesses a Latin language.
 """
 
 from __future__ import annotations
@@ -27,7 +26,8 @@ from __future__ import annotations
 import re
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from starlette.concurrency import run_in_threadpool
 
 from ...config import Settings
 from ...domain.language import Script, profile_text
@@ -38,6 +38,7 @@ from ..schemas.transcript import (
     PreparedTextResponse,
     PrepareTextRequest,
     TranscriptChunk,
+    YoutubeTranscriptRequest,
 )
 
 router = APIRouter(prefix="/transcript", tags=["convert"])
@@ -65,7 +66,7 @@ async def prepare_text(
     # Latin-heavy paragraph pick a different sentence-terminator set than the
     # Devanagari one beside it — the same mistake the transliterate handler and
     # the old per-chapter path both refuse.
-    profile = profile_text(body.text, "ur")
+    profile = profile_text(body.text, body.source_language or "ur")
     script = profile.script
     needs_transliteration = script is Script.DEVANAGARI and not catalog.candidates(
         "hi", Script.DEVANAGARI
@@ -96,4 +97,38 @@ async def prepare_text(
         script=script.value,
         needs_transliteration=needs_transliteration,
         chunks=api_chunks,
+        source_language=body.source_language,
+    )
+
+
+@router.post("/youtube", response_model=PreparedTextResponse)
+async def import_youtube(
+    body: YoutubeTranscriptRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    catalog: Annotated[ModelCatalog, Depends(get_catalog)],
+) -> PreparedTextResponse:
+    try:
+        from ...youtube_captions import fetch_captions, video_id_from_url
+    except ImportError as exc:
+        raise HTTPException(
+            503, "Caption import is not installed in this build. Paste the script instead."
+        ) from exc
+    video_id = video_id_from_url(body.url)
+    captions = await run_in_threadpool(
+        fetch_captions,
+        video_id,
+        body.source_language,
+        max_chars=min(settings.transcript_max_chars, 200_000),
+    )
+    prepared = await prepare_text(
+        PrepareTextRequest(text=captions.text, source_language=captions.language),
+        settings,
+        catalog,
+    )
+    return prepared.model_copy(
+        update={
+            "video_id": captions.video_id,
+            "caption_language_code": captions.language_code,
+            "captions_generated": captions.is_generated,
+        }
     )

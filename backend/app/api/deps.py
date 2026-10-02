@@ -64,8 +64,10 @@ def require_cloud_ready(request: Request) -> None:
     settings = request.app.state.settings
     if settings.desktop_static_dir is None:
         return
+    from ..audio_tools import require_audio_tools
     from ..runpod.controller import controller
 
+    require_audio_tools(request)
     cloud = controller(settings)
     if not cloud.is_ready(cloud.read()):
         raise HTTPException(409, "Finish model storage setup in the Runpod tab first")
@@ -96,10 +98,13 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        if not self._api_key or request.method == "OPTIONS" or self._exempt(request.url.path):
-            return await call_next(request)
         provided = request.headers.get("X-API-Key", "")
-        if not hmac.compare_digest(self._api_key, provided):
+        if (
+            self._api_key
+            and request.method != "OPTIONS"
+            and not self._exempt(request.url.path)
+            and not hmac.compare_digest(self._api_key, provided)
+        ):
             return JSONResponse(
                 status_code=401,
                 media_type=PROBLEM_CONTENT_TYPE,
@@ -112,6 +117,31 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     "instance": request.url.path,
                 },
             )
+        settings = getattr(request.app.state, "settings", None)
+        if getattr(settings, "desktop_static_dir", None) is not None and request.method in {
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+        }:
+            # Hold admission across the entire mutation. Preparing an update
+            # cannot race a request that already passed its route dependencies.
+            async with request.app.state.desktop_mutation_lock:
+                update_control = request.method == "POST" and request.url.path in {
+                    "/api/desktop/updates/prepare",
+                    "/api/desktop/updates/cancel",
+                }
+                if request.app.state.desktop_updating and not update_control:
+                    return JSONResponse(
+                        status_code=409,
+                        content={
+                            "detail": (
+                                "The app is preparing an update. "
+                                "Wait for it to restart before starting new work."
+                            ),
+                        },
+                    )
+                return await call_next(request)
         return await call_next(request)
 
     @staticmethod

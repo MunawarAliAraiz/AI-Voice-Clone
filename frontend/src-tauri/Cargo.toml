@@ -1,6 +1,6 @@
 [package]
 name = "voice-clone-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "AI Voice Clone Studio desktop shell"
 authors = ["AI Voice Clone Studio"]
 edition = "2021"
@@ -9,7 +9,12 @@ edition = "2021"
 tauri-build = { version = "=2.7.0", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.0", features = [] }
+tauri = { version = "=2.12.0", features = ["dynamic-acl"] }
 tauri-plugin-shell = "=2.3.6"
 tauri-plugin-single-instance = "=2.4.5"
+tauri-plugin-updater = "=2.13.1"
+tauri-plugin-notification = "=2.5.1"
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }
+serde_json = "=1.0.151"
+serde = { version = "=1.0.229", features = ["derive"] }
 rand = "=0.8.5"

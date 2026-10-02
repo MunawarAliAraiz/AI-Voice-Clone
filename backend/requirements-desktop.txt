@@ -1,3 +1,5 @@
 # Build tools only. Install alongside backend dependencies and requirements-mcp.txt.
 PyInstaller==6.19.0
 pyinstaller-hooks-contrib==2026.8
+youtube-transcript-api==1.2.4
+tomlkit==0.13.3

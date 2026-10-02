@@ -7,8 +7,63 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
+mod updates;
 
 struct Sidecar(Arc<Mutex<Option<CommandChild>>>);
+
+#[derive(Clone)]
+struct BackendContext {
+    port: u16,
+    key: String,
+    data_dir: std::path::PathBuf,
+    process_path: std::ffi::OsString,
+}
+
+fn restore_owned_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
+    let sidecar = app.state::<Sidecar>();
+    if sidecar
+        .0
+        .lock()
+        .map_err(|_| "Local service state unavailable")?
+        .is_some()
+    {
+        return Ok(());
+    }
+    let context = app.state::<BackendContext>();
+    let (mut events, child) = app
+        .shell()
+        .sidecar("voice-clone-api")
+        .map_err(|_| "Cannot locate local service")?
+        .env("VCS_DESKTOP_PORT", context.port.to_string())
+        .env("VCS_API_KEY", context.key.clone())
+        .env(
+            "VCS_DATA_DIR",
+            context.data_dir.to_string_lossy().to_string(),
+        )
+        .env("PATH", context.process_path.to_string_lossy().to_string())
+        .spawn()
+        .map_err(|_| "Could not restore local service")?;
+    tauri::async_runtime::spawn(async move { while events.recv().await.is_some() {} });
+    if !wait_for_api(context.port) {
+        stop_sidecar(child);
+        return Err("Local service restart failed; close and reopen the app".into());
+    }
+    *sidecar
+        .0
+        .lock()
+        .map_err(|_| "Local service state unavailable")? = Some(child);
+    Ok(())
+}
+
+fn stop_owned_sidecar(app: &tauri::AppHandle) {
+    if let Some(sidecar) = app.try_state::<Sidecar>() {
+        if let Ok(mut child) = sidecar.0.lock() {
+            if let Some(child) = child.take() {
+                stop_sidecar(child);
+            }
+        }
+    }
+}
 
 fn stop_sidecar(child: CommandChild) {
     // PyInstaller's onefile bootloader starts another process. Killing only the
@@ -40,7 +95,9 @@ fn wait_for_api(port: u16) -> bool {
     while Instant::now() < deadline {
         if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
             let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-            let _ = stream.write_all(b"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+            let _ = stream.write_all(
+                b"GET /api/health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+            );
             let mut response = [0u8; 64];
             if let Ok(count) = stream.read(&mut response) {
                 if response[..count].starts_with(b"HTTP/1.1 200") {
@@ -65,6 +122,16 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .manage(updates::UpdateState::default())
+        .invoke_handler(tauri::generate_handler![
+            updates::updater_check,
+            updates::updater_download,
+            updates::updater_install,
+            updates::desktop_version,
+            updates::desktop_notify
+        ])
         .setup(|app| {
             let port = free_port()?;
             let mut key = [0u8; 32];
@@ -82,30 +149,48 @@ fn main() {
             };
             std::fs::create_dir_all(&data_dir)?;
             let executable = std::env::current_exe()?;
-            let install_dir = executable.parent().ok_or("Cannot locate install directory")?;
-            let mut search_paths = vec![install_dir.to_path_buf()];
+            let install_dir = executable
+                .parent()
+                .ok_or("Cannot locate install directory")?;
+            let mut search_paths = vec![
+                data_dir.join("tools").join("ffmpeg"),
+                install_dir.to_path_buf(),
+            ];
             if let Some(existing) = std::env::var_os("PATH") {
                 search_paths.extend(std::env::split_paths(&existing));
             }
             let process_path = std::env::join_paths(search_paths)?;
             let url = format!("http://127.0.0.1:{port}/").parse()?;
+            // IPC is granted only to this session's exact loopback origin/window.
+            // No updater command accepts a URL, path, key or signature from JS.
+            app.add_capability(format!(
+                r#"{{"identifier":"desktop-update-session",
+                "windows":["main"],"local":false,
+                "remote":{{"urls":["http://127.0.0.1:{port}"]}},
+                "permissions":["allow-updater-check","allow-updater-download",
+                    "allow-updater-install","allow-desktop-version","allow-desktop-notify"]}}"#
+            ))?;
             let (mut events, child) = app
                 .shell()
                 .sidecar("voice-clone-api")?
                 .env("VCS_DESKTOP_PORT", port.to_string())
-                .env("VCS_API_KEY", session_key)
+                .env("VCS_API_KEY", session_key.clone())
                 .env("VCS_DATA_DIR", data_dir.to_string_lossy().to_string())
                 .env("PATH", process_path.to_string_lossy().to_string())
                 .spawn()?;
             // Drain stdout/stderr so pipe backpressure cannot stall the API.
             // Do not copy potentially sensitive diagnostics into UI logs.
-            tauri::async_runtime::spawn(async move {
-                while events.recv().await.is_some() {}
-            });
+            tauri::async_runtime::spawn(async move { while events.recv().await.is_some() {} });
             if !wait_for_api(port) {
                 stop_sidecar(child);
                 return Err("The local Voice Clone Studio service did not start".into());
             }
+            app.manage(BackendContext {
+                port,
+                key: session_key,
+                data_dir: data_dir.clone(),
+                process_path,
+            });
             if let Err(error) = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("AI Voice Clone Studio")
                 .data_directory(data_dir.join("webview"))
@@ -124,13 +209,7 @@ fn main() {
                 event,
                 tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed
             ) {
-                if let Some(sidecar) = window.app_handle().try_state::<Sidecar>() {
-                    if let Ok(mut child) = sidecar.0.lock() {
-                        if let Some(child) = child.take() {
-                            stop_sidecar(child);
-                        }
-                    }
-                }
+                stop_owned_sidecar(window.app_handle());
             }
         })
         .run(tauri::generate_context!())

@@ -55,7 +55,7 @@ export interface ScriptConversion {
    *  these durations (~7 s per chunk, ~19 s for a 600-char part, minutes for a
    *  transcript) an unlabelled one is indistinguishable from a hang. */
   progressLabel: string;
-  start: (texts: string[], target?: 'roman' | 'perso_arabic') => void;
+  start: (texts: string[], target?: 'roman' | 'perso_arabic', source_language?: 'en' | 'hi' | 'ur') => void;
   reset: () => void;
 }
 
@@ -66,11 +66,11 @@ export function useScriptConversion(): ScriptConversion {
   const job = useJob(jobId);
 
   const start = useCallback(
-    (texts: string[], target?: 'roman' | 'perso_arabic') => {
+    (texts: string[], target?: 'roman' | 'perso_arabic', source_language?: 'en' | 'hi' | 'ur') => {
       setEnqueueError(null);
       setJobId(null);
       mutation.mutate(
-        { texts, ...(target ? { target } : {}) },
+        { texts, ...(target ? { target } : {}), ...(source_language ? { source_language } : {}) },
         {
           onSuccess: (created) => setJobId(created.id),
           // The 503 from a server with no transliterator lands here, and its

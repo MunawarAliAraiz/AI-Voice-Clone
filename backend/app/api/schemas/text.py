@@ -61,6 +61,7 @@ class TransliterateRequest(BaseModel):
     #: caller is about to do, and only they know it. A Devanagari transcript
     #: legitimately goes either way.
     target: Literal["roman", "perso_arabic"] | None = None
+    source_language: Literal["en", "hi", "ur"] | None = None
 
     @model_validator(mode="after")
     def _exactly_one_input(self) -> TransliterateRequest:

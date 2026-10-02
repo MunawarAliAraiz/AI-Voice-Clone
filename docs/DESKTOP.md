@@ -6,11 +6,12 @@ cloud setup implementation is complete. The desktop shell uses
 [Tauri 2 NSIS](https://v2.tauri.app/distribute/windows-installer/) and a
 PyInstaller-bundled local FastAPI sidecar. Rust/Cargo, Node.js/npm, Python
 3.12, PyInstaller, and backend dependencies are needed on the Windows build
-machine, plus MSVC C++ Build Tools/Windows SDK and a redistributable FFmpeg
-executable with its license. The end user will not need Python or Rust installed.
+machine, plus MSVC C++ Build Tools/Windows SDK. The end user will not need
+Python or Rust installed. Audio tools are downloaded directly from the pinned
+publisher on first launch and verified before audio operations unlock.
 
-Run `scripts/build-desktop.ps1` with its FFmpeg path/license arguments from
-PowerShell (see the script's parameters). It builds React, includes
+Run `scripts/build-desktop.ps1` with `-UpdaterKeyFile` pointing to the DPAPI
+protected signing identity (see the script's parameters). It builds React, includes
 `frontend/dist` and `schema.sql` in the sidecar, places the sidecar under
 `frontend/src-tauri/binaries`, then invokes Tauri's NSIS build. The output is
 under `frontend/src-tauri/target/release/bundle/nsis`.

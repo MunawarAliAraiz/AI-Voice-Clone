@@ -1,9 +1,7 @@
 param(
     [string]$Python = "python",
-    [string]$Ffmpeg = "",
-    [string]$FfmpegLicense = "",
-    [string]$FfmpegBuildInfo = "",
     [string]$TauriCli = "",
+    [string]$UpdaterKeyFile = "",
     [ValidateRange(1, 64)][int]$BuildJobs = 2,
     [switch]$UseExistingFrontendDependencies,
     [switch]$CheckOnly
@@ -37,14 +35,6 @@ if (-not (Get-Command $Python -ErrorAction SilentlyContinue)) {
         $missing.Add("Use a 64-bit Python 3.12+ environment with backend dependencies, PyInstaller, and MCP SDK v2 (backend/requirements-mcp.txt).")
     }
 }
-if (-not $CheckOnly) {
-    foreach ($inputPath in @($Ffmpeg, $FfmpegLicense)) {
-        if (-not $inputPath -or -not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
-            $missing.Add("Supply -Ffmpeg and -FfmpegLicense paths for a redistributable static Windows FFmpeg build and its license notice.")
-            break
-        }
-    }
-}
 if ($missing.Count) { throw ($missing -join [Environment]::NewLine) }
 if ($TauriCli) {
     if (-not (Test-Path -LiteralPath $TauriCli -PathType Leaf)) {
@@ -59,26 +49,6 @@ if ($TauriCli) {
 if ($CheckOnly) {
     Write-Output "Python imports, Node.js, and Rust commands are available. MSVC build tools and Windows SDK must also be installed."
     return
-}
-
-$ffmpegPath = (Resolve-Path -LiteralPath $Ffmpeg).Path
-$licensePath = (Resolve-Path -LiteralPath $FfmpegLicense).Path
-if (-not $FfmpegBuildInfo) {
-    $FfmpegBuildInfo = Join-Path (Split-Path (Split-Path $ffmpegPath -Parent) -Parent) "README.txt"
-}
-if (-not (Test-Path -LiteralPath $FfmpegBuildInfo -PathType Leaf)) {
-    throw "Supply -FfmpegBuildInfo with the publisher's README/configuration and source revision."
-}
-$buildInfoPath = (Resolve-Path -LiteralPath $FfmpegBuildInfo).Path
-$ffmpegVersion = & $ffmpegPath -version 2>&1
-if ($LASTEXITCODE -ne 0 -or -not ($ffmpegVersion -match '^ffmpeg version')) {
-    throw "The supplied FFmpeg executable did not run."
-}
-if ($ffmpegVersion -match '--enable-shared') {
-    throw "Supply a static FFmpeg build; DLL-based FFmpeg redistribution is not bundled by this script."
-}
-if ($ffmpegVersion -match '--enable-nonfree') {
-    throw "The supplied FFmpeg build is marked nonfree and cannot be redistributed in this installer."
 }
 
 Push-Location $frontend
@@ -126,9 +96,6 @@ try {
         Copy-Item -LiteralPath (Join-Path $pythonDist "$binary.exe") `
             -Destination (Join-Path $sidecarDir "$binary-$target.exe") -Force
     }
-    Copy-Item -LiteralPath $ffmpegPath -Destination (Join-Path $sidecarDir "ffmpeg-$target.exe") -Force
-    Copy-Item -LiteralPath $licensePath -Destination (Join-Path $sidecarDir "ffmpeg-license.txt") -Force
-    Copy-Item -LiteralPath $buildInfoPath -Destination (Join-Path $sidecarDir "ffmpeg-build-info.txt") -Force
 } finally { Pop-Location }
 
 if (-not (Test-Path -LiteralPath (Join-Path $tauriRoot "Cargo.lock"))) {
@@ -138,13 +105,33 @@ if (-not (Test-Path -LiteralPath (Join-Path $tauriRoot "Cargo.lock"))) {
 }
 Push-Location $frontend
 try {
+    $ownedSigningKey = $false
+    if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
+        if (-not $UpdaterKeyFile -or -not (Test-Path -LiteralPath $UpdaterKeyFile -PathType Leaf)) {
+            throw "Supply -UpdaterKeyFile for the Windows DPAPI protected signing identity, or set TAURI_SIGNING_PRIVATE_KEY securely."
+        }
+        $protectedKey = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $UpdaterKeyFile).Path)
+        $keyBytes = [Security.Cryptography.ProtectedData]::Unprotect($protectedKey,
+            [Text.Encoding]::UTF8.GetBytes('VoiceCloneUpdaterSigningV1'),
+            [Security.Cryptography.DataProtectionScope]::CurrentUser)
+        $env:TAURI_SIGNING_PRIVATE_KEY = [Text.Encoding]::UTF8.GetString($keyBytes)
+        [Array]::Clear($keyBytes, 0, $keyBytes.Length)
+        $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ''
+        $ownedSigningKey = $true
+    }
     if ($TauriCli) {
         & node $TauriCli build --target $target --bundles nsis -- --locked --jobs $BuildJobs
     } else {
         npx --yes "@tauri-apps/cli@$cliVersion" build --target $target --bundles nsis -- --locked --jobs $BuildJobs
     }
     if ($LASTEXITCODE -ne 0) { throw "Tauri NSIS build failed" }
-} finally { Pop-Location }
+} finally {
+    if ($ownedSigningKey) {
+        Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+        Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD -ErrorAction SilentlyContinue
+    }
+    Pop-Location
+}
 
 $installerDir = Join-Path $tauriRoot "target\$target\release\bundle\nsis"
 $installers = @(Get-ChildItem -LiteralPath $installerDir -Filter "*.exe")
@@ -157,9 +144,9 @@ $receipt = [ordered]@{
     frontendLockSha256 = (Get-FileHash -LiteralPath (Join-Path $frontend "package-lock.json") -Algorithm SHA256).Hash
     pythonPackages = @($packages)
     cargoLockSha256 = (Get-FileHash -LiteralPath (Join-Path $tauriRoot "Cargo.lock") -Algorithm SHA256).Hash
-    ffmpegSha256 = (Get-FileHash -LiteralPath $ffmpegPath -Algorithm SHA256).Hash
+    audioToolsDelivery = "First-run publisher download; no FFmpeg binary bundled"
     artifacts = @($installers | ForEach-Object {
-        @{ file = $_.Name; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+        @{ file = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     })
 }
 $receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $installerDir "build-receipt.json") -Encoding UTF8

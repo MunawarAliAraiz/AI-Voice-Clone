@@ -37,25 +37,39 @@ body {
   padding: var(--space-5) var(--space-5) var(--space-16);
 }
 
-.runpod-panel { display: grid; gap: var(--space-4); max-width: 980px; }
-.runpod-panel .card { padding: var(--space-4); }
+.runpod-panel { display: grid; gap: var(--space-4); width: 100%; min-width: 0; }
+.runpod-panel .card { padding: var(--space-4); min-width: 0; }
+.runpod-account { width: 100%; max-width: 640px; }
+.runpod-account .runpod-controls { max-width: none; }
+.runpod-account .hint { margin-top: 0; }
 .runpod-controls { display: grid; gap: var(--space-3); max-width: 600px; }
 .runpod-controls textarea { min-height: 90px; resize: vertical; }
 .runpod-scroll { overflow-x: auto; margin-top: var(--space-4); }
 .runpod-scroll table { width: 100%; border-collapse: collapse; white-space: nowrap; }
 .runpod-scroll th, .runpod-scroll td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--line); }
 
+.agents-panel { display: grid; gap: var(--space-4); min-width: 0; }
+.agent-clients { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+.agent-client { padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); min-width: 0; }
+.agent-client-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.agent-client-head h3 { margin: 0; }
+.agent-path { overflow-wrap: anywhere; }
+.agent-replace { display: flex; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-3); font-size: var(--text-sm); }
+.agent-example { margin: var(--space-4) 0; padding: var(--space-4); background: var(--panel-inset); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); }
+.agent-voices { padding-left: var(--space-5); }
+
 /* ── Top bar ─────────────────────────────────────────────── */
 .topbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'brand status' 'nav nav';
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-2) var(--space-1) var(--space-6);
+  gap: var(--space-4) var(--space-3);
+  padding: var(--space-2) 0 var(--space-6);
 }
 
 .brand {
+  grid-area: brand;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -91,8 +105,10 @@ body {
 .logo-bar:nth-child(3) { height: 13px; opacity: 0.75; }
 
 .topbar-right {
+  grid-area: status;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
 }
 
@@ -106,6 +122,7 @@ body {
   border-radius: var(--radius-full);
   border: 1px solid var(--line);
   background: var(--panel-raised);
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -597,7 +614,11 @@ textarea {
 .tabs button.on { background: var(--accent-soft); color: var(--accent); }
 
 .segmented {
+  grid-area: nav;
   display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
   gap: 2px;
   background: var(--panel-inset);
   padding: 2px;
@@ -623,8 +644,10 @@ textarea {
 .segmented button.on { background: var(--accent-soft); color: var(--accent); }
 
 @media (max-width: 560px) {
-  .seg-label { display: none; }
-  .segmented button { padding: 8px; }
+  .studio { padding-inline: var(--space-3); }
+  .topbar { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'brand' 'status' 'nav'; gap: var(--space-3); }
+  .segmented { width: 100%; }
+  .segmented button { flex: 1 1 auto; min-height: 44px; padding: 8px var(--space-2); }
 }
 
 /* ── Recorder ────────────────────────────────────────────── */

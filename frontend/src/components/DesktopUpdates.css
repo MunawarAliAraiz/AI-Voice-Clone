@@ -1,0 +1,19 @@
+.desktop-updates-button { white-space: nowrap; min-height: 44px; }
+.desktop-updates-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+.desktop-updates-dialog::backdrop { background: rgb(0 0 0 / 65%); }
+.desktop-updates-dialog header, .desktop-updates-dialog footer {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap;
+}
+.desktop-updates-dialog h2 { margin: 0; font-size: var(--text-lg); }
+.desktop-updates-dialog footer { margin-top: var(--space-5); justify-content: flex-end; }
+.desktop-update-notes { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+.desktop-updates-dialog progress { width: 100%; accent-color: var(--accent); }

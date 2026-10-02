@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         env_prefix="VCS_", env_file=".env", extra="ignore"
     )
 
-    version: str = "0.1.0"
+    version: str = "0.1.1"
 
     #: When non-empty, every `/api/*` route except health requires this in the
     #: `X-API-Key` header. Empty = open (single-user local dev only).
@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     #: Built React assets served by the local API in the Windows desktop app.
     #: Unset for the existing web deployment and API tests.
     desktop_static_dir: Path | None = None
+    #: Auto-download a checksum-pinned FFmpeg runtime only in the desktop entry point.
+    desktop_audio_tools_autostart: bool = False
 
     #: Explicit connection to a user-owned Pod worker. Empty keeps the legacy
     #: local-GPU path for the existing web/pod deployment.

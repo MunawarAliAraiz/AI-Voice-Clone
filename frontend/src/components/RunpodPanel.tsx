@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { CloudSetupPanel } from './CloudSetupPanel';
+import { queryKeys } from '../hooks/queries';
 import { api, type RunpodAnalytics, type RunpodEstimate } from '../services/api';
 import type { ModelListResponse } from '../types/api';
 
@@ -8,6 +10,7 @@ function money(value: number | undefined, digits = 4): string {
 }
 
 export function RunpodPanel() {
+  const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
   const [key, setKey] = useState('');
   const [models, setModels] = useState<ModelListResponse['models']>([]);
@@ -36,6 +39,23 @@ export function RunpodPanel() {
       await api.connectRunpod(key);
       setKey('');
       setConnected(true);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cloudSetup });
+    } catch (cause) {
+      setError(String(cause));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    setError('');
+    try {
+      await api.disconnectRunpod();
+      setConnected(false);
+      setAnalytics(null);
+      setEstimates([]);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cloudSetup });
     } catch (cause) {
       setError(String(cause));
     } finally {
@@ -82,22 +102,18 @@ export function RunpodPanel() {
   }
 
   return <div className="runpod-panel">
-    <section className="card">
+    <section className="card runpod-account">
       <header className="card-head"><h2>Runpod account</h2></header>
       <p className="hint">Your API key is encrypted for this Windows user. It stays on this PC.</p>
       {connected ? <>
-        <p>Connected</p>
-        <button className="btn sm" disabled={busy} onClick={() => {
-          void api.disconnectRunpod().then(() => {
-            setConnected(false); setAnalytics(null); setEstimates([]);
-          }).catch((cause) => setError(String(cause)));
-        }}>Disconnect</button>
+        <p>API key connected. Storage and model setup are shown below.</p>
+        <button className="btn sm" disabled={busy} onClick={() => void disconnect()}>Disconnect</button>
       </> : <div className="runpod-controls">
         <label className="field"><span className="field-label">Runpod API key</span>
           <input type="password" value={key} onChange={(event) => setKey(event.target.value)}
-            autoComplete="off" /></label>
+            autoComplete="off" spellCheck={false} placeholder="Paste your Runpod API key" /></label>
         <button className="btn primary sm" disabled={busy || key.length < 8}
-          onClick={() => void connect()}>Connect</button>
+          onClick={() => void connect()}>{busy ? 'Connecting…' : 'Connect Runpod'}</button>
       </div>}
       {error && <p role="alert" className="hint">{error}</p>}
     </section>

@@ -43,6 +43,12 @@ export interface StorageQuote {
   required_credit_reserve_usd: number; installer_budget_usd: number;
 }
 
+export interface AudioToolsStatus {
+  stage: 'idle' | 'verifying' | 'downloading' | 'extracting' | 'ready' | 'failed' | 'cancelled';
+  ready: boolean; detail: string; bytes_completed: number; bytes_total: number;
+  progress_pct: number; version: string; source_url: string;
+}
+
 /**
  * Backend URL precedence:
  * 1. import.meta.env.VITE_API_BASE — build-time, for dev against a non-default
@@ -146,6 +152,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
+  audioToolsStatus: () => request<AudioToolsStatus>('/api/audio-tools/status'),
+  retryAudioTools: () => request<AudioToolsStatus>('/api/audio-tools/start', { method: 'POST' }),
   cloudSetup: () => request<CloudSetup>('/api/runpod/setup'),
   cloudDiscover: () => request<CloudDiscovery>('/api/runpod/setup/discover'),
   cloudQuote: (region: string) => request<StorageQuote>('/api/runpod/setup/storage/quote', {
@@ -301,11 +309,18 @@ export const api = {
    * the text, detects its script, and reports whether it needs converting
    * before it can be spoken. Conversion itself is `transliterate` below.
    */
-  prepareText: (text: string) =>
+  prepareText: (text: string, source_language?: 'en' | 'hi' | 'ur') =>
     request<PreparedTextResponse>('/api/transcript/prepare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, source_language }),
+    }),
+
+  importYoutubeTranscript: (url: string, source_language: 'en' | 'hi' | 'ur') =>
+    request<PreparedTextResponse>('/api/transcript/youtube', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, source_language }),
     }),
 
   /**

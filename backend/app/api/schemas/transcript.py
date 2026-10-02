@@ -1,13 +1,12 @@
 """Request/response models for the Convert tab: chunk pasted text for review + conversion.
 
-Formerly YouTube transcript import; the video fetch was removed once the input
-became text the user pastes. The chunking and script detection are the parts
-worth keeping — a pasted Hindi (Devanagari) or Roman Urdu script still needs to
-be split into review-sized units and have its script detected so the client can
-offer the right conversion.
+Accepts pasted scripts or public caption tracks, with explicit source language
+and review-sized chunks. No language is inferred from Latin characters.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +14,7 @@ __all__ = [
     "PrepareTextRequest",
     "TranscriptChunk",
     "PreparedTextResponse",
+    "YoutubeTranscriptRequest",
 ]
 
 #: Hard ceiling on a single paste. A whole book is not the use case, and an
@@ -27,6 +27,12 @@ class PrepareTextRequest(BaseModel):
     """A script the user pasted, to be chunked for review and conversion."""
 
     text: str = Field(..., min_length=1, max_length=MAX_PREPARE_CHARS)
+    source_language: Literal["en", "hi", "ur"] | None = None
+
+
+class YoutubeTranscriptRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2048)
+    source_language: Literal["en", "hi", "ur"]
 
 
 class TranscriptChunk(BaseModel):
@@ -54,3 +60,7 @@ class PreparedTextResponse(BaseModel):
     #: server-side so the UI never has to encode routing rules.
     needs_transliteration: bool
     chunks: list[TranscriptChunk]
+    source_language: Literal["en", "hi", "ur"] | None = None
+    video_id: str | None = None
+    caption_language_code: str | None = None
+    captions_generated: bool | None = None

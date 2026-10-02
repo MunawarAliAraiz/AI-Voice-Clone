@@ -1,5 +1,57 @@
 # Handoff — current state
 
+## Desktop integration checkpoint — 2026-10-02
+
+The user explicitly approved public worker source/workflow publication.
+`aba059407951651a59a4163fcc67858771b60c3c` was pushed to
+`MunawarAliAraiz/AI-Voice-Clone:codex/desktop-runpod-mcp`. Actions run
+36906772717 built the CPU installer image; the GPU image failed on source-only
+Python dependencies. The five exact hash-checked source exceptions are now
+fixed locally and Linux dependency resolution passes. A new hosted build is
+required; immutable release digests and anonymous pulls remain unqualified.
+`backend/app/runpod/release.json` remains absent and provisioning is blocked.
+
+Source now fixes the no-key green "online" status and header/form alignment.
+Generation controls are gray with focus/hover explanations, visible reasons,
+and Runpod/update navigation actions. Header and generation gate checks pass.
+The Agents screen detects and explicitly configures Codex, Claude Desktop or
+Claude Code without overwriting unrelated settings; ten MCP tools, durable
+jobs, idle queue polling and completion/failure notification hooks are present.
+33 agent/MCP tests passed with one Windows symlink privilege skip; actual
+client handshake and native notification delivery remain to be qualified.
+
+Convert supports pasted English/Hindi/Urdu and public YouTube captions into
+editable script parts. Explicit translation drafts target Urdu script or
+Roman Urdu. 88 focused tests and one actual English caption fetch passed;
+GPU translation quality has not been tested. Videos without available
+captions still need the future audio transcription path.
+
+The 0.1.1 native build adds a fixed HTTPS update feed, embedded public signing
+key, signed-version binding, byte progress and idle-only restart preparation.
+Private signing material is DPAPI protected in the original checkout's ignored
+`build/desktop/updater/signing-key.dpapi`; it must never enter Git or logs.
+Feed publication and end-to-end update/restart qualification are unfinished.
+The updater keeps the app usable if launching its installer fails.
+
+FFmpeg is removed from the installer. First launch downloads the exact pinned
+publisher archive, verifies archive and executable/notices hashes and exposes
+real progress/retry. A real 114,768,076-byte download and audio processing
+check passed in 88.39 seconds; this is not voice-generation evidence. Native
+packaging must include the new audio-tools controller and admission guards.
+
+The existing delivered 0.1.0 installer is older than these changes. Rebuild
+and isolate-test 0.1.1 before replacing it. No new persistent volume, Pod,
+endpoint or paid generation has been created. Model graph is pinned at
+49.01 GB but has not been downloaded to Runpod. English/Urdu generation,
+listening, provider billing and compute termination qualification are open.
+Serverless mode comparison and recorded-audio conversion are unfinished.
+Dialogue remains Beta; its generation tests are deferred by the user.
+
+Next: finish native build and API/MCP freezing, test the isolated installer,
+publish the already-approved worker fixes and qualify both image artifacts.
+Prepare a concrete storage/compute quote for live GPU qualification. Update
+this section with exact receipts at the next meaningful checkpoint.
+
 ## Local installer and automatic setup checkpoint — 2026-10-01
 
 The Windows NSIS installer is now built. Disposable installation/upgrade,

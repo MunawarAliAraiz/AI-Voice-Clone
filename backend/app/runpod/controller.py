@@ -35,6 +35,10 @@ STORAGE_GB = 200
 STORAGE_MONTHLY_USD = 14.0
 EVIDENCE_VERSION = 2
 REQUIRED_MODELS = REQUIRED_MODEL_IDS
+# Explicit request/authentication/payment/validation/rate-limit rejections.
+# A timeout, conflict, unrecognized error or server failure may follow a
+# successful creation, so those must retain the persisted reconciliation fence.
+STORAGE_REJECTION_STATUSES = frozenset({400, 401, 402, 403, 422, 429})
 
 
 class CloudSetupError(RuntimeError):
@@ -94,7 +98,13 @@ def verified_models(value: dict) -> bool:
         expected_graph = set(model_graph(model_id))
         if not isinstance(files, list) or any(not isinstance(f, dict) for f in files):
             return False
-        if {(f.get("repo"), f.get("revision")) for f in files} != expected_graph:
+        if (
+            any(
+                not isinstance(f.get("repo"), str) or not isinstance(f.get("revision"), str)
+                for f in files
+            )
+            or {(f.get("repo"), f.get("revision")) for f in files} != expected_graph
+        ):
             return False
         if (
             any(
@@ -347,11 +357,28 @@ class CloudController:
                 else:
                     state["volume_operation_sent"] = True
                     self.write(state)
-                    volume = await client.create_volume(
-                        name=operation,
-                        data_center=quote["region"],
-                        size_gb=STORAGE_GB,
-                    )
+                    try:
+                        volume = await client.create_volume(
+                            name=operation,
+                            data_center=quote["region"],
+                            size_gb=STORAGE_GB,
+                        )
+                    except RunpodApiError as exc:
+                        if exc.status_code not in STORAGE_REJECTION_STATUSES:
+                            raise
+                        # The provider explicitly rejected this request. Keep
+                        # its name for reconciliation, but permit a newly
+                        # approved attempt after funds/permissions are fixed.
+                        state["volume_operation_sent"] = False
+                        self.write(state)
+                        self.quote = None
+                        message = (
+                            "Runpod rejected payment; add credit and refresh the storage quote"
+                            if exc.status_code == 402
+                            else "Runpod rejected the storage request "
+                            f"(HTTP {exc.status_code}); resolve it and refresh the storage quote"
+                        )
+                        raise CloudSetupError(message) from exc
                 if (
                     volume.get("size", 0) < STORAGE_GB
                     or volume.get("dataCenter") != quote["region"]

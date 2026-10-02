@@ -29,6 +29,9 @@ from fastapi.staticfiles import StaticFiles
 from .api.deps import ApiKeyMiddleware
 from .api.errors import install_exception_handlers
 from .api.routers import (
+    agents,
+    audio_tools,
+    desktop_updates,
     dialogue,
     direction,
     health,
@@ -182,7 +185,12 @@ def create_app(
             await app.state.jobs.start()
 
         if settings.desktop_static_dir is not None:
+            from .audio_tools import AudioToolsController
             from .runpod.controller import controller
+
+            app.state.audio_tools = AudioToolsController(settings.data_dir)
+            if settings.desktop_audio_tools_autostart:
+                await app.state.audio_tools.start()
 
             async def pending_cloud_jobs() -> int:
                 return sum(
@@ -243,6 +251,8 @@ def create_app(
         try:
             yield
         finally:
+            if getattr(app.state, "audio_tools", None) is not None:
+                await app.state.audio_tools.shutdown()
             for task in (warm_task, translit_task):
                 if task is not None and not task.done():
                     task.cancel()
@@ -267,6 +277,8 @@ def create_app(
 
     app = FastAPI(title="AI Voice Clone Studio", version=settings.version, lifespan=lifespan)
     app.state.settings = settings
+    app.state.desktop_mutation_lock = asyncio.Lock()
+    app.state.desktop_updating = False
     if scheduler is not None:
         app.state.scheduler = scheduler
         app.state.owns_scheduler = False
@@ -297,6 +309,9 @@ def create_app(
     app.include_router(pronunciations.router, prefix="/api")
     app.include_router(text.router, prefix="/api")
     app.include_router(transcript.router, prefix="/api")
+    app.include_router(desktop_updates.router, prefix="/api")
+    app.include_router(agents.router, prefix="/api")
+    app.include_router(audio_tools.router, prefix="/api")
     _assert_no_duplicate_routes(app)
 
     if settings.desktop_static_dir is not None:

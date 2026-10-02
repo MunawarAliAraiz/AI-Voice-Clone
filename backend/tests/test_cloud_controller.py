@@ -63,6 +63,27 @@ def test_readiness_requires_complete_pinned_graph(defect):
     assert not verified_models(value)
 
 
+@pytest.mark.parametrize(
+    "defect", ["root", "models", "model", "evidence", "files", "repo", "revision", "path"]
+)
+def test_malformed_readiness_evidence_fails_closed(defect):
+    value = evidence()
+    item = value["models"]["omnivoice_urdu"]
+    if defect == "root":
+        value = []
+    elif defect == "models":
+        value["models"] = []
+    elif defect == "model":
+        value["models"]["omnivoice_urdu"] = None
+    elif defect == "evidence":
+        item["evidence"] = []
+    elif defect == "files":
+        item["evidence"]["files"] = [None]
+    else:
+        item["evidence"]["files"][0][defect] = []
+    assert not verified_models(value)
+
+
 def test_gpu_selection_checks_regional_stock_memory_and_rate():
     def gpu(name, rate, region="EU", stock="HIGH", memory=48):
         return {
@@ -134,8 +155,11 @@ async def test_storage_purchase_blocks_unknown_or_insufficient_balance(cloud, ba
     assert not cloud.read().get("volume")
 
 
+@pytest.mark.parametrize("status_code", [None, 408, 409, 500, 503])
 @pytest.mark.asyncio
-async def test_ambiguous_storage_purchase_never_replays_post(cloud):
+async def test_ambiguous_storage_purchase_never_replays_post(cloud, status_code):
+    attempts = []
+
     class Provider:
         def __init__(self, key):
             pass
@@ -150,7 +174,8 @@ async def test_ambiguous_storage_purchase_never_replays_post(cloud):
             pass
 
         async def create_volume(self, **kwargs):
-            raise RunpodApiError("network failure")
+            attempts.append(kwargs)
+            raise RunpodApiError("uncertain failure", status_code)
 
     cloud.client_factory = Provider
     cloud.quote = {
@@ -162,8 +187,117 @@ async def test_ambiguous_storage_purchase_never_replays_post(cloud):
     with pytest.raises(RunpodApiError):
         await cloud.purchase_storage("quote")
     assert cloud.read()["volume_operation_sent"]
+    # Refreshing approval cannot lift the uncertainty fence.
+    cloud.quote["id"] = "fresh-quote"
     with pytest.raises(CloudSetupError, match="uncertain"):
+        await cloud.purchase_storage("fresh-quote")
+    assert len(attempts) == 1
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 402, 403, 422, 429])
+@pytest.mark.asyncio
+async def test_rejected_storage_purchase_can_refresh_requote_and_retry(
+    cloud, monkeypatch, status_code
+):
+    attempts = []
+    balance = 10
+
+    class Provider:
+        def __init__(self, key):
+            pass
+
+        async def balance(self):
+            return {"balance_usd": balance}
+
+        async def list_volumes(self):
+            return []
+
+        async def close(self):
+            pass
+
+        async def create_volume(self, **kwargs):
+            attempts.append(kwargs)
+            if len(attempts) == 1:
+                raise RunpodApiError("request rejected", status_code)
+            return {
+                "id": "created-volume",
+                "name": kwargs["name"],
+                "dataCenter": kwargs["data_center"],
+                "size": kwargs["size_gb"],
+                "type": "STANDARD",
+            }
+
+    async def discover():
+        return {"balance_usd": balance, "regions": [{"id": "EU"}]}
+
+    cloud.client_factory = Provider
+    monkeypatch.setattr(cloud, "discover", discover)
+    first_quote = await cloud.quote_storage("EU")
+    with pytest.raises(CloudSetupError, match="refresh the storage quote"):
+        await cloud.purchase_storage(first_quote["id"])
+    assert cloud.read()["volume_operation_sent"] is False
+    assert cloud.quote is None
+    assert not cloud.read().get("volume")
+    with pytest.raises(CloudSetupError, match="expired"):
+        await cloud.purchase_storage(first_quote["id"])
+    assert len(attempts) == 1
+
+    # A new discovery/quote reflects the user's newly available funds and
+    # requires a new approval ID before a second POST is possible.
+    balance = 20
+    fresh_quote = await cloud.quote_storage("EU")
+    assert fresh_quote["balance_usd"] == 20
+    assert fresh_quote["id"] != first_quote["id"]
+    result = await cloud.purchase_storage(fresh_quote["id"])
+    assert result["id"] == "created-volume"
+    assert len(attempts) == 2
+    assert attempts[1]["name"] == attempts[0]["name"]
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_purchase_adopts_reconciled_volume_without_second_post(cloud):
+    created = []
+
+    class Provider:
+        def __init__(self, key):
+            pass
+
+        async def balance(self):
+            return {"balance_usd": 10}
+
+        async def list_volumes(self):
+            return created
+
+        async def close(self):
+            pass
+
+        async def create_volume(self, **kwargs):
+            assert not created, "reconciliation must avoid a second purchase"
+            created.append(
+                {
+                    "id": "created-despite-lost-response",
+                    "name": kwargs["name"],
+                    "dataCenter": kwargs["data_center"],
+                    "size": kwargs["size_gb"],
+                    "type": "STANDARD",
+                }
+            )
+            raise RunpodApiError("lost response", 503)
+
+    cloud.client_factory = Provider
+    cloud.quote = {
+        "id": "quote",
+        "expires_at": time.time() + 300,
+        "required_credit_reserve_usd": 1.5,
+        "region": "EU",
+    }
+    with pytest.raises(RunpodApiError):
         await cloud.purchase_storage("quote")
+    assert cloud.read()["volume_operation_sent"]
+    result = await cloud.purchase_storage("quote")
+    assert result["id"] == "created-despite-lost-response"
+    assert cloud.read()["volume"]["id"] == result["id"]
+    assert len(created) == 1
 
 
 @pytest.mark.asyncio

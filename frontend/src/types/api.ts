@@ -465,6 +465,8 @@ export interface TransliterateRequest {
   /** Omit for this source's usual destination: Roman Urdu → Perso-Arabic (to
    *  speak it), Devanagari or Perso-Arabic → Roman (to read and edit it). */
   target?: 'roman' | 'perso_arabic';
+  /** Explicit language; English/Hindi translate meaning, Urdu changes script. */
+  source_language?: 'en' | 'hi' | 'ur';
 }
 
 /** One chunk's outcome. A `rejected` item carries NO `text` — the user never
@@ -502,6 +504,8 @@ export interface TransliterateResult {
   /** Charged once for the batch, because the model loaded once. */
   load_time_sec: number;
   gen_time_sec: number;
+  source_language?: 'en' | 'hi' | 'ur' | null;
+  operation?: 'translation' | 'transliteration';
 }
 
 /** Body for `POST /api/transcript/prepare`. */
@@ -519,4 +523,8 @@ export interface PreparedTextResponse {
    *  server-side so the UI never encodes routing rules. */
   needs_transliteration: boolean;
   chunks: TranscriptChunk[];
+  source_language?: 'en' | 'hi' | 'ur' | null;
+  video_id?: string | null;
+  caption_language_code?: string | null;
+  captions_generated?: boolean | null;
 }

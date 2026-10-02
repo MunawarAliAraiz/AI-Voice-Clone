@@ -88,6 +88,7 @@ class RemoteTransliterator:
         instruction: str = "",
         source_script: str = "latin",
         target_script: str = "perso_arabic",
+        source_language: str | None = None,
     ) -> list[TransliterateResult]:
         try:
             value = await self.features.call(
@@ -98,9 +99,12 @@ class RemoteTransliterator:
                     "instruction": instruction,
                     "source_script": source_script,
                     "target_script": target_script,
+                    **({"source_language": source_language} if source_language else {}),
                 },
             )
             items = value["results"]
+            if source_language and value.get("source_language") != source_language:
+                raise ValueError("Pod does not support the requested translation language")
             if len(items) != len(texts):
                 raise ValueError("Pod omitted conversion results")
             return [TransliterateResult(**item) for item in items]

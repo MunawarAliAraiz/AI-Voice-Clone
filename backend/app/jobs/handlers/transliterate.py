@@ -77,6 +77,7 @@ from ...domain.transliterate import (
     TransliterationRejected,
     source_script_of,
     target_script_for,
+    validate_translation,
     validate_transliteration,
 )
 from ...exceptions import TransliterationRejectedError, TransliteratorUnavailableError
@@ -107,6 +108,7 @@ class TransliterateParams(BaseModel):
     #: and the client already has a 202 saying which conversion it asked for.
     #: Optional only so a row written before this field existed still runs.
     target: Literal["roman", "perso_arabic"] | None = None
+    source_language: Literal["en", "hi", "ur"] | None = None
 
 
 async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
@@ -130,11 +132,17 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
     source_script = source_script_of(" ".join(params.texts))
     target_script = params.target or target_script_for(source_script)
 
+    language_kwargs = (
+        {"source_language": params.source_language}
+        if params.source_language in {"en", "hi"}
+        else {}
+    )
     results = await ctx.transliterator.convert_many(
         texts=params.texts,
         instruction=params.instruction,
         source_script=source_script,
         target_script=target_script,
+        **language_kwargs,
     )
 
     items: list[dict] = []
@@ -142,7 +150,12 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
     first_rejection: TransliterationRejected | None = None
     for index, (source_text, result) in enumerate(zip(params.texts, results, strict=True)):
         try:
-            check = validate_transliteration(source_text, result.text, target_script)
+            validate = (
+                validate_translation
+                if params.source_language in {"en", "hi"}
+                else validate_transliteration
+            )
+            check = validate(source_text, result.text, target_script)
         except TransliterationRejected as exc:
             # NO TEXT ON A REJECTED ITEM. That is golden rule 5 at the item
             # level: the user never receives a string that is not a conversion
@@ -150,26 +163,30 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
             # transcript.
             rejected += 1
             first_rejection = first_rejection or exc
-            items.append({
-                "index": index,
-                "status": "rejected",
-                "source_text": source_text,
-                "reason": exc.reason,
-                "detail": exc.detail,
-            })
+            items.append(
+                {
+                    "index": index,
+                    "status": "rejected",
+                    "source_text": source_text,
+                    "reason": exc.reason,
+                    "detail": exc.detail,
+                }
+            )
             continue
-        items.append({
-            "index": index,
-            "status": "ok",
-            "text": result.text.strip(),
-            "source_text": source_text,
-            # The validator's measurements ride along rather than being
-            # recomputed client-side: they are how a reviewer can see WHY
-            # something passed, and a second implementation would drift.
-            "arabic_share": check.arabic_share,
-            "length_ratio": check.length_ratio,
-            "residual_source_share": check.residual_source_share,
-        })
+        items.append(
+            {
+                "index": index,
+                "status": "ok",
+                "text": result.text.strip(),
+                "source_text": source_text,
+                # The validator's measurements ride along rather than being
+                # recomputed client-side: they are how a reviewer can see WHY
+                # something passed, and a second implementation would drift.
+                "arabic_share": check.arabic_share,
+                "length_ratio": check.length_ratio,
+                "residual_source_share": check.residual_source_share,
+            }
+        )
 
     # ALL REJECTED -> the job FAILS, carrying the first reason code.
     #
@@ -180,9 +197,7 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
     # converted — those are real work the user can use, and each bad one is
     # marked in place with its reason rather than silently dropped.
     if rejected == len(items) and first_rejection is not None:
-        raise TransliterationRejectedError(
-            first_rejection.detail, reason=first_rejection.reason
-        )
+        raise TransliterationRejectedError(first_rejection.detail, reason=first_rejection.reason)
 
     return JobOutcome(
         result={
@@ -195,6 +210,10 @@ async def run_transliterate(ctx: JobContext, job: JobRecord) -> JobOutcome:
             #: rather than looking like any other successful job.
             "source_script": source_script,
             "target_script": target_script,
+            "source_language": params.source_language,
+            "operation": "translation"
+            if params.source_language in {"en", "hi"}
+            else "transliteration",
             # Charged once, by `convert_many`, because the load happened once.
             "load_time_sec": sum(r.load_time_sec for r in results),
             "gen_time_sec": sum(r.gen_time_sec for r in results),

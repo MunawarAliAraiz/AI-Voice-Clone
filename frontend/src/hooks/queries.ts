@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
+import { deriveCloudGenerationGate } from '../lib/cloudGenerationGate';
 import type {
   JobList,
   JobStatusResponse,
@@ -17,6 +18,7 @@ export const queryKeys = {
   languages: ['languages'] as const,
   voices: ['voices'] as const,
   models: ['models'] as const,
+  cloudSetup: ['cloud-setup'] as const,
   history: (page: number, pageSize: number) => ['history', page, pageSize] as const,
   jobs: (page: number, pageSize: number) => ['jobs', page, pageSize] as const,
   job: (id: number) => ['job', id] as const,
@@ -36,8 +38,18 @@ export function useModels() {
 }
 
 export function useCloudReadiness() {
-  return useQuery({ queryKey: ['cloud-setup'], queryFn: api.cloudSetup,
+  return useQuery({ queryKey: queryKeys.cloudSetup, queryFn: api.cloudSetup,
     enabled: !!window.__VCS_DESKTOP_KEY__, refetchInterval: 3000 });
+}
+
+export function useGenerationGate() {
+  const desktop = !!window.__VCS_DESKTOP_KEY__;
+  const cloud = useCloudReadiness();
+  const audio = useQuery({ queryKey: ['audio-tools'], queryFn: api.audioToolsStatus,
+    enabled: desktop, refetchInterval: query => query.state.data?.ready ? false : 1500 });
+  return deriveCloudGenerationGate({ desktop, setup: cloud.data, error: cloud.isError,
+    audioTools: desktop ? audio.data ?? { ready: false, detail: audio.isError
+      ? 'Local audio tools could not be checked.' : 'Checking local audio tools.' } : undefined });
 }
 
 export function useVoices() {
@@ -68,11 +80,11 @@ export function useJobsList(page: number, pageSize: number) {
     queryFn: () => api.jobs(page, pageSize),
     refetchInterval: (query) => {
       const data = query.state.data as JobList | undefined;
-      if (!data) return false;
+      if (!data) return window.__VCS_DESKTOP_KEY__ ? 3000 : false;
       const busy = data.items.some(
         (j) => j.status === 'queued' || j.status === 'running',
       );
-      return busy ? 2000 : false;
+      return busy ? 2000 : window.__VCS_DESKTOP_KEY__ ? 3000 : false;
     },
   });
 }

@@ -85,15 +85,14 @@ def windows(pid):
 async def check_mcp(env):
     async with (
         stdio_client(
-            StdioServerParameters(
-                command=str(install / "voice-clone-mcp.exe"), args=[], env=env
-            )
+            StdioServerParameters(command=str(install / "voice-clone-mcp.exe"), args=[], env=env)
         ) as (reader, writer),
         ClientSession(reader, writer) as session,
     ):
         await session.initialize()
         listing = await session.list_tools()
-        assert len(listing.tools) == 8
+        assert len(listing.tools) == 10
+        assert {"preview_speech_direction", "wait_for_job"} <= {tool.name for tool in listing.tools}
         health = await session.call_tool("studio_health", {})
         assert not health.is_error, health
         voices = await session.call_tool("list_voices", {})
@@ -116,7 +115,7 @@ def main():
     env.pop("VCS_MCP_API_BASE", None)
     env.pop("VCS_MCP_API_KEY", None)
     env.pop("VCS_API_KEY", None)
-    proc = subprocess.Popen([str(shell)], env=env)
+    proc = subprocess.Popen([str(shell)], env=env)  # noqa: S603 -- exact test install executable
     discovered = None
     api_handle = None
     api_verified = False
@@ -136,19 +135,14 @@ def main():
             time.sleep(0.2)
         else:
             raise AssertionError("Native API/WebView startup timeout")
-        api_handle = kernel32.OpenProcess(
-            0x100000 | 0x1000 | 0x0001, False, discovered.pid
-        )
+        api_handle = kernel32.OpenProcess(0x100000 | 0x1000 | 0x0001, False, discovered.pid)
         assert api_handle, "Cannot retain the API process handle for test cleanup"
         api_image = ctypes.create_unicode_buffer(32768)
         image_length = wintypes.DWORD(len(api_image))
         assert kernel32.QueryFullProcessImageNameW(
             api_handle, 0, api_image, ctypes.byref(image_length)
         )
-        assert (
-            Path(api_image.value).resolve()
-            == (install / "voice-clone-api.exe").resolve()
-        )
+        assert Path(api_image.value).resolve() == (install / "voice-clone-api.exe").resolve()
         api_verified = True
         with httpx.Client(base_url=discovered.base_url, timeout=5) as client:
             assert client.get("/api/voices").status_code == 401
@@ -161,12 +155,14 @@ def main():
             assert setup.json()["connected"] is False
             assert setup.json()["ready"] is False
             assert setup.json()["compute"] is None
-            assert (
-                client.post(
-                    "/api/generate", json={"text": "Setup gate test"}
-                ).status_code
-                == 409
-            )
+            assert client.post("/api/generate", json={"text": "Setup gate test"}).status_code == 409
+            # Quiesce only this disposable test profile; cancellation restores
+            # normal API mutation admission without starting an installer.
+            assert client.post("/api/desktop/updates/prepare").json() == {"prepared": True}
+            assert client.post("/api/desktop/updates/prepare").json() == {"prepared": True}
+            assert client.get("/api/voices").status_code == 200
+            assert client.post("/api/generate", json={"text": "Fenced"}).status_code == 409
+            assert client.post("/api/desktop/updates/cancel").json() == {"prepared": False}
         assert (data / "voiceclone.db").is_file()
         assert (data / "webview").is_dir()
         print(
@@ -174,7 +170,7 @@ def main():
             flush=True,
         )
         asyncio.run(check_mcp(env))
-        second = subprocess.Popen([str(shell)], env=env)
+        second = subprocess.Popen([str(shell)], env=env)  # noqa: S603 -- exact test install executable
         assert second.wait(timeout=20) == 0
         assert DesktopSessionStore(descriptor).load() == discovered
         assert proc.poll() is None
@@ -211,6 +207,7 @@ def main():
                         "native startup",
                         "frontend/auth/sqlite",
                         "cloud setup status and generation admission gate",
+                        "idle updater quiesce, idempotent prepare and cancel",
                         "installed MCP bridge",
                         "single-instance session",
                         "window close API cleanup",

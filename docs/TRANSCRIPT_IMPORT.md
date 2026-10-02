@@ -1,5 +1,13 @@
 # The Convert tab — design, decisions, and what is not built
 
+> **Current behavior — 2026-10-02:** public YouTube caption import has been
+> restored locally with explicit English/Hindi/Urdu selection and bounded
+> requests. English/Hindi-to-Urdu translation is now implemented as a durable
+> draft job, alongside the existing Urdu script conversions. See
+> [the current Convert feature document](CONVERT.md). The sections below record
+> the earlier removal and transliteration decisions; their planned-feature
+> statements are historical.
+
 > **The YouTube fetch was removed 2026-08-19, and the tab renamed "Import" → "Convert".** YouTube
 > hard-blocks datacenter IPs (RunPod) with "Sign in to confirm you're not a bot", and getting past it
 > needs a fragile stack (a logged-in cookies file + Deno + the EJS challenge solver + new caption-format

@@ -25,6 +25,7 @@
 import { useState } from 'react';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse } from '../types/api';
 import { IconChevronDown, IconChevronUp, IconReset, IconSpark, IconSpinner } from './icons';
+import { DisabledAction } from './CloudGenerationGate';
 
 interface Props {
   data: DirectionAnalyzeResponse | null;
@@ -54,6 +55,7 @@ interface Props {
    */
   onSuggestAi?: () => void;
   aiSuggestLoading?: boolean;
+  aiSuggestDisabledReason?: string | null;
   aiSuggestError?: string | null;
 }
 
@@ -79,6 +81,7 @@ export function DirectionPanel({
   onResetAllEdits,
   onSuggestAi,
   aiSuggestLoading,
+  aiSuggestDisabledReason,
   aiSuggestError,
 }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -164,17 +167,19 @@ export function DirectionPanel({
               </span>
             </button>
             {showAdvanced && editable && onSuggestAi && (
+              <DisabledAction reason={aiSuggestDisabledReason ?? (aiSuggestLoading ? 'AI suggestions are being generated. Please wait.' : null)}>
               <button
                 type="button"
                 className="btn-sm on"
                 onClick={onSuggestAi}
-                disabled={aiSuggestLoading}
+                disabled={aiSuggestLoading || !!aiSuggestDisabledReason}
                 aria-busy={aiSuggestLoading}
                 title="Classify emotion/intensity/energy/rate for every segment with the Qwen LLM analyzer, then review/adjust below before generating."
               >
                 {aiSuggestLoading ? <IconSpinner size={12} /> : <IconSpark size={12} />}
                 {aiSuggestLoading ? 'Asking AI…' : 'Let AI suggest emotion/tone'}
               </button>
+              </DisabledAction>
             )}
             {showAdvanced && editable && editedCount > 0 && (
               <button type="button" className="btn-sm" onClick={onResetAllEdits}>

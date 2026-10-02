@@ -23,6 +23,8 @@ dependencies = [
     "aiosqlite>=0.20",
     "aiofiles>=24.1",
     "httpx>=0.28",
+    "tomlkit>=0.13.3,<1",
+    "youtube-transcript-api==1.2.4",
     # YouTube caption import (routers/transcript.py). Unlicense (public
     # domain), so golden rule 6 is clear. Pure Python, no torch, so golden
     # rule 2 holds. Imported inside the endpoint, not at startup.

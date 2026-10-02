@@ -22,6 +22,7 @@ from ...config import Settings
 from ...db import Database
 from ...exceptions import AudioValidationError, ProfileNotFoundError, ValidationError
 from ..deps import get_db, get_settings
+from ...audio_tools import require_audio_tools
 from ..media_tokens import make_media_url, verify_token
 from ..schemas.voice import VoiceProfileList, VoiceProfileResponse, VoiceProfileUpdate
 
@@ -41,7 +42,7 @@ def _to_response(row: aiosqlite.Row, settings: Settings) -> VoiceProfileResponse
     )
 
 
-@router.post("/preview-edit")
+@router.post("/preview-edit", dependencies=[Depends(require_audio_tools)])
 async def preview_edit(
     settings: Annotated[Settings, Depends(get_settings)],
     file: Annotated[UploadFile, File(description="Reference audio.")],
@@ -94,7 +95,8 @@ async def preview_edit(
     }
 
 
-@router.post("", response_model=VoiceProfileResponse, status_code=201)
+@router.post("", response_model=VoiceProfileResponse, status_code=201,
+             dependencies=[Depends(require_audio_tools)])
 async def create_voice(
     db: Annotated[Database, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],

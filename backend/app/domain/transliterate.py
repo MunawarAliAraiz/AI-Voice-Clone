@@ -1,6 +1,10 @@
 """
 Script conversion: the contract, and the validator that enforces it.
 
+Explicit English/Hindi translation has a separate draft validator below.
+Those languages are provided by the caller, never inferred from Latin text;
+the existing script-conversion prompts/checks retain their original behavior.
+
 Four conversions. Exactly one of them has passed a listening gate:
 
     latin      → perso_arabic   the SPEECH hop. GATED 2026-08-16.
@@ -239,12 +243,14 @@ def source_script_of(text: str) -> str:
 #:                            target — the whole reason `hi` is not a
 #:                            `LanguageCode` and `routing.py` refuses to render
 #:                            it. Adding it would reopen that by the back door.
-SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset({
-    ("latin", TARGET_PERSO_ARABIC),
-    ("devanagari", TARGET_ROMAN),
-    ("devanagari", TARGET_PERSO_ARABIC),
-    ("arabic", TARGET_ROMAN),
-})
+SUPPORTED_PAIRS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("latin", TARGET_PERSO_ARABIC),
+        ("devanagari", TARGET_ROMAN),
+        ("devanagari", TARGET_PERSO_ARABIC),
+        ("arabic", TARGET_ROMAN),
+    }
+)
 
 #: Where each source goes when the caller expresses no preference.
 #:
@@ -351,13 +357,17 @@ def validate_transliteration(
     if target == TARGET_ROMAN:
         if residual > MAX_RESIDUAL_SOURCE_SHARE:
             _reject_script(
-                text, source, "not_converted",
+                text,
+                source,
+                "not_converted",
                 "The model left your text in its original script instead of "
                 "writing it in Latin letters.",
             )
     elif arabic < MIN_ARABIC_SHARE:
         _reject_script(
-            text, source, "not_urdu_script",
+            text,
+            source,
+            "not_urdu_script",
             "The model replied in the wrong script instead of converting your text.",
         )
 
@@ -379,3 +389,32 @@ def validate_transliteration(
     return TransliterationCheck(
         arabic_share=arabic, length_ratio=ratio, residual_source_share=residual
     )
+
+
+def validate_translation(source: str, output: str, target: str) -> TransliterationCheck:
+    """Reject empty/echo/wrong-script drafts, without claiming semantic accuracy."""
+    text = output.strip()
+    if not text or text.casefold() == source.strip().casefold():
+        raise TransliterationRejected(
+            "translation_empty_or_echo",
+            "The model did not translate this part. Try again or edit the source.",
+        )
+    arabic = _arabic_share(text)
+    if target == TARGET_PERSO_ARABIC and arabic < MIN_ARABIC_SHARE:
+        raise TransliterationRejected(
+            "translation_wrong_script", "The model did not write its translation in Urdu script."
+        )
+    if (
+        target == TARGET_ROMAN
+        and _share(text, _ARABIC_RANGES + _DEVANAGARI_RANGES) > MAX_RESIDUAL_SOURCE_SHARE
+    ):
+        raise TransliterationRejected(
+            "translation_wrong_script", "The model did not write its translation in Roman Urdu."
+        )
+    ratio = len(text) / max(1, len(source.strip()))
+    if not 0.15 <= ratio <= 6.0 or len(text) > 12_000:
+        raise TransliterationRejected(
+            "translation_length",
+            "This translation's length is implausible. Review the source and try again.",
+        )
+    return TransliterationCheck(arabic_share=arabic, length_ratio=ratio)

@@ -15,6 +15,8 @@ from .main import create_app
 
 def main() -> None:
     settings = Settings()
+    if "VCS_DESKTOP_AUDIO_TOOLS_AUTOSTART" not in os.environ:
+        settings.desktop_audio_tools_autostart = True
     if settings.desktop_static_dir is None:
         packaged = Path(getattr(sys, "_MEIPASS", "")) / "web"
         if packaged.is_dir():

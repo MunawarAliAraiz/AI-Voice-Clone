@@ -12,12 +12,13 @@
  * this component's lifetime.
  */
 import { useEffect, useRef, useState } from 'react';
-import { isTerminal, useCloudReadiness, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
+import { isTerminal, useGenerationGate, useAnalyzeLlmMutation, useCancelJobMutation, useGenerateMutation, useInvalidateAfterJobSuccess, useJob, useModels, useSystemStatus } from '../hooks/queries';
 import { useScriptConversion } from '../hooks/useScriptConversion';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
 import { DirectionPanel } from './DirectionPanel';
+import { CloudGenerationGate, DisabledAction } from './CloudGenerationGate';
 import {
   IconAlert,
   IconCheck,
@@ -40,6 +41,8 @@ interface Props {
   onJobQueued?: (job: JobStatusResponse) => void;
   /** Switches to the Recent tab. Undefined hides the pointer entirely. */
   onOpenRecent?: () => void;
+  onOpenRunpod?: () => void;
+  onOpenUpdates?: () => void;
   /**
    * Text pushed in from another tab (the transcript importer).
    *
@@ -69,7 +72,7 @@ function fallbackTitle(text: string): string {
   return text.trim().split(/\s+/).slice(0, 4).join(' ');
 }
 
-export function Composer({ voices, languages, onJobQueued, onOpenRecent, pendingText }: Props) {
+export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenRunpod, onOpenUpdates, pendingText }: Props) {
   const [profileId, setProfileId] = useState<number | null>(null);
   const [language, setLanguage] = useState('ur');
   // null = Auto (let /api/generate's resolve() pick). An explicit id is
@@ -157,8 +160,8 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   const cancelMutation = useCancelJobMutation();
   const { data: job } = useJob(jobId);
   const { data: modelsData } = useModels();
-  const cloudQ = useCloudReadiness();
-  const cloudReady = !window.__VCS_DESKTOP_KEY__ || (cloudQ.data?.ready && !!cloudQ.data.policy);
+  const cloudGate = useGenerationGate();
+  const cloudReady = !cloudGate.blocked;
   const invalidateAfterSuccess = useInvalidateAfterJobSuccess();
   const settledJobId = useRef<number | null>(null);
 
@@ -353,7 +356,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
     // `title` is read inside fillTitleIfEmpty's own guard; depending on it here
     // would restart the timer on every character the user types INTO the title.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, language]);
+  }, [text, language, cloudReady]);
 
   // Debounced direction analysis — same pattern as script detection, but only
   // while the "Direction (preview)" disclosure is open, so the preview call
@@ -460,6 +463,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   }, [llmJob, direction]);
 
   async function handleSuggestAi() {
+    if (!cloudReady) return setAiSuggestErr(cloudGate.reason);
     const t = text.trim();
     if (!t) return;
     setAiSuggestErr(null);
@@ -473,6 +477,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
   }
 
   async function generate() {
+    if (!cloudReady) return setErr(cloudGate.reason);
     if (profileId === null) return setErr('Add and select a voice first.');
     if (!text.trim()) return setErr('Type something to say.');
     setErr(null);
@@ -536,7 +541,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
 
   /** Ctrl/Cmd+Enter generates, the convention for a "send" textarea. */
   function onKeyDown(e: React.KeyboardEvent) {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !busy) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !disabled) {
       e.preventDefault();
       void generate();
     }
@@ -569,7 +574,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
    * to be unwanted is not a free one.
    */
   async function fillTitleIfEmpty(forText: string): Promise<void> {
-    if (title.trim() || titling || !forText.trim()) return;
+    if (!cloudReady || title.trim() || titling || !forText.trim()) return;
     setTitling(true);
     try {
       const suggested = (await api.suggestTitle(forText.trim(), language)).title;
@@ -593,7 +598,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
    */
   async function suggestTitleNow(): Promise<void> {
     const t = text.trim();
-    if (!t || titling) return;
+    if (!cloudReady || !t || titling) return;
     setTitleSuggestion(null);
     setTitleErr(null);
     setTitling(true);
@@ -637,7 +642,18 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
     }
   }
 
-  const disabled = busy || !voices.length || !cloudReady;
+  const generateDisabledReason = cloudGate.blocked ? cloudGate.reason
+    : busy ? 'Submitting this generation. Please wait.'
+    : conversion.running ? 'The script is being converted. Review it when conversion finishes.'
+    : !voices.some(voice => voice.id === profileId) ? 'Add and select a reference voice before generating.'
+    : !text.trim() ? 'Enter a script before generating.' : null;
+  const disabled = !!generateDisabledReason;
+  const titleDisabledReason = cloudGate.blocked ? cloudGate.reason
+    : titling ? 'A title suggestion is being generated. Please wait.'
+    : !text.trim() ? 'Enter a script before asking for a title suggestion.' : null;
+  const conversionDisabledReason = cloudGate.blocked ? cloudGate.reason
+    : conversion.running ? 'Script conversion is already running. Please wait.'
+    : !text.trim() ? 'Enter a script before converting it.' : null;
   const aiSuggestBusy =
     analyzeLlmMutation.isPending || (llmJob != null && !isTerminal(llmJob.status));
 
@@ -647,7 +663,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
         <h2 id="composer-h">Generate speech</h2>
       </header>
 
-      {!cloudReady && <p role="status" className="hint">Open Runpod to prepare model storage and approve automatic compute limits. Generation and cloud text helpers unlock when setup is ready.</p>}
+      <CloudGenerationGate gate={cloudGate} onOpenRunpod={onOpenRunpod} onOpenUpdates={onOpenUpdates} />
 
       <div className="editor-bar">
         <label className="field editor-title">
@@ -664,6 +680,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
             aria-label="Generation title"
           />
         </label>
+        <DisabledAction reason={titleDisabledReason}>
         <button
           type="button"
           className="btn-sm ghost editor-title-suggest"
@@ -678,6 +695,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
           {titling ? <IconSpinner size={13} /> : <IconSpark size={13} />}
           {titling ? 'Naming…' : 'Suggest'}
         </button>
+        </DisabledAction>
       </div>
 
       {/* Only reachable with a non-empty field: with an empty one the
@@ -924,6 +942,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
               needsConversionBeforeGenerate), so this button would be a
               redundant second door to the same step. */}
           {canConvert && detect?.script === 'latin' && language === 'ur' && selectedModelServesLatin && (
+            <DisabledAction reason={conversionDisabledReason}>
             <button
               type="button"
               className="btn-sm ghost"
@@ -934,6 +953,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
               {conversion.running ? <IconSpinner size={13} /> : null}
               {conversion.running ? conversion.progressLabel : 'Convert to Urdu script'}
             </button>
+            </DisabledAction>
           )}
           {preConvert !== null && (
             <button
@@ -990,7 +1010,8 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
           onResetSegment={handleResetSegment}
           onResetAllEdits={handleResetAllEdits}
           onSuggestAi={handleSuggestAi}
-          aiSuggestLoading={aiSuggestBusy || !cloudReady}
+          aiSuggestLoading={aiSuggestBusy}
+          aiSuggestDisabledReason={cloudGate.blocked ? cloudGate.reason : !text.trim() ? 'Enter a script before asking for AI suggestions.' : null}
           aiSuggestError={aiSuggestErr}
         />
       )}
@@ -1001,6 +1022,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
         </div>
       )}
 
+      <DisabledAction reason={generateDisabledReason} className="block">
       <button
         className="btn primary"
         disabled={disabled || conversion.running}
@@ -1016,6 +1038,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, pending
               ? 'Convert to Urdu script, then review'
               : 'Generate'}
       </button>
+      </DisabledAction>
 
       {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
 

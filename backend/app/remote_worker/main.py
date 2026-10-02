@@ -10,7 +10,7 @@ import tempfile
 from collections.abc import AsyncIterator
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -49,6 +49,7 @@ class RemoteTransliterateRequest(BaseModel):
     instruction: str = Field(default="", max_length=2000)
     source_script: str
     target_script: str
+    source_language: Literal["en", "hi", "ur"] | None = None
 
 
 def create_worker_app(
@@ -174,8 +175,13 @@ def create_worker_app(
     @app.post("/v1/transliterate", dependencies=[Depends(authenticate)])
     async def transliterate(body: RemoteTransliterateRequest) -> dict[str, Any]:
         require_helper(GEMMA_TRANSLITERATOR_MODEL_ID)
-        if (body.source_script, body.target_script) not in SUPPORTED_PAIRS:
+        if (
+            body.source_language not in {"en", "hi"}
+            and (body.source_script, body.target_script) not in SUPPORTED_PAIRS
+        ):
             raise HTTPException(422, "Unsupported script conversion pair")
+        if body.target_script not in {"roman", "perso_arabic"}:
+            raise HTTPException(422, "Unsupported translation target")
         if any(not text.strip() or len(text) > 6000 for text in body.texts):
             raise HTTPException(422, "Conversion passages must contain 1 to 6000 characters")
         if app.state.transliterator is None:
@@ -187,12 +193,18 @@ def create_worker_app(
             instruction=body.instruction,
             source_script=body.source_script,
             target_script=body.target_script,
+            **(
+                {"source_language": body.source_language}
+                if body.source_language in {"en", "hi"}
+                else {}
+            ),
         )
         return {
             "protocol_version": PROTOCOL_VERSION,
             "model_id": GEMMA_TRANSLITERATOR_MODEL_ID,
             "revision": AUXILIARY_PINS[GEMMA_TRANSLITERATOR_MODEL_ID][1],
             "results": [asdict(result) for result in results],
+            "source_language": body.source_language,
         }
 
     @app.post(

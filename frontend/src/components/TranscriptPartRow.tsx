@@ -47,6 +47,7 @@ interface Props {
    *  script, so the memo below can compare it by identity. */
   targets: ('roman' | 'perso_arabic')[];
   converting: boolean;
+  conversionLocked?: boolean;
   convertingLabel: string;
   onSendToEditor: (text: string) => void;
   onCopy: (text: string, key: string) => void;
@@ -65,7 +66,7 @@ const STATUS_LABEL: Record<PartStatus, string> = {
 
 function TranscriptPartRowImpl({
   chunk, parts, expanded, onToggle, selected, selectMode, onSelect,
-  onConvert, targets, converting, convertingLabel, onSendToEditor, onCopy, copied,
+  onConvert, targets, converting, conversionLocked, convertingLabel, onSendToEditor, onCopy, copied,
   requiresConversion,
 }: Props) {
   const part = parts.get(chunk.index);
@@ -160,7 +161,7 @@ function TranscriptPartRowImpl({
                   type="button"
                   className="btn-sm"
                   onClick={() => onConvert(t)}
-                  disabled={converting}
+                  disabled={converting || conversionLocked}
                   title={
                     t === 'roman'
                       ? 'Convert only this part to Roman Urdu'
@@ -187,7 +188,7 @@ function TranscriptPartRowImpl({
               disabled={sendBlocked}
               title={
                 sendBlocked
-                  ? 'Devanagari cannot be generated — convert this part first'
+                  ? 'Convert this part to Urdu before sending to the editor'
                   : 'Put this part in the editor'
               }
             >
@@ -225,6 +226,7 @@ export const TranscriptPartRow = memo(TranscriptPartRowImpl, (a, b) =>
   a.selected === b.selected &&
   a.selectMode === b.selectMode &&
   a.converting === b.converting &&
+  a.conversionLocked === b.conversionLocked &&
   a.convertingLabel === b.convertingLabel &&
   a.copied === b.copied &&
   a.requiresConversion === b.requiresConversion &&

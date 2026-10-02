@@ -50,22 +50,29 @@ async def test_stdio_tools_and_authenticated_api_bridge() -> None:
     env["VCS_MCP_API_BASE"] = f"http://127.0.0.1:{api.server_port}"
     env["VCS_MCP_API_KEY"] = key
     try:
-        parameters = StdioServerParameters(
-            command=sys.executable, args=["-m", "app.mcp"], env=env
-        )
+        parameters = StdioServerParameters(command=sys.executable, args=["-m", "app.mcp"], env=env)
         async with stdio_client(parameters) as (reader, writer):
             async with ClientSession(reader, writer) as session:
-                await session.initialize()
+                initialized = await session.initialize()
+                assert "reference voice" in initialized.instructions
                 tools = await session.list_tools()
                 assert {tool.name for tool in tools.tools} == {
-                    "studio_health", "list_voices", "list_models", "generate_speech",
-                    "get_job", "cancel_job", "list_recent_jobs", "list_history",
+                    "studio_health",
+                    "list_voices",
+                    "list_models",
+                    "generate_speech",
+                    "get_job",
+                    "cancel_job",
+                    "list_recent_jobs",
+                    "list_history",
+                    "preview_speech_direction",
+                    "wait_for_job",
                 }
                 result = await session.call_tool(
                     "generate_speech", {"text": "Hello", "profile_id": 2, "language": "en"}
                 )
                 assert not result.is_error
-                assert requests == [
+                assert [r for r in requests if r[0] != "/api/agents/activity"] == [
                     ("/api/generate", {"text": "Hello", "profile_id": 2, "language": "en"})
                 ]
                 failed = await session.call_tool("studio_health", {})
