@@ -1,5 +1,22 @@
 # Handoff — current state
 
+## Automatic model-download request fix - 2026-10-03
+
+The user reported "The request body failed validation" during model setup in
+0.1.5. A read-only live snapshot confirmed 0.1.5, selected storage, cancelled
+setup, automatic intent unset and no compute or cleanup pending. The frontend
+cloudAutoSetup sent JSON text without a JSON Content-Type. Browser fetch defaults
+that body to text/plain, which FastAPI rejects before the controller executes.
+
+Fixed the client header. Regression checks execute the real frontend API client
+and enable/pause/resume requests; actual FastAPI route tests reproduce the exact
+422 for text/plain and accept application/json without any paid controller call.
+7 focused backend tests, request/wizard/gate/header/updater frontend checks and
+the frontend build passed. Other Runpod JSON methods were audited and already
+have the header. No worker image change is required. Next: build/sign/check
+0.1.6, obtain approval for the exact installer, publish and verify public bytes.
+Do not mutate the live profile or start paid downloads for these checks.
+
 ## Guided setup revision - installer verified, 2026-10-03
 
 The user confirmed the choices in [GUIDED_SETUP.md](GUIDED_SETUP.md). Work is

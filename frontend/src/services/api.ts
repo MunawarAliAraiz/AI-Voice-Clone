@@ -177,7 +177,7 @@ export const api = {
   cloudInstall: () => request<CloudSetup>('/api/runpod/setup/install', { method: 'POST' }),
   cloudCancel: () => request<CloudSetup>('/api/runpod/setup/cancel', { method: 'POST' }),
   cloudAutoSetup: (enabled: boolean) => request<CloudSetup>('/api/runpod/setup/auto', {
-    method: 'PUT', body: JSON.stringify({ enabled }),
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
   }),
   cloudRelease: () => request<void>('/api/runpod/setup/release', { method: 'POST' }),
   cloudPolicy: (session: number, hourly: number) => request<void>('/api/runpod/setup/policy', {

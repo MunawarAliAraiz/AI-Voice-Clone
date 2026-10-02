@@ -2,6 +2,10 @@
 
 ## Simple setup and progress state
 
+JSON mutations explicitly send `Content-Type: application/json`. The automatic
+setup client transport is tested with browser-equivalent requests and actual
+FastAPI parsing; component rendering alone cannot prove a request is accepted.
+
 The Runpod UI presents Account, Storage, Models and Ready as separate pages,
 with Back/Next and revisitable steps. Ready also checks compulsory local audio
 tools; GPU loading belongs to the first generation. Collapsed disclosures hold technical controls; visible
