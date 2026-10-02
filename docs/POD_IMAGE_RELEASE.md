@@ -103,8 +103,10 @@ worker-only source `e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`. Immutable referen
 and verification evidence live in `backend/app/runpod/release.json`.
 The CPU image is 280,301,535 compressed layer bytes; GPU is 7,736,397,742.
 Actual model downloads, CUDA generation, listening, costs and compute release
-still require Runpod qualification. Desktop 0.1.1 has no embedded manifest;
-the next installer must include it before setup can unlock.
+still require Runpod qualification. Desktop 0.1.1 has no embedded manifest.
+The built 0.1.2 installer includes the exact qualified manifest;
+frozen API tests report `release_available: true`. Do not confuse this
+packaging check with actual Runpod qualification.
 
 ## Local rebuild
 

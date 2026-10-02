@@ -1,5 +1,39 @@
 # Handoff — current state
 
+## Desktop 0.1.2 built and verified — 2026-10-02
+
+The signed Windows x64 NSIS installer is ready locally:
+`D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.2-setup.exe`.
+65,745,532 bytes; SHA256
+`f553c47a5684e766f6a1230d607b5dfcaab6765a520ee193d03241ba8f4928b4`.
+The actual Ed25519 updater signature, signed version/filename and PE/NSIS
+structure passed verification. Windows Authenticode is absent.
+
+Both frozen sidecars passed isolated tests: API startup/version, auth/static
+frontend, embedded worker availability, honest disconnected state, generation
+admission, update preparation/idempotency/fence/cancel and real MCP handshake
+with ten tools. Only the created test process tree was stopped; listener cleanup
+passed. The exact qualified worker manifest bytes were extracted from the
+frozen API and matched source SHA256
+`bfb2d40350387618b3b09d2275997e683a5d3342e40b4bf13387f2b842ac90c9`.
+Frontend/CSS checks and native release build passed. 24 release qualification
+tests and focused Ruff passed. Receipts are beside the installer.
+
+The user's active app/profile was not touched. Native 0.1.2 install and real
+update/restart were not run, because the user is operating their computer.
+Actual Runpod provisioning, model downloads, GPU audio/cost/shutdown tests
+remain pending. The qualified manifest and account-card width fix are included
+in this installer. Source is local; broad application-source permission remains
+unanswered. The user separately approved exact 0.1.2 binary/feed publication
+with the hash above. It is published at
+https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.2.
+Anonymous latest-feed and complete installer downloads passed; public bytes
+match the exact approved SHA256/size. Receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.2-receipt.json`.
+Do not push additional application source. Let the user apply Updates and
+complete setup; preserve their active TEMP profile described below. The
+old 0.1.1 app was not closed, restarted or operated during this work.
+
 ## Qualified worker images — 2026-10-02
 
 Both jobs in hosted run 36964451430 completed successfully for worker-only

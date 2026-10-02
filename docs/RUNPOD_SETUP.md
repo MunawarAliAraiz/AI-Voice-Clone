@@ -1,6 +1,6 @@
 # Runpod setup from the desktop
 
-## Current blocker
+## Applying the worker-enabled release
 
 Desktop 0.1.1 does not include a verified cloud worker release. Connecting the
 API, checking funds and reviewing storage quotes work, but purchasing storage
@@ -11,11 +11,14 @@ Both worker image jobs in
 [36964451430](https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430)
 succeeded for source `e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`. Their matching
 immutable images passed anonymous registry verification and are now included
-in the release manifest. Desktop 0.1.2 is being packaged with this manifest and
-the account-card width fix. The running 0.1.1 cannot gain these references by
+in the release manifest. Desktop 0.1.2 is built and verified with this manifest
+and the account-card width fix. It is published at
+[v0.1.2](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.2);
+anonymous latest-feed and full installer downloads match the verified files.
+The running 0.1.1 cannot gain these references by
 connecting its API key. Actual GPU generation quality remains untested.
 
-## Once the worker-enabled update is available
+## Setup after applying 0.1.2
 
 1. Open **Updates**, check, download, then restart/apply when your jobs are idle.
 2. Open **Runpod** and connect the API key if needed. Select **Refresh storage
