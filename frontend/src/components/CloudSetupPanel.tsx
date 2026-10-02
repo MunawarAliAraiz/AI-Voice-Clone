@@ -74,7 +74,10 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
           })}>Purchase storage and set up models</button>
         </div>}
       </>}
-      {setup && !setup.release_available && <p role="status" className="hint">Cloud worker release is being prepared. Storage and funds can be checked now; purchasing and downloading unlock when the published release is included.</p>}
+      {setup && !setup.release_available && <div role="status">
+        <p className="hint">Model setup is unavailable in this app version because a verified cloud worker release has not been included. You can check storage and funds now. Purchasing and model downloads unlock in the desktop update that includes the worker release.</p>
+        <button type="button" className="btn sm" onClick={() => window.dispatchEvent(new CustomEvent('vcs-open-updates'))}>Check app updates</button>
+      </div>}
       {(error || setupQ.error) && <p role="alert">{error || String(setupQ.error)}</p>}
     </section>
     <section className="card">

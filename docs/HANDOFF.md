@@ -1,5 +1,46 @@
 # Handoff — current state
 
+## Worker-only rebuild and screenshot correction — 2026-10-02
+
+The user is using the computer themselves. Do not use Computer Use or replace,
+restart or close their active app. Their screenshot confirmed the account card
+was still narrower than the other Runpod cards. Its 640 px maximum width is
+now removed in source so it spans the same grid column; frontend build passes.
+The missing-worker explanation now names the app-version limitation and links
+to Updates. These fixes await the next installer and are not in published 0.1.1.
+
+The broad application-source push remains unapproved, but a safer, approved
+worker-only publication succeeded: exact two-file Dockerfile/lock fix on public
+base `aba0594`, commit `41c22a8378307abf6b4525dfe18cae800db089c5`, pushed to
+`fork:codex/desktop-runpod-mcp`. This excludes desktop/agents/updater source.
+An isolated checkout is at `D:/Projects/AI-Voice-Clone/build/worker-release-publish`.
+Worker translation implementation is also being scoped for worker-only
+publication. Hosted image builds and anonymous image access are being checked.
+
+The replacement worker-only commit is now
+`e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`: two Pod dependency files,
+five worker translation files and one worker-only test. No desktop/API/agent
+publication scope was added. Corrected hosted build:
+https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430.
+Both jobs started; the redundant earlier 41c build was canceled. Existing CPU
+image `sha256:6d2f1aadf5159be2f6fa6561a2b0fc1b100a5ab46f250646bbe0465422487cf2`
+passed authenticated service checks and anonymous OCI manifest access;
+280,300,375 compressed layer bytes. The replacement source must qualify both
+images before writing the release manifest.
+
+The user's current desktop process is the TEMP test installation, PID 700.
+Preserve its app/profile: the user has connected Runpod in it. Do not uninstall
+or remove `vcs-desktop-011-7dcb27c8597a4379bfb5ead2fd4e142c` as test cleanup.
+Any later profile migration to the standard installed location must preserve
+their actual saved data and should be coordinated with their manual update.
+
+Prepare 0.1.2 with the full-width fix and qualified worker manifest together.
+Do not publish another app claiming Pod setup is usable without successful
+image build/digest/public-pull evidence. Real storage/model download/GPU output
+and billing/shutdown qualification remain incomplete. The screenshot's $9.30
+credit exceeds its displayed $1.47 setup reserve; missing worker release was
+the immediate blocker, rather than that screenshot's account funds.
+
 ## Installed 0.1.1 and approved publication — 2026-10-02
 
 0.1.1 was built, installed into a disposable TEMP directory and tested with
