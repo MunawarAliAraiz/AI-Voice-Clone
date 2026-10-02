@@ -30,8 +30,30 @@ installer cleanup is confirmed. A definitive GraphQL parse/schema rejection
 clears its pre-execution creation record; unknown/transport/resolver errors keep
 the reconciliation fence. Provider messages/credentials are not echoed.
 
-40 focused cloud-controller checks and Ruff passed; frontend 0.1.3 build and
-27 generation-gate checks passed. Native installer packaging is underway.
+40 focused cloud-controller checks and Ruff passed; frontend 0.1.3 build,
+27 generation-gate checks, 15 header checks and focused Runpod SSR checks passed.
+The rebuilt frozen API/MCP also passed isolated startup/auth/frontend, fresh
+idle setup state, worker manifest availability, generation admission, update
+preparation/cancel and ten-tool MCP checks; only the test PID tree was stopped.
+Receipt: `D:/Projects/AI-Voice-Clone/build/sidecars-013-receipt.json`.
+Native packaging initially failed because cached Cargo source files were
+missing. Existing crate archives were checked against the committed lockfile
+SHA256 before restoring missing files (540 verified archives, 26,037 files).
+The resumed native build passed with the rebuilt/tested sidecars and existing
+protected updater signing identity. The exact frozen worker manifest was
+extracted and matched source SHA256
+`bfb2d40350387618b3b09d2275997e683a5d3342e40b4bf13387f2b842ac90c9`.
+
+The finished local installer is
+`D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.3-setup.exe`,
+65,756,839 bytes; SHA256
+`545619e15195cc07d6eb3f88295d19ea41c8664792cd98d9381c907dc88e5da8`.
+Windows PE/NSIS structure, actual Ed25519 signature and signed version/filename
+passed verification. The local feed, release notes, build/sidecar receipts and
+release evidence are beside the installer. No native 0.1.3 install or actual
+update/restart was performed. Exact 0.1.3 installer/feed/notes publication
+approval was requested and remains pending; the public feed is still 0.1.2.
+Do not push broad application source or operate the user's desktop window.
 The user continues operating the computer: no native windows are launched,
 closed or updated by the agent. Paid provisioning/generation remains untested.
 

@@ -143,7 +143,7 @@ speakers require listening tests in Urdu and English before release. The
 diarization, separation, and conversion models need their own dependency
 environments and pinned, license-checked weights.
 
-## Current checkpoint 2026-10-01
+## Historical checkpoint 2026-10-01
 
 The Windows installer is built and local native integration is being verified
 against the final bundle. Runpod setup now uses one management key, account
@@ -154,9 +154,11 @@ storage and an approved compute policy. Provider-side termination is included
 atomically in creation; completed output remains local and model storage remains
 on the network volume. See [CLOUD_LIFECYCLE.md](CLOUD_LIFECYCLE.md).
 
-No worker image has been published and no new live generation is qualified.
-Public source publication approval is pending, and paid operations require
-reviewed immutable worker image references. Serverless comparison and automatic
+At that checkpoint, no worker image had been published and no new live
+generation was qualified. Worker-only source/workflow publication was later
+approved and both immutable images were qualified for desktop 0.1.2; see
+[HANDOFF.md](HANDOFF.md) for current release evidence. Broad application-source
+publication remains unapproved. Serverless comparison and automatic
 recorded-audio conversion remain open. Dialogue is Beta and its generation tests
 are deferred. [HANDOFF.md](HANDOFF.md) is the current execution checkpoint;
 the dated sections below describe earlier states.
