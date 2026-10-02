@@ -189,6 +189,7 @@ class TransliteratorScheduler:
         instruction: str = "",
         source_script: str = "latin",
         target_script: str = "perso_arabic",
+        source_language: str | None = None,
     ) -> list[TransliterateResult]:
         """
         Convert several passages against ONE residency.
@@ -229,6 +230,7 @@ class TransliteratorScheduler:
                             "instruction": instruction,
                             "source_script": source_script,
                             "target_script": target_script,
+                            **({"source_language": source_language} if source_language else {}),
                         },
                         timeout=self._convert_timeout_sec,
                     )
@@ -340,9 +342,7 @@ class TransliteratorScheduler:
                 f"gemma transliterator failed to load: {response.error_message or 'unknown'}"
             )
         self._loaded = True
-        self._pending_load_time_sec = float(
-            response.result.get("load_time_sec", time.time() - t0)
-        )
+        self._pending_load_time_sec = float(response.result.get("load_time_sec", time.time() - t0))
         logger.info("gemma transliterator loaded in %.1fs", self._pending_load_time_sec)
 
     async def _drop_worker(self) -> None:
@@ -375,8 +375,7 @@ class TransliteratorScheduler:
                     idle_for = time.monotonic() - self._last_activity
                     if self._worker is not None and idle_for >= self._idle_unload_sec:
                         logger.info(
-                            "gemma transliterator idle for %.0fs; killing worker "
-                            "to release ~19 GB",
+                            "gemma transliterator idle for %.0fs; killing worker to release ~19 GB",
                             idle_for,
                         )
                         await self._drop_worker()

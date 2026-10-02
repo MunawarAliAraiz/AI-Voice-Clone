@@ -65,11 +65,14 @@ def main(runtime: str) -> int:
             # Unparseable line: we cannot correlate it to a request id, so the
             # stream is desynchronized. Report and let the scheduler kill us —
             # never guess an id.
-            send({
-                "id": -1, "ok": False,
-                "error_code": "ProtocolError",
-                "error_message": "unparseable request line",
-            })
+            send(
+                {
+                    "id": -1,
+                    "ok": False,
+                    "error_code": "ProtocolError",
+                    "error_message": "unparseable request line",
+                }
+            )
             continue
 
         try:
@@ -80,12 +83,14 @@ def main(runtime: str) -> int:
                 # them (see scheduler._load_into); other backends' load()
                 # never sees these kwargs, so this is a no-op for them.
                 extra = {
-                    k: payload[k] for k in
-                    ("lora_local_path", "lora_hf_repo", "lora_hf_revision")
+                    k: payload[k]
+                    for k in ("lora_local_path", "lora_hf_repo", "lora_hf_revision")
                     if k in payload
                 }
                 load_sec = backend.load(
-                    payload["model_id"], payload["hf_repo"], payload["hf_revision"],
+                    payload["model_id"],
+                    payload["hf_repo"],
+                    payload["hf_revision"],
                     **extra,
                 )
                 result = {"load_time_sec": load_sec}
@@ -113,6 +118,11 @@ def main(runtime: str) -> int:
                     # conversion here that has passed a listening gate.
                     source_script=payload.get("source_script") or "latin",
                     target_script=payload.get("target_script") or "perso_arabic",
+                    **(
+                        {"source_language": payload["source_language"]}
+                        if payload.get("source_language")
+                        else {}
+                    ),
                     params=payload.get("params") or {},
                 )
             elif op == WireOp.UNLOAD:
@@ -125,12 +135,15 @@ def main(runtime: str) -> int:
                 raise ValueError(f"unknown op {op!r}")
             send({"id": rid, "ok": True, "result": result})
         except Exception as exc:
-            send({
-                "id": rid, "ok": False,
-                "error_code": type(exc).__name__,
-                "error_message": str(exc),
-                "traceback": traceback.format_exc(),
-            })
+            send(
+                {
+                    "id": rid,
+                    "ok": False,
+                    "error_code": type(exc).__name__,
+                    "error_message": str(exc),
+                    "traceback": traceback.format_exc(),
+                }
+            )
 
     return 0
 
