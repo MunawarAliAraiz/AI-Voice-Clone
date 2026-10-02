@@ -1,6 +1,40 @@
 # Runpod setup from the desktop
 
-## Simplified setup in 0.1.3
+## Automatic setup in 0.1.4
+
+The user-approved [0.1.4 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.4)
+is published. Its anonymous feed and full installer match the approved bytes.
+Apply it through **Updates** with local jobs and cloud setup
+idle. If restart is blocked, open **Runpod** and select **Cancel model setup**;
+wait for machine cleanup to be confirmed before restarting. Ambiguous starts
+still need reconciliation and cannot be bypassed.
+
+1. Connect Runpod and refresh storage/funds. Suitable existing 200 GB Standard
+   storage is selected by default; otherwise review and approve its purchase.
+2. Required model preparation starts automatically once storage is connected.
+   The app uses the dedicated CPU deployment method and selected CPU instance;
+   it does not require generation-GPU stock to download weights. Temporary
+   setup has a $1 cap and at most a two-hour requested termination deadline.
+3. Follow **Set up models**: start machine, named model downloads, file checks,
+   cleanup, then ready. Percentages require measured bytes. Valid existing
+   files are reused; incomplete files resume when their download source supports it.
+4. **Cancel model setup** keeps storage and model files and turns automatic
+   setup off. **Resume automatic downloads** re-enables it. Availability-only
+   retries are bounded; a failed paid or uncertain attempt needs explicit resume.
+5. Approve the displayed generation spending limits. On generation, the app
+   chooses a compatible available GPU within those limits and releases it after
+   the queue finishes. Advanced overrides remain collapsed.
+
+**Cancel download** in Updates pauses only the installer transfer. In 0.1.4,
+verified installers survive closing the app or a blocked restart. Partial
+installers resume only if the server confirms the same file and byte range;
+otherwise the app safely downloads a fresh copy. Files lost by closing an older
+memory-only updater cannot be restored retroactively.
+
+The request correction and offline checks passed. A real paid CPU deployment,
+model download, GPU generation and installed update/restart remain unverified.
+
+## Historical simplified setup in 0.1.3
 
 The published [0.1.3 update](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.3)
 uses three cards: **Model storage**, **Set up models**, and

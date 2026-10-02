@@ -9,6 +9,16 @@ GPU selection is automatic within the stored region, capacity and price limits.
 Voice model overrides are collapsed without widening license or experimental
 routing eligibility. Recommended language defaults are unchanged.
 
+Required model preparation starts through an explicit automatic-setup mutation
+after the UI connects suitable storage, rather than through status reads. The
+intent is durable and resumes on service startup. Availability-only retries
+occur before machine creation; an attempted paid or ambiguous start consumes
+that intent and needs explicit resume after failure. Cancel disables automatic
+setup, quiesces its task and reconciles/releases only the owned installer. The
+CPU request uses the CPU-specific deployment mutation and exact catalog
+configuration, with a maximum two-hour deadline inside the $1 setup budget.
+CPU download availability does not depend on current generation GPU stock.
+
 The controller persists model setup phase/error and distinguishes an actual
 provider Pod ID from a merely recorded start attempt. UI progress uses measured
 bytes and never animates an unknown percentage or a failed task. On restart,
@@ -32,6 +42,15 @@ The fixed HTTPS feed points to an installer signed by the embedded Ed25519
 public key and requires a matching signed version. Before restart, a shared
 mutation lock checks pending jobs/cloud lifecycle work and fences new mutations.
 Installer launch failure restores the owned API and admission.
+
+Partial updater bytes and verified installers live in the profile's update
+cache. Its metadata is bound to the announced version, asset URL and signature.
+Appending requires matching strong ETag, exact byte range and total; otherwise
+the partial file is safely replaced. Artifact/global-comment/version signatures
+are checked after transfer, during cache recovery and immediately before use.
+Cancel aborts the network future while keeping saved bytes. A failed cloud
+restart check leaves the verified installer reusable, including after app
+restart. Active automatic setup/cancellation tasks block updater admission.
 
 FFmpeg is excluded from the installer. A CPU-only first-launch controller
 downloads a pinned publisher archive, checks archive/file hashes and adopts

@@ -24,7 +24,7 @@ Read-only stock showed `cpu3c-2-4` in US-NE-1 at $0.06/hour. Current source uses
 the matching CPU instance and limits the installer deadline to two hours as
 well as its $1 budget. This request correction is not live worker qualification.
 
-Implemented, under integration: explicit model-setup cancel, durable automatic
+Implemented in 0.1.4: explicit model-setup cancel, durable automatic
 setup intent and bounded availability-only retries; no repeated paid/ambiguous
 attempt without explicit resume. Required model preparation starts automatically
 when selected storage is connected; valid stored files are reused and partial
@@ -38,9 +38,36 @@ cancelled network requests, validates Range/strong ETag before appending, and
 rechecks artifact/global-comment/version signatures before installing. Completed
 cache recovery and cancellation/transport/cryptographic tamper tests passed
 (10 Rust tests); frontend/updater SSR checks passed. Older memory-only downloads
-cannot be recovered retroactively. Backend lifecycle/transfer tests passed;
-final update-admission guard tests and packaging are pending. No 0.1.4 artifact
-or publication approval exists yet. The user operates their own native app.
+cannot be recovered retroactively. 102 backend lifecycle/update/transfer tests
+passed with two optional worker HTTP tests skipped, and focused Ruff passed.
+Update admission includes active auto/cancel tasks; the error links to Runpod.
+Frontend model/gate/updater state checks and the 0.1.4 frontend build passed.
+Required model IDs are exposed so queued model names appear before transfer.
+Source implementation checkpoint: `66a7bb2`; the Tauri configuration version
+is included in the subsequent qualification checkpoint. Signed Windows 0.1.4
+packaging passed, along with isolated frozen API/MCP checks (ten MCP tools,
+cancel/auto routes, auth, readiness gates and update admission). The embedded
+worker manifest matched source SHA256
+`bfb2d40350387618b3b09d2275997e683a5d3342e40b4bf13387f2b842ac90c9`.
+Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.4-setup.exe`,
+65,802,251 bytes; SHA256
+`540862ee538516bac3c7404bca715442e8fbc773497e627fb8f6b80d6ec2097c`.
+Ed25519 artifact/global-comment signatures, signed version/filename and PE/NSIS
+structure passed. No Authenticode certificate. Exact installer/feed/notes
+publication was approved by the user and completed:
+[v0.1.4](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.4).
+Anonymous latest-feed bytes matched the prepared feed, and the complete public
+installer matched the approved size/SHA256. Receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.4-receipt.json`.
+Build, sidecar,
+release evidence and notes are beside the installer. No native 0.1.4 install,
+real update/restart, paid CPU deployment, cloud model download, GPU inference
+or listening qualification was performed. The user operates their own app.
+
+Next: after the user applies 0.1.4, verify the CPU
+request starts an owned worker, model progress/valid-file reuse, cleanup and
+actual generation. Preserve the ambiguous-start and cost guards; never infer
+provider deadline enforcement from schema acceptance alone.
 
 ## Simple setup and truthful progress — 2026-10-02
 

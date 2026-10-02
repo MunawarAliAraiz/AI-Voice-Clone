@@ -9,7 +9,7 @@ transferred bytes. The embedded updater public key validates the installer
 before installation, including the signed version. Only a verified installer
 is eligible to install.
 
-### Download recovery and cancellation (next desktop build)
+### Download recovery and cancellation (0.1.4)
 
 The update dialog offers **Cancel download** while an installer transfers.
 Cancellation aborts the HTTP request, including a stalled response, then
