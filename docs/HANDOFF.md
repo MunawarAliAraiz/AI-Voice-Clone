@@ -13,8 +13,23 @@ and enable/pause/resume requests; actual FastAPI route tests reproduce the exact
 422 for text/plain and accept application/json without any paid controller call.
 7 focused backend tests, request/wizard/gate/header/updater frontend checks and
 the frontend build passed. Other Runpod JSON methods were audited and already
-have the header. No worker image change is required. Next: build/sign/check
-0.1.6, obtain approval for the exact installer, publish and verify public bytes.
+have the header. No worker image change is required. Source checkpoint: `f33d30a`.
+Windows 0.1.6 build/signature, isolated frozen API/MCP, and extraction of the
+packaged frontend passed. The packaged client contains the corrected JSON header;
+the frozen API reproduces text-body rejection and admits the corrected JSON
+request to its normal readiness gate. No paid setup was started.
+
+Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.6-setup.exe`,
+65,823,197 bytes; SHA256
+`e186d41d38391ddff58810c5e5cdb93bb31cdc5a30fc18b6006755ebe62ad805`.
+Ed25519 artifact/global-comment, signed version/filename and PE/NSIS checks
+passed. Exact installer/feed/notes publication was approved and completed:
+[v0.1.6](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.6).
+The anonymous latest feed and full installer match the prepared bytes and
+approved size/SHA256. Public latest is 0.1.6; receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.6-receipt.json`. Evidence is alongside
+the installer. Paid downloads/generation and native update cycle remain untested.
+Next: implement the user's new colourful liquid orb and premium UI request.
 Do not mutate the live profile or start paid downloads for these checks.
 
 ## Guided setup revision - installer verified, 2026-10-03

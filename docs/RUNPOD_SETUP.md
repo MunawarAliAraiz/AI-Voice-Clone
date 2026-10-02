@@ -1,5 +1,19 @@
 # Runpod setup from the desktop
 
+## Automatic-download request correction in 0.1.6
+
+The approved [0.1.6 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.6)
+is published and its public feed/full installer match the verified files. Apply
+it through Updates to receive the request correction.
+
+0.1.5 can show "The request body failed validation" when automatic downloads
+start or resume. Its client omitted the JSON Content-Type header, so parsing
+failed before the controller started a machine. The verified 0.1.6 local
+installer corrects that request. Storage and model files are kept. After applying
+the fix, open Runpod; automatic setup uses the saved intent, or select Resume
+downloads if you manually paused it. Models show separate measured progress
+bars once file sizes are known; otherwise they show Preparing/Waiting.
+
 ## Guided setup in 0.1.5
 
 The approved [0.1.5 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.5)
