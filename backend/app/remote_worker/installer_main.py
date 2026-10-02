@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import hmac
+import json
 import os
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -13,6 +14,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from ..inference.catalog import CATALOG
 from .model_install import REQUIRED_MODEL_IDS, ModelInstaller
+from .model_manifest import atomic_json, bound_path
 from .model_pins import AUXILIARY_PINS
 
 
@@ -75,9 +77,44 @@ def create_installer_app(
 
     @app.post("/v1/setup", status_code=202, dependencies=[Depends(authenticate)])
     async def setup() -> dict:
+        if manager.capacity_status().get("sufficient") is not True:
+            raise HTTPException(409, "Check model storage before downloading")
         for model_id in REQUIRED_MODEL_IDS:
             manager.start(model_id)
         return {"protocol_version": 1, **manager.setup_status()}
+
+    @app.post("/v1/capacity", status_code=202, dependencies=[Depends(authenticate)])
+    async def start_capacity() -> dict:
+        marker = bound_path(cache, ".vcs-volume.json")
+        if marker.exists():
+            if marker.is_symlink():
+                raise HTTPException(409, "Storage identity could not be checked")
+            try:
+                identity = json.loads(marker.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raise HTTPException(409, "Storage identity could not be checked") from None
+            if (
+                not isinstance(identity, dict)
+                or identity.get("app_id") != "studio.voiceclone.desktop"
+            ):
+                raise HTTPException(409, "This storage folder belongs to another app")
+        return {"protocol_version": 1, **manager.start_capacity()}
+
+    @app.get("/v1/capacity", dependencies=[Depends(authenticate)])
+    async def capacity_status() -> dict:
+        result = manager.capacity_status()
+        if result.get("sufficient"):
+            marker = bound_path(cache, ".vcs-volume.json")
+            cache.mkdir(parents=True, exist_ok=True)
+            atomic_json(
+                marker,
+                {
+                    "app_id": "studio.voiceclone.desktop",
+                    "version": 1,
+                    "volume_id": os.environ.get("VCS_VOLUME_ID"),
+                },
+            )
+        return {"protocol_version": 1, "app_owned": bool(result.get("sufficient")), **result}
 
     @app.get("/v1/models/{model_id}/install", dependencies=[Depends(authenticate)])
     async def model_status(model_id: str) -> dict:
