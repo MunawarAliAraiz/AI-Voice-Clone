@@ -1,6 +1,6 @@
 # Handoff — current state
 
-## Guided setup revision - source verified, 2026-10-03
+## Guided setup revision - installer verified, 2026-10-03
 
 The user confirmed the choices in [GUIDED_SETUP.md](GUIDED_SETUP.md). Work is
 split across storage/capacity backend, graceful native app exit, and frontend
@@ -18,14 +18,26 @@ when creating a new 60 GB volume. Pending purchase attempts remain fenced.
 
 142 integrated backend tests passed; two optional worker HTTP tests skipped.
 Frontend build, wizard SSR, 32 generation-gate and 15 header checks passed;
-native compilation and the close-acknowledgement test passed. These are isolated
+native compilation and all 11 updater/close-acknowledgement tests passed. Source
+checkpoint: `9259402`. These are isolated
 implementation checks, not paid downloads or installed-window tests.
 
 Scoped worker source was published at d066405aee2e9603b519a9aa8b3ecb8c05b54ff9.
-Hosted run 37050531973: installer succeeded; GPU image still building at this
-checkpoint. Next: qualify both immutable images, build/sign 0.1.5, check frozen
-API/MCP, then obtain exact artifact publication approval. Public 0.1.4 remains
-current until then. Broader app-source publication is unapproved. Do not operate
+Hosted run 37050531973 succeeded for both images. Both immutable artifacts passed
+anonymous registry/source/lock/platform checks and are embedded in release.json.
+Windows 0.1.5 build and isolated frozen API/MCP checks passed (10 MCP tools,
+auth, 60 GB capacity contract, readiness, updater admission and graceful-exit
+acknowledgement/fence/return). Ed25519 artifact/global-comment signatures,
+signed version/filename and PE/NSIS checks passed. No Authenticode certificate.
+Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.5-setup.exe`,
+65,826,185 bytes; SHA256
+`4f6ed9466aa184e45ab0e3903c2e38d298fc342b552a053797075fad12f5d6a6`.
+Build/sidecar/release evidence, feed and notes are alongside it. The frozen API's
+embedded worker manifest was extracted and matched source byte-for-byte (SHA256
+`f14cc8bebf134bb675196072a6a1b93365627abe91e27c5701837c7bbd4a43d4`).
+Exact 0.1.5 installer/feed/notes publication was approved; upload is underway.
+Public 0.1.4 remains current until then. Broader app-source publication is
+unapproved. Do not operate
 the user's app or run paid cloud work as part of these packaging checks.
 
 ## Cancellation, update recovery and automatic required models — 2026-10-02

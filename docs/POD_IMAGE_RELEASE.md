@@ -110,6 +110,23 @@ packaging check with actual Runpod qualification.
 
 ## Local rebuild
 
+### Guided setup worker qualification - 2026-10-03
+
+Run [37050531973](https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37050531973)
+succeeded for scoped worker source `d066405aee2e9603b519a9aa8b3ecb8c05b54ff9`.
+Both artifacts passed local source/lock/platform and anonymous registry checks:
+
+- CPU installer: `sha256:7fed81715415dd3d61e29a665a644124d929ba458d042ed433a25c914852042d`,
+  280,303,081 compressed layer bytes.
+- GPU: `sha256:682321140d447e208c566e1dde845290423a8517a3f13ca4216623fd67579aaf`,
+  7,736,369,088 compressed layer bytes.
+
+The CPU container smoke checked authenticated health/model/capacity reads,
+unauthorized rejection and absence of Torch. No scan/setup mutation or model
+download was performed. The new capacity scan is started explicitly by the
+desktop controller. The qualified manifest is included in the 0.1.5 build.
+This is not live Runpod download, CUDA generation or billing qualification.
+
 Use the same base references as the workflow with `pod/build.py --target gpu`
 or `--target installer`. Docker with Linux containers is required. A local
 build does not push. See `POD_WORKER.md` for the complete command and runtime

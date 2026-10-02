@@ -1,18 +1,18 @@
 {
   "schema_version": 1,
-  "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
-  "installer": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:733bbce5f5e6a6954c63229559fecfe05a8fe802cf58c4d82be963d4ac64f62f",
-  "gpu": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:2dd8dcf6cb3ed8df6b2dffb55c3170123e663cedd0d5255b81ac0fbc1a38de52",
-  "verified_at": "2026-10-02T16:00:45.823499+00:00",
+  "source_commit": "d066405aee2e9603b519a9aa8b3ecb8c05b54ff9",
+  "installer": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:7fed81715415dd3d61e29a665a644124d929ba458d042ed433a25c914852042d",
+  "gpu": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:682321140d447e208c566e1dde845290423a8517a3f13ca4216623fd67579aaf",
+  "verified_at": "2026-10-02T19:23:45.588735+00:00",
   "evidence": {
     "installer": {
       "target": "installer",
-      "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
-      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:733bbce5f5e6a6954c63229559fecfe05a8fe802cf58c4d82be963d4ac64f62f",
+      "source_commit": "d066405aee2e9603b519a9aa8b3ecb8c05b54ff9",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:7fed81715415dd3d61e29a665a644124d929ba458d042ed433a25c914852042d",
       "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
       "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
       "debian_snapshot": "20260901T000000Z",
-      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37050531973",
       "dependency_locks": {
         "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
         "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
@@ -29,25 +29,25 @@
         "listening": "not tested",
         "billing": "not tested"
       },
-      "platform_manifest_digest": "sha256:a6a434cf7dda21f82b59da5d2ff5d4ed997f333db5ab7ab8605ae235b1db89ef",
-      "compressed_layer_bytes": 280301535,
+      "platform_manifest_digest": "sha256:76855320d4e4a0198c8332655ae1c90dd22a40d8870099731d4b121335b7c4ba",
+      "compressed_layer_bytes": 280303081,
       "layer_count": 14,
       "registry": {
         "anonymous_pull": "passed",
         "content_digests": "verified",
         "platform": "linux/amd64",
-        "config_digest": "sha256:71532491b1524fdd13844bec9a097251a53db63ee9e4244d118f9cb781aec024",
+        "config_digest": "sha256:851acf29f97f457740da104ab8d68a10d277216acf4192db2a0a5c8c9085cf66",
         "layers_downloaded": false
       }
     },
     "gpu": {
       "target": "gpu",
-      "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
-      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:2dd8dcf6cb3ed8df6b2dffb55c3170123e663cedd0d5255b81ac0fbc1a38de52",
+      "source_commit": "d066405aee2e9603b519a9aa8b3ecb8c05b54ff9",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:682321140d447e208c566e1dde845290423a8517a3f13ca4216623fd67579aaf",
       "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
       "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
       "debian_snapshot": "20260901T000000Z",
-      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37050531973",
       "dependency_locks": {
         "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
         "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
@@ -64,14 +64,14 @@
         "listening": "not tested",
         "billing": "not tested"
       },
-      "platform_manifest_digest": "sha256:bd8b8f3a37e23bba149333e0e849a24699a794c4ae96cf79fb3a2d27161c65b8",
-      "compressed_layer_bytes": 7736397742,
+      "platform_manifest_digest": "sha256:180c82e827d1175c7373330826b335635621d84f06301cf29cc76386ed99fe00",
+      "compressed_layer_bytes": 7736369088,
       "layer_count": 17,
       "registry": {
         "anonymous_pull": "passed",
         "content_digests": "verified",
         "platform": "linux/amd64",
-        "config_digest": "sha256:a441f277cb0404e747b7f9957ed7b995659a018964c3a898a6b537870ac41937",
+        "config_digest": "sha256:75ab9efb6a56e02cffe46ecb8ea122c8d9aa8d6dd2859b40eb031b3fd01a7525",
         "layers_downloaded": false
       }
     }

@@ -1,6 +1,6 @@
 # Runpod setup from the desktop
 
-## Guided setup in 0.1.5 (awaiting installer qualification/publication)
+## Guided setup in 0.1.5 (verified installer; publication approval pending)
 
 1. **Account**: enter the Runpod key and connect. The app checks the account.
 2. **Storage**: use the saved voice-app volume, or review a new volume's size
@@ -19,7 +19,7 @@ setup. If Runpod cannot confirm the machine stopped, the app stays open with
 Try again/Return to app. Failed or uncertain paid starts need attention rather
 than silently starting another machine. See [guided setup](GUIDED_SETUP.md).
 
-These source checks are complete; paid model transfer, GPU generation and the
+Source, Windows build/signature and isolated API/MCP checks passed. Paid model transfer, GPU generation and the
 installed close/reopen/update cycle have not been tested.
 
 ## Automatic setup in 0.1.4
