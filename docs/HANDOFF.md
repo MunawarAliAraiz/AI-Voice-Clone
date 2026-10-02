@@ -51,8 +51,15 @@ The finished local installer is
 Windows PE/NSIS structure, actual Ed25519 signature and signed version/filename
 passed verification. The local feed, release notes, build/sidecar receipts and
 release evidence are beside the installer. No native 0.1.3 install or actual
-update/restart was performed. Exact 0.1.3 installer/feed/notes publication
-approval was requested and remains pending; the public feed is still 0.1.2.
+update/restart was performed. The user approved publication of the exact
+0.1.3 installer/feed/notes with the hash above. It is published at
+https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.3.
+Anonymous latest-feed and complete installer downloads passed and match the
+approved bytes; receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.3-receipt.json`.
+The public latest feed is now 0.1.3. Let the user apply Updates when Runpod is
+idle; the updater will refuse restart while the ambiguous pending compute
+record still exists. The original deployment failure remains undiagnosed.
 Do not push broad application source or operate the user's desktop window.
 The user continues operating the computer: no native windows are launched,
 closed or updated by the agent. Paid provisioning/generation remains untested.

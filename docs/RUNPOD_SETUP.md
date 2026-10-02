@@ -2,7 +2,8 @@
 
 ## Simplified setup in 0.1.3
 
-The upcoming update uses three cards: **Model storage**, **Set up models**, and
+The published [0.1.3 update](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.3)
+uses three cards: **Model storage**, **Set up models**, and
 **Voice generation**. Advanced settings are collapsed. The app chooses the
 cheapest compatible available GPU; saving spending limits does not start it.
 The default limits are visible and require a click to approve. Custom values
@@ -20,6 +21,12 @@ The Voice Studio model override is also collapsed. Existing recommended model
 choices remain; noncommercial/experimental warnings remain visible. Explicit
 Auto is still available, but unsupported Urdu Arabic requires an informed
 model choice rather than silently selecting a different model.
+
+Apply it through **Updates** when local jobs and Runpod sessions are idle.
+If restart reports a current cloud session, reconcile/release the pending
+session first; the updater does not bypass an ambiguous creation record.
+The clearer progress display does not establish that the earlier provider
+deployment error has been resolved. Paid downloads/generation remain untested.
 
 ## Applying the worker-enabled release
 
