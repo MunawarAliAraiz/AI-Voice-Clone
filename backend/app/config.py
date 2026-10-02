@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         env_prefix="VCS_", env_file=".env", extra="ignore"
     )
 
-    version: str = "0.1.4"
+    version: str = "0.1.5"
 
     #: When non-empty, every `/api/*` route except health requires this in the
     #: `X-API-Key` header. Empty = open (single-user local dev only).

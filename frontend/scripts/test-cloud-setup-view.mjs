@@ -6,123 +6,75 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as reactQuery from '@tanstack/react-query';
 import ts from 'typescript';
-
-// Render the actual component against seeded API responses. No browser,
-// provider requests, purchase, model download or machine operation is used.
 const require = createRequire(import.meta.url);
-const { QueryClient, QueryClientProvider } = reactQuery;
-const source = readFileSync(new URL('../src/components/CloudSetupPanel.tsx', import.meta.url), 'utf8');
-const compiled = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-});
 let apiCalls = 0;
-const api = new Proxy({}, {
-  get: () => () => { apiCalls += 1; throw new Error('SSR checks must not call the API'); },
-});
-const exports = {};
-runInNewContext(compiled.outputText, {
-  exports,
-  require(name) {
+const api = new Proxy({}, { get: () => () => { apiCalls++; throw new Error('No provider calls in SSR'); } });
+function load(file, dependencies = {}) {
+  const source = readFileSync(new URL(`../src/components/${file}.tsx`, import.meta.url), 'utf8');
+  const result = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } });
+  const exports = {};
+  runInNewContext(result.outputText, { exports, require(name) {
     if (name === '../services/api') return { api };
-    // Share the provider's ESM instance; the package's CJS export has a
-    // separate context and cannot consume the provider imported above.
     if (name === '@tanstack/react-query') return reactQuery;
     if (['react', 'react/jsx-runtime'].includes(name)) return require(name);
-    throw new Error('Unexpected component dependency: ' + name);
-  },
-});
-
-const base = {
-  connected: true, stage: 'download_models', ready: false, release_available: true,
-  volume: { id: 'volume', name: 'Existing storage', size: 200, dataCenter: 'US-NE-1', type: 'STANDARD' },
-  policy: { max_session_usd: 3.25, max_hourly_usd: 1.5 },
-  progress_pct: null, bytes_completed: 0, bytes_total: null, models: {}, detail: '',
-  setup_phase: 'idle', setup_running: false, setup_error: null, cleanup_pending: false,
-  compute: null,
-};
-const machine = {
-  pod_id: 'pod', kind: 'installer', status: 'starting', hourly_usd: .06,
-  deadline: '2026-10-03T00:00:00Z', creation_confirmed: true,
-};
-function render(changes) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
-  client.setQueryData(['cloud-setup'], { ...base, ...changes });
-  try {
-    return renderToStaticMarkup(React.createElement(QueryClientProvider, { client },
-      React.createElement(exports.CloudSetupPanel, { connected: true })));
-  } finally { client.clear(); }
+    if (name in dependencies) return dependencies[name];
+    throw new Error(name);
+  } });
+  return exports;
 }
-function closedAdvanced(html) {
-  assert.match(html, /<summary>Advanced storage settings<\/summary>/);
-  assert.match(html, /<summary>Advanced generation settings<\/summary>/);
-  assert.doesNotMatch(html, /<details\b[^>]*\bopen(?:[=\s>])/);
+const cloud = load('CloudSetupPanel');
+const runpod = load('RunpodPanel', { './CloudSetupPanel': cloud, '../hooks/queries': { queryKeys: { cloudSetup: ['cloud-setup'] } } });
+const volume = { id: 'voice', name: 'Voice Clone Studio', size: 60, dataCenter: 'US-NE-1', type: 'STANDARD', app_owned: true };
+const discovery = { volumes: [volume, { id: 'video', name: 'Video Studio', size: 100, dataCenter: 'US-NE-1', type: 'STANDARD' }],
+  regions: [{ id: 'US-NE-1', name: 'US-NE-1', gpu_hourly_from_usd: 1.09 }], balance_usd: 9, storage_min_gb: 60 };
+const base = { connected: true, ready: false, release_available: true, volume, required_model_ids: ['voxcpm2', 'chatterbox_ml_v3'],
+  policy: { max_session_usd: 3.25, max_hourly_usd: 1.5 }, models: {}, detail: '', setup_phase: 'idle', setup_running: false,
+  setup_error: null, cleanup_pending: false, auto_setup_enabled: true, compute: null };
+function render(changes = {}, step = 'models', target = cloud.CloudSetupPanel, audioTools = { ready: true, stage: 'ready' }) {
+  const client = new reactQuery.QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity, gcTime: Infinity } } });
+  client.setQueryData(['cloud-setup'], { ...base, ...changes }); client.setQueryData(['cloud-discovery'], discovery);
+  client.setQueryData(['audio-tools'], audioTools);
+  try { return renderToStaticMarkup(React.createElement(reactQuery.QueryClientProvider, { client }, React.createElement(target, { connected: true, step }))); }
+  finally { client.clear(); }
 }
-
-const failed = render({
-  setup_phase: 'failed', setup_error: 'Runpod start failed; try again after checking the pending attempt.',
-  cleanup_pending: true, detail: 'Cloud release is pending',
-  compute: { ...machine, pod_id: null, creation_confirmed: false, status: 'provisioning' },
-  progress_pct: 12.5, bytes_completed: 125, bytes_total: 1000,
-  models: { voxcpm2: { state: 'downloading', progress_pct: 12.5, current_file: 'weights/model.safetensors' } },
-});
-assert.doesNotMatch(failed, /<progress\b/);
-assert.match(failed, /Automatic model preparation needs attention/);
-assert.match(failed, /Runpod start failed/);
-assert.match(failed, /Machine start not confirmed/);
-assert.match(failed, /Estimated rate: \$0\.06/);
-assert.match(failed, /Requested stop-by time:/);
-assert.doesNotMatch(failed, /Automatic stop-by time:/);
-assert.match(failed, /Check pending start/);
-assert.match(failed, /<strong>VoxCPM 2<\/strong> · Stopped · Last reported: 12\.5%/);
-assert.doesNotMatch(failed, /<strong>VoxCPM 2<\/strong> · Downloading/);
-assert.match(failed, /<button[^>]*disabled=""[^>]*>Resume after resolving the error/);
-closedAdvanced(failed);
-
-const starting = render({ setup_phase: 'starting_worker', setup_running: true, compute: machine });
-assert.doesNotMatch(starting, /<progress\b/);
-assert.match(starting, /downloading its software\. Model files have not started downloading yet/);
-assert.match(starting, /Storage connected/);
-assert.match(starting, /Current: Start machine/);
-assert.match(starting, />Cancel model setup<\/button>/);
-closedAdvanced(starting);
-
-const transfer = {
-  setup_phase: 'downloading', setup_running: true, compute: { ...machine, status: 'running' },
-  bytes_completed: 2e9, bytes_total: 5e9, progress_pct: 40,
-  models: { chatterbox_ml_v3: { state: 'downloading', progress_pct: 40, current_file: 'weights/model.safetensors' } },
-};
+const storage = render({}, 'storage');
+assert.match(storage, /Available volumes/); assert.match(storage, /Video Studio · 100 GB/); assert.match(storage, /Create a new volume/);
+assert.match(storage, /Use this volume/); assert.doesNotMatch(storage, /200 GB|Your models|Ready to generate|<details\b[^>]*\bopen(?:[=\s>])/);
+const empty = render({ volume: null }, 'storage');
+assert.match(empty, /Create a 60 GB volume/); assert.match(empty, /10 GB of spare space/); assert.match(empty, /Review storage cost/);
+const starting = render({ setup_phase: 'starting_worker', setup_running: true });
+assert.match(starting, /Preparing your setup/); assert.match(starting, /Pause downloads/); assert.match(starting, /VoxCPM 2/);
+assert.doesNotMatch(starting, /<progress\b|Start machine|Download setup software|Advanced model/);
+const transfer = { setup_phase: 'downloading', setup_running: true, models: { voxcpm2: { state: 'ready' },
+  chatterbox_ml_v3: { state: 'downloading', progress_pct: 40, bytes_completed: 2e9, bytes_total: 5e9 } } };
 const downloading = render(transfer);
-assert.match(downloading, /<progress\b[^>]*max="100"[^>]*value="40"/);
-assert.match(downloading, /40\.0% downloaded · 2\.00 GB \/ 5\.00 GB/);
-assert.match(downloading, /<strong>Chatterbox Multilingual<\/strong> · Downloading · 40\.0%/);
-assert.match(downloading, /Current: Download models/);
-assert.match(downloading, /<summary>Advanced model details<\/summary>[\s\S]*weights\/model\.safetensors/);
-assert.match(downloading, /Approved limits:<\/strong> \$3\.25 per session · GPU up to \$1\.50\/hour/);
-assert.doesNotMatch(downloading, />Approve these limits<\/button>/);
-closedAdvanced(downloading);
-
-// Unknown totals and non-finite percentages cannot produce a fake moving bar.
-assert.doesNotMatch(render({ ...transfer, bytes_total: null }), /<progress\b/);
-assert.doesNotMatch(render({ ...transfer, progress_pct: NaN }), /<progress\b/);
-const cancelled = render({ ...transfer, setup_phase: 'cancelled', setup_running: false, compute: null, auto_setup_enabled: false });
-assert.doesNotMatch(cancelled, /<progress\b/);
-assert.match(cancelled, /Model setup cancelled/);
-assert.match(cancelled, /valid downloaded files are reused/);
-assert.match(cancelled, /Resume automatic downloads/);
-assert.match(cancelled, /Stopped · Last reported: 40\.0%/);
-assert.doesNotMatch(cancelled, />Cancel model setup<\/button>/);
-const cancelling = render({ ...transfer, setup_phase: 'cancelling' });
-assert.doesNotMatch(cancelling, /<progress\b/);
-assert.match(cancelling, /Stopping model setup and releasing its temporary machine/);
-assert.doesNotMatch(cancelling, />Cancel model setup<\/button>/);
-const pendingCleanup = render({ ...transfer, setup_phase: 'cancelled', setup_running: false,
-  cleanup_pending: true, setup_error: 'Machine stop still pending' });
-assert.match(pendingCleanup, /Runpod has not confirmed that the rented machine stopped/);
-assert.doesNotMatch(pendingCleanup, />Resume automatic downloads/);
-assert.match(pendingCleanup, /Machine stop still pending/);
-const waiting = render({ auto_setup_enabled: true, auto_setup_waiting: true });
-assert.match(waiting, /check again automatically/);
-assert.match(waiting, />Cancel model setup<\/button>/);
-assert.doesNotMatch(waiting, /Retry model setup|Resume automatic downloads|<progress\b/);
+assert.match(downloading, /aria-label="Chatterbox Multilingual download progress" max="100" value="40"/);
+assert.match(downloading, /40% · 2\.00 GB \/ 5\.00 GB/); assert.match(downloading, /VoxCPM 2<\/strong><span>Ready/);
+assert.doesNotMatch(downloading, /Storage for your voices|Ready to generate/);
+for (const model of [{ state: 'downloading', progress_pct: NaN, bytes_total: 5e9 }, { state: 'downloading', progress_pct: 40 }])
+  assert.doesNotMatch(render({ ...transfer, models: { chatterbox_ml_v3: model } }), /<progress\b/);
+const paused = render({ ...transfer, setup_phase: 'cancelled', setup_running: false, auto_setup_enabled: false });
+assert.match(paused, /Downloads paused/); assert.match(paused, /Resume downloads/); assert.match(paused, /value="40"/);
+assert.doesNotMatch(paused, /valid downloaded files|incomplete files resume|Retrying checks|Cancel model setup|Advanced model/);
+const pending = render({ setup_phase: 'failed', cleanup_pending: true, setup_error: 'Runpod start could not be confirmed.',
+  compute: { pod_id: null, kind: 'installer', status: 'provisioning', hourly_usd: .06, deadline: '2026-10-03T00:00:00Z', creation_confirmed: false } });
+assert.match(pending, /Check pending start/); assert.match(pending, /Error details/); assert.match(pending, /Runpod start could not be confirmed/);
+assert.doesNotMatch(pending, /Resume downloads|Continue setup|<progress\b/);
+const waiting = render({ auto_setup_waiting: true }); assert.match(waiting, /Waiting for an available machine/); assert.match(waiting, /Pause downloads/);
+const ready = render({ ready: true, setup_phase: 'ready' }, 'ready');
+assert.match(ready, /Ready to generate/); assert.match(ready, /\$3\.25 maximum per session/); assert.match(ready, /GPU up to \$1\.50\/hour/);
+assert.match(ready, /Advanced generation settings/); assert.match(ready, /Open Voice Studio/); assert.doesNotMatch(ready, /Approve these limits|Your models|Storage for your voices/);
+const appPreparing = render({ ready: true, setup_phase: 'ready' }, 'ready', cloud.CloudSetupPanel,
+  { ready: false, stage: 'downloading', progress_pct: 25, bytes_completed: 25e6, bytes_total: 100e6 });
+assert.match(appPreparing, /Preparing your app/); assert.match(appPreparing, /aria-label="App setup progress" max="100" value="25"/);
+assert.match(appPreparing, /disabled=""[^>]*>Open Voice Studio/); assert.doesNotMatch(appPreparing, /Ready to generate/);
+assert.match(appPreparing, /App setup must finish before you generate/); assert.doesNotMatch(appPreparing, /FFmpeg/);
+const appFailed = render({ ready: true }, 'ready', cloud.CloudSetupPanel,
+  { ready: false, stage: 'failed', detail: 'Download connection failed.', progress_pct: 0, bytes_total: 0 });
+assert.match(appFailed, /Continue app setup/); assert.match(appFailed, /Error details/);
+assert.doesNotMatch(appFailed, /Ready to generate|<progress\b/);
+const account = render({}, 'account', runpod.RunpodPanel);
+assert.match(account, /aria-label="Runpod setup"/); assert.match(account, /Checking your saved connection/);
+assert.doesNotMatch(account, /Storage for your voices|Your models|Ready to generate/);
 assert.equal(apiCalls, 0);
-console.log('Cloud setup SSR checks passed: failed/pending, startup, real transfer, collapsed advanced settings and saved budgets; no API calls.');
+console.log('Wizard SSR passed: single pages, storage choices, calculated minimum, real model progress, pauses, cleanup, limits and initial key check. No provider calls.');

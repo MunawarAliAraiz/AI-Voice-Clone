@@ -1,32 +1,53 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CloudDiscovery, type StorageQuote, type CloudModelInstall } from '../services/api';
+import { api, type CloudModelInstall } from '../services/api';
 
-const money = (v: number | null | undefined) => v == null ? 'Unknown' : `$${v.toFixed(2)}`;
-const gb = (v: number) => `${(v / 1e9).toFixed(2)} GB`;
-const DEFAULT_SESSION_LIMIT = 1;
-const DEFAULT_HOURLY_LIMIT = 2;
-const suitableVolumes = (discovery: CloudDiscovery | null) =>
-  discovery?.volumes.filter(v => v.size >= 200 && v.type === 'STANDARD') ?? [];
-const modelName = (id: string) => ({ vox_cpm: 'VoxCPM', voxcpm: 'VoxCPM', voxcpm2: 'VoxCPM 2',
-  chatterbox: 'Chatterbox', chatterbox_ml_v3: 'Chatterbox Multilingual', chatterbox_multilingual: 'Chatterbox Multilingual', omni_voice: 'OmniVoice',
-  omni_urdu: 'OmniVoice Urdu', omnivoice_urdu: 'OmniVoice Urdu', qwen_transliterator: 'Qwen text conversion', gemma_transliterator: 'Gemma text conversion',
-  'qwen2.5-3b-instruct-analyzer': 'Qwen script helper', 'gemma-4-31b-it-transliterator': 'Gemma Urdu text conversion',
+export type RunpodSetupStep = 'account' | 'storage' | 'models' | 'ready';
+const money = (value: number | null | undefined) => value == null ? 'Not available' : `$${value.toFixed(2)}`;
+const gb = (value: number) => `${(value / 1e9).toFixed(2)} GB`;
+const storageCost = (size: number) => money(Math.min(size, 1000) * .07 + Math.max(0, size - 1000) * .05);
+const modelName = (id: string) => ({ voxcpm2: 'VoxCPM 2', chatterbox_ml_v3: 'Chatterbox Multilingual',
+  omnivoice_urdu: 'OmniVoice Urdu', 'qwen2.5-3b-instruct-analyzer': 'Qwen script helper',
+  'gemma-4-31b-it-transliterator': 'Gemma Urdu text conversion',
 })[id] ?? id.replace(/[_-]/g, ' ');
 
-export function CloudSetupPanel({ connected }: { connected: boolean }) {
+export function CloudSetupPanel({ connected, step = 'models', onStep = () => {} }: {
+  connected: boolean; step?: RunpodSetupStep; onStep?: (step: RunpodSetupStep) => void;
+}) {
   const client = useQueryClient();
   const setupQ = useQuery({ queryKey: ['cloud-setup'], queryFn: api.cloudSetup, refetchInterval: 3000 });
+  const discoverQ = useQuery({ queryKey: ['cloud-discovery'], queryFn: api.cloudDiscover,
+    enabled: connected, staleTime: 60000, retry: false });
+  const audioToolsQ = useQuery({ queryKey: ['audio-tools'], queryFn: api.audioToolsStatus,
+    enabled: connected, refetchInterval: query => query.state.data?.ready ? false : 2000, retry: false });
   const setup = setupQ.data;
-  const [discovery, setDiscovery] = useState<CloudDiscovery | null>(null);
-  const [quote, setQuote] = useState<StorageQuote | null>(null);
+  const discovery = discoverQ.data;
+  const minimum = discovery?.storage_min_gb ?? 60;
   const [region, setRegion] = useState('');
   const [volumeId, setVolumeId] = useState('');
+  const [storageMode, setStorageMode] = useState<'existing' | 'new'>('existing');
+  const [size, setSize] = useState('');
+  const [name, setName] = useState('');
+  const [quote, setQuote] = useState<Awaited<ReturnType<typeof api.cloudQuote>> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [sessionLimit, setSessionLimit] = useState(String(DEFAULT_SESSION_LIMIT));
-  const [hourlyLimit, setHourlyLimit] = useState(String(DEFAULT_HOURLY_LIMIT));
+  const [sessionLimit, setSessionLimit] = useState('1');
+  const [hourlyLimit, setHourlyLimit] = useState('2');
   const automaticAttempt = useRef<string | null>(null);
+  const selectionAttempt = useRef<string | null>(null);
+  const automaticVolume = useRef<string | null | undefined>(undefined);
+  const stored = setup?.volume;
+  const running = !!setup?.setup_running || !!setup?.compute || !!setup?.auto_setup_waiting;
+  const controlsLocked = busy || running || !!setup?.cleanup_pending;
+  const phase = setup?.setup_phase ?? 'idle';
+  const paused = phase === 'cancelled' && !setup?.auto_setup_enabled;
+  const stopping = phase === 'cancelling' || phase === 'stopping_worker';
+  const failed = phase === 'failed' || (!!setup?.setup_error && !paused && !stopping);
+  const cleanup = !!setup?.cleanup_pending;
+  const confirmed = setup?.compute?.creation_confirmed ?? !!setup?.compute?.pod_id;
+  const standardVolumes = discovery?.volumes.filter(volume => volume.type === 'STANDARD') ?? [];
+  const candidate = standardVolumes.find(volume => volume.app_candidate && volume.size >= minimum);
+
   async function action(work: () => Promise<unknown>) {
     setBusy(true); setError('');
     try { await work(); await client.invalidateQueries({ queryKey: ['cloud-setup'] }); }
@@ -34,205 +55,222 @@ export function CloudSetupPanel({ connected }: { connected: boolean }) {
     finally { setBusy(false); }
   }
   async function refresh() {
-    const value = await api.cloudDiscover(); setDiscovery(value);
-    // Discovery is ordered by the cheapest compatible available GPU region.
-    setRegion(r => value.regions.some(v => v.id === r) ? r : value.regions[0]?.id ?? '');
-    const volumes = suitableVolumes(value);
-    setVolumeId(id => volumes.some(v => v.id === id) ? id : volumes[0]?.id ?? '');
-    setQuote(null);
+    const value = await api.cloudDiscover();
+    client.setQueryData(['cloud-discovery'], value); setQuote(null);
+  }
+  async function enableDownloads() {
+    const value = await api.cloudAutoSetup(true);
+    client.setQueryData(['cloud-setup'], value);
+    onStep('models');
   }
   useEffect(() => {
-    if (connected) void action(refresh);
-    else { setDiscovery(null); setQuote(null); setVolumeId(''); setRegion(''); automaticAttempt.current = null; }
-  }, [connected]);
+    if (!discovery) return;
+    setRegion(current => discovery.regions.some(value => value.id === current) ? current : discovery.regions[0]?.id ?? '');
+    setSize(current => current || String(minimum));
+    setVolumeId(current => standardVolumes.some(value => value.id === current) ? current
+      : stored?.id ?? standardVolumes.find(value => value.app_owned)?.id ?? '');
+  }, [discovery, minimum, stored?.id]);
+  useEffect(() => {
+    setSessionLimit(String(setup?.policy?.max_session_usd ?? 1));
+    setHourlyLimit(String(setup?.policy?.max_hourly_usd ?? 2));
+  }, [setup?.policy?.max_session_usd, setup?.policy?.max_hourly_usd]);
   useEffect(() => { if (setup?.ready) void client.invalidateQueries({ queryKey: ['models'] }); }, [setup?.ready, client]);
   useEffect(() => {
-    setSessionLimit(String(setup?.policy?.max_session_usd ?? DEFAULT_SESSION_LIMIT));
-    setHourlyLimit(String(setup?.policy?.max_hourly_usd ?? DEFAULT_HOURLY_LIMIT));
-  }, [setup?.policy?.max_session_usd, setup?.policy?.max_hourly_usd]);
+    if (connected && setup && automaticVolume.current === undefined) automaticVolume.current = stored?.id ?? null;
+  }, [connected, setup, stored]);
+  // Only a confirmed Voice Clone volume may be selected automatically. A name
+  // match alone does not prove that a volume belongs to this app.
   useEffect(() => {
-    if (!connected || !setup || busy || setup.ready || setup.compute || !setup.release_available
-        || setup.auto_setup_enabled != null) return;
-    const volume = setup.volume ?? suitableVolumes(discovery)[0];
-    if (!volume || automaticAttempt.current === volume.id) return;
-    automaticAttempt.current = volume.id;
+    if (!connected || !setup || stored || controlsLocked) return;
+    const owned = standardVolumes.find(value => value.app_owned && value.size >= minimum);
+    if (!owned || selectionAttempt.current === owned.id) return;
+    selectionAttempt.current = owned.id;
+    automaticVolume.current = owned.id;
+    void action(() => api.cloudSelectStorage(owned.id));
+  }, [connected, setup, discovery, controlsLocked, stored]);
+  // Migrate a previously selected volume to automatic setup once. Explicit
+  // user pauses (false) remain paused; ordinary page navigation never cancels.
+  useEffect(() => {
+    if (!connected || !setup || !stored || controlsLocked || setup.ready || !setup.release_available
+      || setup.auto_setup_enabled != null || automaticAttempt.current === stored.id || automaticVolume.current !== stored.id) return;
+    automaticAttempt.current = stored.id;
     void action(async () => {
-      if (!setup.volume) await api.cloudSelectStorage(volume.id);
-      const value = await api.cloudAutoSetup(true);
-      client.setQueryData(['cloud-setup'], value);
+      client.setQueryData(['cloud-setup'], await api.cloudAutoSetup(true));
     });
-  }, [connected, setup, discovery, busy, client]);
+  }, [connected, setup, stored, controlsLocked, client]);
 
-  const suitable = suitableVolumes(discovery);
-  const chosenVolume = suitable.find(v => v.id === volumeId);
-  const chosenRegion = discovery?.regions.find(r => r.id === region);
-  const installing = setup?.compute?.kind === 'installer';
-  const creationConfirmed = setup?.compute?.creation_confirmed ?? !!setup?.compute?.pod_id;
-  const cancelled = setup?.setup_phase === 'cancelled';
-  const cancelling = setup?.setup_phase === 'cancelling';
-  const waiting = !!setup?.auto_setup_waiting;
-  const failed = !!setup && !cancelled && !cancelling && !waiting && (
-    !!setup.setup_error || setup.setup_phase === 'failed'
-    || /failed|could not|couldn't|release is pending|release needs retry|reached its time limit|needs cleanup/i.test(setup.detail)
-    || setup.compute?.status === 'failed'
-    || Object.values(setup.models).some(m => m.state === 'failed' || m.state === 'unsupported')
-  );
-  const releasePending = !!setup?.compute && (setup.cleanup_pending
-    || /release is pending|release needs retry|release compute|needs cleanup/i.test(setup.detail));
-  const installingActive = !failed && !cancelled && (setup?.setup_running ?? installing);
-  const expired = quote != null && Date.now() / 1000 > quote.expires_at;
-  const validLimits = Number.isFinite(Number(sessionLimit)) && Number(sessionLimit) >= .1 && Number(sessionLimit) <= 20
-    && Number.isFinite(Number(hourlyLimit)) && Number(hourlyLimit) >= .1 && Number(hourlyLimit) <= 10;
-  const retryDisabled = busy || !!setup?.compute || installingActive || cancelling || !setup?.release_available;
-  const failureMessage = 'Automatic model preparation needs attention. Your storage and downloaded files are kept. Resolve the issue below to continue.';
-  const phase = setup?.setup_phase ?? (installingActive ? (setup?.bytes_completed ? 'downloading' : 'starting_worker') : setup?.ready ? 'ready' : 'idle');
-  const activity = ({ starting_worker: 'Starting a temporary machine and downloading its software. Model files have not started downloading yet.',
-    checking_files: 'Checking which model files are already on your storage.', downloading: 'Downloading missing model files to your storage.',
-    verifying: 'Checking the downloaded files before generation is enabled.', stopping_worker: 'Stopping the temporary machine. Your downloaded models stay on storage.',
-    cancelling: 'Stopping model setup and releasing its temporary machine. Your storage and downloaded files are kept.',
-    cancelled: 'Model setup cancelled. Resume when ready: valid downloaded files are reused and incomplete files resume where supported.',
-    idle: setup?.volume ? 'Required models are prepared automatically on your storage.' : 'Connect storage above to get started.',
-    ready: 'Your models are downloaded and checked.', failed: failureMessage,
-  })[phase];
   const models: [string, CloudModelInstall][] = (setup?.required_model_ids ?? Object.keys(setup?.models ?? {}))
     .map(id => [id, setup?.models[id] ?? { state: 'pending' }]);
-  const hasTransfer = !failed && !cancelled && !cancelling && phase === 'downloading' && (setup?.bytes_total ?? 0) > 0
-    && setup?.progress_pct != null && Number.isFinite(setup.progress_pct);
+  const validSize = Number.isInteger(Number(size)) && Number(size) >= minimum && Number(size) <= 4000;
+  const validLimits = Number.isFinite(Number(sessionLimit)) && Number(sessionLimit) >= .1 && Number(sessionLimit) <= 20
+    && Number.isFinite(Number(hourlyLimit)) && Number(hourlyLimit) >= .1 && Number(hourlyLimit) <= 10;
+  const expired = quote != null && Date.now() / 1000 > quote.expires_at;
+  const noRelease = !!setup && !setup.release_available;
+  const audioTools = audioToolsQ.data;
+  const allReady = !!setup?.ready && !!audioTools?.ready && !!setup.policy;
+  const normalMessage = setup?.ready ? 'Your models are ready.'
+    : cleanup ? 'Waiting for Runpod to confirm the machine stopped.'
+    : stopping ? 'Pausing setup…'
+    : paused ? 'Downloads paused.'
+    : failed ? 'Setup needs attention.'
+    : setup?.auto_setup_waiting ? 'Waiting for an available machine. We will try again automatically.'
+    : phase === 'downloading' ? 'Downloading your models…'
+    : phase === 'verifying' ? 'Checking your models…'
+    : 'Preparing your setup…';
 
-  if (!connected) return null;
-  return <>
-    <section className="card">
-      <header className="card-head"><h2>1. Model storage</h2></header>
-      <p>Keep the models on Runpod so you only download them once. Your voice files and generated audio stay on this PC.</p>
-      <p><strong>Account credit: {money(discovery?.balance_usd)}</strong></p>
+  if (!connected || step === 'account') return null;
+  return <section className="card runpod-wizard-page" aria-labelledby="runpod-page-heading">
+    {step === 'storage' && <>
+      <header className="card-head"><h2 id="runpod-page-heading">Storage for your voices</h2></header>
+      <p>Models stay in a separate Runpod volume for Voice Clone Studio.</p>
+      <p>Account credit: <strong>{money(discovery?.balance_usd)}</strong></p>
       <div className="runpod-actions">
-        <button type="button" className="btn sm" disabled={busy} onClick={() => void action(refresh)}>Refresh storage and funds</button>
+        <button className="btn sm" disabled={busy} onClick={() => void action(refresh)}>Refresh</button>
         <a className="btn sm" href="https://www.runpod.io/console/user/billing" target="_blank" rel="noreferrer">Add funds</a>
       </div>
-      {setup?.volume ? <>
-        <p><strong>Storage connected</strong> · {setup.volume.size} GB · {setup.volume.dataCenter}</p>
-        <p className="hint">Storage is billed while you keep it, even when no machine is running. A 200 GB volume costs about $14/month.</p>
-      </> : chosenVolume ? <>
-        <p><strong>Existing storage found</strong> · {chosenVolume.size} GB · {chosenVolume.dataCenter}</p>
-        <p className="hint">Connecting this storage and preparing required models automatically. Temporary download-machine time is limited to $1 per setup attempt.</p>
-      </> : <>
-        <p>{discovery ? 'You need 200 GB of storage for the models, cache and updates.' : 'Checking your storage…'}</p>
-        <p className="hint">About $14/month while kept. The app selects an available region with a low GPU rate. Review the price before purchasing.</p>
-        {chosenRegion && <p>Selected region: <strong>{chosenRegion.name}</strong> · GPU from {money(chosenRegion.gpu_hourly_from_usd)}/hour.</p>}
-        {discovery && !chosenRegion && <p role="status">No suitable region is available right now. Refresh to check again.</p>}
-        <button type="button" className="btn primary sm" disabled={busy || !region || !!setup?.compute} onClick={() => void action(async () => {
-          setQuote(await api.cloudQuote(region));
-        })}>Review storage purchase</button>
-        {quote && <div className="runpod-purchase" aria-live="polite">
-          <p><strong>{quote.storage_gb} GB · {money(quote.monthly_usd)}/month</strong> · {quote.region}</p>
-          <p className="hint">You need {money(quote.required_credit_reserve_usd)} available credit for one day of storage and up to {money(quote.installer_budget_usd)} to download and check the models. Storage is billed over time; the full monthly price is not charged now.</p>
-          {!quote.can_purchase && <p>{quote.balance_usd == null ? 'We could not check your balance. Check the API key permissions and refresh.' : 'Add funds, then refresh and review the purchase again.'}</p>}
-          {expired && <p>The price check expired. Review the purchase again.</p>}
-          <button type="button" className="btn primary sm" disabled={busy || !quote.can_purchase || expired || !setup?.release_available || !!setup?.compute} onClick={() => void action(async () => {
-            await api.cloudPurchase(quote.id); setQuote(null); await api.cloudAutoSetup(true); await refresh();
-          })}>Purchase storage and download models</button>
-        </div>}
+      {stored ? <div className="runpod-storage-choice">
+        <strong>{stored.name}</strong><span>{stored.size} GB · {stored.dataCenter} · About {storageCost(stored.size)}/month</span>
+        <p className="hint">Storage is billed while you keep it, even between generations.</p>
+      </div> : candidate && storageMode !== 'new' ? <div className="runpod-storage-choice">
+        <strong>Voice Clone storage found</strong><span>{candidate.name} · {candidate.size} GB · {candidate.dataCenter} · About {storageCost(candidate.size)}/month</span>
+        <button className="btn primary sm" disabled={controlsLocked || noRelease} onClick={() => void action(async () => {
+          await api.cloudSelectStorage(candidate.id); await enableDownloads();
+        })}>Use this storage and continue</button>
+        <p className="hint">Model setup: up to $1 per session.</p>
+      </div> : <>
+        <p>{discovery ? `Create a ${minimum} GB volume for your models.` : 'Checking your storage…'}</p>
+        <p className="hint">Includes the model files and 10 GB of spare space.</p>
       </>}
       <details className="runpod-advanced">
         <summary>Advanced storage settings</summary>
-        <p className="hint">The current model files total about 49 GB. Extra space holds cache files and future updates.</p>
-        <p className="hint">Total account spend: {money(discovery?.account_hourly_spend_usd)}/hour, including your other projects.</p>
-        {setup?.volume ? <p className="hint">Storage name: {setup.volume.name}</p> : <div className="runpod-controls">
-          {suitable.length > 0 ? <label className="field"><span className="field-label">Choose existing storage</span>
-            <select value={volumeId} onChange={e => { setVolumeId(e.target.value); setQuote(null); }}>
-              {suitable.map(v => <option key={v.id} value={v.id}>{v.name} · {v.size} GB · {v.dataCenter}</option>)}
-            </select></label> : <label className="field"><span className="field-label">Storage region</span>
-            <select value={region} onChange={e => { setRegion(e.target.value); setQuote(null); }}>
-              {(discovery?.regions ?? []).map(r => <option value={r.id} key={r.id}>{r.name} · GPU from {money(r.gpu_hourly_from_usd)}/hour</option>)}
-            </select></label>}
-        </div>}
-      </details>
-      {setup && !setup.release_available && <div role="status">
-        <p className="hint">This app version needs an update before it can download models or rent a machine.</p>
-        <button type="button" className="btn sm" onClick={() => window.dispatchEvent(new CustomEvent('vcs-open-updates'))}>Check app updates</button>
-      </div>}
-      {(error || setupQ.error) && <p role="alert">{error || String(setupQ.error)}</p>}
-    </section>
-    <section className="card">
-      <header className="card-head"><h2>2. {setup?.ready ? 'Models ready' : 'Set up models'}</h2></header>
-      <ol className="runpod-steps" aria-label="Model setup steps">
-        <li><strong>{setup?.volume ? '✓ ' : ''}Storage</strong></li>
-        <li><strong>{phase === 'starting_worker' && !failed ? 'Current: ' : ''}Start machine</strong><span>Download setup software</span></li>
-        <li><strong>{phase === 'downloading' && !failed ? 'Current: ' : ''}Download models</strong></li>
-        <li><strong>{(phase === 'checking_files' || phase === 'verifying') && !failed ? 'Current: ' : ''}Check files</strong></li>
-        <li><strong>{setup?.ready ? '✓ ' : ''}Ready</strong></li>
-      </ol>
-      <p aria-live="polite">{waiting ? 'Waiting for an available download machine in your storage region. The app will check again automatically; model downloading has not started yet.' : failed ? failureMessage : activity}</p>
-      {!setup?.ready && !cancelled && <p className="hint">Required models download automatically. Temporary setup compute is limited to $1 per attempt; storage is billed separately.</p>}
-      {(failed || cancelled) && (setup?.setup_error || setup?.detail) && <p role={setup?.setup_error ? 'alert' : 'status'}>{setup.setup_error || setup.detail}</p>}
-      {releasePending && <p role="alert">{creationConfirmed
-        ? 'Runpod has not confirmed that the rented machine stopped. Check the pending machine before retrying setup.'
-        : 'Runpod has not confirmed whether the machine started. Check the pending machine; another setup attempt stays blocked until this one is reconciled.'}</p>}
-      {(installingActive || waiting || setup?.auto_setup_enabled) && !cancelling && phase !== 'stopping_worker' && !setup?.ready && <div>
-        <button type="button" className="btn sm" disabled={busy} onClick={() => void action(api.cloudCancel)}>Cancel model setup</button>
-        <p className="hint">Stops the download and releases the temporary machine. Your model storage is kept.</p>
-      </div>}
-      {hasTransfer && <>
-        <progress aria-label="Model download progress" max={100} value={Math.max(0, Math.min(100, setup!.progress_pct!))} />
-        <p className="hint">{setup!.progress_pct!.toFixed(1)}% downloaded · {gb(setup?.bytes_completed ?? 0)} / {gb(setup!.bytes_total!)}</p>
-      </>}
-      {!setup?.ready && models.length > 0 && <ul className="runpod-model-status">
-        {models.map(([id, m]) => <li key={id}><strong>{modelName(id)}</strong> · {(failed || cancelled || cancelling) && ['downloading', 'verifying', 'discovering'].includes(m.state)
-          ? 'Stopped' : ({ ready: 'Downloaded and checked', installed: 'Downloaded and checked', downloading: 'Downloading', verifying: 'Checking files', discovering: 'Finding required files', resolving: 'Checking required files', idle: 'Waiting', pending: 'Waiting', failed: 'Failed', cancelled: 'Stopped', unsupported: 'Unavailable' })[m.state] ?? m.state}
-          {m.state === 'downloading' && m.progress_pct != null && Number.isFinite(m.progress_pct) && ` · ${failed || cancelled || cancelling ? 'Last reported: ' : ''}${Math.max(0, Math.min(100, m.progress_pct)).toFixed(1)}%`}
-          {m.bytes_total != null && m.bytes_total > 0 && ` · ${gb(m.bytes_completed ?? 0)} / ${gb(m.bytes_total)}`}</li>)}
-      </ul>}
-      {setup?.volume && !setup.ready && setup.auto_setup_enabled === false && !setup.compute && <button type="button" className="btn sm" disabled={retryDisabled}
-        onClick={() => void action(() => api.cloudAutoSetup(true))}>Resume automatic downloads (up to $1)</button>}
-      {!setup?.ready && <p className="hint">Generation stays disabled until the required models are fully checked.</p>}
-      {!setup?.ready && <p className="hint">Retrying checks stored files first. Valid files are skipped; partial downloads resume if supported. Only corrupt or changed files need downloading again.</p>}
-      {setup?.compute && <div className="runpod-machine">
-        <p><strong>{creationConfirmed ? (installing ? 'Model setup machine' : 'Voice generation machine') : 'Machine start not confirmed'}</strong> · {creationConfirmed ? '' : 'Estimated rate: '}{money(setup.compute.hourly_usd)}/hour.</p>
-        <p className="hint">{creationConfirmed ? 'It is billed until Runpod confirms it has stopped. Automatic stop-by time: ' : 'This is a pending start attempt, not a confirmed rental. Requested stop-by time: '}{new Date(setup.compute.deadline).toLocaleString()}.</p>
-        {!(installingActive || cancelling) && <button type="button" className="btn sm" disabled={busy}
-          onClick={() => void action(installing ? api.cloudCancel : api.cloudRelease)}>{creationConfirmed ? 'Stop rented machine' : 'Check pending start'}</button>}
-      </div>}
-      <details className="runpod-advanced">
-        <summary>{failed ? 'Error details and model status' : 'Advanced model details'}</summary>
-        {(setup?.setup_error || setup?.detail) && <p>{setup.setup_error || setup.detail}</p>}
-        {setup?.compute && <p className="hint">Machine status: {setup.compute.status}</p>}
-        {models.map(([id, m]) => <p key={id}>{id} · {m.state}
-          {m.current_file && <span className="hint"> · {m.current_file}</span>}{m.detail && <span className="hint"> · {m.detail}</span>}</p>)}
-        {setup?.ready && <button type="button" className="btn sm" disabled={retryDisabled} onClick={() => void action(api.cloudInstall)}>Check stored models again (up to $1)</button>}
-        {!setup?.ready && failed && setup.auto_setup_enabled !== false && <button type="button" className="btn sm" disabled={retryDisabled}
-          onClick={() => void action(() => api.cloudAutoSetup(true))}>Resume after resolving the error (up to $1)</button>}
-      </details>
-    </section>
-    <section className="card">
-      <header className="card-head"><h2>3. Voice generation</h2></header>
-      <p>The app automatically rents the cheapest available GPU that can run your models. It starts when you generate a voice and stops after your queue finishes.</p>
-      <p className="hint">You pay for startup, model loading and generation. Keeping storage is a separate cost.</p>
-      {setup?.policy ? <p><strong>Approved limits:</strong> {money(setup.policy.max_session_usd)} per session · GPU up to {money(setup.policy.max_hourly_usd)}/hour.</p> : <>
-        <p><strong>Suggested limits:</strong> {money(DEFAULT_SESSION_LIMIT)} per session · GPU up to {money(DEFAULT_HOURLY_LIMIT)}/hour.</p>
-        <button type="button" className="btn primary sm" disabled={busy} onClick={() => void action(async () => {
-          await api.cloudPolicy(DEFAULT_SESSION_LIMIT, DEFAULT_HOURLY_LIMIT);
-        })}>Approve these limits</button>
-        <p className="hint">Approval saves your spending limits. It does not start a machine or charge you now.</p>
-      </>}
-      {setup?.ready && setup.policy && <p role="status">Ready. Go to Voice Studio, choose your voice and enter a script.</p>}
-      <details className="runpod-advanced">
-        <summary>Advanced generation settings</summary>
+        {running && <p role="status">{setup?.compute?.kind === 'generation' ? 'Finish generation before changing storage.' : 'Pause downloads before changing storage.'}</p>}
+        {running && setup?.compute?.kind !== 'generation' && !stopping && !cleanup && <button className="btn sm" disabled={busy} onClick={() => void action(api.cloudCancel)}>Pause downloads</button>}
         <div className="runpod-controls">
-          <label className="field"><span className="field-label">Maximum cost per session (USD)</span>
-            <input type="number" min="0.1" max="20" step="0.1" value={sessionLimit} onChange={e => setSessionLimit(e.target.value)} /></label>
-          <label className="field"><span className="field-label">Maximum GPU rate per hour (USD)</span>
-            <input type="number" min="0.1" max="10" step="0.1" value={hourlyLimit} onChange={e => setHourlyLimit(e.target.value)} /></label>
-          <button type="button" className="btn sm" disabled={busy || !validLimits} onClick={() => void action(async () => {
-            await api.cloudPolicy(Number(sessionLimit), Number(hourlyLimit));
-          })}>{setup?.policy ? 'Save new spending limits' : 'Approve custom limits'}</button>
+          <label className="field"><span className="field-label">Storage choice</span>
+            <select value={storageMode} disabled={controlsLocked} onChange={event => { setStorageMode(event.target.value as 'existing' | 'new'); setQuote(null); }}>
+              <option value="existing">Use existing storage</option><option value="new">Create a new volume</option>
+            </select></label>
+          {storageMode === 'existing' ? <>
+            <label className="field"><span className="field-label">Available volumes</span>
+              <select value={volumeId} disabled={controlsLocked} onChange={event => { setVolumeId(event.target.value); setQuote(null); }}>
+                <option value="">Choose a volume</option>
+                {standardVolumes.map(volume => <option key={volume.id} value={volume.id} disabled={volume.size < minimum}>{volume.name} · {volume.size} GB · {volume.dataCenter}{volume.size < minimum ? ` · Needs at least ${minimum} GB` : volume.app_owned ? ' · Voice Clone' : ''}</option>)}
+              </select></label>
+            {volumeId && !standardVolumes.find(volume => volume.id === volumeId)?.app_owned && volumeId !== stored?.id
+              && <p className="hint">This volume may belong to another app. Use it only if you want Voice Clone models stored there.</p>}
+            <button className="btn sm" disabled={controlsLocked || !volumeId || volumeId === stored?.id || noRelease || (standardVolumes.find(volume => volume.id === volumeId)?.size ?? 0) < minimum} onClick={() => void action(async () => {
+              automaticVolume.current = null;
+              await api.cloudSelectStorage(volumeId, !standardVolumes.find(volume => volume.id === volumeId)?.app_owned);
+              setQuote(null);
+            })}>Use this volume</button>
+          </> : <>
+            {stored && <p className="hint">Your current volume stays in your Runpod account and is still billed until you remove it.</p>}
+            <label className="field"><span className="field-label">Volume name (optional)</span>
+              <input value={name} maxLength={64} disabled={controlsLocked} placeholder="Voice Clone Studio" onChange={event => { setName(event.target.value); setQuote(null); }} /></label>
+            <label className="field"><span className="field-label">Size (GB)</span>
+              <input type="number" min={minimum} max="4000" step="1" value={size} disabled={controlsLocked} onChange={event => { setSize(event.target.value); setQuote(null); }} /></label>
+            <p className="hint">Minimum {minimum} GB for all model files plus 10 GB spare.</p>
+            <label className="field"><span className="field-label">Region</span>
+              <select value={region} disabled={controlsLocked} onChange={event => { setRegion(event.target.value); setQuote(null); }}>
+                {(discovery?.regions ?? []).map(value => <option key={value.id} value={value.id}>{value.name} · GPU from {money(value.gpu_hourly_from_usd)}/hour</option>)}
+              </select></label>
+          </>}
         </div>
-        <p className="hint">Current mode: rent a Pod, finish the queue, then terminate it. The GPU must be available in your storage region and fit within your approved hourly rate.</p>
-        <div className="runpod-scroll"><table><thead><tr><th>Option</th><th>Benefit</th><th>Tradeoff</th></tr></thead><tbody>
-          <tr><td>Stop after generation (current)</td><td>Lower hourly prices; good for a batch of voices.</td><td>Each new session starts a machine and loads the models.</td></tr>
-          <tr><td>Serverless Flex (not available yet)</td><td>Can sleep between requests and may start faster.</td><td>Higher active prices; support and cost comparisons still need testing.</td></tr>
-          <tr><td>Keep a machine warm (not available yet)</td><td>Faster repeated edits because models stay loaded.</td><td>You also pay while it waits. The current queue only has a five-second grace period.</td></tr>
-        </tbody></table></div>
       </details>
-    </section>
-  </>;
+      {(storageMode === 'new' || (!stored && !candidate)) && <>
+        {discovery && !region && <p role="status">No suitable region is available. Refresh to check again.</p>}
+        <button className="btn primary sm" disabled={controlsLocked || !region || !validSize || noRelease} onClick={() => void action(async () => {
+          setQuote(await api.cloudQuote(region, Number(size || minimum), name.trim() || undefined, storageMode === 'new' && !!stored));
+        })}>Review storage cost</button>
+        {quote && <div className="runpod-purchase" aria-live="polite">
+          <p><strong>{quote.storage_gb} GB · {money(quote.monthly_usd)}/month</strong></p>
+          <p>Model setup: up to {money(quote.installer_budget_usd)} per session.</p>
+          {!quote.can_purchase && <p role="status">{quote.balance_usd == null ? 'Refresh to check your balance.' : `Add funds to reach ${money(quote.required_credit_reserve_usd)}, then refresh.`}</p>}
+          {expired && <p>Review the cost again to continue.</p>}
+          <button className="btn primary sm" disabled={controlsLocked || !quote.can_purchase || expired || noRelease} onClick={() => void action(async () => {
+            await api.cloudPurchase(quote.id); setQuote(null); await enableDownloads(); await refresh();
+          })}>Create storage and continue</button>
+        </div>}
+      </>}
+      {stored && storageMode !== 'new' && <div className="runpod-wizard-footer">
+        <button className="btn sm" onClick={() => onStep('account')}>Back</button>
+        <button className="btn primary sm" disabled={busy || noRelease || cleanup} onClick={() => void action(async () => {
+          if (!setup?.ready && !running && !setup?.auto_setup_enabled) await enableDownloads(); else onStep('models');
+        })}>Continue</button>
+        {!setup?.ready && !running && !setup?.auto_setup_enabled && <p className="hint">Missing models download automatically. Model setup: up to $1 per session.</p>}
+      </div>}
+      {!stored && <div className="runpod-wizard-footer"><button className="btn sm" onClick={() => onStep('account')}>Back</button></div>}
+    </>}
+    {step === 'models' && <>
+      <header className="card-head"><h2 id="runpod-page-heading">Your models</h2></header>
+      <p role="status" aria-live="polite">{normalMessage}</p>
+      {failed && <p role="alert">{setup?.setup_error || 'Check the details below, then continue setup.'}</p>}
+      {!stored && <button className="btn primary sm" onClick={() => onStep('storage')}>Set up storage</button>}
+      <div className="runpod-model-list">
+        {models.map(([id, model]) => {
+          const ready = ['ready', 'installed'].includes(model.state);
+          const stopped = paused || stopping || failed;
+          const knownProgress = model.bytes_total != null && model.bytes_total > 0
+            && model.progress_pct != null && Number.isFinite(model.progress_pct);
+          const status = ready ? 'Ready' : stopped ? 'Paused' : ({ downloading: 'Downloading', verifying: 'Checking',
+            discovering: 'Preparing', resolving: 'Preparing', failed: 'Needs attention', unsupported: 'Unavailable' })[model.state] ?? 'Waiting';
+          return <div className="runpod-model-row" key={id}>
+            <div className="runpod-model-heading"><strong>{modelName(id)}</strong><span>{status}</span></div>
+            {knownProgress && <>
+              <progress aria-label={`${modelName(id)} download progress`} max={100} value={Math.max(0, Math.min(100, model.progress_pct!))} />
+              <span className="hint">{Math.max(0, Math.min(100, model.progress_pct!)).toFixed(0)}% · {gb(model.bytes_completed ?? 0)} / {gb(model.bytes_total!)}</span>
+            </>}
+          </div>;
+        })}
+      </div>
+      {setup?.auto_setup_enabled && !setup.ready && !stopping && !cleanup && <button className="btn sm" disabled={busy} onClick={() => void action(api.cloudCancel)}>Pause downloads</button>}
+      {stored && !setup?.ready && !setup?.auto_setup_enabled && !running && !cleanup && <>
+        <button className="btn primary sm" disabled={busy || noRelease} onClick={() => void action(enableDownloads)}>{failed ? 'Continue setup' : 'Resume downloads'}</button>
+        <p className="hint">Model setup: up to $1 per session.</p>
+      </>}
+      {cleanup && <button className="btn sm" disabled={busy} onClick={() => void action(api.cloudCancel)}>{confirmed ? 'Check machine stop' : 'Check pending start'}</button>}
+      {(failed || cleanup) && <details className="runpod-advanced"><summary>Error details</summary>
+        <p>{setup?.detail}</p>{setup?.compute && <p>Machine status: {setup.compute.status}. Requested stop time: {new Date(setup.compute.deadline).toLocaleString()}.</p>}
+        {models.filter(([, model]) => model.detail).map(([id, model]) => <p key={id}>{modelName(id)}: {model.detail}</p>)}
+      </details>}
+      <div className="runpod-wizard-footer">
+        <button className="btn sm" onClick={() => onStep('storage')}>Back</button>
+        <button className="btn primary sm" disabled={!setup?.ready} onClick={() => onStep('ready')}>Continue</button>
+      </div>
+    </>}
+    {step === 'ready' && <>
+      <header className="card-head"><h2 id="runpod-page-heading">{allReady ? 'Ready to generate' : 'Finish setup'}</h2></header>
+      {!audioTools?.ready && <div aria-live="polite">
+        <p role="status">{audioTools?.stage === 'failed' ? 'App setup needs attention.' : 'Preparing your app…'}</p>
+        {audioTools?.progress_pct != null && Number.isFinite(audioTools.progress_pct) && audioTools.bytes_total > 0 && <>
+          <progress aria-label="App setup progress" max={100} value={Math.max(0, Math.min(100, audioTools.progress_pct))} />
+          <p className="hint">{Math.max(0, Math.min(100, audioTools.progress_pct)).toFixed(0)}% · {gb(audioTools.bytes_completed)} / {gb(audioTools.bytes_total)}</p>
+        </>}
+        {(audioTools?.stage === 'failed' || audioTools?.stage === 'cancelled') && <>
+          <button className="btn sm" disabled={busy} onClick={() => void action(async () => {
+            client.setQueryData(['audio-tools'], await api.retryAudioTools());
+          })}>Continue app setup</button>
+          {audioTools.detail && <details className="runpod-advanced"><summary>Error details</summary><p>{audioTools.detail}</p></details>}
+        </>}
+        {audioToolsQ.error && <p role="alert">Unable to check app setup. <button className="btn sm" disabled={audioToolsQ.isFetching} onClick={() => void audioToolsQ.refetch()}>Check again</button></p>}
+      </div>}
+      <p>The app picks an available GPU for your voice. It starts when you generate and stops when your queue finishes.</p>
+      <p>Your first generation also loads and checks the model.</p>
+      <p><strong>{money(setup?.policy?.max_session_usd ?? 1)} maximum per session</strong> · GPU up to {money(setup?.policy?.max_hourly_usd ?? 2)}/hour.</p>
+      {!setup?.policy && <button className="btn primary sm" disabled={busy} onClick={() => void action(() => api.cloudPolicy(1, 2))}>Approve these limits</button>}
+      <details className="runpod-advanced"><summary>Advanced generation settings</summary>
+        <div className="runpod-controls">
+          <label className="field"><span className="field-label">Maximum per session (USD)</span><input type="number" min="0.1" max="20" step="0.1" value={sessionLimit} onChange={event => setSessionLimit(event.target.value)} /></label>
+          <label className="field"><span className="field-label">Maximum GPU price per hour (USD)</span><input type="number" min="0.1" max="10" step="0.1" value={hourlyLimit} onChange={event => setHourlyLimit(event.target.value)} /></label>
+          <button className="btn sm" disabled={busy || !validLimits} onClick={() => void action(() => api.cloudPolicy(Number(sessionLimit), Number(hourlyLimit)))}>Save spending limits</button>
+        </div>
+      </details>
+      <div className="runpod-wizard-footer"><button className="btn sm" onClick={() => onStep('models')}>Back</button>
+        <button className="btn primary sm" disabled={!allReady} onClick={() => window.dispatchEvent(new CustomEvent('vcs-open-voice-studio'))}>Open Voice Studio</button>
+        {!allReady && <p className="hint">{!setup?.ready ? 'Finish model downloads to continue.' : !audioTools?.ready ? 'App setup must finish before you generate.' : 'Approve spending limits to continue.'}</p>}
+      </div>
+    </>}
+    {noRelease && <p role="status">Update the app to finish setup. <button className="btn sm" onClick={() => window.dispatchEvent(new CustomEvent('vcs-open-updates'))}>Check updates</button></p>}
+    {(error || setupQ.error || discoverQ.error) && <p role="alert">{error || String(setupQ.error || discoverQ.error)}</p>}
+  </section>;
 }

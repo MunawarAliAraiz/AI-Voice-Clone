@@ -39,6 +39,7 @@ Pod. Read the documents below before changing behavior.
 - [Model storage](docs/MODEL_STORAGE.md): complete pinned graphs, checksums and measured disk use.
 - [Cloud image release](docs/POD_IMAGE_RELEASE.md): hosted builds and immutable image qualification.
 - [Cloud lifecycle](docs/CLOUD_LIFECYCLE.md): automatic storage verification, GPU selection and compute release plan.
+- [Guided setup](docs/GUIDED_SETUP.md): confirmed setup pages, automatic defaults, storage sizing and app-exit behavior.
 - [Runpod setup](docs/RUNPOD_SETUP.md): current blocker and user-operated storage/model/generation setup steps.
 - [CPU setup investigation](docs/CPU_SETUP_INVESTIGATION.md): CPU deployment request correction and read-only provider evidence.
 - [Pod worker](docs/POD_WORKER.md): worker contract and deployment gaps.

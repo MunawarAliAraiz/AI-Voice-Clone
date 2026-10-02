@@ -1,5 +1,47 @@
 # Persistent model storage
 
+## Setup wizard capacity contract — 2026-10-02
+
+New Standard volumes default to **60 GB**: the current pinned graph contains
+49,014,734,674 bytes, plus a **10,000,000,000-byte reserve**, rounded up to
+whole decimal GB. The quote binds this measurement to the exact release manifest;
+changed pins require updated capacity evidence before a purchase. Advanced choices
+accept larger sizes up to the documented API bound, a custom name and an available
+region. The price is an estimate: $0.07/GB/month for the first 1,000 GB and
+$0.05/GB/month beyond that. Existing 200 GB volumes are retained; no automatic
+shrink, deletion or migration occurs.
+
+The volume list reports allocated size and location, **not free space or model
+contents**. A saved app-owned volume is the normal choice. A `voice-clone-` name
+is only a candidate; explicit selection or mounted identity verification is needed.
+An explicitly selected unrelated volume uses `/workspace/voice-clone/hf-cache`
+to separate the app's files from the other workload. Existing app caches keep their
+legacy `/workspace/hf-cache` path so prior downloads remain reusable.
+
+The authenticated CPU worker exposes `POST /v1/capacity` (202) and
+`GET /v1/capacity`. It checks the complete required graph on a background thread,
+deduplicates identical repository/revision/path entries, hashes existing files,
+reports per-model checks, and measures the mounted filesystem's free bytes.
+The controller polls it before requesting any full setup download. Required free
+space is all additional missing writes plus the 10 GB reserve. Existing partial
+bytes reduce additional writes; an ignored Range request truncates the partial
+first, freeing those bytes before the full replacement. Corrupt target files remain
+occupied until atomic replacement. A corrupt complete partial is downloaded again.
+Insufficient capacity stops setup and asks the user to increase storage.
+
+A `.vcs-volume.json` app identity marker lives in the selected cache namespace.
+It identifies the voice-app folder; it never proves model health or readiness.
+Transfer still requires verified current-file evidence. Scan cancellation joins
+the background thread before worker shutdown returns, and serializes with installs.
+The framework image lives on the Pod's container disk; the persistent reserve holds
+caches and working space. This is a measured model-based minimum, not a live
+qualification of every framework cache or a real 60 GB transfer.
+
+Offline tests cover full-graph capacity, shared snapshot deduplication, partial
+deficits, corrupt complete-partial repair, authenticated asynchronous scans,
+marker isolation and joined cancellation. Real volume setup and GPU generation
+remain separate qualification steps.
+
 ## Implemented boundary â€” 2026-09-30
 
 `app.remote_worker.installer_main:create_installer_app` is a CPU-only FastAPI
@@ -78,8 +120,8 @@ including alternate formats, instead of risking a hidden dependency omission.
 
 Total: **49,014,734,674 bytes**, about **49.01 GB / 45.65 GiB**, before partial
 files, framework caches and future revisions. 200 GB is ample headroom for this
-graph; it is not a measured minimum. The downloader keeps a 2 GiB free-space
-reserve and checks missing bytes before transfer. Public anonymous metadata
+graph; it is not a measured minimum. The current downloader keeps a 10 GB decimal
+free-space reserve and checks remaining writes before transfer. Public anonymous metadata
 access succeeded for all six repositories at this checkpoint. Metadata access
 is not a full weight download or runtime qualification.
 

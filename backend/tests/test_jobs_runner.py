@@ -278,3 +278,23 @@ async def test_drain_timeout_leaves_the_row_running(tmp_path: Path) -> None:
     row = await db.get_job(job.id)
     assert row["status"] == "running"
     await db.close()
+
+
+async def test_return_to_app_restarts_stopped_queue_consumers(tmp_path: Path) -> None:
+    runner, db, sched, _settings, pid = await _setup(tmp_path)
+    try:
+        await runner.start()
+        await runner.stop(drain_timeout_sec=0)
+        job = await runner.enqueue(
+            JobKind.SYNTHESIZE, params=_synth_params(tmp_path, "resumed"),
+            route=_ROUTE, profile_id=pid,
+        )
+        assert (await db.get_job(job.id))["status"] == "queued"
+        await runner.reap_stale()
+        await runner.start()
+        await asyncio.wait_for(runner.wait_idle(), timeout=2)
+        assert (await db.get_job(job.id))["status"] == "succeeded"
+        assert len(sched.requests) == 1
+    finally:
+        await runner.stop(drain_timeout_sec=1)
+        await db.close()

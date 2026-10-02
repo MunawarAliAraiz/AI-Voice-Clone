@@ -2,8 +2,9 @@
 
 ## Simple setup and progress state
 
-The Runpod UI presents storage, model preparation and voice generation as
-separate steps. Native collapsed disclosures hold technical controls; visible
+The Runpod UI presents Account, Storage, Models and Ready as separate pages,
+with Back/Next and revisitable steps. Ready also checks compulsory local audio
+tools; GPU loading belongs to the first generation. Collapsed disclosures hold technical controls; visible
 cost summaries and explicit purchase/spending approval remain outside them.
 GPU selection is automatic within the stored region, capacity and price limits.
 Voice model overrides are collapsed without widening license or experimental
@@ -11,7 +12,8 @@ routing eligibility. Recommended language defaults are unchanged.
 
 Required model preparation starts through an explicit automatic-setup mutation
 after the UI connects suitable storage, rather than through status reads. The
-intent is durable and resumes on service startup. Availability-only retries
+intent is durable and resumes on service startup after an app-exit pause.
+Explicit user pause disables automatic resume. Availability-only retries
 occur before machine creation; an attempted paid or ambiguous start consumes
 that intent and needs explicit resume after failure. Cancel disables automatic
 setup, quiesces its task and reconciles/releases only the owned installer. The
@@ -161,6 +163,39 @@ chunks, and resumable assembly. One-hour recordings and up to three simultaneous
 speakers require listening tests in Urdu and English before release. The
 diarization, separation, and conversion models need their own dependency
 environments and pinned, license-checked weights.
+
+## Graceful desktop close and setup navigation
+
+Leaving the Runpod setup page does not cancel downloads: setup tasks and model
+progress belong to the local backend, independently of the mounted React page.
+Wizard Previous/Next controls change the displayed step; they do not start or
+stop work merely because a page is mounted.
+
+Closing the desktop window requests authenticated
+`POST /api/desktop/lifecycle/prepare-exit`. The API establishes a separate exit
+admission fence, stops queue consumers, and calls the controller's
+`pause_for_app_exit()` before acknowledging confirmed cloud cleanup. Setup
+intent and downloaded model bytes remain durable for reopening. This pause is
+distinct from an explicit user cancellation.
+
+The native shell prevents immediate window destruction and shows a short
+closing message. Only an acknowledged `prepared: true, stop_confirmed: true`
+permits stopping its exact owned sidecar process tree and closing the window.
+An uncertain provider response or timeout leaves the window open with **Try
+again** and **Return to app**. The latter requests authenticated
+`POST /api/desktop/lifecycle/cancel-exit`; it cannot interrupt ongoing cleanup,
+and clears only the exit fence. Interrupted running queue rows are reaped before
+consumers restart; queued rows retain their existing durable behavior. The
+update fence is independent and is never cleared by this recovery.
+
+Forced OS termination, process crashes and loss of power cannot run this close
+handshake. Provider termination deadlines and saved ownership reconciliation
+remain necessary. Native updater installation retains its stricter idle
+admission and existing owned-sidecar handling.
+
+GPU models are loaded during the first generation. File verification during
+setup does not claim GPU inference or audio quality has been tested; an optional
+voice test must use a real saved reference and its own bounded compute session.
 
 ## Historical checkpoint 2026-10-01
 

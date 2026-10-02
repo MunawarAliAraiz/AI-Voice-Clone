@@ -1,5 +1,27 @@
 # Runpod setup from the desktop
 
+## Guided setup in 0.1.5 (awaiting installer qualification/publication)
+
+1. **Account**: enter the Runpod key and connect. The app checks the account.
+2. **Storage**: use the saved voice-app volume, or review a new volume's size
+   and monthly price. The current minimum is 60 GB. Advanced lets you select
+   an existing volume or choose a new volume's name, size and region. Creating
+   new storage does not delete or stop billing for old storage.
+3. **Models**: missing models download automatically after the storage and
+   setup cost are confirmed. Each model shows its own progress. Pause/Resume
+   controls are available. Leaving this page keeps downloads running.
+4. **Ready**: approve generation limits. Once cloud files and local audio tools
+   are ready, open Voice Studio. The first generation loads the GPU models.
+
+Back/Next changes the page, not the running download. Closing the app pauses
+setup and stops its temporary machine before exiting; reopening resumes eligible
+setup. If Runpod cannot confirm the machine stopped, the app stays open with
+Try again/Return to app. Failed or uncertain paid starts need attention rather
+than silently starting another machine. See [guided setup](GUIDED_SETUP.md).
+
+These source checks are complete; paid model transfer, GPU generation and the
+installed close/reopen/update cycle have not been tested.
+
 ## Automatic setup in 0.1.4
 
 The user-approved [0.1.4 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.4)

@@ -188,6 +188,7 @@ class JobRunner:
             (self._idle[kind].set if n == 0 else self._idle[kind].clear)()
 
     async def start(self) -> None:
+        self._stopping = False
         await self._sync_pending()
         for kind, n in self._concurrency.items():
             if kind not in HANDLERS:

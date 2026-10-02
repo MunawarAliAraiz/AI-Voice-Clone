@@ -20,31 +20,35 @@ export function deriveCloudGenerationGate({ desktop, setup, error = false, audio
   if (error) return block('Runpod setup could not be checked. Open Runpod and refresh the connection.');
   if (!setup) return block('Checking Runpod setup. Generation unlocks after model storage and compute limits are ready.');
   if (!setup.connected) return block('Connect your Runpod API key to set up voice generation.');
-  if (!setup.volume || setup.volume.size < 200 || setup.volume.type !== 'STANDARD') {
-    return block('Select or purchase at least 200 GB of persistent model storage in Runpod.');
+  const minimumStorage = setup.storage_min_gb ?? 60;
+  if (!setup.volume || setup.volume.size < minimumStorage || setup.volume.type !== 'STANDARD') {
+    return block(`Choose persistent model storage with at least ${minimumStorage} GB in Runpod.`);
+  }
+  if (setup.capacity?.sufficient === false) {
+    return block('Your storage needs more free space. Open Runpod to choose storage.');
   }
   if (!setup.release_available) {
     return block('This app does not have a published cloud worker release yet. Check app updates to enable model setup.', 'updates');
   }
-  if (setup.setup_phase === 'cancelling') return block('Stopping model setup and its temporary machine. Open Runpod to check cleanup.');
+  if (setup.setup_phase === 'cancelling') return block('Pausing setup. Waiting for the download machine to stop.');
   if (setup.setup_phase === 'cancelled') return block(setup.cleanup_pending
-    ? 'Model setup was cancelled, but Runpod machine cleanup is pending. Open Runpod to check it.'
-    : 'Model setup was cancelled. Open Runpod to resume using your stored files.');
-  if (setup.auto_setup_waiting) return block('Waiting for an available model download machine. The app will check again automatically.');
+    ? 'Waiting for the download machine to stop. Open Runpod to check it.'
+    : 'Setup is paused. Open Runpod to continue.');
+  if (setup.auto_setup_waiting) return block('Waiting for an available download machine.');
   if (setup.setup_error || setup.setup_phase === 'failed' || Object.values(setup.models).some(model => model.state === 'failed') || setup.compute?.status === 'failed') {
-    return block('Model setup failed. Open Runpod to see the error and retry setup.');
+    return block('Model setup failed. Open Runpod to fix it.');
   }
   if (!setup.ready || setup.compute?.kind === 'installer') {
     if (setup.setup_phase === 'starting_worker' || (setup.compute?.status === 'provisioning' && !setup.setup_running)) {
-      return block('The download worker is starting or needs attention. Open Runpod to check setup.');
+      return block('Preparing your setup. Open Runpod to see progress.');
     }
     const preparing = setup.compute?.kind === 'installer' || Object.values(setup.models).some(model =>
       ['discovering', 'verifying', 'downloading'].includes(model.state));
     const percent = preparing && typeof setup.progress_pct === 'number' && Number.isFinite(setup.progress_pct)
       ? ` (${Math.min(100, Math.max(0, setup.progress_pct)).toFixed(0)}%)` : '';
     return block(preparing
-      ? `Models are downloading or being verified${percent}. Open Runpod to view progress.`
-      : 'Download and verify the required models in Runpod before generating.');
+      ? `Preparing models${percent}. Open Runpod to see progress.`
+      : 'Finish model setup in Runpod before generating.');
   }
   if (!setup.policy) return block('Confirm your voice generation spending limit in Runpod before generating.');
   if (audioTools && !audioTools.ready) return {

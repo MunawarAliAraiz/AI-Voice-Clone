@@ -131,7 +131,15 @@ class ApiKeyMiddleware(BaseHTTPMiddleware):
                     "/api/desktop/updates/prepare",
                     "/api/desktop/updates/cancel",
                 }
-                if request.app.state.desktop_updating and not update_control:
+                exit_control = request.method == "POST" and request.url.path in {
+                    "/api/desktop/lifecycle/prepare-exit",
+                    "/api/desktop/lifecycle/cancel-exit",
+                }
+                if getattr(request.app.state, "desktop_exiting", False) and not exit_control:
+                    return JSONResponse(status_code=409, content={
+                        "detail": "The app is closing. Wait or choose Return to app to continue.",
+                    })
+                if request.app.state.desktop_updating and not (update_control or exit_control):
                     return JSONResponse(
                         status_code=409,
                         content={

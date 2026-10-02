@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { CloudSetupPanel } from './CloudSetupPanel';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CloudSetupPanel, type RunpodSetupStep } from './CloudSetupPanel';
 import { queryKeys } from '../hooks/queries';
 import { api, type RunpodAnalytics, type RunpodEstimate } from '../services/api';
 import type { ModelListResponse } from '../types/api';
@@ -12,6 +12,10 @@ function money(value: number | undefined, digits = 4): string {
 export function RunpodPanel() {
   const queryClient = useQueryClient();
   const [connected, setConnected] = useState(false);
+  const [savedKey, setSavedKey] = useState(false);
+  const [checkingKey, setCheckingKey] = useState(true);
+  const [step, setStep] = useState<RunpodSetupStep>('account');
+  const setupQ = useQuery({ queryKey: queryKeys.cloudSetup, queryFn: api.cloudSetup, refetchInterval: 3000 });
   const [key, setKey] = useState('');
   const [models, setModels] = useState<ModelListResponse['models']>([]);
   const [modelId, setModelId] = useState('');
@@ -23,13 +27,31 @@ export function RunpodPanel() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void api.runpodConnection().then((result) => setConnected(result.connected))
-      .catch((cause) => setError(String(cause)));
+    let current = true;
+    void (async () => {
+      try {
+        const result = await api.runpodConnection();
+        if (!current) return;
+        setSavedKey(result.connected);
+        if (result.connected) {
+          const discovery = await api.cloudDiscover();
+          if (!current) return;
+          queryClient.setQueryData(['cloud-discovery'], discovery);
+          setConnected(true);
+          const setup = await api.cloudSetup();
+          if (!current) return;
+          queryClient.setQueryData(queryKeys.cloudSetup, setup);
+          setStep(setup.ready ? 'ready' : setup.volume ? 'models' : 'storage');
+        }
+      } catch (cause) { if (current) setError(String(cause)); }
+      finally { if (current) setCheckingKey(false); }
+    })();
     void api.models().then((result) => {
       const supported = result.models.filter(model => model.runtime !== 'f5');
       setModels(supported);
       setModelId((current) => current || supported[0]?.id || '');
     }).catch((cause) => setError(String(cause)));
+    return () => { current = false; };
   }, []);
 
   async function connect() {
@@ -37,8 +59,12 @@ export function RunpodPanel() {
     setError('');
     try {
       await api.connectRunpod(key);
+      setSavedKey(true);
+      const discovery = await api.cloudDiscover();
+      queryClient.setQueryData(['cloud-discovery'], discovery);
       setKey('');
       setConnected(true);
+      setStep('storage');
       await queryClient.invalidateQueries({ queryKey: queryKeys.cloudSetup });
     } catch (cause) {
       setError(String(cause));
@@ -53,6 +79,8 @@ export function RunpodPanel() {
     try {
       await api.disconnectRunpod();
       setConnected(false);
+      setSavedKey(false);
+      setStep('account');
       setAnalytics(null);
       setEstimates([]);
       await queryClient.invalidateQueries({ queryKey: queryKeys.cloudSetup });
@@ -61,6 +89,15 @@ export function RunpodPanel() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function checkSavedKey() {
+    setBusy(true); setError('');
+    try {
+      queryClient.setQueryData(['cloud-discovery'], await api.cloudDiscover());
+      setConnected(true); setStep('storage');
+    } catch (cause) { setError(String(cause)); }
+    finally { setBusy(false); }
   }
 
   async function refresh() {
@@ -102,25 +139,36 @@ export function RunpodPanel() {
   }
 
   return <div className="runpod-panel">
-    <section className="card runpod-account">
-      <header className="card-head"><h2>Runpod account</h2></header>
-      <p className="hint">Your API key is encrypted for this Windows user. It stays on this PC.</p>
+    <nav className="runpod-wizard-nav" aria-label="Runpod setup">
+      {(['account', 'storage', 'models', 'ready'] as RunpodSetupStep[]).map((value, index) =>
+        <button type="button" key={value} aria-current={step === value ? 'step' : undefined}
+          disabled={value !== 'account' && !connected || value === 'models' && !setupQ.data?.volume}
+          onClick={() => setStep(value)}>
+          <span>{index + 1}</span>{({ account: 'Account', storage: 'Storage', models: 'Models', ready: 'Ready' })[value]}
+        </button>)}
+    </nav>
+    {step === 'account' && <section className="card runpod-account">
+      <header className="card-head"><h2>Connect your Runpod account</h2></header>
+      {checkingKey ? <p role="status">Checking your saved connection…</p> : <>
       {connected ? <>
-        <p>API key connected. Storage and model setup are shown below.</p>
-        <button className="btn sm" disabled={busy} onClick={() => void disconnect()}>Disconnect</button>
+        <p>Connected to Runpod.</p>
+        <div className="runpod-wizard-footer"><button className="btn sm" disabled={busy} onClick={() => void disconnect()}>Disconnect</button>
+          <button className="btn primary sm" disabled={busy} onClick={() => setStep('storage')}>Continue</button></div>
       </> : <div className="runpod-controls">
+        {savedKey && <button className="btn sm" disabled={busy} onClick={() => void checkSavedKey()}>Check saved API key</button>}
         <label className="field"><span className="field-label">Runpod API key</span>
           <input type="password" value={key} onChange={(event) => setKey(event.target.value)}
             autoComplete="off" spellCheck={false} placeholder="Paste your Runpod API key" /></label>
         <button className="btn primary sm" disabled={busy || key.length < 8}
           onClick={() => void connect()}>{busy ? 'Connecting…' : 'Connect Runpod'}</button>
       </div>}
+      </>}
       {error && <p role="alert" className="hint">{error}</p>}
-    </section>
+    </section>}
 
-    <CloudSetupPanel connected={connected} />
+    <CloudSetupPanel connected={connected} step={step} onStep={setStep} />
 
-    {connected && <>
+    {connected && step === 'ready' && <details className="card runpod-extra-settings"><summary>Cost estimates and account activity</summary>
       <section className="card">
         <header className="card-head"><h2>Estimated generation compute cost</h2></header>
         <p className="hint">Based on current Secure Cloud GPU rates and reference model timing. Idle Pod time and persistent storage are extra. Actual timing needs a GPU benchmark.</p>
@@ -144,7 +192,7 @@ export function RunpodPanel() {
             <td>{money(row.cold_estimated_compute_usd, 6)}</td>
           </tr>)}</tbody>
         </table></div>}
-        {estimates.length === 0 && <p className="hint">Current full feature residency: 48 GB VRAM. Recommended persistent volume: 200 GB. Estimates use global stock; generation rechecks availability beside your selected storage.</p>}
+        {estimates.length === 0 && <p className="hint">GPU availability is checked again before generation. Estimates are approximate until your first generation is measured.</p>}
       </section>
 
       <section className="card">
@@ -166,6 +214,6 @@ export function RunpodPanel() {
           {billing && <p aria-live="polite">{billing}</p>}
         </>}
       </section>
-    </>}
+    </details>}
   </div>;
 }

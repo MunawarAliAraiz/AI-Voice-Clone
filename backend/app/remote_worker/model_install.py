@@ -32,7 +32,8 @@ from .model_pins import AUXILIARY_PINS
 
 # Resolved through the public Hub API on 2026-09-30; optional-reference ASR.
 WHISPER_PIN = ("openai/whisper-large-v3-turbo", "41f01f3fe87f28c78e2fbf8b568835947dd65ed9")
-MIN_FREE_GB_BEFORE_DOWNLOAD = 2
+MIN_FREE_GB_BEFORE_DOWNLOAD = 10
+STORAGE_RESERVE_BYTES = 10_000_000_000
 ACTIVE_STATES = {"discovering", "verifying", "downloading"}
 MODEL_ALIASES = {"voxcpm2_urdu_arabic": "voxcpm2"}
 REQUIRED_MODEL_IDS = ("voxcpm2", "chatterbox_ml_v3", "omnivoice_urdu", *AUXILIARY_PINS)
@@ -79,6 +80,138 @@ class ModelInstaller:
         self._lock = threading.RLock()
         # Serial transfers prevent shared snapshot races and unbounded I/O.
         self._download_lock = asyncio.Lock()
+        self._capacity_cancel = threading.Event()
+        self._capacity_task: asyncio.Task | None = None
+        self._capacity_status: dict = {"state": "not_started"}
+
+    def start_capacity(self) -> dict:
+        if self._capacity_task and not self._capacity_task.done():
+            return self.capacity_status()
+        self._capacity_status = {"state": "checking", "scan_complete": False}
+        self._capacity_task = asyncio.create_task(self._run_capacity())
+        return self.capacity_status()
+
+    def capacity_status(self) -> dict:
+        with self._lock:
+            return {**self._capacity_status, "model_progress": self.setup_status()["models"]}
+
+    async def _run_capacity(self) -> None:
+        try:
+            result = await self.capacity()
+            self._capacity_status = {"state": "complete", **result}
+        except (InterruptedError, asyncio.CancelledError):
+            self._capacity_status = {"state": "cancelled", "scan_complete": False}
+            raise
+        except Exception:
+            self._capacity_status = {
+                "state": "failed",
+                "scan_complete": False,
+                "detail": "Storage check failed. Try again.",
+            }
+
+    async def capacity(self) -> dict:
+        """Inspect mounted files and free space before any model transfer."""
+        async with self._download_lock:
+            self._capacity_cancel.clear()
+            task = asyncio.create_task(
+                asyncio.to_thread(self._capacity_sync, self._capacity_cancel)
+            )
+            try:
+                return await asyncio.shield(task)
+            except asyncio.CancelledError:
+                self._capacity_cancel.set()
+                with contextlib.suppress(InterruptedError):
+                    await task
+                raise
+
+    def _capacity_sync(self, cancel: threading.Event) -> dict:
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        seen: set[tuple[str, str, str]] = set()
+        total = verified = remaining = conservative = partial = 0
+        models: dict[str, dict] = {}
+        for model_id in REQUIRED_MODEL_IDS:
+            model_total = model_verified = model_missing = 0
+            self._update(
+                model_id,
+                state="verifying",
+                bytes_completed=0,
+                bytes_total=None,
+                files_verified=0,
+                files_total=None,
+            )
+            for repo, revision in self.graph(model_id):
+                entries = self.manifest_loader(repo, revision)
+                folder = "models--" + repo.replace("/", "--")
+                root = bound_path(self.cache_dir, f"{folder}/snapshots/{revision}")
+                for entry in entries:
+                    if cancel.is_set():
+                        raise InterruptedError("Storage check stopped")
+                    identity = (repo, revision, entry.path)
+                    model_total += entry.size_bytes
+                    path = bound_path(root, entry.path, allowed_root=self.cache_dir)
+                    self._update(model_id, current_file=entry.path)
+                    try:
+                        verify_file(path, entry, cancel)
+                        valid = True
+                    except ValueError:
+                        valid = False
+                    if valid:
+                        model_verified += entry.size_bytes
+                    else:
+                        model_missing += entry.size_bytes
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
+                    total += entry.size_bytes
+                    if valid:
+                        verified += entry.size_bytes
+                        continue
+                    temp = bound_path(
+                        root, entry.path + ".vcs-incomplete", allowed_root=self.cache_dir
+                    )
+                    offset = temp.stat().st_size if temp.is_file() and not temp.is_symlink() else 0
+                    offset = min(offset, entry.size_bytes) if offset <= entry.size_bytes else 0
+                    resumable = offset
+                    if offset == entry.size_bytes and offset:
+                        try:
+                            verify_file(temp, entry, cancel)
+                        except ValueError:
+                            resumable = 0
+                    partial += resumable
+                    remaining += entry.size_bytes - resumable
+                    # Range fallback truncates the partial before writing. The
+                    # occupied partial bytes are then freed, so only the deficit
+                    # is additional space. Corrupt target files remain occupied
+                    # until atomic replacement and are already excluded from free.
+                    conservative += entry.size_bytes - offset
+            models[model_id] = {
+                "bytes_total": model_total,
+                "bytes_verified": model_verified,
+                "bytes_missing": model_missing,
+            }
+            self._update(
+                model_id,
+                state="not_started",
+                bytes_total=model_total,
+                bytes_completed=model_verified,
+                current_file=None,
+            )
+        free = shutil.disk_usage(self.cache_dir).free
+        required_free = conservative + STORAGE_RESERVE_BYTES
+        return {
+            "manifest_id": release_manifest_id(),
+            "scan_complete": True,
+            "model_files_bytes": total,
+            "verified_bytes": verified,
+            "partial_bytes": partial,
+            "remaining_download_bytes": remaining,
+            "missing_write_bytes": conservative,
+            "reserve_bytes": STORAGE_RESERVE_BYTES,
+            "free_bytes": free,
+            "required_free_bytes": required_free,
+            "sufficient": free >= required_free,
+            "models": models,
+        }
 
     def status(self, model_id: str) -> dict[str, Any]:
         _, revision = model_pin(model_id)
@@ -108,6 +241,8 @@ class ModelInstaller:
 
     def _update(self, model_id: str, **changes: Any) -> None:
         with self._lock:
+            if model_id not in self._states:
+                self._states[model_id] = self.status(model_id)
             self._states[model_id].update(changes)
             state = self._states[model_id]
             total = state.get("bytes_total")
@@ -213,9 +348,20 @@ class ModelInstaller:
                     }
                 )
                 self._update(model_id, bytes_completed=completed, files_verified=verified)
-        needed = sum(entry.size_bytes for _, _, _, entry in missing)
-        reserve = MIN_FREE_GB_BEFORE_DOWNLOAD * 1024**3
-        if needed and shutil.disk_usage(self.cache_dir).free < needed + reserve:
+        needed = 0
+        for _, _, snapshot, entry in missing:
+            partial_path = bound_path(
+                snapshot, entry.path + ".vcs-incomplete", allowed_root=self.cache_dir
+            )
+            offset = (
+                partial_path.stat().st_size
+                if partial_path.is_file() and not partial_path.is_symlink()
+                else 0
+            )
+            offset = offset if offset <= entry.size_bytes else 0
+            needed += entry.size_bytes - offset
+        reserve = STORAGE_RESERVE_BYTES
+        if missing and shutil.disk_usage(self.cache_dir).free < needed + reserve:
             raise OSError("Insufficient model storage")
         self._update(model_id, state="downloading" if missing else "verifying")
         for repo, revision, snapshot, entry in missing:
@@ -286,6 +432,10 @@ class ModelInstaller:
         }
 
     async def shutdown(self) -> None:
+        self._capacity_cancel.set()
+        if self._capacity_task and not self._capacity_task.done():
+            self._capacity_task.cancel()
+            await asyncio.gather(self._capacity_task, return_exceptions=True)
         for cancel in self._cancels.values():
             cancel.set()
         # Do not abandon a to_thread transfer and delete its volume underneath it.

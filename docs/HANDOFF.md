@@ -1,5 +1,33 @@
 # Handoff — current state
 
+## Guided setup revision - source verified, 2026-10-03
+
+The user confirmed the choices in [GUIDED_SETUP.md](GUIDED_SETUP.md). Work is
+split across storage/capacity backend, graceful native app exit, and frontend
+wizard. No paid cloud operation or user-app manipulation is authorized by these
+implementation tests. The running 0.1.4 was checked read-only: storage exists,
+setup phase cancelled, auto_setup_enabled null, no compute or cleanup pending.
+That legacy unset state explains the missing normal Resume action.
+
+Implemented: Account/Storage/Models/Ready pages, Back/Next, real Advanced volume
+selection and creation, 60 GB minimum (pinned files plus 10 GB), measured
+per-model progress, local audio-tools readiness and graceful exit/reopening.
+The worker scans actual free space and verified/partial files before transfer.
+A legacy purchase migration fix prevents an old 200 GB volume being adopted
+when creating a new 60 GB volume. Pending purchase attempts remain fenced.
+
+142 integrated backend tests passed; two optional worker HTTP tests skipped.
+Frontend build, wizard SSR, 32 generation-gate and 15 header checks passed;
+native compilation and the close-acknowledgement test passed. These are isolated
+implementation checks, not paid downloads or installed-window tests.
+
+Scoped worker source was published at d066405aee2e9603b519a9aa8b3ecb8c05b54ff9.
+Hosted run 37050531973: installer succeeded; GPU image still building at this
+checkpoint. Next: qualify both immutable images, build/sign 0.1.5, check frozen
+API/MCP, then obtain exact artifact publication approval. Public 0.1.4 remains
+current until then. Broader app-source publication is unapproved. Do not operate
+the user's app or run paid cloud work as part of these packaging checks.
+
 ## Cancellation, update recovery and automatic required models — 2026-10-02
 
 The user requested cloud-session termination before applying 0.1.3. The active

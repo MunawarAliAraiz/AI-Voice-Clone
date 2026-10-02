@@ -94,7 +94,12 @@ def smoke(reference: str) -> None:
                 "headers={'Authorization':'Bearer '+os.environ['POD_WORKER_TOKEN']}); "
                 "data=json.load(opener.open(req,timeout=5)); "
                 "assert data.get('protocol_version') == 1; "
-                "assert isinstance(data.get('models'),list)"
+                "assert isinstance(data.get('models'),list); "
+                "req=urllib.request.Request('http://127.0.0.1:8000/v1/capacity',"
+                "headers={'Authorization':'Bearer '+os.environ['POD_WORKER_TOKEN']}); "
+                "capacity=json.load(opener.open(req,timeout=5)); "
+                "assert capacity.get('protocol_version') == 1; "
+                "assert capacity.get('state') == 'not_started'"
             )
             docker("exec", container, "/opt/venvs/api/bin/python", "-c", code)
             # Unauthenticated health must not leak account/model details.
@@ -113,7 +118,7 @@ def smoke(reference: str) -> None:
                 os.environ.pop("POD_WORKER_TOKEN", None)
             else:
                 os.environ["POD_WORKER_TOKEN"] = previous
-    print("CPU installer: authenticated health/models, denied anonymous access, no torch; "
+    print("CPU installer: authenticated health/models/capacity, denied anonymous access, no torch; "
           "no weights downloaded.")
 
 

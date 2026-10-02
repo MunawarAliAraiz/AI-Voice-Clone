@@ -12,8 +12,9 @@ API_BASE = "https://api.runpod.io/v2"
 
 
 class RunpodApiError(RuntimeError):
-    def __init__(self, message: str, status_code: int | None = None,
-                 *, request_rejected: bool = False) -> None:
+    def __init__(
+        self, message: str, status_code: int | None = None, *, request_rejected: bool = False
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.request_rejected = request_rejected
@@ -89,22 +90,31 @@ class RunpodClient:
                         code = item["extensions"].get("code")
                         if isinstance(code, str):
                             codes.add(code)
-            if (codes and codes <= {"GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED"}
-                    and not data.get("data")):
+            if (
+                codes
+                and codes <= {"GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED"}
+                and not data.get("data")
+            ):
                 raise RunpodApiError(
                     "Runpod rejected the app's setup request before starting a machine. "
                     "Check for an app update.",
-                    400, request_rejected=True)
+                    400,
+                    request_rejected=True,
+                )
             if codes & {"UNAUTHENTICATED", "FORBIDDEN"}:
                 raise RunpodApiError(
                     "Runpod denied this request. Check that your API key allows managing Pods, "
-                    "then reconnect.")
+                    "then reconnect."
+                )
             raise RunpodApiError(
                 "Runpod could not complete the cloud request. Check Runpod for service "
-                "or availability issues, then retry setup.")
+                "or availability issues, then retry setup."
+            )
         if not isinstance(data.get("data"), dict):
-            raise RunpodApiError("Runpod returned an incomplete cloud response; "
-                                 "check the pending machine before retrying")
+            raise RunpodApiError(
+                "Runpod returned an incomplete cloud response; "
+                "check the pending machine before retrying"
+            )
         return data["data"]
 
     async def balance(self) -> dict[str, float | None]:
@@ -162,6 +172,7 @@ class RunpodClient:
         terminate_at: str,
         gpu_id: str | None = None,
         cpu_instance_id: str | None = None,
+        cache_home: str = "/workspace/hf-cache",
     ) -> dict:
         """GraphQL creation atomically includes the provider termination deadline.
 
@@ -170,6 +181,8 @@ class RunpodClient:
         """
         if not re.fullmatch(r"[a-zA-Z0-9./_-]+@sha256:[0-9a-f]{64}", image):
             raise ValueError("Worker image must have an immutable digest")
+        if cache_home not in {"/workspace/hf-cache", "/workspace/voice-clone/hf-cache"}:
+            raise ValueError("Invalid model storage path")
         if not gpu_id and (
             not cpu_instance_id or not re.fullmatch(r"[A-Za-z0-9_-]+", cpu_instance_id)
         ):
@@ -188,7 +201,9 @@ class RunpodClient:
             "startJupyter": False,
             "env": [
                 {"key": "POD_WORKER_TOKEN", "value": worker_token},
-                {"key": "HF_HOME", "value": "/workspace/hf-cache"},
+                {"key": "HF_HOME", "value": cache_home},
+                {"key": "HF_HUB_CACHE", "value": cache_home + "/hub"},
+                {"key": "VCS_VOLUME_ID", "value": volume_id},
                 {"key": "VCS_DATA_DIR", "value": "/tmp/vcs-worker"},  # noqa: S108 -- ephemeral container data
             ],
         }
@@ -199,8 +214,7 @@ class RunpodClient:
             body["instanceId"] = cpu_instance_id
             input_type, mutation = "deployCpuPodInput", "deployCpuPod"
         data = await self.graphql(
-            f"mutation($input: {input_type}!) {{ "
-            f"{mutation}(input: $input) {{ id costPerHr }} }}",
+            f"mutation($input: {input_type}!) {{ {mutation}(input: $input) {{ id costPerHr }} }}",
             {"input": body},
         )
         pod = data.get(mutation)
@@ -262,8 +276,8 @@ class RunpodClient:
         )
 
     async def create_volume(self, *, name: str, data_center: str, size_gb: int) -> dict[str, Any]:
-        if size_gb < 150:
-            raise ValueError("All-model volume must be at least 150 GB")
+        if isinstance(size_gb, bool) or not isinstance(size_gb, int) or not 1 <= size_gb <= 4000:
+            raise ValueError("Storage size must be between 1 and 4000 GB")
         return await self._call(
             "POST",
             "/network-volumes",

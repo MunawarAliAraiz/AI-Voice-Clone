@@ -34,10 +34,14 @@ class WorkerPairInput(BaseModel):
 
 class StorageChoice(BaseModel):
     volume_id: str = Field(min_length=1, max_length=64)
+    allow_other_app_volume: bool = False
 
 
 class StorageQuoteRequest(BaseModel):
     region: str = Field(min_length=1, max_length=64)
+    size_gb: int | None = Field(default=None, ge=1, le=4000)
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    replace_current: bool = False
 
 
 class StoragePurchase(BaseModel):
@@ -79,7 +83,9 @@ async def discover_storage(settings: Annotated[Settings, Depends(get_settings)])
 async def storage_quote(
     body: StorageQuoteRequest, settings: Annotated[Settings, Depends(get_settings)]
 ) -> dict:
-    return await _cloud(settings, "quote_storage", body.region)
+    return await _cloud(
+        settings, "quote_storage", body.region, body.size_gb, body.name, body.replace_current
+    )
 
 
 @router.post("/setup/storage/purchase", status_code=201)
@@ -93,7 +99,7 @@ async def storage_purchase(
 async def storage_select(
     body: StorageChoice, settings: Annotated[Settings, Depends(get_settings)]
 ) -> dict:
-    return await _cloud(settings, "select_storage", body.volume_id)
+    return await _cloud(settings, "select_storage", body.volume_id, body.allow_other_app_volume)
 
 
 @router.put("/setup/policy", status_code=204)

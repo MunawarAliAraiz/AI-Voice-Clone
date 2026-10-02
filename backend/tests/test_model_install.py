@@ -63,6 +63,84 @@ def test_install_adopts_pinned_graph_and_rechecks_on_restart(tmp_path, monkeypat
     assert len(requests) == 1
 
 
+def test_complete_graph_capacity_deduplicates_snapshots_and_counts_partial_deficit(
+    tmp_path, monkeypatch
+):
+    repo, revision = "org/model", "a" * 40
+    root = snapshot(tmp_path, repo, revision)
+    root.mkdir(parents=True)
+    (root / (ENTRY.path + ".vcs-incomplete")).write_bytes(DATA[:8])
+    monkeypatch.setattr(
+        "app.remote_worker.model_install.shutil.disk_usage",
+        lambda _: SimpleNamespace(free=10_000_000_000 + len(DATA) - 8),
+    )
+    installer = ModelInstaller(
+        tmp_path, manifest_loader=lambda *_: (ENTRY,), graph=lambda _: ((repo, revision),)
+    )
+    result = asyncio.run(installer.capacity())
+    assert result["model_files_bytes"] == len(DATA)
+    assert result["partial_bytes"] == 8
+    assert result["remaining_download_bytes"] == len(DATA) - 8
+    assert result["missing_write_bytes"] == len(DATA) - 8
+    assert result["reserve_bytes"] == 10_000_000_000
+    assert result["sufficient"]
+    (root / ENTRY.path).write_bytes(DATA)
+    result = asyncio.run(installer.capacity())
+    assert result["verified_bytes"] == len(DATA)
+    assert result["missing_write_bytes"] == 0
+
+
+def test_capacity_requires_all_remaining_models_plus_reserve_before_transfer(tmp_path, monkeypatch):
+    installer, requests = fixture_installer(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "app.remote_worker.model_install.shutil.disk_usage",
+        lambda _: SimpleNamespace(free=10_000_000_000 + len(DATA)),
+    )
+    result = asyncio.run(installer.capacity())
+    assert result["model_files_bytes"] == len(DATA) * 6
+    assert not result["sufficient"]
+    assert not requests
+
+
+def test_full_corrupt_partial_is_repaired_instead_of_repeatedly_failing(tmp_path, monkeypatch):
+    installer, requests = fixture_installer(tmp_path, monkeypatch)
+    repo, revision = model_pin("voxcpm2")
+    root = snapshot(tmp_path, repo, revision)
+    root.mkdir(parents=True)
+    (root / (ENTRY.path + ".vcs-incomplete")).write_bytes(b"x" * len(DATA))
+
+    async def run():
+        installer.start("voxcpm2")
+        await installer._tasks["voxcpm2"]
+        assert installer.status("voxcpm2")["state"] == "installed"
+
+    asyncio.run(run())
+    assert len(requests) == 1
+    assert "Range" not in requests[0].headers
+    assert (root / ENTRY.path).read_bytes() == DATA
+
+
+def test_capacity_corrupt_complete_partial_counts_redownload_and_freed_temp_space(
+    tmp_path, monkeypatch
+):
+    repo, revision = "org/model", "a" * 40
+    root = snapshot(tmp_path, repo, revision)
+    root.mkdir(parents=True)
+    (root / (ENTRY.path + ".vcs-incomplete")).write_bytes(b"x" * len(DATA))
+    monkeypatch.setattr(
+        "app.remote_worker.model_install.shutil.disk_usage",
+        lambda _: SimpleNamespace(free=10_000_000_000),
+    )
+    installer = ModelInstaller(
+        tmp_path, manifest_loader=lambda *_: (ENTRY,), graph=lambda _: ((repo, revision),)
+    )
+    result = asyncio.run(installer.capacity())
+    assert result["partial_bytes"] == 0
+    assert result["remaining_download_bytes"] == len(DATA)
+    assert result["missing_write_bytes"] == 0
+    assert result["sufficient"]
+
+
 def test_corrupt_download_is_not_ready_or_published(tmp_path, monkeypatch):
     installer, _ = fixture_installer(tmp_path, monkeypatch, corrupt=True)
 
@@ -164,8 +242,14 @@ def test_cancelled_transfer_keeps_partial_bytes_and_retry_resumes(tmp_path, monk
 
     with pytest.raises(InterruptedError):
         transfer_file(
-            "owner/repo", "a" * 40, ENTRY, tmp_path, progress=progress, cancel=cancel,
-            transport=httpx.MockTransport(lambda _: httpx.Response(200, content=DATA)))
+            "owner/repo",
+            "a" * 40,
+            ENTRY,
+            tmp_path,
+            progress=progress,
+            cancel=cancel,
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, content=DATA)),
+        )
     partial_file = tmp_path / (ENTRY.path + ".vcs-incomplete")
     assert partial_file.read_bytes() == DATA[:8]
     assert not (tmp_path / ENTRY.path).exists()
@@ -173,12 +257,19 @@ def test_cancelled_transfer_keeps_partial_bytes_and_retry_resumes(tmp_path, monk
 
     def resumed(request):
         requests.append(request)
-        return httpx.Response(206, content=DATA[8:], headers={
-            "Content-Range": f"bytes 8-{len(DATA) - 1}/{len(DATA)}"})
+        return httpx.Response(
+            206, content=DATA[8:], headers={"Content-Range": f"bytes 8-{len(DATA) - 1}/{len(DATA)}"}
+        )
 
     digest = transfer_file(
-        "owner/repo", "a" * 40, ENTRY, tmp_path, progress=lambda _: None,
-        cancel=threading.Event(), transport=httpx.MockTransport(resumed))
+        "owner/repo",
+        "a" * 40,
+        ENTRY,
+        tmp_path,
+        progress=lambda _: None,
+        cancel=threading.Event(),
+        transport=httpx.MockTransport(resumed),
+    )
     assert requests[0].headers["range"] == "bytes=8-"
     assert digest == ENTRY.digest
     assert (tmp_path / ENTRY.path).read_bytes() == DATA
@@ -296,6 +387,62 @@ def test_cpu_service_requires_auth_and_mounted_storage(tmp_path):
         create_installer_app(
             token="internal", cache_dir=tmp_path.parent / "outside", volume_root=tmp_path
         )
+
+
+def test_cpu_capacity_is_async_authenticated_and_marker_is_not_readiness(tmp_path, monkeypatch):
+    import time
+
+    installer, requests = fixture_installer(tmp_path / "hub", monkeypatch)
+    app = create_installer_app(token="internal", cache_dir=tmp_path / "hub",
+                               volume_root=tmp_path, installer=installer)
+    headers = {"Authorization": "Bearer internal"}
+    with TestClient(app) as client:
+        assert client.post("/v1/capacity").status_code == 401
+        assert client.post("/v1/setup", headers=headers).status_code == 409
+        started = client.post("/v1/capacity", headers=headers)
+        assert started.status_code == 202
+        assert started.json()["state"] == "checking"
+        for _ in range(100):
+            result = client.get("/v1/capacity", headers=headers).json()
+            if result["state"] == "complete":
+                break
+            time.sleep(0.01)
+        assert result["state"] == "complete"
+        assert result["sufficient"]
+        assert result["app_owned"]
+        assert not client.get("/v1/setup", headers=headers).json()["ready"]
+        assert not requests
+        marker = json.loads((tmp_path / "hub" / ".vcs-volume.json").read_text())
+        assert marker["app_id"] == "studio.voiceclone.desktop"
+        marker["app_id"] = "video-app"
+        (tmp_path / "hub" / ".vcs-volume.json").write_text(json.dumps(marker))
+        assert client.post("/v1/capacity", headers=headers).status_code == 409
+
+
+def test_shutdown_joins_cancelled_capacity_thread_before_return(tmp_path, monkeypatch):
+    entered, stopped = threading.Event(), threading.Event()
+    installer, _ = fixture_installer(tmp_path, monkeypatch)
+
+    def scan(cancel):
+        entered.set()
+        assert cancel.wait(timeout=2)
+        stopped.set()
+        raise InterruptedError("Stopped")
+
+    monkeypatch.setattr(installer, "_capacity_sync", scan)
+
+    async def run():
+        installer.start_capacity()
+        for _ in range(100):
+            if entered.is_set():
+                break
+            await asyncio.sleep(0.01)
+        assert entered.is_set()
+        await installer.shutdown()
+        assert stopped.is_set()
+        assert installer._capacity_task.done()
+
+    asyncio.run(run())
 
 
 def test_arabic_alias_reuses_verified_base_without_extra_transfer(tmp_path, monkeypatch):

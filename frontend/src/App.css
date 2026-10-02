@@ -39,6 +39,23 @@ body {
 
 .runpod-panel { display: grid; gap: var(--space-4); width: 100%; min-width: 0; }
 .runpod-panel .card { padding: var(--space-4); min-width: 0; }
+.runpod-wizard-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2); }
+.runpod-wizard-nav button { display: flex; align-items: center; justify-content: flex-start; gap: var(--space-2); padding: var(--space-3); color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md); font: inherit; cursor: pointer; min-width: 0; }
+.runpod-wizard-nav button[aria-current="step"] { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.runpod-wizard-nav button:disabled { opacity: .5; cursor: not-allowed; }
+.runpod-wizard-nav button span { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0; border: 1px solid currentColor; border-radius: 50%; font-size: var(--text-sm); }
+.runpod-wizard-page { min-height: 280px; }
+.runpod-wizard-footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-5); }
+.runpod-wizard-footer .hint { flex-basis: 100%; margin: 0; }
+.runpod-storage-choice { display: grid; gap: var(--space-1); margin-top: var(--space-4); }
+.runpod-model-list { display: grid; gap: var(--space-3); margin: var(--space-4) 0; }
+.runpod-model-row { padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-md); min-width: 0; }
+.runpod-model-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.runpod-model-heading span { color: var(--muted); font-size: var(--text-sm); }
+.runpod-model-row progress { margin-top: var(--space-2); height: 8px; accent-color: var(--accent); }
+.runpod-extra-settings > summary { cursor: pointer; font-weight: 500; }
+.runpod-extra-settings[open] > summary { margin-bottom: var(--space-4); }
+@media (max-width: 560px) { .runpod-wizard-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .runpod-account { width: 100%; min-width: 0; }
 .runpod-account .runpod-controls { max-width: none; }
 .runpod-account .hint { margin-top: 0; }

@@ -67,8 +67,13 @@ export default function App() {
 
   useEffect(() => {
     const openRunpod = () => { if (window.__VCS_DESKTOP_KEY__) setActiveTab('runpod'); };
+    const openVoiceStudio = () => setActiveTab('studio');
     window.addEventListener('vcs-open-runpod', openRunpod);
-    return () => window.removeEventListener('vcs-open-runpod', openRunpod);
+    window.addEventListener('vcs-open-voice-studio', openVoiceStudio);
+    return () => {
+      window.removeEventListener('vcs-open-runpod', openRunpod);
+      window.removeEventListener('vcs-open-voice-studio', openVoiceStudio);
+    };
   }, []);
 
   const languagesQ = useLanguages();

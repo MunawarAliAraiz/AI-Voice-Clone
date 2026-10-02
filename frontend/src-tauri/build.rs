@@ -7,6 +7,8 @@ fn main() {
             "updater_install",
             "desktop_version",
             "desktop_notify",
+            "desktop_exit_retry",
+            "desktop_exit_cancel",
         ]),
     ))
     .expect("desktop permission generation failed")

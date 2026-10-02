@@ -177,6 +177,12 @@ def transfer_file(
     if temporary.exists() and temporary.stat().st_size > entry.size_bytes:
         temporary.unlink()
     offset = temporary.stat().st_size if temporary.is_file() else 0
+    if offset == entry.size_bytes and entry.size_bytes:
+        try:
+            verify_file(temporary, entry, cancel)
+        except ValueError:
+            temporary.unlink()
+            offset = 0
     progress(offset)
     if entry.size_bytes == 0:
         temporary.touch()

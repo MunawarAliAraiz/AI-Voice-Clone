@@ -31,8 +31,11 @@ from .client import RunpodApiError, RunpodClient
 from .secrets import RunpodKeyStore
 from .worker_pair import WorkerPair, WorkerPairStore
 
-STORAGE_GB = 200
-STORAGE_MONTHLY_USD = 14.0
+MODEL_FILES_BYTES = 49_014_734_674
+CAPACITY_MANIFEST_ID = "b7307be7b6a2308c2ee909e8f1b4ff01ffad9f7a8f387b9657cc1b0dd65e6182"
+STORAGE_RESERVE_BYTES = 10_000_000_000
+STORAGE_GB = math.ceil((MODEL_FILES_BYTES + STORAGE_RESERVE_BYTES) / 1_000_000_000)
+STORAGE_MONTHLY_USD = round(STORAGE_GB * 0.07, 2)
 EVIDENCE_VERSION = 2
 INSTALLER_TIMEOUT_SEC = 2 * 3600
 REQUIRED_MODELS = REQUIRED_MODEL_IDS
@@ -91,21 +94,41 @@ def installer_candidates(cpus: list[dict], region: str) -> list[dict]:
         price = cpu.get("price", {}).get("securePerVcpu")
         count, maximum = cpu.get("vcpu", {}).get("min"), cpu.get("vcpu", {}).get("max")
         ratio = cpu.get("ramGbPerVcpu")
-        if (not _available(stock.get("availability"))
-                or not isinstance(flavor, str) or not re.fullmatch(r"[A-Za-z0-9_]+", flavor)
-                or not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0
-                or not isinstance(count, int) or isinstance(count, bool) or count <= 0
-                or not isinstance(maximum, int) or isinstance(maximum, bool)
-                or not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or ratio <= 0):
+        if (
+            not _available(stock.get("availability"))
+            or not isinstance(flavor, str)
+            or not re.fullmatch(r"[A-Za-z0-9_]+", flavor)
+            or not isinstance(price, (int, float))
+            or not math.isfinite(price)
+            or price <= 0
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count <= 0
+            or not isinstance(maximum, int)
+            or isinstance(maximum, bool)
+            or not isinstance(ratio, (int, float))
+            or not math.isfinite(ratio)
+            or ratio <= 0
+        ):
             continue
         count = max(2, count)
         memory = count * ratio
         rate = price * count
-        if (count > maximum or memory < 4 or not float(memory).is_integer()
-                or not math.isfinite(rate)):
+        if (
+            count > maximum
+            or memory < 4
+            or not float(memory).is_integer()
+            or not math.isfinite(rate)
+        ):
             continue
-        choices.append({"instance_id": f"{flavor}-{count}-{int(memory)}",
-                        "hourly_usd": rate, "vcpu": count, "memory_gb": int(memory)})
+        choices.append(
+            {
+                "instance_id": f"{flavor}-{count}-{int(memory)}",
+                "hourly_usd": rate,
+                "vcpu": count,
+                "memory_gb": int(memory),
+            }
+        )
     return sorted(choices, key=lambda item: (item["hourly_usd"], item["instance_id"]))
 
 
@@ -234,11 +257,16 @@ class CloudController:
             raise CloudSetupError("Cloud worker release evidence is incomplete")
         return images
 
-    def _setup_status(self, phase: str, *, error: str | None = None,
-                      cleanup_pending: bool = False) -> None:
+    def _setup_status(
+        self, phase: str, *, error: str | None = None, cleanup_pending: bool = False
+    ) -> None:
         state = self.read()
-        state.update(setup_phase=phase, setup_error=error, cleanup_pending=cleanup_pending,
-                     setup_detail=self.detail)
+        state.update(
+            setup_phase=phase,
+            setup_error=error,
+            cleanup_pending=cleanup_pending,
+            setup_detail=self.detail,
+        )
         self.write(state)
 
     async def snapshot(self) -> dict:
@@ -252,19 +280,31 @@ class CloudController:
         running = bool(self.setup_task and not self.setup_task.done())
         phase = state.get("setup_phase", "ready" if self.is_ready(state) else "idle")
         error = state.get("setup_error")
-        active_phases = {"starting_worker", "checking_files", "downloading",
-                         "verifying", "stopping_worker"}
+        active_phases = {
+            "starting_worker",
+            "checking_files",
+            "downloading",
+            "verifying",
+            "stopping_worker",
+        }
         cancelling = bool(self.cancel_task and not self.cancel_task.done())
         if not running and not cancelling and phase == "cancelling":
             phase = "cancelled"
             error = error or (
-                "Model download was stopped. Check the pending machine to confirm it is off.")
-        if not running and (phase in active_phases or (
+                "Model download was stopped. Check the pending machine to confirm it is off."
+            )
+        if not running and (
+            phase in active_phases
+            or (
                 (state.get("compute") or {}).get("kind") == "installer"
-                and not self.is_ready(state) and phase not in {"cancelling", "cancelled"})):
+                and not self.is_ready(state)
+                and phase not in {"cancelling", "cancelled"}
+            )
+        ):
             phase = "failed"
             error = error or (
-                "The last model setup did not finish. Check the pending machine before retrying.")
+                "The last model setup did not finish. Check the pending machine before retrying."
+            )
         compute = state.get("compute")
         if compute:
             compute = {**compute, "creation_confirmed": bool(compute.get("pod_id"))}
@@ -272,6 +312,11 @@ class CloudController:
             "connected": connected,
             "stage": stage,
             "volume": state.get("volume"),
+            "capacity": state.get("capacity"),
+            "pause_reason": state.get("pause_reason"),
+            "storage_min_gb": STORAGE_GB,
+            "model_files_bytes": MODEL_FILES_BYTES,
+            "reserve_bytes": STORAGE_RESERVE_BYTES,
             "ready": self.is_ready(state),
             "models": self.progress.get("models", state.get("models", {})),
             "required_model_ids": list(REQUIRED_MODELS),
@@ -283,14 +328,21 @@ class CloudController:
             "setup_error": error,
             "setup_running": running,
             "cleanup_pending": bool(
-                state.get("cleanup_pending") or (phase in {"failed", "cancelled"} and compute)),
-            "auto_setup_enabled": state.get("auto_setup_enabled", False
-                if (state.get("last_compute") or {}).get("pod_id") else None),
+                state.get("cleanup_pending") or (phase in {"failed", "cancelled"} and compute)
+            ),
+            "auto_setup_enabled": state.get(
+                "auto_setup_enabled",
+                False if (state.get("last_compute") or {}).get("pod_id") else None,
+            ),
             "auto_setup_waiting": bool(state.get("auto_setup_waiting")),
             "auto_setup_retry_at": state.get("auto_setup_retry_at"),
-            "auto_setup_requires_resume": bool(state.get("auto_setup_requires_resume") or (
-                "auto_setup_enabled" not in state
-                and (state.get("last_compute") or {}).get("pod_id"))),
+            "auto_setup_requires_resume": bool(
+                state.get("auto_setup_requires_resume")
+                or (
+                    "auto_setup_enabled" not in state
+                    and (state.get("last_compute") or {}).get("pod_id")
+                )
+            ),
             "compute": compute,
             "policy": state.get("policy"),
             "release_available": Path(__file__).with_name("release.json").is_file(),
@@ -313,9 +365,17 @@ class CloudController:
             and state.get("evidence_version") == EVIDENCE_VERSION
             and not state.get("cleanup_pending")
             and (state.get("compute") or {}).get("kind") != "installer"
-            and state.get("setup_phase") not in {
-                "starting_worker", "checking_files", "downloading",
-                "verifying", "stopping_worker", "failed", "cancelling", "cancelled"}
+            and state.get("setup_phase")
+            not in {
+                "starting_worker",
+                "checking_files",
+                "downloading",
+                "verifying",
+                "stopping_worker",
+                "failed",
+                "cancelling",
+                "cancelled",
+            }
         )
 
     async def discover(self) -> dict:
@@ -346,8 +406,14 @@ class CloudController:
                     }
                 )
         regions.sort(key=lambda r: (r["gpu_hourly_from_usd"], r["id"]))
+        saved = self.read().get("volume") or {}
         safe = [
-            {k: volume.get(k) for k in ("id", "name", "size", "dataCenter", "type")}
+            {
+                **{k: volume.get(k) for k in ("id", "name", "size", "dataCenter", "type")},
+                "app_owned": volume.get("id") == saved.get("id") and bool(saved.get("app_owned")),
+                "app_candidate": bool(str(volume.get("name", "")).startswith("voice-clone-")),
+                "selected": volume.get("id") == saved.get("id"),
+            }
             for volume in volumes
         ]
         return {
@@ -355,11 +421,35 @@ class CloudController:
             "regions": regions,
             **balance,
             "storage_gb": STORAGE_GB,
+            "storage_min_gb": STORAGE_GB,
+            "model_files_bytes": MODEL_FILES_BYTES,
+            "reserve_bytes": STORAGE_RESERVE_BYTES,
+            "selected_volume_id": saved.get("id"),
             "storage_monthly_usd": STORAGE_MONTHLY_USD,
             "funding_url": "https://www.runpod.io/console/user/billing",
         }
 
-    async def quote_storage(self, region: str) -> dict:
+    async def quote_storage(
+        self,
+        region: str,
+        size_gb: int | None = None,
+        name: str | None = None,
+        replace_current: bool = False,
+    ) -> dict:
+        if release_manifest_id() != CAPACITY_MANIFEST_ID:
+            raise CloudSetupError(
+                "Model storage requirements changed. Update the app before buying storage."
+            )
+        size_gb = STORAGE_GB if size_gb is None else size_gb
+        if (
+            isinstance(size_gb, bool)
+            or not isinstance(size_gb, int)
+            or not STORAGE_GB <= size_gb <= 4000
+        ):
+            raise CloudSetupError(f"Choose storage between {STORAGE_GB} and 4000 GB")
+        name = name.strip() if name is not None else None
+        if name is not None and (not name or len(name) > 64 or any(ord(c) < 32 for c in name)):
+            raise CloudSetupError("Enter a storage name between 1 and 64 characters")
         discovery = await self.discover()
         selected = next((r for r in discovery["regions"] if r["id"] == region), None)
         if selected is None:
@@ -367,14 +457,22 @@ class CloudController:
                 "No compatible GPU and installer stock in this region; refresh availability"
             )
         # A month of storage is a reserve policy, not an upfront provider invoice.
-        reserve = round(STORAGE_MONTHLY_USD / 30 + 1.0, 4)
+        monthly = round(min(size_gb, 1000) * 0.07 + max(0, size_gb - 1000) * 0.05, 2)
+        reserve = round(monthly / 30 + 1.0, 4)
         balance = discovery["balance_usd"]
         self.quote = {
             "id": secrets.token_hex(16),
             "expires_at": time.time() + 300,
             "region": region,
-            "storage_gb": STORAGE_GB,
-            "monthly_usd": STORAGE_MONTHLY_USD,
+            "storage_gb": size_gb,
+            "storage_name": name,
+            "replace_current": replace_current,
+            "previous_volume_id": (self.read().get("volume") or {}).get("id"),
+            "storage_min_gb": STORAGE_GB,
+            "model_files_bytes": MODEL_FILES_BYTES,
+            "reserve_bytes": STORAGE_RESERVE_BYTES,
+            "capacity_manifest_id": CAPACITY_MANIFEST_ID,
+            "monthly_usd": monthly,
             "required_credit_reserve_usd": reserve,
             "balance_usd": balance,
             "can_purchase": balance is not None and balance >= reserve,
@@ -392,8 +490,22 @@ class CloudController:
             if not quote or quote["id"] != quote_id or quote["expires_at"] < time.time():
                 raise CloudSetupError("Storage quote expired; refresh the quote before purchasing")
             state = self.read()
-            if state.get("volume"):
+            if (
+                state.get("compute")
+                or self.active
+                or any(
+                    task and not task.done()
+                    for task in (self.setup_task, self.auto_task, self.cancel_task)
+                )
+            ):
+                raise CloudSetupError("Pause setup before changing storage")
+            if state.get("volume") and not quote.get("replace_current"):
                 raise CloudSetupError("Storage is already selected")
+            if (state.get("volume") or {}).get("id") != quote.get("previous_volume_id"):
+                if state.get("volume"):
+                    raise CloudSetupError(
+                        "Storage selection changed. Review the new storage price again."
+                    )
             key = self.key()
             client = self.client_factory(key)
             try:
@@ -402,17 +514,81 @@ class CloudController:
                     raise CloudSetupError("Balance is unknown; enable account reads and refresh")
                 if funds["balance_usd"] < quote["required_credit_reserve_usd"]:
                     raise CloudSetupError("Add Runpod credit and refresh before purchasing storage")
-                operation = state.get("volume_operation") or f"voice-clone-{secrets.token_hex(8)}"
+                volumes = await client.list_volumes()
+                operation = state.get("volume_operation")
+                prior_binding = state.get("volume_operation_request")
+                if state.get("volume_operation_sent") and not operation:
+                    raise CloudSetupError(
+                        "An earlier storage purchase is uncertain. Check Runpod first."
+                    )
+                saved_volume = state.get("volume") or {}
+                if operation and not prior_binding and saved_volume:
+                    old_matches = [v for v in volumes if v.get("name") == operation]
+                    if (
+                        len(old_matches) == 1
+                        and old_matches[0].get("id") == saved_volume.get("id")
+                        and saved_volume.get("name") == operation
+                    ):
+                        # 0.1.4 kept the completed purchase guard after selecting
+                        # its result. Clear only this provider-confirmed old result;
+                        # an unknown later POST must remain fenced.
+                        for field in (
+                            "volume_operation",
+                            "volume_operation_sent",
+                            "volume_operation_request",
+                        ):
+                            state.pop(field, None)
+                        operation = None
+                        self.write(state)
+                intent = {
+                    "storage_name": quote.get("storage_name"),
+                    "region": quote["region"],
+                    "storage_gb": quote.get("storage_gb", STORAGE_GB),
+                    "previous_volume_id": quote.get("previous_volume_id"),
+                    "replace_current": bool(quote.get("replace_current")),
+                }
+                if operation and state.get("volume_operation_sent"):
+                    if (not isinstance(prior_binding, dict)
+                            or prior_binding.get("intent") != intent
+                            or prior_binding.get("operation_name") != operation
+                            or not prior_binding.get("quote_id")):
+                        raise CloudSetupError(
+                            "An earlier storage purchase is uncertain. "
+                            "Check it before buying different storage."
+                        )
+                elif operation and isinstance(prior_binding, dict):
+                    if prior_binding.get("intent") != intent:
+                        # An explicit provider rejection is safe to requote with
+                        # changed choices. An ambiguous request never reaches here.
+                        operation = None
+                operation = (
+                    operation or quote.get("storage_name") or f"voice-clone-{secrets.token_hex(8)}"
+                )
                 state.update(
-                    account=hashlib.sha256(key.encode()).hexdigest(), volume_operation=operation
+                    account=hashlib.sha256(key.encode()).hexdigest(),
+                    volume_operation=operation,
+                    volume_operation_request={
+                        "quote_id": (prior_binding or {}).get("quote_id", quote["id"])
+                        if state.get("volume_operation_sent")
+                        else quote["id"],
+                        "intent": intent,
+                        "operation_name": operation,
+                    },
                 )
                 self.write(
                     state
                 )  # Persist before POST; ambiguous retries reconcile by unique name.
-                matches = [v for v in await client.list_volumes() if v.get("name") == operation]
+                matches = [v for v in volumes if v.get("name") == operation]
                 if len(matches) > 1:
                     raise CloudSetupError(
                         "Multiple storage results found; reconcile in Runpod before retrying"
+                    )
+                if matches and not state.get("volume_operation_sent"):
+                    state.pop("volume_operation", None)
+                    state.pop("volume_operation_request", None)
+                    self.write(state)
+                    raise CloudSetupError(
+                        "A volume already has this name. Choose another name or use Advanced."
                     )
                 if not matches and state.get("volume_operation_sent"):
                     raise CloudSetupError(
@@ -427,7 +603,7 @@ class CloudController:
                         volume = await client.create_volume(
                             name=operation,
                             data_center=quote["region"],
-                            size_gb=STORAGE_GB,
+                            size_gb=quote.get("storage_gb", STORAGE_GB),
                         )
                     except RunpodApiError as exc:
                         if exc.status_code not in STORAGE_REJECTION_STATUSES:
@@ -446,13 +622,29 @@ class CloudController:
                         )
                         raise CloudSetupError(message) from exc
                 if (
-                    volume.get("size", 0) < STORAGE_GB
+                    volume.get("size", 0) != quote.get("storage_gb", STORAGE_GB)
                     or volume.get("dataCenter") != quote["region"]
+                    or volume.get("type") != "STANDARD"
                 ):
                     raise CloudSetupError("Provider storage does not match the approved quote")
                 state["volume"] = {
                     k: volume.get(k) for k in ("id", "name", "size", "dataCenter", "type")
                 }
+                state["volume"].update(app_owned=True, cache_namespace="voice-clone")
+                state.pop("volume_operation", None)
+                state.pop("volume_operation_sent", None)
+                state.pop("volume_operation_request", None)
+                state["capacity"] = None
+                state.update(
+                    models={},
+                    models_verified=False,
+                    auto_setup_enabled=None,
+                    setup_phase="idle",
+                    setup_error=None,
+                    pause_reason=None,
+                    auto_setup_attempt_consumed=False,
+                    auto_setup_requires_resume=False,
+                )
                 state["ready"] = False
                 self.write(state)
                 self.quote = None
@@ -460,12 +652,15 @@ class CloudController:
             finally:
                 await client.close()
 
-    async def select_storage(self, volume_id: str) -> dict:
+    async def select_storage(self, volume_id: str, allow_other_app_volume: bool = False) -> dict:
         async with self.lock:
             state = self.read()
             if (
                 state.get("compute")
-                or (self.setup_task and not self.setup_task.done())
+                or any(
+                    task and not task.done()
+                    for task in (self.setup_task, self.auto_task, self.cancel_task)
+                )
                 or self.active
             ):
                 raise CloudSetupError("Finish the current cloud operation before changing storage")
@@ -476,12 +671,37 @@ class CloudController:
                 await client.close()
             volume = next((v for v in volumes if v.get("id") == volume_id), None)
             if not volume or volume.get("size", 0) < STORAGE_GB or volume.get("type") != "STANDARD":
-                raise CloudSetupError("Choose a Standard network volume with at least 200 GB")
+                raise CloudSetupError(f"Choose Standard storage with at least {STORAGE_GB} GB")
+            saved = state.get("volume") or {}
+            if saved.get("id") == volume_id:
+                return saved  # Revisiting the current choice keeps verified readiness.
+            owned = volume_id == saved.get("id") and bool(saved.get("app_owned"))
+            candidate = str(volume.get("name", "")).startswith("voice-clone-")
+            if not (owned or candidate or allow_other_app_volume):
+                raise CloudSetupError(
+                    "Choose this app's storage, or select another volume in Advanced"
+                )
             state.update(
                 account=hashlib.sha256(self.key().encode()).hexdigest(),
                 volume={k: volume.get(k) for k in ("id", "name", "size", "dataCenter", "type")},
                 ready=False,
                 models={},
+                capacity=None,
+                models_verified=False,
+                auto_setup_enabled=None,
+                auto_setup_attempt_consumed=False,
+                auto_setup_requires_resume=False,
+                setup_phase="idle",
+                setup_error=None,
+                pause_reason=None,
+            )
+            state["volume"].update(
+                app_owned=owned,
+                app_candidate=candidate,
+                explicitly_selected=allow_other_app_volume,
+                cache_namespace="isolated"
+                if allow_other_app_volume and not (owned or candidate)
+                else "legacy",
             )
             self.write(state)
             return state["volume"]
@@ -531,8 +751,12 @@ class CloudController:
                 raise CloudSetupError("Select persistent storage before automatic model setup")
             if state.get("compute") or self.active:
                 raise CloudSetupError("Check the pending machine before resuming automatic setup")
-            state.update(auto_setup_enabled=True, auto_setup_requires_resume=False,
-                         auto_setup_attempt_consumed=False)
+            state.update(
+                auto_setup_enabled=True,
+                auto_setup_requires_resume=False,
+                auto_setup_attempt_consumed=False,
+                pause_reason=None,
+            )
             self.write(state)
         await self.resume_auto_setup()
         return await self.snapshot()
@@ -542,9 +766,29 @@ class CloudController:
         state = self.read()
         if not state.get("auto_setup_enabled") or not state.get("volume") or self.is_ready(state):
             return
+        if state.get("pause_reason") == "app_exit":
+            if state.get("compute"):
+                async with self.lock:
+                    try:
+                        await self._release()
+                    except (CloudSetupError, RunpodApiError, OSError, ValueError):
+                        return  # Preserve intent and the uncertain-resource fence.
+                state = self.read()
+            if state.get("app_exit_resume_allowed") and not state.get("compute"):
+                state.update(
+                    auto_setup_attempt_consumed=False,
+                    pause_reason=None,
+                    app_exit_resume_allowed=False,
+                    cleanup_pending=False,
+                )
+                self.write(state)
         if state.get("compute") or state.get("auto_setup_attempt_consumed"):
-            state.update(auto_setup_enabled=False, auto_setup_requires_resume=True,
-                         auto_setup_waiting=False, auto_setup_retry_at=None)
+            state.update(
+                auto_setup_enabled=False,
+                auto_setup_requires_resume=True,
+                auto_setup_waiting=False,
+                auto_setup_retry_at=None,
+            )
             self.write(state)
             return
         if not self.auto_task or self.auto_task.done():
@@ -565,26 +809,40 @@ class CloudController:
                     await asyncio.shield(self.setup_task)
             except (CloudSetupError, RunpodApiError, OSError, ValueError) as exc:
                 self.detail = str(exc)
-                self._setup_status("failed", error=self.detail,
-                                   cleanup_pending=bool(self.read().get("compute")))
+                self._setup_status(
+                    "failed", error=self.detail, cleanup_pending=bool(self.read().get("compute"))
+                )
             state = self.read()
             if not state.get("auto_setup_enabled") or self.is_ready(state):
                 return
-            if (state.get("auto_setup_retryable") and not state.get("compute")
-                    and not state.get("auto_setup_attempt_consumed") and attempt < 10):
-                state.update(auto_setup_waiting=True,
-                             auto_setup_retry_at=(
-                                 datetime.now(UTC) + timedelta(seconds=60)).isoformat())
+            if (
+                state.get("auto_setup_retryable")
+                and not state.get("compute")
+                and not state.get("auto_setup_attempt_consumed")
+                and attempt < 10
+            ):
+                state.update(
+                    auto_setup_waiting=True,
+                    auto_setup_retry_at=(datetime.now(UTC) + timedelta(seconds=60)).isoformat(),
+                )
                 self.write(state)
                 await asyncio.sleep(60)
                 continue
-            state.update(auto_setup_enabled=False, auto_setup_requires_resume=True,
-                         auto_setup_waiting=False, auto_setup_retry_at=None)
-            if (state.get("auto_setup_retryable") and not state.get("compute")
-                    and not state.get("auto_setup_attempt_consumed")):
+            state.update(
+                auto_setup_enabled=False,
+                auto_setup_requires_resume=True,
+                auto_setup_waiting=False,
+                auto_setup_retry_at=None,
+            )
+            if (
+                state.get("auto_setup_retryable")
+                and not state.get("compute")
+                and not state.get("auto_setup_attempt_consumed")
+            ):
                 self.detail = (
                     "No download machine became available. Setup paused without renting compute. "
-                    "Resume when capacity is available.")
+                    "Resume when capacity is available."
+                )
                 state.update(setup_error=self.detail, setup_detail=self.detail)
             self.write(state)
             return
@@ -607,8 +865,13 @@ class CloudController:
             if self.active or (state.get("compute") or {}).get("kind") == "generation":
                 raise CloudSetupError("A voice generation is active; cancel it in the queue first")
             self._cancel_requested = True
-            state.update(auto_setup_enabled=False, auto_setup_waiting=False,
-                         auto_setup_retry_at=None)
+            state.update(
+                auto_setup_enabled=False,
+                auto_setup_waiting=False,
+                auto_setup_retry_at=None,
+                pause_reason="manual",
+                app_exit_resume_allowed=False,
+            )
             self.write(state)
             if self.auto_task and not self.auto_task.done():
                 self.auto_task.cancel()
@@ -616,9 +879,59 @@ class CloudController:
         await asyncio.shield(self.cancel_task)
         return await self.snapshot()
 
+    async def pause_for_app_exit(self, *, queue_paused: bool = False) -> dict:
+        """Stop an owned installer on app exit, keeping eligible automatic intent."""
+        state = self.read()
+        if self.active or (
+            not queue_paused and (state.get("compute") or {}).get("kind") == "generation"
+        ):
+            raise CloudSetupError("Wait for voice generation to finish before closing")
+        if not queue_paused and self.pending and await self.pending():
+            raise CloudSetupError("Cancel queued generations before closing")
+        state = self.read()
+        if self.active or (
+            not queue_paused and (state.get("compute") or {}).get("kind") == "generation"
+        ):
+            raise CloudSetupError("Wait for voice generation to finish before closing")
+        was_ready = self.is_ready(state)
+        if self.is_ready(state) and not state.get("compute"):
+            return await self.snapshot()
+        intent = bool(state.get("auto_setup_enabled"))
+        allow_resume = bool(
+            intent
+            and state.get("setup_phase") != "failed"
+            and not state.get("auto_setup_requires_resume")
+        )
+        if state.get("pause_reason") == "app_exit":
+            allow_resume = bool(state.get("app_exit_resume_allowed"))
+        self._cancel_requested = True
+        state.update(
+            pause_reason="app_exit",
+            app_exit_resume_allowed=allow_resume,
+            auto_setup_waiting=False,
+            auto_setup_retry_at=None,
+        )
+        self.write(state)
+        if self.auto_task and not self.auto_task.done():
+            self.auto_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.auto_task
+        if not self.cancel_task or self.cancel_task.done():
+            self.cancel_task = asyncio.create_task(self._cancel_setup())
+        await asyncio.shield(self.cancel_task)
+        state = self.read()
+        state.update(
+            auto_setup_enabled=intent, pause_reason="app_exit", app_exit_resume_allowed=allow_resume
+        )
+        if was_ready and not state.get("compute") and not state.get("cleanup_pending"):
+            state.update(ready=True, setup_phase="ready", setup_error=None)
+        self.write(state)
+        return await self.snapshot()
+
     async def _cancel_setup(self) -> None:
         self.detail = (
-            "Stopping model setup and the temporary download machine. Stored files are kept.")
+            "Stopping model setup and the temporary download machine. Stored files are kept."
+        )
         state = self.read()
         state["ready"] = False
         self.write(state)
@@ -636,22 +949,25 @@ class CloudController:
                 error = (
                     "Model setup is cancelled, but Runpod has not confirmed the temporary "
                     "machine is off. Downloads and compute charges may continue until it stops. "
-                    "Check the pending machine before updating or retrying.")
+                    "Check the pending machine before updating or retrying."
+                )
             self.detail = error or (
-                "Model setup cancelled. Persistent storage and downloaded files are kept. "
-                "Retry setup to check existing files and resume missing downloads.")
+                "Setup paused."
+                if self.read().get("pause_reason") == "app_exit"
+                else "Model setup paused."
+            )
             models = self.progress.get("models", self.read().get("models", {}))
             models = {key: dict(value) for key, value in models.items()}
             for value in models.values():
                 if value.get("state") in {"discovering", "verifying", "downloading"}:
-                    value.update(state="cancelled",
-                                 detail="Stopped; stored bytes are kept for retry")
+                    value.update(
+                        state="cancelled", detail="Stopped; stored bytes are kept for retry"
+                    )
             self.progress["models"] = models
             state = self.read()
             state.update(models=models, ready=False)
             self.write(state)
-            self._setup_status("cancelled", error=error,
-                               cleanup_pending=bool(state.get("compute")))
+            self._setup_status("cancelled", error=error, cleanup_pending=bool(state.get("compute")))
 
     async def _worker_call(self, pair: WorkerPair, method: str, path: str) -> dict:
         remote = self.remote_factory(pair.url, pair.token, CATALOG)
@@ -685,7 +1001,8 @@ class CloudController:
                 if not choices:
                     raise CloudAvailabilityError(
                         "Waiting for a download machine beside your storage. "
-                        "No models are downloading yet; automatic setup will check again.")
+                        "No models are downloading yet; automatic setup will check again."
+                    )
                 rate, budget, gpu_id = choices[0]["hourly_usd"], 1.0, None
                 cpu_instance_id = choices[0]["instance_id"]
             else:
@@ -709,8 +1026,7 @@ class CloudController:
             funds = await client.balance()
             if funds["balance_usd"] is None or funds["balance_usd"] < budget:
                 raise CloudSetupError("Add Runpod credit or enable balance reads, then refresh")
-            seconds = min(INSTALLER_TIMEOUT_SEC if installer else 3600,
-                          int(budget / rate * 3600))
+            seconds = min(INSTALLER_TIMEOUT_SEC if installer else 3600, int(budget / rate * 3600))
             if seconds < 300:
                 raise CloudSetupError(
                     "Session limit is too small for startup; increase it in Runpod setup"
@@ -738,6 +1054,11 @@ class CloudController:
                     image=self.images()["installer" if installer else "gpu"],
                     data_center=volume["dataCenter"],
                     volume_id=volume["id"],
+                    cache_home=(
+                        "/workspace/voice-clone/hf-cache"
+                        if volume.get("cache_namespace") == "isolated"
+                        else "/workspace/hf-cache"
+                    ),
                     worker_token=token,
                     terminate_at=deadline,
                     gpu_id=gpu_id,
@@ -784,15 +1105,53 @@ class CloudController:
                 pair = await self._provision(installer=True)
             self.detail = "Download worker is ready. Checking which stored model files are missing."
             self._setup_status("checking_files")
+            await self._worker_call(pair, "POST", "/v1/capacity")
+            stop_by = (self.read().get("compute") or {}).get("deadline")
+            scan_limit = (
+                int((datetime.fromisoformat(stop_by) - datetime.now(UTC)).total_seconds())
+                if stop_by
+                else INSTALLER_TIMEOUT_SEC
+            )
+            capacity = {}
+            for _ in range(max(1, scan_limit // 2)):
+                capacity = await self._worker_call(pair, "GET", "/v1/capacity")
+                if isinstance(capacity.get("model_progress"), dict):
+                    self.progress["models"] = capacity["model_progress"]
+                if capacity.get("state") in {"complete", "failed", "cancelled"}:
+                    break
+                await asyncio.sleep(2)
+            if (
+                capacity.get("manifest_id") != release_manifest_id()
+                or capacity.get("scan_complete") is not True
+                or not isinstance(capacity.get("free_bytes"), int)
+                or not isinstance(capacity.get("required_free_bytes"), int)
+            ):
+                raise CloudSetupError("Storage check did not finish. Try again.")
+            state = self.read()
+            state["capacity"] = capacity
+            if capacity.get("app_owned") and isinstance(state.get("volume"), dict):
+                state["volume"]["app_owned"] = True
+            self.write(state)
+            if capacity.get("sufficient") is not True:
+                needed = math.ceil(capacity["required_free_bytes"] / 1_000_000_000)
+                raise CloudSetupError(
+                    f"Storage needs {needed} GB free. Increase its size in Runpod, then try again."
+                )
             await self._worker_call(pair, "POST", "/v1/setup")
             deadline = (self.read().get("compute") or {}).get("deadline")
-            remaining = (int((datetime.fromisoformat(deadline) - datetime.now(UTC)).total_seconds())
-                         if deadline else INSTALLER_TIMEOUT_SEC)
+            remaining = (
+                int((datetime.fromisoformat(deadline) - datetime.now(UTC)).total_seconds())
+                if deadline
+                else INSTALLER_TIMEOUT_SEC
+            )
             for _ in range(max(1, remaining // 2)):
                 self.progress = await self._worker_call(pair, "GET", "/v1/setup")
                 states = {model.get("state") for model in self.progress.get("models", {}).values()}
-                phase = "downloading" if "downloading" in states else (
-                    "verifying" if "verifying" in states else "checking_files")
+                phase = (
+                    "downloading"
+                    if "downloading" in states
+                    else ("verifying" if "verifying" in states else "checking_files")
+                )
                 self.detail = {
                     "downloading": "Downloading missing models to your Runpod storage.",
                     "verifying": "Checking model files before voice generation can start.",
@@ -830,39 +1189,47 @@ class CloudController:
             self.write(state)
             self.detail = str(exc)
             setup_error = self.detail
-            self._setup_status("failed", error=setup_error,
-                               cleanup_pending=bool(self.read().get("compute")))
+            self._setup_status(
+                "failed", error=setup_error, cleanup_pending=bool(self.read().get("compute"))
+            )
         except asyncio.CancelledError:
-            setup_error = ("Model setup cancelled. Stored files are kept for retry."
-                           if self._cancel_requested else
-                           "Model setup was interrupted. Retry to resume from stored files.")
+            setup_error = (
+                "Model setup cancelled. Stored files are kept for retry."
+                if self._cancel_requested
+                else "Model setup was interrupted. Retry to resume from stored files."
+            )
             self.detail = setup_error
-            self._setup_status("failed", error=setup_error,
-                               cleanup_pending=bool(self.read().get("compute")))
+            self._setup_status(
+                "failed", error=setup_error, cleanup_pending=bool(self.read().get("compute"))
+            )
             raise
         except Exception:
             setup_error = "Model setup stopped unexpectedly. Check the pending machine, then retry."
             self.detail = setup_error
-            self._setup_status("failed", error=setup_error,
-                               cleanup_pending=bool(self.read().get("compute")))
+            self._setup_status(
+                "failed", error=setup_error, cleanup_pending=bool(self.read().get("compute"))
+            )
         finally:
             async with self.lock:
                 if self._cancel_requested:
                     # The cancellation task owns cleanup after this task is quiescent.
                     # This also prevents normal success from racing a user's stop.
-                    self._setup_status("cancelling",
-                                       cleanup_pending=bool(self.read().get("compute")))
+                    self._setup_status(
+                        "cancelling", cleanup_pending=bool(self.read().get("compute"))
+                    )
                 else:
                     if not setup_error:
                         self.detail = "Models verified. Stopping the temporary download worker."
-                        self._setup_status("stopping_worker",
-                                           cleanup_pending=bool(self.read().get("compute")))
+                        self._setup_status(
+                            "stopping_worker", cleanup_pending=bool(self.read().get("compute"))
+                        )
                     try:
                         await self._release()
                     except (CloudSetupError, RunpodApiError):
                         self.detail = setup_error or (
                             "The rented machine could not be stopped yet. "
-                            "Check the pending machine and retry.")
+                            "Check the pending machine and retry."
+                        )
                         self._setup_status("failed", error=self.detail, cleanup_pending=True)
                     else:
                         self.detail = setup_error or "Models are ready. The download worker is off."

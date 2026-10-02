@@ -23,7 +23,7 @@ import type {
   VoiceProfileList,
 } from '../types/api';
 
-export interface CloudVolume { id: string; name: string; size: number; dataCenter: string; type: string }
+export interface CloudVolume { id: string; name: string; size: number; dataCenter: string; type: string; app_owned?: boolean; app_candidate?: boolean }
 export interface CloudModelInstall { state: string; progress_pct?: number | null; current_file?: string; detail?: string; bytes_completed?: number; bytes_total?: number | null }
 export interface CloudSetup {
   connected: boolean; stage: string; ready: boolean; release_available: boolean;
@@ -34,6 +34,9 @@ export interface CloudSetup {
   setup_error?: string | null; setup_running?: boolean; cleanup_pending?: boolean;
   auto_setup_enabled?: boolean | null; auto_setup_waiting?: boolean; auto_setup_retry_at?: string | null;
   auto_setup_requires_resume?: boolean;
+  pause_reason?: string | null;
+  capacity?: { free_bytes?: number; required_free_bytes?: number; missing_bytes?: number; reserve_bytes?: number; sufficient?: boolean } | null;
+  storage_min_gb?: number; model_files_bytes?: number; reserve_bytes?: number;
   compute: { pod_id: string | null; kind: string; status: string; hourly_usd: number; deadline: string; creation_confirmed?: boolean } | null;
   policy: { max_session_usd: number; max_hourly_usd: number } | null;
 }
@@ -41,6 +44,7 @@ export interface CloudDiscovery {
   volumes: CloudVolume[];
   regions: { id: string; name: string; gpu_hourly_from_usd: number; installer_hourly_from_usd: number }[];
   balance_usd: number | null; account_hourly_spend_usd: number | null; funding_url: string;
+  storage_min_gb?: number; storage_gb?: number; model_files_bytes?: number; reserve_bytes?: number; selected_volume_id?: string | null;
 }
 export interface StorageQuote {
   id: string; region: string; storage_gb: number; monthly_usd: number;
@@ -161,14 +165,14 @@ export const api = {
   retryAudioTools: () => request<AudioToolsStatus>('/api/audio-tools/start', { method: 'POST' }),
   cloudSetup: () => request<CloudSetup>('/api/runpod/setup'),
   cloudDiscover: () => request<CloudDiscovery>('/api/runpod/setup/discover'),
-  cloudQuote: (region: string) => request<StorageQuote>('/api/runpod/setup/storage/quote', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ region }),
+  cloudQuote: (region: string, sizeGb?: number, name?: string, replaceCurrent = false) => request<StorageQuote>('/api/runpod/setup/storage/quote', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ region, size_gb: sizeGb, name, replace_current: replaceCurrent }),
   }),
   cloudPurchase: (quoteId: string) => request<CloudVolume>('/api/runpod/setup/storage/purchase', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quote_id: quoteId }),
   }),
-  cloudSelectStorage: (volumeId: string) => request<CloudVolume>('/api/runpod/setup/storage', {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ volume_id: volumeId }),
+  cloudSelectStorage: (volumeId: string, allowOtherAppVolume = false) => request<CloudVolume>('/api/runpod/setup/storage', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ volume_id: volumeId, allow_other_app_volume: allowOtherAppVolume }),
   }),
   cloudInstall: () => request<CloudSetup>('/api/runpod/setup/install', { method: 'POST' }),
   cloudCancel: () => request<CloudSetup>('/api/runpod/setup/cancel', { method: 'POST' }),

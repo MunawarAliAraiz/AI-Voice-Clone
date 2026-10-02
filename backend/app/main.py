@@ -31,6 +31,7 @@ from .api.errors import install_exception_handlers
 from .api.routers import (
     agents,
     audio_tools,
+    desktop_lifecycle,
     desktop_updates,
     dialogue,
     direction,
@@ -286,6 +287,9 @@ def create_app(
     app.state.settings = settings
     app.state.desktop_mutation_lock = asyncio.Lock()
     app.state.desktop_updating = False
+    app.state.desktop_exiting = False
+    app.state.desktop_exit_task = None
+    app.state.desktop_exit_jobs_stopped = False
     if scheduler is not None:
         app.state.scheduler = scheduler
         app.state.owns_scheduler = False
@@ -317,6 +321,7 @@ def create_app(
     app.include_router(text.router, prefix="/api")
     app.include_router(transcript.router, prefix="/api")
     app.include_router(desktop_updates.router, prefix="/api")
+    app.include_router(desktop_lifecycle.router, prefix="/api")
     app.include_router(agents.router, prefix="/api")
     app.include_router(audio_tools.router, prefix="/api")
     _assert_no_duplicate_routes(app)

@@ -2,6 +2,13 @@
 
 ## What the app does
 
+From 0.1.5, normal window close also asks the authenticated API to stop owned
+cloud work before the sidecar exits. Confirmed app-exit pauses resume on reopening;
+manual Pause remains paused. This does not override updater admission: applying
+an update still requires confirmed idle cloud/queue state. Failure to confirm
+cleanup keeps the window open with retry/return actions. This path was compiled
+and checked through isolated API tests; an installed-window cycle is unverified.
+
 The desktop **Updates** control checks the fixed public GitHub release feed.
 An unpublished/unreachable feed is reported as unavailable; it does not
 confirm that the installed version is current. Download progress is real

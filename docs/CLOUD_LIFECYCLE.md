@@ -1,5 +1,46 @@
 # Automatic cloud lifecycle
 
+## Wizard storage choices and app exit — 2026-10-02
+
+Storage discovery exposes `storage_min_gb` (currently 60), `model_files_bytes`,
+`reserve_bytes`, `selected_volume_id`, and volume `app_owned`/`app_candidate`
+flags. Names alone do not prove ownership. A saved volume remains selected;
+an unchanged selection preserves checked models. Advanced explicit selection
+of another app's volume is allowed only with `allow_other_app_volume: true`
+and uses a separate cache folder.
+
+Storage quotes accept `region`, optional `size_gb` and `name`. Creating a new
+volume while one is selected requires `replace_current: true` in the reviewed
+quote; the previous selection ID is bound to that quote. Active compute, setup,
+automatic waits and cancellation prevent switching. Selecting the new volume
+invalidates downstream readiness but does not delete the prior volume. Volume
+creation retains the ambiguous-request guard and checks name collisions before
+creation. See [model storage](MODEL_STORAGE.md) for capacity scanning.
+
+The 0.1.4 completed-purchase guard migrates only when the provider's sole matching
+name has the same ID as the saved selected volume. This prevents Advanced Create
+New from adopting a previously purchased 200 GB volume for a new 60 GB quote.
+Every new operation records its approval quote ID, exact requested name, region,
+size, previous selected volume ID and replacement intent before sending the POST.
+A refreshed quote may reconcile the same intent; changed choices cannot adopt an
+uncertain earlier operation. An unconfirmed legacy operation stays fenced rather
+than being inferred successful from its name. Explicit rejection permits a fresh
+approved request; successful selection clears the completed guard atomically.
+
+`pause_for_app_exit()` pauses model setup and releases app-owned compute, saving
+`pause_reason: app_exit`. Eligible automatic setup intent remains enabled.
+Startup first reconciles any retained compute; it resumes only after confirmed
+cleanup. A failed paid attempt still requires explicit resume; an uncertain
+creation is never replayed. Explicit user cancellation saves `pause_reason:
+manual` and disables automatic intent.
+
+The trusted desktop lifecycle call may pass `queue_paused: true` only after job
+consumers have stopped. This skips the durable queued-row guard and permits
+releasing an idle generation machine; active generation handlers still block
+closure. A successfully released ready session retains model readiness.
+Closing just the setup page has no controller effect. Closing the app pauses
+transfer, retains model storage, and confirms compute shutdown before closing.
+
 ## Stop model setup and retry — 2026-10-02
 
 After selecting existing storage or purchasing storage, the frontend explicitly
