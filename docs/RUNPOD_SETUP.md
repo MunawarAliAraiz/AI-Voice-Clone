@@ -7,10 +7,13 @@ API, checking funds and reviewing storage quotes work, but purchasing storage
 and downloading models remain disabled. Do not create a manual GPU Pod to
 work around this; the app needs its own authenticated worker and model evidence.
 
-The corrected worker build is
-[36964451430](https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430).
-The next desktop update must include both successful immutable worker images.
-A successful container build does not prove actual GPU generation quality.
+Both worker image jobs in
+[36964451430](https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430)
+succeeded for source `e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`. Their matching
+immutable images passed anonymous registry verification and are now included
+in the release manifest. Desktop 0.1.2 is being packaged with this manifest and
+the account-card width fix. The running 0.1.1 cannot gain these references by
+connecting its API key. Actual GPU generation quality remains untested.
 
 ## Once the worker-enabled update is available
 

@@ -51,6 +51,19 @@ if ($CheckOnly) {
     return
 }
 
+$cloudRelease = Join-Path $backend "app\runpod\release.json"
+if (-not (Test-Path -LiteralPath $cloudRelease -PathType Leaf)) {
+    throw "Qualify both published worker images with scripts/prepare-pod-release.py before building the desktop installer."
+}
+$cloudEvidence = Get-Content -LiteralPath $cloudRelease -Raw | ConvertFrom-Json
+foreach ($role in @("installer", "gpu")) {
+    $reference = $cloudEvidence.$role
+    if ($reference -notmatch "^ghcr\.io/munawaraliaraiz/ai-voice-clone-$role@sha256:[a-f0-9]{64}$" -or
+        $cloudEvidence.evidence.$role.registry.anonymous_pull -ne "passed") {
+        throw "Cloud release evidence is missing a qualified immutable $role image."
+    }
+}
+
 Push-Location $frontend
 try {
     $nodeModules = Join-Path $frontend "node_modules"
@@ -76,11 +89,7 @@ $commonArgs = @("--noconfirm", "--clean", "--onefile", "--noupx", "--paths", $ba
     "--specpath", $buildRoot, "--exclude-module", "torch", "--exclude-module", "torchaudio")
 Push-Location $repoRoot
 try {
-    $cloudRelease = Join-Path $backend "app\runpod\release.json"
-    $cloudDataArgs = @()
-    if (Test-Path -LiteralPath $cloudRelease -PathType Leaf) {
-        $cloudDataArgs = @("--add-data", "${cloudRelease};app/runpod")
-    }
+    $cloudDataArgs = @("--add-data", "${cloudRelease};app/runpod")
     & $Python -m PyInstaller @commonArgs --name voice-clone-api --console `
         --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto `
         --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto `
@@ -144,6 +153,7 @@ $receipt = [ordered]@{
     frontendLockSha256 = (Get-FileHash -LiteralPath (Join-Path $frontend "package-lock.json") -Algorithm SHA256).Hash
     pythonPackages = @($packages)
     cargoLockSha256 = (Get-FileHash -LiteralPath (Join-Path $tauriRoot "Cargo.lock") -Algorithm SHA256).Hash
+    cloudReleaseSha256 = (Get-FileHash -LiteralPath $cloudRelease -Algorithm SHA256).Hash
     audioToolsDelivery = "First-run publisher download; no FFmpeg binary bundled"
     artifacts = @($installers | ForEach-Object {
         @{ file = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }

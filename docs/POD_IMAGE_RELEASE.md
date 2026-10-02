@@ -79,6 +79,33 @@ handler and bounded output transfer. A briefly warm session requires a bounded
 provider-side deadline. No mode may be described as production-tested solely
 because its image builds.
 
+## Release qualification
+
+Download both evidence artifacts from the same successful source/build. Run:
+
+```powershell
+python scripts/prepare-pod-release.py `
+  --installer <release-installer.json> `
+  --gpu <release-gpu.json> `
+  --source-commit e27c1ca87e2d56608c74f50b60bc394b0ddf4ade `
+  --output backend/app/runpod/release.json
+```
+
+The helper checks CI source, local dependency locks, pinned bases and explicit
+qualification claims, then verifies immutable OCI manifests and config content
+through anonymous GHCR requests. It checks Linux/amd64, image source labels and
+layer sizes/counts before atomically writing the manifest included by the
+desktop freezer. It never sends GitHub credentials to the registry and does
+not download full image layers or call Runpod.
+
+On 2026-10-02, run 36964451430 passed both builds and this verification for
+worker-only source `e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`. Immutable references
+and verification evidence live in `backend/app/runpod/release.json`.
+The CPU image is 280,301,535 compressed layer bytes; GPU is 7,736,397,742.
+Actual model downloads, CUDA generation, listening, costs and compute release
+still require Runpod qualification. Desktop 0.1.1 has no embedded manifest;
+the next installer must include it before setup can unlock.
+
 ## Local rebuild
 
 Use the same base references as the workflow with `pod/build.py --target gpu`

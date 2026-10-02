@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
+  "installer": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:733bbce5f5e6a6954c63229559fecfe05a8fe802cf58c4d82be963d4ac64f62f",
+  "gpu": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:2dd8dcf6cb3ed8df6b2dffb55c3170123e663cedd0d5255b81ac0fbc1a38de52",
+  "verified_at": "2026-10-02T16:00:45.823499+00:00",
+  "evidence": {
+    "installer": {
+      "target": "installer",
+      "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:733bbce5f5e6a6954c63229559fecfe05a8fe802cf58c4d82be963d4ac64f62f",
+      "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
+      "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
+      "debian_snapshot": "20260901T000000Z",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430",
+      "dependency_locks": {
+        "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
+        "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
+        "chatterbox.lock": "83f6d89aff6932bb1dac2703261c350033ecc793a40f394ab6147a9d46c4af73",
+        "omnivoice.lock": "82f73148b17bb4331d117d870fd2dea55bc4c56e79140bbc51707991206df75d",
+        "text.lock": "796a2ff3b09ead7fa0956f6d51b95c268a448aaeb3be8937d95d3e4732050df2",
+        "voxcpm.lock": "c1a66acd51ed983a65344ce7f06f42218604f7146f4c8548965fa2207d4f5f0a"
+      },
+      "qualification": {
+        "runtime_imports": "passed during image build",
+        "cpu_service": "passed",
+        "cuda": "not tested",
+        "real_generation": "not tested",
+        "listening": "not tested",
+        "billing": "not tested"
+      },
+      "platform_manifest_digest": "sha256:a6a434cf7dda21f82b59da5d2ff5d4ed997f333db5ab7ab8605ae235b1db89ef",
+      "compressed_layer_bytes": 280301535,
+      "layer_count": 14,
+      "registry": {
+        "anonymous_pull": "passed",
+        "content_digests": "verified",
+        "platform": "linux/amd64",
+        "config_digest": "sha256:71532491b1524fdd13844bec9a097251a53db63ee9e4244d118f9cb781aec024",
+        "layers_downloaded": false
+      }
+    },
+    "gpu": {
+      "target": "gpu",
+      "source_commit": "e27c1ca87e2d56608c74f50b60bc394b0ddf4ade",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:2dd8dcf6cb3ed8df6b2dffb55c3170123e663cedd0d5255b81ac0fbc1a38de52",
+      "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
+      "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
+      "debian_snapshot": "20260901T000000Z",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/36964451430",
+      "dependency_locks": {
+        "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
+        "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
+        "chatterbox.lock": "83f6d89aff6932bb1dac2703261c350033ecc793a40f394ab6147a9d46c4af73",
+        "omnivoice.lock": "82f73148b17bb4331d117d870fd2dea55bc4c56e79140bbc51707991206df75d",
+        "text.lock": "796a2ff3b09ead7fa0956f6d51b95c268a448aaeb3be8937d95d3e4732050df2",
+        "voxcpm.lock": "c1a66acd51ed983a65344ce7f06f42218604f7146f4c8548965fa2207d4f5f0a"
+      },
+      "qualification": {
+        "runtime_imports": "passed during image build",
+        "cpu_service": "not applicable",
+        "cuda": "not tested",
+        "real_generation": "not tested",
+        "listening": "not tested",
+        "billing": "not tested"
+      },
+      "platform_manifest_digest": "sha256:bd8b8f3a37e23bba149333e0e849a24699a794c4ae96cf79fb3a2d27161c65b8",
+      "compressed_layer_bytes": 7736397742,
+      "layer_count": 17,
+      "registry": {
+        "anonymous_pull": "passed",
+        "content_digests": "verified",
+        "platform": "linux/amd64",
+        "config_digest": "sha256:a441f277cb0404e747b7f9957ed7b995659a018964c3a898a6b537870ac41937",
+        "layers_downloaded": false
+      }
+    }
+  },
+  "qualification_limits": "Registry/CI verification only; CUDA, real generation, listening and Runpod billing have not been tested."
+}

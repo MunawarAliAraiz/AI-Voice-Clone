@@ -1,5 +1,24 @@
 # Handoff — current state
 
+## Qualified worker images — 2026-10-02
+
+Both jobs in hosted run 36964451430 completed successfully for worker-only
+source `e27c1ca87e2d56608c74f50b60bc394b0ddf4ade`. Matching CI artifacts and
+anonymous GHCR manifests/configs passed source, lock/base, platform and content
+digest verification. `backend/app/runpod/release.json` now contains:
+
+- Installer: `ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:733bbce5f5e6a6954c63229559fecfe05a8fe802cf58c4d82be963d4ac64f62f`;
+  280,301,535 compressed layer bytes; authenticated CPU service smoke passed.
+- GPU: `ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:2dd8dcf6cb3ed8df6b2dffb55c3170123e663cedd0d5255b81ac0fbc1a38de52`;
+  7,736,397,742 compressed layer bytes; runtime imports passed during build.
+
+Registry qualification did not download entire image layers. CUDA, actual
+Runpod model downloads/generation, listening quality, billing and termination
+remain untested. Package 0.1.2 with this manifest and the full-width card fix.
+The user's running 0.1.1 still lacks the manifest. Leave their app, computer
+controls and active TEMP profile untouched. Older checkpoints below describe
+the progression to this result and may contain superseded blockers.
+
 ## Worker-only rebuild and screenshot correction — 2026-10-02
 
 The user is using the computer themselves. Do not use Computer Use or replace,
