@@ -1,5 +1,14 @@
 # Desktop updates and local release preparation
 
+## Latest published update - 0.1.7
+
+The exact 65,831,146-byte installer was approved and published with its signed
+feed and notes. SHA256:
+`5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
+Anonymous latest-feed and full-installer verification passed. The fixed feed
+now offers 0.1.7; the signature uses the existing trusted update identity.
+See [Desktop build evidence](DESKTOP.md) for scope and untested native/GPU paths.
+
 ## What the app does
 
 From 0.1.5, normal window close also asks the authenticated API to stop owned

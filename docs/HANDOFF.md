@@ -12,8 +12,8 @@ there was fixed. See [Design](UI_DESIGN.md) and [Orb](ORB.md) for evidence.
 
 Frontend production build and the existing setup/gate/update checks passed;
 15 new status checks and orb lifecycle checks passed. This redesign has now
-been packaged and verified in Windows 0.1.7. Publication approval is pending;
-0.1.6 remains the latest public desktop release.
+been packaged and verified in Windows 0.1.7. Exact publication was approved and
+completed; 0.1.7 is the latest public desktop release.
 
 User then supplied a screenshot of VoxCPM2 HTTP500 and unavailable Pod script
 conversion. Read-only profile inspection confirmed failures; the old GPU Pod
@@ -38,8 +38,14 @@ Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.7-
 Size: 65,831,146 bytes. SHA256:
 `5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
 Feed, build/signature evidence, frozen sidecar/embedded asset receipts and notes
-are alongside it. Next: obtain approval for this exact installer/feed/notes,
-publish and anonymously verify the full public installer and latest feed.
+are alongside it. The approved
+[v0.1.7 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.7)
+is published. Anonymous latest-feed and full-installer downloads matched the
+prepared bytes and approved size/SHA256. Receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.7-receipt.json`.
+Next: the user updates and retries a short generation/conversion. If either
+fails, use the new safe failure category; the original removed Pod's traceback
+cannot be recovered. Do not claim live GPU success from these package checks.
 Never push the whole app
 branch or operate the user's installed app/profile/cloud.
 

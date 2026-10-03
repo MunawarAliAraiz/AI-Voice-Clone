@@ -17,8 +17,12 @@ listening acceptance or an installed app update/restart cycle.
 
 Local installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.7-setup.exe`;
 65,831,146 bytes; SHA256 `5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
-Exact publication approval is pending. The public latest remains 0.1.6.
-Evidence and release notes are beside the local installer.
+Exact publication was approved and completed:
+[v0.1.7](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.7).
+Anonymous latest-feed and full-installer downloads matched the prepared bytes
+and approved size/SHA256. Public latest is 0.1.7. Evidence, publication receipt
+and release notes are beside the local installer. Live GPU and native restart
+limitations above remain.
 
 ## Earlier 0.1.1 release — 2026-10-02
 
