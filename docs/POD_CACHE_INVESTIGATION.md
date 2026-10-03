@@ -49,5 +49,7 @@ Focused startup regression tests cover both approved paths, the legacy default,
 isolated Torch caches, offline settings, and unexpected/mismatched path refusal.
 These tests use temporary directories and mocked CUDA import checks. No live
 Pod, paid download, model load, script conversion, or speech generation was run.
-The corrected source must enter a newly qualified immutable GPU image before
-desktop publication; changing desktop source alone does not update a Pod image.
+The corrected source entered the newly qualified immutable GPU image from
+`5e2d5c0556622475b8e308c851b40d48fd0613a7`. Its registry identity and build
+evidence passed; the desktop manifest now selects it. Live model loading and
+generation still require a user-operated check with a new Pod session.

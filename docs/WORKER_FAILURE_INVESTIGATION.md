@@ -75,6 +75,12 @@ cannot change code in an already published worker image. The desktop error
 adapter can be packaged independently, but an old worker may still provide
 only an unstructured 500.
 
-Next live check, after image qualification and explicit authorization for paid
+Worker source `5e2d5c0556622475b8e308c851b40d48fd0613a7` built successfully in
+[run 37095214258](https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37095214258).
+Both immutable images passed anonymous registry qualification and are recorded
+in `backend/app/runpod/release.json`. No model weights or image layers were
+downloaded for this check, and no Runpod machine was rented.
+
+Next live check, after explicit authorization for paid
 testing: one short VoxCPM generation and one conversion, recording the worker
 failure category if either fails. Full voice quality still requires listening.
