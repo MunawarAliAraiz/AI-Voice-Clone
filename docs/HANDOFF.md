@@ -17,7 +17,7 @@ installed MCP image, checks exclusive file readiness and blocks on failure or
 persistent host respawn. It stages only in the temporary installer directory.
 The API, agent hosts, unrelated same-name binaries and user data are outside
 its termination scope. Runtime/package version is 0.1.8; the installer is built
-and signed, but not yet published. 47 mocked
+and signed; exact publication was approved and completed. 47 mocked
 guard checks and lint passed. Production NSIS hooks in a disposable probe
 reproduced the actual frozen parent/child lock, stopped only the exact target,
 replaced it and initialized the new ten-tool MCP. An unrelated same-name MCP
@@ -33,9 +33,15 @@ hooks around sidecar extraction, with the tested MCP SHA256.
 Local installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.8-setup.exe`;
 74,225,580 bytes; SHA256:
 `4fcfef0182b50d44fe068fdc3835a851902958a4bfe57e20b6983ae010cb5e78`.
-Feed, receipts and notes are beside it. Next: obtain exact publication approval,
-then publish and anonymously verify the public feed and full installer.
-Public latest remains 0.1.7.
+Feed, receipts and notes are beside it. The approved
+[v0.1.8 release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.8)
+is published. Anonymous latest-feed and full-installer downloads matched the
+prepared bytes and approved size/SHA256. Receipt:
+`D:/Projects/AI-Voice-Clone/dist/desktop/publication-0.1.8-receipt.json`.
+Public latest is 0.1.8. The user's completion of the earlier Retry prompt was
+not observed. Next: user finishes that installer if still waiting, then updates
+to 0.1.8; reconnect the Voice Clone agent server if its host marks it disconnected.
+Do not operate the user's installed app or profile to prove a full restart cycle.
 
 ## Premium workspace and generation error investigation - 2026-10-03
 

@@ -13,7 +13,10 @@ The full Windows package compiled with both hooks and the tested MCP SHA256.
 Local signed installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.8-setup.exe`;
 74,225,580 bytes; SHA256 `4fcfef0182b50d44fe068fdc3835a851902958a4bfe57e20b6983ae010cb5e78`.
 Artifact/global-comment signature, signed filename/version and PE/NSIS checks
-passed. Exact publication approval is pending; public latest remains 0.1.7.
+passed. Exact publication was approved and completed:
+[v0.1.8](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.8).
+The anonymous latest feed and full installer match the approved bytes; public
+latest is 0.1.8.
 Evidence and native lock-test receipts are beside the installer.
 No complete installed-app update/restart or live GPU success is claimed.
 

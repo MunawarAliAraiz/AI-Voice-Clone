@@ -1,12 +1,21 @@
 # Desktop updates and local release preparation
 
-## Latest published update - 0.1.7
+## Latest published update - 0.1.8
+
+The MCP file-lock fix is published with exact approval: 74,225,580 bytes,
+SHA256 `4fcfef0182b50d44fe068fdc3835a851902958a4bfe57e20b6983ae010cb5e78`.
+The signed feed and full public installer download matched the prepared bytes.
+Real production-hook file-lock tests and frozen API/MCP checks passed;
+a complete installed-app update/restart cycle remains unverified.
+See [Desktop build evidence](DESKTOP.md).
+
+## Earlier published update - 0.1.7
 
 The exact 65,831,146-byte installer was approved and published with its signed
 feed and notes. SHA256:
 `5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
 Anonymous latest-feed and full-installer verification passed. The fixed feed
-now offers 0.1.7; the signature uses the existing trusted update identity.
+offered 0.1.7 at that publication; the signature uses the existing trusted update identity.
 See [Desktop build evidence](DESKTOP.md) for scope and untested native/GPU paths.
 
 ## What the app does
