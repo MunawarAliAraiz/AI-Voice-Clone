@@ -381,7 +381,7 @@ class InferenceScheduler:
             WireOp.LOAD, payload, timeout=self._config.load_timeout_sec,
         )
         if not response.ok:
-            raise self._error_from(spec, response)
+            raise self._error_from(spec, response, during_load=True)
 
     async def _make_room_for(self, spec: ModelSpec) -> None:
         """
@@ -526,7 +526,7 @@ class InferenceScheduler:
         self._workers.pop(runtime, None)
         self._last_used.pop(runtime, None)
 
-    def _error_from(self, spec: ModelSpec, response) -> Exception:
+    def _error_from(self, spec: ModelSpec, response, *, during_load: bool = False) -> Exception:
         """Map a worker error response onto an app exception."""
         from ..exceptions import GenerationError, ModelLoadError
 
@@ -534,6 +534,8 @@ class InferenceScheduler:
         detail = response.error_message or "worker reported no detail"
         if code == "WORKER_CRASHED":
             return WorkerCrashedError(spec.id)
-        if code in {"MODEL_LOAD_FAILED", "LOAD_FAILED"}:
-            return ModelLoadError(spec.id, detail)
-        return GenerationError(spec.id, detail)
+        if during_load or code in {"MODEL_LOAD_FAILED", "LOAD_FAILED"}:
+            error = ModelLoadError(spec.id, detail)
+        else:
+            error = GenerationError(spec.id, detail)
+        return error.with_worker_error(code)

@@ -18,11 +18,25 @@ def prepare() -> None:
         raise ValueError("POD_WORKER_TOKEN must be a 24-512 character URL-safe secret")
     if os.environ.get("VCS_REMOTE_WORKER_URL") or os.environ.get("VCS_DESKTOP_STATIC_DIR"):
         raise ValueError("Pod workers cannot use desktop or remote scheduler settings")
+    # The desktop may explicitly isolate this app's cache within a volume used
+    # by another app. Preserve that approved location across CPU and GPU Pods.
+    cache_home = os.environ.get("HF_HOME", "/workspace/hf-cache")
+    if cache_home not in {"/workspace/hf-cache", "/workspace/voice-clone/hf-cache"}:
+        raise ValueError("Unexpected model cache location")
+    hub_cache = cache_home + "/hub"
+    if os.environ.get("HF_HUB_CACHE", hub_cache) != hub_cache:
+        raise ValueError("Model cache locations do not match")
+    cache_parent = (
+        "/workspace/voice-clone"
+        if cache_home.startswith("/workspace/voice-clone/") else "/workspace"
+    )
+    torch_home = cache_parent + "/torch-cache"
+    torch_inductor = cache_parent + "/torch-inductor"
     mount = Path("/workspace")
     if not mount.is_mount():
         raise ValueError("Mount the persistent network volume at /workspace before starting")
-    for name in ("hf-cache", "hf-cache/hub", "torch-cache", "torch-inductor"):
-        path = mount / name
+    for location in (cache_home, hub_cache, torch_home, torch_inductor):
+        path = Path(location)
         path.mkdir(parents=True, exist_ok=True)
         if not os.access(path, os.W_OK):
             raise ValueError("The persistent model cache is not writable")
@@ -33,10 +47,10 @@ def prepare() -> None:
     os.environ["VCS_DATA_DIR"] = str(runtime / "data")
     os.environ["TMPDIR"] = str(runtime / "tmp")
     Path(os.environ["TMPDIR"]).mkdir(mode=0o700)
-    os.environ["HF_HOME"] = "/workspace/hf-cache"
-    os.environ["HF_HUB_CACHE"] = "/workspace/hf-cache/hub"
-    os.environ["TORCH_HOME"] = "/workspace/torch-cache"
-    os.environ["TORCHINDUCTOR_CACHE_DIR"] = "/workspace/torch-inductor"
+    os.environ["HF_HOME"] = cache_home
+    os.environ["HF_HUB_CACHE"] = hub_cache
+    os.environ["TORCH_HOME"] = torch_home
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = torch_inductor
     # A gated model token is supplied only as an environment secret. Do not
     # call huggingface_hub.login(), which would write it to the network volume.
     os.environ["HF_TOKEN_PATH"] = str(runtime / "hf-token")

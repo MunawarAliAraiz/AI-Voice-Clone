@@ -84,17 +84,13 @@ class VoxCPMBackend:
         # Honour the pinned revision (golden rule 7): resolve the exact snapshot
         # on disk and load from that path, rather than trusting `main`.
         model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
-        try:
-            self._model = VoxCPM(
-                voxcpm_model_path=model_path, load_denoiser=False, optimize=False,
-                **kwargs,
-            )
-        except TypeError:
-            # Older/newer signature: fall back to from_pretrained (cache already
-            # holds the pinned revision from the snapshot_download above).
-            self._model = VoxCPM.from_pretrained(
-                hf_repo, load_denoiser=False, optimize=False, **kwargs
-            )
+        # The pinned voxcpm 2.0.3 constructor uses enable_denoiser. Loading
+        # directly from the pinned snapshot also avoids a fallback to repo main
+        # and never mistakes an internal TypeError for a signature mismatch.
+        self._model = VoxCPM(
+            voxcpm_model_path=model_path, enable_denoiser=False, optimize=False,
+            **kwargs,
+        )
         if lora_dir is not None:
             self._apply_lora(lora_dir)
         self._sr = int(self._model.tts_model.sample_rate)
