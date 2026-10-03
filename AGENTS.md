@@ -44,6 +44,8 @@ Pod. Read the documents below before changing behavior.
 - [Guided setup](docs/GUIDED_SETUP.md): confirmed setup pages, automatic defaults, storage sizing and app-exit behavior.
 - [Runpod setup](docs/RUNPOD_SETUP.md): current blocker and user-operated storage/model/generation setup steps.
 - [CPU setup investigation](docs/CPU_SETUP_INVESTIGATION.md): CPU deployment request correction and read-only provider evidence.
+- [Worker failure investigation](docs/WORKER_FAILURE_INVESTIGATION.md): safe generation/helper errors, loader correction and live-test limits.
+- [Selected cache investigation](docs/POD_CACHE_INVESTIGATION.md): preserve approved volume paths between CPU setup and GPU generation.
 - [Pod worker](docs/POD_WORKER.md): worker contract and deployment gaps.
 - [MCP](docs/MCP.md): local tool surface and host configuration.
 - [Convert](docs/CONVERT.md): pasted scripts, public YouTube captions and explicit Urdu translation drafts.

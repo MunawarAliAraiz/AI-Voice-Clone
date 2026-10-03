@@ -22,7 +22,7 @@ NameError, and it cost an afternoon.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 __all__ = [
     "PROBLEM_CONTENT_TYPE",
@@ -87,6 +87,14 @@ class AppError(Exception):
         #: e.g. NoRouteError's list of pairs that WOULD work.
         self.extensions = extensions
         super().__init__(detail)
+
+    def with_worker_error(self, code: object) -> Self:
+        """Carry only recognized runtime categories through helper wrappers."""
+        if isinstance(code, str) and code in {
+            "OutOfMemoryError", "LocalEntryNotFoundError", "OfflineModeIsEnabled",
+        }:
+            self.extensions["worker_error_code"] = code
+        return self
 
     def to_problem(self, instance: str | None = None) -> dict[str, Any]:
         """Serialize to an RFC 9457 problem document."""

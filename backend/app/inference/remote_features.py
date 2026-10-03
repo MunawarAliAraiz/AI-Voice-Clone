@@ -10,7 +10,7 @@ from ..runpod.worker_pair import WorkerPairStore
 from .analyzer_scheduler import QWEN_ANALYZER_MODEL_ID
 from .catalog import CATALOG
 from .protocol import AnalyzeResult, TransliterateResult
-from .remote_scheduler import RemoteScheduler
+from .remote_scheduler import RemoteScheduler, RemoteWorkerError
 from .transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
 
 
@@ -70,6 +70,8 @@ class RemoteAnalyzer:
                 gen_time_sec=float(value["gen_time_sec"]),
                 load_time_sec=float(value["load_time_sec"]),
             )
+        except RemoteWorkerError as exc:
+            raise AnalyzerUnavailableError(exc.detail) from exc
         except (GenerationError, KeyError, ValueError, TypeError) as exc:
             raise AnalyzerUnavailableError("Pod Speech Direction is unavailable") from exc
 
@@ -108,6 +110,8 @@ class RemoteTransliterator:
             if len(items) != len(texts):
                 raise ValueError("Pod omitted conversion results")
             return [TransliterateResult(**item) for item in items]
+        except RemoteWorkerError as exc:
+            raise TransliteratorUnavailableError(exc.detail) from exc
         except (GenerationError, KeyError, ValueError, TypeError) as exc:
             raise TransliteratorUnavailableError("Pod script conversion is unavailable") from exc
 

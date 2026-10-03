@@ -237,7 +237,7 @@ class TransliteratorScheduler:
                     if not response.ok:
                         raise TransliteratorUnavailableError(
                             f"transliteration failed: {response.error_message or 'unknown'}"
-                        )
+                        ).with_worker_error(response.error_code)
                     out.append(
                         TransliterateResult(
                             text=str(response.result.get("text") or ""),
@@ -340,7 +340,7 @@ class TransliteratorScheduler:
             await self._drop_worker()
             raise TransliteratorUnavailableError(
                 f"gemma transliterator failed to load: {response.error_message or 'unknown'}"
-            )
+            ).with_worker_error(response.error_code)
         self._loaded = True
         self._pending_load_time_sec = float(response.result.get("load_time_sec", time.time() - t0))
         logger.info("gemma transliterator loaded in %.1fs", self._pending_load_time_sec)

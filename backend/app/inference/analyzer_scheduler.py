@@ -208,10 +208,10 @@ class AnalyzerScheduler:
                 raise AnalyzerUnavailableError(
                     f"qwen analyzer worker died mid-request: "
                     f"{response.error_message or 'unknown'}"
-                )
+                ).with_worker_error(response.error_code)
             raise AnalyzerResponseInvalidError(
                 response.error_message or "analyzer returned an unspecified error"
-            )
+            ).with_worker_error(response.error_code)
 
         result = response.result
         return AnalyzeResult(
@@ -264,7 +264,7 @@ class AnalyzerScheduler:
         if not response.ok:
             raise AnalyzerUnavailableError(
                 f"qwen analyzer failed to load: {response.error_message or 'unknown'}"
-            )
+            ).with_worker_error(response.error_code)
         self._loaded = True
         self._pending_load_time_sec = float(response.result.get("load_time_sec", 0.0))
 

@@ -18,10 +18,15 @@ User then supplied a screenshot of VoxCPM2 HTTP500 and unavailable Pod script
 conversion. Read-only profile inspection confirmed failures; the old GPU Pod
 was already removed, so its stacktrace is unavailable. Backend correction of
 an evidenced VoxCPM keyword/path defect, safe worker error propagation and a
-separate-volume cache path defect is in progress. Do not claim those changes
-prove the old failure's cause or real successful generation. Next: review/test
-those patches, publish only the already-authorized worker source scope, qualify
-immutable images, then package/test/sign the new desktop and obtain approval
+separate-volume cache path defect passed 79 focused backend and 42 Pod tests;
+touched backend/startup files passed lint. See the two investigation docs.
+The old constructor fallback could succeed and the installer writes pinned
+refs/main, so neither establishes the observed failure's cause. No real
+successful generation is claimed. Worker-only corrections/tests were published
+as `5e2d5c0556622475b8e308c851b40d48fd0613a7`; its CI image build is running.
+No desktop UI or user data was pushed. Runtime/package version is now 0.1.7;
+the next installer has not been built. Next: qualify immutable images, then
+package/test/sign the new desktop and obtain approval
 for its exact installer before public publication. Never push the whole app
 branch or operate the user's installed app/profile/cloud.
 

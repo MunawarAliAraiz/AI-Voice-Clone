@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import hmac
 import json
+import logging
 import os
 import tempfile
 from collections.abc import AsyncIterator
@@ -13,17 +14,19 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from starlette.background import BackgroundTask
 
 from ..config import Settings
 from ..domain.transliterate import MAX_BATCH_CHUNKS, SUPPORTED_PAIRS
+from ..exceptions import AppError
 from ..inference.analyzer_scheduler import QWEN_ANALYZER_MODEL_ID
 from ..inference.catalog import CATALOG
 from ..inference.protocol import SchedulerProtocol, SynthRequest
 from ..inference.transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
 from ..main import _build_analyzer, _build_scheduler, _build_transliterator
+from .errors import safe_worker_problem
 from .model_install import REQUIRED_MODEL_IDS, ModelInstaller, release_manifest_id
 from .model_pins import AUXILIARY_PINS
 
@@ -95,6 +98,16 @@ def create_worker_app(
                 await app.state.transliterator.shutdown()
 
     app = FastAPI(title="Voice Clone Pod Worker", lifespan=lifespan)
+
+    @app.exception_handler(AppError)
+    async def worker_error(_request, error: AppError) -> JSONResponse:
+        # Preserve actionable error categories without returning runtime paths,
+        # credentials, model output or arbitrary third-party exception text.
+        problem = safe_worker_problem(error)
+        logging.getLogger(__name__).error("Cloud worker failure: %s", problem["code"])
+        return JSONResponse(
+            problem, status_code=problem["status"], media_type="application/problem+json"
+        )
 
     def authenticate(authorization: Annotated[str | None, Header()] = None) -> None:
         expected = f"Bearer {token}"

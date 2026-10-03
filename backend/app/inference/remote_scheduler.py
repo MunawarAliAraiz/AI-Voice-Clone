@@ -11,10 +11,20 @@ from urllib.parse import urlparse
 import httpx
 
 from ..exceptions import GenerationError, ModelNotFoundError
+from ..remote_worker.errors import WORKER_MESSAGES
 from ..remote_worker.model_pins import AUXILIARY_PINS
 from .catalog import ModelCatalog
 from .protocol import ModelStatus, SynthRequest, SynthResult
 from .spec import ModelState
+
+
+class RemoteWorkerError(GenerationError):
+    """A recognized worker category with a locally curated, safe explanation."""
+
+    def __init__(self, code: str, status: int) -> None:
+        super().__init__("remote", WORKER_MESSAGES[code])
+        self.code = code
+        self.http_status = status
 
 
 class RemoteScheduler:
@@ -48,6 +58,18 @@ class RemoteScheduler:
         except httpx.HTTPError as exc:
             raise GenerationError("remote", "Cannot reach the Runpod worker") from exc
         if response.is_error:
+            try:
+                problem = response.json()
+            except ValueError:
+                problem = None
+            if (
+                isinstance(problem, dict)
+                and isinstance(problem.get("code"), str)
+                and problem["code"] in WORKER_MESSAGES
+            ):
+                # Never echo arbitrary remote detail or extensions. The selected
+                # category maps to fixed local copy, including older workers.
+                raise RemoteWorkerError(problem["code"], response.status_code)
             raise GenerationError("remote", f"Runpod worker returned HTTP {response.status_code}")
         return response
 
