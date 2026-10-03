@@ -141,7 +141,8 @@ cloud setup, GPU costs or listening quality. The final source freeze and repeate
 native smoke checks are recorded above. The public release still needs the
 redistribution source and notices required by the bundled FFmpeg build.
 Code signing is not configured.
-# Windows 0.1.7 verification - 2026-10-03
+
+## Windows 0.1.7 verification - 2026-10-03
 
 The premium workspace and original liquid orb passed an isolated browser review
 at 375, 768, 1024 and 1440 px. Keyboard section navigation, retained drafts,

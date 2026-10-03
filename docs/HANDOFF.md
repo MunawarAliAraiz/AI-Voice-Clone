@@ -11,8 +11,8 @@ retention passed in an isolated preview. Narrow width/tooltip overflow found
 there was fixed. See [Design](UI_DESIGN.md) and [Orb](ORB.md) for evidence.
 
 Frontend production build and the existing setup/gate/update checks passed;
-15 new status checks and orb lifecycle checks passed. This redesign has not
-now been packaged and verified in Windows 0.1.7. Publication approval is pending;
+15 new status checks and orb lifecycle checks passed. This redesign has now
+been packaged and verified in Windows 0.1.7. Publication approval is pending;
 0.1.6 remains the latest public desktop release.
 
 User then supplied a screenshot of VoxCPM2 HTTP500 and unavailable Pod script
