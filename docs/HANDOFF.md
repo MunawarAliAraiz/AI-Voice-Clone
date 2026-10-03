@@ -16,8 +16,8 @@ exact process image paths through retained Windows handles, stops only that
 installed MCP image, checks exclusive file readiness and blocks on failure or
 persistent host respawn. It stages only in the temporary installer directory.
 The API, agent hosts, unrelated same-name binaries and user data are outside
-its termination scope. Runtime/package version is 0.1.8; no 0.1.8 installer
-has been completed or published yet; its Windows build is running. 47 mocked
+its termination scope. Runtime/package version is 0.1.8; the installer is built
+and signed, but not yet published. 47 mocked
 guard checks and lint passed. Production NSIS hooks in a disposable probe
 reproduced the actual frozen parent/child lock, stopped only the exact target,
 replaced it and initialized the new ten-tool MCP. An unrelated same-name MCP
@@ -27,7 +27,14 @@ preserved and test processes were cleaned up. Isolated 0.1.8 frozen API/MCP and
 exact embedded UI/worker-manifest checks also passed. Receipt:
 `D:/Projects/AI-Voice-Clone/build/installer-mcp-lock-018-receipt.json`.
 This does not establish a complete installed-app update/restart cycle.
-Next: finish the signed installer and obtain exact publication approval.
+Exact signed artifact/global-comment, version/filename and PE/NSIS verification
+passed. The generated production installer includes preinstall and postinstall
+hooks around sidecar extraction, with the tested MCP SHA256.
+Local installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.8-setup.exe`;
+74,225,580 bytes; SHA256:
+`4fcfef0182b50d44fe068fdc3835a851902958a4bfe57e20b6983ae010cb5e78`.
+Feed, receipts and notes are beside it. Next: obtain exact publication approval,
+then publish and anonymously verify the public feed and full installer.
 Public latest remains 0.1.7.
 
 ## Premium workspace and generation error investigation - 2026-10-03

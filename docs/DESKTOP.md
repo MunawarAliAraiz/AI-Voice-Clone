@@ -1,5 +1,22 @@
 # Windows desktop build
 
+## Windows 0.1.8 MCP installer guard - 2026-10-03
+
+The new NSIS preinstall/postinstall hooks passed a real disposable frozen-MCP
+file-lock regression. Both parent/child processes for the exact target were
+stopped and replaced, an unrelated same-name copy stayed running, and the new
+MCP initialized with ten tools. Persistent unknown locks block before copying;
+skipped/mismatched MCP files block installer success. 47 focused mocked tests,
+lint, isolated frozen API/MCP and exact embedded UI/manifest checks passed.
+The full Windows package compiled with both hooks and the tested MCP SHA256.
+
+Local signed installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.8-setup.exe`;
+74,225,580 bytes; SHA256 `4fcfef0182b50d44fe068fdc3835a851902958a4bfe57e20b6983ae010cb5e78`.
+Artifact/global-comment signature, signed filename/version and PE/NSIS checks
+passed. Exact publication approval is pending; public latest remains 0.1.7.
+Evidence and native lock-test receipts are beside the installer.
+No complete installed-app update/restart or live GPU success is claimed.
+
 ## Windows 0.1.7 verification - 2026-10-03
 
 The premium workspace and original liquid orb passed an isolated browser review
