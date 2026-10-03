@@ -1,4 +1,4 @@
 chatterbox-tts==0.1.7
-torch==2.6.0+cu124
-torchaudio==2.6.0+cu124
+torch==2.8.0+cu128
+torchaudio==2.8.0+cu128
 setuptools==80.9.0

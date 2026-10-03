@@ -27,7 +27,9 @@ def main() -> None:
             # These pinned releases have no usable Python 3.12 Linux wheels.
             command += ["--no-binary", "antlr4-python3-runtime,argbind,crcmod,jieba,oss2"]
         if name not in {"api", "build"}:
-            command += ["--torch-backend", "cu124" if name == "chatterbox" else "cu128"]
+            command += ["--torch-backend", "cu128"]
+        if name == "chatterbox":
+            command += ["--override", str(requirements / "chatterbox.overrides.in")]
         subprocess.run(command, check=True)  # noqa: S603 -- fixed resolver arguments, no shell
 
 
