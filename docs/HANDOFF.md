@@ -12,7 +12,8 @@ there was fixed. See [Design](UI_DESIGN.md) and [Orb](ORB.md) for evidence.
 
 Frontend production build and the existing setup/gate/update checks passed;
 15 new status checks and orb lifecycle checks passed. This redesign has not
-yet been packaged/published. 0.1.6 remains the latest public desktop release.
+now been packaged and verified in Windows 0.1.7. Publication approval is pending;
+0.1.6 remains the latest public desktop release.
 
 User then supplied a screenshot of VoxCPM2 HTTP500 and unavailable Pod script
 conversion. Read-only profile inspection confirmed failures; the old GPU Pod
@@ -28,9 +29,18 @@ Anonymous registry qualification passed for their immutable digests, which are
 now recorded in `backend/app/runpod/release.json`. This verifies image identity
 and build evidence, not live CUDA generation.
 No desktop UI or user data was pushed. Runtime/package version is now 0.1.7;
-the next installer has not been built. Next: qualify immutable images, then
-package/test/sign the new desktop and obtain approval
-for its exact installer before public publication. Never push the whole app
+the new installer is built. Exact archived UI assets and worker manifest,
+isolated frozen API/MCP, session authentication, setup/update/exit gates and
+cryptographic artifact/global-comment signatures passed. Native installed UI,
+update/restart, paid GPU generation and listening remain untested.
+
+Installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.7-setup.exe`.
+Size: 65,831,146 bytes. SHA256:
+`5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
+Feed, build/signature evidence, frozen sidecar/embedded asset receipts and notes
+are alongside it. Next: obtain approval for this exact installer/feed/notes,
+publish and anonymously verify the full public installer and latest feed.
+Never push the whole app
 branch or operate the user's installed app/profile/cloud.
 
 ## Automatic model-download request fix - 2026-10-03
