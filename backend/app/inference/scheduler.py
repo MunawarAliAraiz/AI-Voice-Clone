@@ -64,6 +64,7 @@ from ..exceptions import (
 )
 from .catalog import ModelCatalog
 from .error_diagnostics import with_worker_diagnostics
+from .progress import emit_progress
 from .protocol import ModelStatus, SynthRequest, SynthResult, WireOp, WorkerHandle
 from .spec import ModelSpec, ModelState, RuntimeKind
 
@@ -206,6 +207,7 @@ class InferenceScheduler:
                 # the exact race this class exists to prevent. The only early
                 # exit is the timeout below, which kills the process.
                 try:
+                    await emit_progress("generating", spec.id)
                     response = await asyncio.shield(
                         worker.call(WireOp.SYNTH, payload, timeout=timeout)
                     )
@@ -244,7 +246,7 @@ class InferenceScheduler:
         out: list[ModelStatus] = []
         for spec in self._catalog.specs:
             worker = self._workers.get(spec.runtime)
-            if worker is not None and worker.loaded_model_id == spec.id:
+            if worker is not None and worker.is_alive and worker.loaded_model_id == spec.id:
                 state, wait = ModelState.RESIDENT, 0.0
             elif worker is not None and worker.is_alive:
                 # Same runtime is live with a different checkpoint: a swap costs
@@ -342,6 +344,8 @@ class InferenceScheduler:
         # RESIDENT — nothing to do.
         if worker is not None and worker.is_alive and worker.loaded_model_id == spec.id:
             return worker, 0.0
+
+        await emit_progress("loading_model", spec.id)
 
         # A dead worker is bookkeeping we must drop before sizing the budget.
         if worker is not None and not worker.is_alive:

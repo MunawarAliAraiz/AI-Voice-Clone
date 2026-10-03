@@ -27,8 +27,26 @@ def test_auth_and_synthesis(tmp_path: Path) -> None:
         )
         assert response.status_code == 200
         assert response.headers["x-model-id"] == "voxcpm2"
+        assert len(response.headers["x-request-id"]) == 32
         assert response.content
         assert not list(tmp_path.glob("vcs-worker-*"))
+
+
+def test_bad_request_identity_is_rejected_before_scheduling(tmp_path: Path) -> None:
+    scheduler = FakeScheduler()
+    app = create_worker_app(
+        scheduler=scheduler, settings=Settings(data_dir=tmp_path), token="secret",
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/v1/synthesize",
+            headers={"Authorization": "Bearer secret", "X-Request-Id": "private-script"},
+            data={"request": json.dumps({"model_id": "voxcpm2", "text": "Hello"})},
+            files={"reference_audio": ("reference.wav", b"sample", "audio/wav")},
+        )
+        assert response.status_code == 422
+        assert not scheduler.requests
+        assert "private-script" not in response.text
 
 
 def test_unknown_model_is_rejected_before_upload(tmp_path: Path) -> None:

@@ -122,6 +122,9 @@ def test_worker_synthesis_error_is_structured_and_safe(tmp_path: Path) -> None:
     assert "secret-token" not in response.text
     assert "private-file" not in response.text
     assert "user script" not in response.text
+    with TestClient(worker) as client:
+        state = client.get("/v1/activity", headers={"Authorization": "Bearer test-session"})
+        assert state.json()["operations"] == []
 
 
 @pytest.mark.parametrize(

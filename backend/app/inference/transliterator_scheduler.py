@@ -62,6 +62,7 @@ from pathlib import Path
 
 from ..exceptions import TransliteratorUnavailableError
 from .error_diagnostics import with_worker_diagnostics
+from .progress import emit_progress
 from .protocol import TransliterateResult, WireOp
 from .worker_client import WorkerProcess
 
@@ -224,6 +225,7 @@ class TransliteratorScheduler:
             try:
                 for text in texts:
                     assert self._worker is not None
+                    await emit_progress("converting", GEMMA_TRANSLITERATOR_MODEL_ID)
                     response = await self._worker.call(
                         WireOp.TRANSLITERATE,
                         {
@@ -295,6 +297,7 @@ class TransliteratorScheduler:
         """Start and load the worker if needed. Caller holds `_worker_lock`."""
         if self._worker is not None and self._worker.is_alive and self._loaded:
             return 0.0
+        await emit_progress("loading_model", GEMMA_TRANSLITERATOR_MODEL_ID)
         if self._worker is None or not self._worker.is_alive:
             await self._start_worker()
         if not self._loaded:
