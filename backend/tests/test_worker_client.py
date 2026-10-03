@@ -86,6 +86,7 @@ async def test_backend_error_is_reported_not_raised(tmp_path: Path) -> None:
         bad = await w.call(WireOp.SYNTH, {"text": "x"}, timeout=5)  # missing keys
         assert not bad.ok
         assert bad.error_code  # e.g. KeyError
+        assert bad.error_class == "KeyError"
         assert w.is_alive  # a rendering error must not kill the worker
     finally:
         await w.kill()

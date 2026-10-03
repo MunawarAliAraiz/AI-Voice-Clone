@@ -22,6 +22,7 @@ from app.exceptions import (
 )
 from app.inference.analyzer_scheduler import AnalyzerScheduler
 from app.inference.catalog import CATALOG
+from app.inference.error_diagnostics import runtime_error_code, with_worker_diagnostics
 from app.inference.remote_features import RemoteTransliterator
 from app.inference.remote_scheduler import RemoteScheduler, RemoteWorkerError
 from app.inference.runtimes.voxcpm import VoxCPMBackend
@@ -284,3 +285,89 @@ def test_unknown_or_cyclic_exception_chain_never_echoes_private_text() -> None:
     assert problem["code"] == "TRANSLITERATOR_UNAVAILABLE"
     assert "Secret-token" not in json.dumps(problem)
     assert "private-path" not in json.dumps(problem)
+
+
+@pytest.mark.parametrize("message", [
+    "CUDA error: no kernel image is available for execution on the device secret-token",
+    "CUDA error: invalid device function /private-path",
+    "CUDA error: device kernel image is invalid",
+    "GPU is not compatible with the current PyTorch installation",
+])
+def test_known_cuda_architecture_failures_are_categorized_inside_runtime(message):
+    assert runtime_error_code(RuntimeError(message)) == "CUDA_ARCHITECTURE_UNSUPPORTED"
+
+
+@pytest.mark.parametrize("message", [
+    "CUDA out of memory", "CUDA error: an illegal memory access was encountered",
+    "MODEL_CACHE_MISSING is part of private user text", "GPU connection failed",
+])
+def test_other_runtime_failures_do_not_claim_architecture_mismatch(message):
+    assert runtime_error_code(RuntimeError(message)) == "RuntimeError"
+
+
+def test_worker_failure_includes_only_allowlisted_class_stage_and_model():
+    scheduler = InferenceScheduler(CATALOG, lambda _: None, SchedulerConfig())
+    response = SimpleNamespace(
+        error_code="CUDA_ARCHITECTURE_UNSUPPORTED", error_class="RuntimeError",
+        error_message="secret-token /workspace/private-path", traceback="private traceback",
+    )
+    error = scheduler._error_from(CATALOG.get("chatterbox_ml_v3"), response, during_load=True)
+    problem = safe_worker_problem(error)
+    assert problem["code"] == "CUDA_ARCHITECTURE_UNSUPPORTED"
+    assert problem["status"] == 503
+    assert problem["diagnostics"] == {
+        "exception_class": "RuntimeError", "stage": "load", "model_id": "chatterbox_ml_v3",
+    }
+    assert "secret-token" not in json.dumps(problem)
+    assert "private" not in json.dumps(problem)
+
+
+def test_untrusted_diagnostic_strings_are_omitted_even_in_wrapped_failures():
+    inner = ModelLoadError("private-model-id", "private message")
+    with_worker_diagnostics(
+        inner, SimpleNamespace(error_code="private-class", error_class="secret-token"),
+        stage="private-stage", model_id="private-model-id",
+    )
+    outer = TransliteratorUnavailableError("private wrapper")
+    outer.__cause__ = inner
+    problem = safe_worker_problem(outer)
+    assert "diagnostics" not in problem
+    assert "private" not in json.dumps(problem)
+    assert "secret-token" not in json.dumps(problem)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("helper", ["analyzer", "transliterator"])
+async def test_helper_load_propagates_safe_underlying_failure_identity(helper):
+    class Worker:
+        async def call(self, *args, **kwargs):
+            return SimpleNamespace(
+                ok=False, error_code="CUDA_ARCHITECTURE_UNSUPPORTED", error_class="RuntimeError",
+                error_message="secret-token /private-path",
+            )
+
+        async def kill(self):
+            pass
+
+    if helper == "analyzer":
+        scheduler = AnalyzerScheduler(python_executable="unused")
+        model_id = "qwen2.5-3b-instruct-analyzer"
+    else:
+        class Slot:
+            @asynccontextmanager
+            async def reserve_slot(self, reason):
+                yield
+
+        scheduler = TransliteratorScheduler(python_executable="unused", inference_scheduler=Slot())
+        model_id = "gemma-4-31b-it-transliterator"
+    scheduler._worker = Worker()
+    try:
+        with pytest.raises((AnalyzerUnavailableError, TransliteratorUnavailableError)) as caught:
+            await scheduler._load()
+        problem = safe_worker_problem(caught.value)
+        assert problem["code"] == "CUDA_ARCHITECTURE_UNSUPPORTED"
+        assert problem["diagnostics"] == {
+            "exception_class": "RuntimeError", "stage": "load", "model_id": model_id,
+        }
+    finally:
+        await scheduler.shutdown()

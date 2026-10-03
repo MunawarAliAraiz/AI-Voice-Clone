@@ -160,6 +160,7 @@ class WorkerProcess:
             error_code=data.get("error_code"),
             error_message=data.get("error_message"),
             traceback=data.get("traceback"),
+            error_class=data.get("error_class"),
         )
         # Track residency so PING/status need not touch the worker.
         if response.ok:

@@ -104,6 +104,8 @@ class WireResponse:
     error_code: str | None = None
     error_message: str | None = None
     traceback: str | None = None
+    #: Additive diagnostic identity; arbitrary class names are filtered at HTTP.
+    error_class: str | None = None
 
 
 # ── Application-level request/result ─────────────────────────────────────────

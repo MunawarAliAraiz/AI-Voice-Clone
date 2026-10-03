@@ -63,6 +63,7 @@ import time
 from pathlib import Path
 
 from ..exceptions import AnalyzerResponseInvalidError, AnalyzerUnavailableError
+from .error_diagnostics import with_worker_diagnostics
 from .protocol import AnalyzeResult, WireOp
 from .worker_client import WorkerProcess
 
@@ -205,13 +206,13 @@ class AnalyzerScheduler:
         if not response.ok:
             if self._worker is None or not self._worker.is_alive:
                 self._loaded = False
-                raise AnalyzerUnavailableError(
+                raise with_worker_diagnostics(AnalyzerUnavailableError(
                     f"qwen analyzer worker died mid-request: "
                     f"{response.error_message or 'unknown'}"
-                ).with_worker_error(response.error_code)
-            raise AnalyzerResponseInvalidError(
+                ), response, stage="analyze", model_id=QWEN_ANALYZER_MODEL_ID)
+            raise with_worker_diagnostics(AnalyzerResponseInvalidError(
                 response.error_message or "analyzer returned an unspecified error"
-            ).with_worker_error(response.error_code)
+            ), response, stage="analyze", model_id=QWEN_ANALYZER_MODEL_ID)
 
         result = response.result
         return AnalyzeResult(
@@ -262,9 +263,9 @@ class AnalyzerScheduler:
             timeout=self._load_timeout_sec,
         )
         if not response.ok:
-            raise AnalyzerUnavailableError(
+            raise with_worker_diagnostics(AnalyzerUnavailableError(
                 f"qwen analyzer failed to load: {response.error_message or 'unknown'}"
-            ).with_worker_error(response.error_code)
+            ), response, stage="load", model_id=QWEN_ANALYZER_MODEL_ID)
         self._loaded = True
         self._pending_load_time_sec = float(response.result.get("load_time_sec", 0.0))
 
