@@ -53,6 +53,17 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   ] : []),
 ];
 
+const SECTION_COPY: Record<Tab, [string, string]> = {
+  studio: ['Voice studio', 'Write your script, choose a voice, and shape the delivery.'],
+  dialogue: ['Dialogue', 'Build a conversation with assigned voices. This feature is in beta.'],
+  recent: ['Recent generations', 'Your queue, finished audio, and previous attempts.'],
+  convert: ['Convert scripts', 'Paste a script or import captions, then review the converted text.'],
+  pronunciation: ['Pronunciation', 'Save how names and words should be spoken.'],
+  editor: ['Audio editor', 'Trim, arrange, and export your audio.'],
+  runpod: ['Cloud setup', 'Connect your account and prepare the models for voice generation.'],
+  agents: ['Agent connections', 'Connect Codex or Claude to your studio and generation queue.'],
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('studio');
   const [pageCount, setPageCount] = useState(1);
@@ -240,7 +251,7 @@ export default function App() {
   }, [queryClient]);
 
   return (
-    <div className="studio">
+    <div className="studio workspace-shell">
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">
@@ -266,6 +277,16 @@ export default function App() {
               tabIndex={activeTab === t.id ? 0 : -1}
               className={activeTab === t.id ? 'on' : ''}
               onClick={() => setActiveTab(t.id)}
+              onKeyDown={(event) => {
+                const index = TABS.findIndex(tab => tab.id === t.id);
+                const next = event.key === 'ArrowRight' ? (index + 1) % TABS.length
+                  : event.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length
+                    : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
+                if (next === null) return;
+                event.preventDefault();
+                setActiveTab(TABS[next]!.id);
+                document.getElementById(`tab-${TABS[next]!.id}`)?.focus();
+              }}
             >
               {t.icon}
               <span className="seg-label">{t.label}</span>
@@ -291,6 +312,13 @@ export default function App() {
       </header>
 
       <AudioToolsSetup />
+
+      <div className="workspace-heading">
+        <div className="workspace-heading-copy">
+          <h1>{SECTION_COPY[activeTab][0]}</h1>
+          <p>{SECTION_COPY[activeTab][1]}</p>
+        </div>
+      </div>
 
       {error && (
         <div className="banner error" role="alert">
@@ -323,17 +351,13 @@ export default function App() {
             it is cheap. The Audio Editor stays lazy and unmounted. */}
         <div className="tab-panel" hidden={activeTab !== 'studio'}>
           <>
-            <div className="col">
-              <EnrollCard languages={languagesQ.data?.languages ?? []} onEnrolled={invalidateVoices} />
-              <VoiceLibrary voices={voicesQ.data?.profiles ?? []} onDeleted={invalidateVoices} />
-            </div>
-
-            <div className="col">
+            <div className="col studio-main">
               <Composer
                 voices={voicesQ.data?.profiles ?? []}
                 languages={languagesQ.data?.languages ?? []}
                 onJobQueued={onJobQueued}
                 onOpenRecent={() => setActiveTab('recent')}
+                onOpenRunpod={() => setActiveTab('runpod')}
                 pendingText={pendingText}
               />
               {/* Generate no longer blocks, so several clips can be in flight
@@ -364,6 +388,12 @@ export default function App() {
                 </section>
               )}
             </div>
+
+            <div className="col studio-support">
+              <EnrollCard languages={languagesQ.data?.languages ?? []} onEnrolled={invalidateVoices} />
+              <VoiceLibrary voices={voicesQ.data?.profiles ?? []} onDeleted={invalidateVoices} />
+            </div>
+
           </>
         </div>
         {/* ONE list. History is the spine because it is durable; only

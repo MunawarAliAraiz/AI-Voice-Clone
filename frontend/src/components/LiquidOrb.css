@@ -1,0 +1,48 @@
+.liquid-orb {
+  display: inline-block;
+  position: relative;
+  width: var(--liquid-orb-size, 64px);
+  height: var(--liquid-orb-size, 64px);
+  flex: 0 0 auto;
+  border-radius: 50%;
+  isolation: isolate;
+  pointer-events: none;
+  vertical-align: middle;
+}
+
+.liquid-orb__material {
+  position: absolute;
+  inset: 3%;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 32% 22%, #ffffff65, transparent 32%),
+    radial-gradient(ellipse at 75% 74%, #f87e99, transparent 53%),
+    radial-gradient(ellipse at 22% 42%, #5bdddf, transparent 57%),
+    linear-gradient(140deg, #bba9ef, #7855cb 47%, #302259);
+  box-shadow: inset -5px -7px 12px #11132960, inset 1px 1px 4px #ffffff38;
+}
+
+.liquid-orb__canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.liquid-orb__canvas[data-rendered='true'] { opacity: 1; }
+
+.liquid-orb:has(.liquid-orb__canvas[data-rendered='true']) .liquid-orb__material {
+  visibility: hidden;
+}
+
+.liquid-orb[data-state='blocked'] .liquid-orb__material,
+.liquid-orb[data-state='paused'] .liquid-orb__material { filter: saturate(0.2); }
+.liquid-orb[data-state='error'] .liquid-orb__material { filter: hue-rotate(60deg) saturate(0.75); }
+.liquid-orb[data-state='complete'] .liquid-orb__material { filter: hue-rotate(-20deg); }
+
+@media (forced-colors: active) {
+  .liquid-orb { display: none; }
+}

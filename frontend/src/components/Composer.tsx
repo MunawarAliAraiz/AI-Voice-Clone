@@ -17,6 +17,8 @@ import { useScriptConversion } from '../hooks/useScriptConversion';
 import { api, ApiError, mediaUrl } from '../services/api';
 import type { DirectedSegmentIn, DirectionAnalyzeResponse, JobStatusResponse, LanguageInfo, ScriptDetectResponse, VoiceProfile } from '../types/api';
 import { AudioPlayer } from './AudioPlayer';
+import { LiquidOrb } from './LiquidOrb';
+import { generationState } from '../lib/generationState';
 import { DirectionPanel } from './DirectionPanel';
 import { CloudGenerationGate, DisabledAction } from './CloudGenerationGate';
 import {
@@ -156,7 +158,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
   const [jobId, setJobId] = useState<number | null>(null);
   const generateMutation = useGenerateMutation();
   const cancelMutation = useCancelJobMutation();
-  const { data: job } = useJob(jobId);
+  const { data: job, isError: jobStatusError } = useJob(jobId);
   const { data: modelsData } = useModels();
   const cloudGate = useGenerationGate();
   const cloudReady = !cloudGate.blocked;
@@ -645,6 +647,11 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
     : !voices.some(voice => voice.id === profileId) ? 'Add and select a reference voice before generating.'
     : !text.trim() ? 'Enter a script before generating.' : null;
   const disabled = !!generateDisabledReason;
+  const generation = generationState({
+    submitting: busy, converting: conversion.running, job,
+    checkingJob: jobId !== null && !job, jobStatusError,
+    blocked: cloudGate.blocked, disabledReason: generateDisabledReason, error: err,
+  });
   const titleDisabledReason = cloudGate.blocked ? cloudGate.reason
     : titling ? 'A title suggestion is being generated. Please wait.'
     : !text.trim() ? 'Enter a script before asking for a title suggestion.' : null;
@@ -656,8 +663,14 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
 
   return (
     <section className="card composer" aria-labelledby="composer-h">
-      <header className="card-head">
-        <h2 id="composer-h">Generate speech</h2>
+      <header className="card-head composer-heading">
+        <div className="generation-state">
+          <LiquidOrb state={generation.state} />
+          <div>
+            <h2 id="composer-h">Generate speech</h2>
+            <p role="status" aria-live="polite"><strong>{generation.label}</strong><span>{generation.detail}</span></p>
+          </div>
+        </div>
       </header>
 
       <CloudGenerationGate gate={cloudGate} onOpenRunpod={onOpenRunpod} onOpenUpdates={onOpenUpdates} />
@@ -730,108 +743,6 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
         </div>
       )}
 
-
-      <div className="row">
-        <label className="field">
-          <span className="field-label">Voice</span>
-          <div className="select-wrap">
-            <select
-              value={profileId ?? ''}
-              onChange={(e) => setProfileId(Number(e.target.value))}
-              disabled={!voices.length}
-            >
-              {voices.length === 0 && <option value="">No voices yet</option>}
-              {voices.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Language</span>
-          <div className="select-wrap">
-            <select value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
-              {langs.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.display_name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </label>
-
-        <label className="field">
-          <span className="field-label">Speed</span>
-          <div className="select-wrap">
-            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
-              <option value={0.75}>0.75x (Slower)</option>
-              <option value={0.85}>0.85x (Relaxed)</option>
-              <option value={0.9}>0.90x (Recommended EN)</option>
-              <option value={1.0}>1.00x (Normal)</option>
-              <option value={1.1}>1.10x (Fast)</option>
-              <option value={1.25}>1.25x (Faster)</option>
-            </select>
-          </div>
-        </label>
-
-        <label className="field" style={{ gridColumn: '1 / -1' }}>
-          <span className="field-label">Delivery style</span>
-          <div className="select-wrap">
-            <select
-              value={stability}
-              onChange={(e) => handleStabilityChange(Number(e.target.value))}
-              aria-label="Delivery style"
-            >
-              {STABILITY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </label>
-      </div>
-
-      <p className="hint" aria-live="polite">
-        Voice model: <strong>{modelId === null ? 'Automatic' : selectedModel?.display_name ?? modelId}</strong>
-        {selectedModel && modelId === DEFAULT_MODEL_BY_LANGUAGE[language] && ' (Recommended)'}
-        {modelId === null && detect?.routable && detect.would_route_to && ` · ${detect.would_route_to.model_display_name}`}
-      </p>
-      {automaticUrduScriptUnavailable && <p className="hint" role="status">
-        No automatic model is available for Urdu script. Open Advanced model settings to choose a model explicitly, or use Roman Urdu.
-      </p>}
-      {displayedModel && !displayedModel.commercial_use && <p className="hint" role="status">
-        Personal use only: this model's weights do not permit commercial use.
-      </p>}
-      {displayedModel?.experimental && <p className="hint" role="status">
-        Experimental model: accuracy may be lower. Review the model details before generating.
-      </p>}
-      <details className="runpod-advanced">
-        <summary>Advanced model settings</summary>
-        <p className="hint">The recommended voice model is chosen for your language. Change it here if needed.</p>
-        <label className="field">
-          <span className="field-label">Voice model</span>
-          <div className="select-wrap">
-            <select
-              value={modelId ?? ''}
-              onChange={(e) => setModelId(e.target.value || null)}
-              disabled={!compatibleModels.length}
-              title={modelId === null ? detect?.would_route_to?.rationale ?? 'Picked automatically for this language and text.' : undefined}
-            >
-              <option value="">Automatic{detect?.routable && detect.would_route_to ? ` — ${detect.would_route_to.model_display_name}` : ''}</option>
-              {compatibleModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.display_name}{m.id === detect?.would_route_to?.model_id ? ' (Recommended)' : ''}{modelSuffix(m)}
-                </option>
-              ))}
-            </select>
-          </div>
-          {selectedModel?.caveat && <p className="hint muted">{selectedModel.caveat}</p>}
-        </label>
-      </details>
 
       <div className="editor-toolbar">
         {/* Directly on top of the textarea, and labelled, because these act on
@@ -993,6 +904,109 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
         </div>
       )}
 
+      <div className="row composer-controls">
+        <label className="field">
+          <span className="field-label">Voice</span>
+          <div className="select-wrap">
+            <select
+              value={profileId ?? ''}
+              onChange={(e) => setProfileId(Number(e.target.value))}
+              disabled={!voices.length}
+            >
+              {voices.length === 0 && <option value="">No voices yet</option>}
+              {voices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Language</span>
+          <div className="select-wrap">
+            <select value={language} onChange={(e) => handleLanguageChange(e.target.value)}>
+              {langs.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Speed</span>
+          <div className="select-wrap">
+            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))}>
+              <option value={0.75}>0.75x (Slower)</option>
+              <option value={0.85}>0.85x (Relaxed)</option>
+              <option value={0.9}>0.90x (Recommended EN)</option>
+              <option value={1.0}>1.00x (Normal)</option>
+              <option value={1.1}>1.10x (Fast)</option>
+              <option value={1.25}>1.25x (Faster)</option>
+            </select>
+          </div>
+        </label>
+
+        <label className="field">
+          <span className="field-label">Delivery style</span>
+          <div className="select-wrap">
+            <select
+              value={stability}
+              onChange={(e) => handleStabilityChange(Number(e.target.value))}
+              aria-label="Delivery style"
+            >
+              {STABILITY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </label>
+      </div>
+
+      <p className="hint" aria-live="polite">
+        Voice model: <strong>{modelId === null ? 'Automatic' : selectedModel?.display_name ?? modelId}</strong>
+        {selectedModel && modelId === DEFAULT_MODEL_BY_LANGUAGE[language] && ' (Recommended)'}
+        {modelId === null && detect?.routable && detect.would_route_to && ` · ${detect.would_route_to.model_display_name}`}
+      </p>
+      {automaticUrduScriptUnavailable && <p className="hint" role="status">
+        No automatic model is available for Urdu script. Open Advanced model settings to choose a model explicitly, or use Roman Urdu.
+      </p>}
+      {displayedModel && !displayedModel.commercial_use && <p className="hint" role="status">
+        Personal use only: this model's weights do not permit commercial use.
+      </p>}
+      {displayedModel?.experimental && <p className="hint" role="status">
+        Experimental model: accuracy may be lower. Review the model details before generating.
+      </p>}
+      <details className="runpod-advanced">
+        <summary>Advanced model settings</summary>
+        <p className="hint">The recommended voice model is chosen for your language. Change it here if needed.</p>
+        <label className="field">
+          <span className="field-label">Voice model</span>
+          <div className="select-wrap">
+            <select
+              value={modelId ?? ''}
+              onChange={(e) => setModelId(e.target.value || null)}
+              disabled={!compatibleModels.length}
+              title={modelId === null ? detect?.would_route_to?.rationale ?? 'Picked automatically for this language and text.' : undefined}
+            >
+              <option value="">Automatic{detect?.routable && detect.would_route_to ? ` — ${detect.would_route_to.model_display_name}` : ''}</option>
+              {compatibleModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}{m.id === detect?.would_route_to?.model_id ? ' (Recommended)' : ''}{modelSuffix(m)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedModel?.caveat && <p className="hint muted">{selectedModel.caveat}</p>}
+        </label>
+      </details>
+
+
       <button
         type="button"
         className="disclosure-btn"
@@ -1027,7 +1041,8 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
         </div>
       )}
 
-      <DisabledAction reason={generateDisabledReason} className="block">
+      <div className="generation-action">
+      <DisabledAction reason={generateDisabledReason}>
       <button
         className="btn primary"
         disabled={disabled || conversion.running}
@@ -1036,7 +1051,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
       >
         {busy || conversion.running ? <IconSpinner size={15} /> : <IconSpark size={15} />}
         {busy
-          ? 'Generating…'
+          ? 'Adding to queue…'
           : conversion.running
             ? 'Converting to Urdu script…'
             : needsConversionBeforeGenerate
@@ -1044,6 +1059,7 @@ export function Composer({ voices, languages, onJobQueued, onOpenRecent, onOpenR
               : 'Generate'}
       </button>
       </DisabledAction>
+      </div>
 
       {job && <JobStatusCard job={job} onCancel={() => cancelMutation.mutate(job.id)} />}
 
@@ -1161,10 +1177,10 @@ function JobStatusCard({ job, onCancel }: { job: JobStatusResponse; onCancel: ()
 // tone (that's the separate Direction feature below). Plain-language
 // buckets over a 0-100 raw dial so nobody has to guess what a percentage means.
 const STABILITY_OPTIONS = [
-  { value: 30, label: '🎭 More Expressive' },
-  { value: 50, label: '🎨 Balanced' },
-  { value: 70, label: '🎯 Consistent (Recommended)' },
-  { value: 90, label: '🪨 Very Stable' },
+  { value: 30, label: 'More expressive' },
+  { value: 50, label: 'Balanced' },
+  { value: 70, label: 'Consistent (Recommended)' },
+  { value: 90, label: 'Very stable' },
 ];
 
 function nearestStabilityOption(v: number): number {

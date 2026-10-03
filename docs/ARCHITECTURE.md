@@ -1,5 +1,19 @@
 # Architecture
 
+## Desktop workspace visuals
+
+The shared React workspace uses neutral surface tokens and system fonts. The
+script editor precedes delivery controls; the main editor precedes voice tools
+in both DOM and desktop grid order. Studio, Convert and Dialogue stay mounted
+but hidden during section changes, preserving drafts and job tracking.
+
+One original WebGL liquid orb accompanies the Composer's real status. It never
+replaces measured model/download progress or claims GPU readiness from API
+health. Submitted-but-not-yet-polled jobs remain queued; status fetch errors
+and completed jobs lacking audio cannot show Ready. Motion stops when hidden,
+offscreen, paused or blocked, and follows reduced-motion preferences. See
+[Workspace design](UI_DESIGN.md) and [Orb](ORB.md).
+
 > Supersedes the root `ARCHITECTURE.md`, whose §5 claimed the AI engines were
 > unwritten stubs. They were fully implemented — 333 lines in `fish_speech.py`
 > alone. X1 deletes the old file in Wave 2. Where docs and code disagree, the

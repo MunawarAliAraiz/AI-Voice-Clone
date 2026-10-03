@@ -1,14 +1,15 @@
 /* ═══════════════════════════════════════════════════════════
    Voice Clone Studio — Compact Studio Application Styles
-   Tokens live in styles/variables.css. One accent (amber),
-   hairline borders, flat fills, and compact alignment.
+   Tokens live in styles/variables.css. Quiet neutral surfaces,
+   a clear working hierarchy, and restrained warm selection.
    ═══════════════════════════════════════════════════════════ */
 
 * { box-sizing: border-box; }
+html { color-scheme: dark; }
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 70% -10%, #161e3d 0%, var(--bg) 55%);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: var(--text-md);
@@ -32,9 +33,9 @@ body {
 }
 
 .studio {
-  max-width: 1240px;
+  max-width: 1480px;
   margin: 0 auto;
-  padding: var(--space-5) var(--space-5) var(--space-16);
+  padding: var(--space-6) var(--space-8) var(--space-16);
 }
 
 .runpod-panel { display: grid; gap: var(--space-4); width: 100%; min-width: 0; }
@@ -96,8 +97,9 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas: 'brand status' 'nav nav';
   align-items: center;
-  gap: var(--space-4) var(--space-3);
-  padding: var(--space-2) 0 var(--space-6);
+  gap: var(--space-5) var(--space-4);
+  padding: 0;
+  margin-bottom: var(--space-8);
 }
 
 .brand {
@@ -110,7 +112,7 @@ body {
 .brand-name {
   font-size: var(--text-lg);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.025em;
   color: var(--text);
 }
 
@@ -129,7 +131,7 @@ body {
 .logo-bar {
   width: 3px;
   border-radius: var(--radius-full);
-  background: var(--accent);
+  background: var(--text);
 }
 
 .logo-bar:nth-child(1) { height: 9px; opacity: 0.55; }
@@ -140,6 +142,7 @@ body {
   grid-area: status;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
@@ -150,10 +153,9 @@ body {
   gap: var(--space-2);
   font-size: var(--text-sm);
   color: var(--muted);
-  padding: 6px var(--space-3);
-  border-radius: var(--radius-full);
-  border: 1px solid var(--line);
-  background: var(--panel-raised);
+  padding: 6px var(--space-2);
+  border: none;
+  background: transparent;
   white-space: nowrap;
 }
 
@@ -197,8 +199,8 @@ body {
 /* ── Layout ──────────────────────────────────────────────── */
 .grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
-  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-6);
   align-items: start;
 }
 
@@ -209,18 +211,18 @@ body {
   min-width: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 980px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ── Card ────────────────────────────────────────────────── */
 .card {
-  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 140%);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  padding: var(--space-5);
+  padding: var(--space-6);
   box-shadow: var(--shadow-card);
-  animation: rise var(--dur-slow) var(--ease-out) both;
+  animation: none;
 }
 
 .col > .card:nth-child(2) { animation-delay: 60ms; }
@@ -272,7 +274,7 @@ body {
 input, select, textarea {
   background: var(--panel-inset);
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   padding: 10px var(--space-3);
   font: inherit;
@@ -366,7 +368,7 @@ textarea {
 
 .expand-toggle-btn:hover {
   color: var(--text);
-  background: rgba(30, 41, 59, 0.95);
+  background: var(--panel-2);
   border-color: var(--line-strong);
 }
 
@@ -515,7 +517,7 @@ textarea {
 }
 
 .btn:active:not(:disabled) {
-  transform: scale(0.985);
+  background: var(--panel-2);
 }
 
 .btn:disabled {
@@ -524,14 +526,14 @@ textarea {
 }
 
 .btn.primary {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--primary);
+  color: var(--on-primary);
   border-color: transparent;
   font-weight: 600;
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--primary-hover);
   border-color: transparent;
 }
 
@@ -648,38 +650,44 @@ textarea {
 .segmented {
   grid-area: nav;
   display: flex;
-  flex-wrap: wrap;
-  width: fit-content;
+  flex-wrap: nowrap;
+  width: 100%;
   max-width: 100%;
-  gap: 2px;
-  background: var(--panel-inset);
-  padding: 2px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line);
+  gap: var(--space-5);
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .segmented button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   background: none;
   border: none;
-  border-radius: 7px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   color: var(--muted);
-  padding: 6px var(--space-3);
-  font-size: var(--text-sm);
+  padding: var(--space-3) 0;
+  min-height: 44px;
+  font-size: var(--text-base);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .segmented button:hover { color: var(--text); }
-.segmented button.on { background: var(--accent-soft); color: var(--accent); }
+.segmented button.on { background: transparent; color: var(--text); border-bottom-color: var(--accent); }
 
 @media (max-width: 560px) {
-  .studio { padding-inline: var(--space-3); }
+  .studio { padding: var(--space-4) var(--space-4) var(--space-8); }
   .topbar { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'brand' 'status' 'nav'; gap: var(--space-3); }
   .segmented { width: 100%; }
-  .segmented button { flex: 1 1 auto; min-height: 44px; padding: 8px var(--space-2); }
+  .segmented button { flex: 0 0 auto; min-height: 44px; }
+  .topbar-right { justify-content: flex-start; }
 }
 
 /* ── Recorder ────────────────────────────────────────────── */
@@ -1922,6 +1930,132 @@ textarea {
   gap: var(--space-2);
   align-items: center;
   font-size: var(--text-sm);
+}
+
+/* ── Desktop workspace hierarchy ───────────────────────────────────────────
+   The editor is the main working surface. Supporting voice tools live in a
+   narrow rail; other sections use the full reading width. */
+.workspace-shell main { min-width: 0; }
+.workspace-shell .tab-panel[hidden] { display: none; }
+.workspace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+  min-width: 0;
+}
+.workspace-heading-copy { min-width: 0; }
+.workspace-heading h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(23px, 2vw, 28px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.25;
+}
+.workspace-heading p {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: var(--text-base);
+  max-width: 66ch;
+}
+.workspace-heading-tools { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+.studio-main { grid-column: 1; grid-row: 1; }
+.studio-support { grid-column: 2; grid-row: 1; }
+.studio-support .card { padding: var(--space-4); width: 100%; min-width: 0; }
+.studio-support .row { grid-template-columns: minmax(0, 1fr); }
+.studio-support .card-head h2 { font-size: var(--text-base); }
+.studio-support .consent { align-items: flex-start; }
+.studio-support .consent input { margin-top: 3px; }
+.studio-support .tabs button { padding-inline: 6px; }
+.studio-support .voice-list li { border: none; border-bottom: 1px solid var(--line); border-radius: 0; padding-inline: 0; background: transparent; }
+.studio-support .voice-list li:last-child { border-bottom: none; }
+.studio-support .avatar { background: var(--panel-2); color: var(--muted); border-color: var(--line); border-radius: var(--radius-md); }
+.studio-support .empty-body { text-align: start; }
+.composer .card-head { margin-bottom: var(--space-5); }
+.composer-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.composer-heading h2 { margin: 0; font-size: var(--text-lg); letter-spacing: -0.02em; }
+.composer-heading p { margin: var(--space-1) 0 0; color: var(--muted); font-size: var(--text-sm); }
+.composer .textarea-wrapper textarea { min-height: 260px; font-size: 16px; line-height: 1.75; padding: var(--space-4) var(--space-4) var(--space-8); }
+.composer .editor-toolbar { padding: var(--space-2) var(--space-3); border-color: var(--line-strong); }
+.composer .editor-bar { margin-bottom: var(--space-4); }
+.composer .runpod-advanced { margin-bottom: var(--space-5); }
+.composer .composer-foot { margin: var(--space-3) 0 var(--space-4); }
+.composer-controls { margin-top: var(--space-5); }
+@media (min-width: 1200px) { .composer-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.generation-action { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.generation-state { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.generation-state p { margin: 0; font-size: var(--text-sm); color: var(--muted); }
+.generation-state span { display: block; font-size: var(--text-sm); color: var(--muted); line-height: 1.5; }
+.generation-state { flex: 1; }
+.generation-action .btn { width: auto; min-width: 140px; }
+.generation-action .liquid-orb { flex-shrink: 0; }
+.generation-state strong { display: block; color: var(--text); font-size: var(--text-base); font-weight: 500; }
+.workspace-shell .btn:not(.primary), .workspace-shell .btn-sm, .workspace-shell .rec-btn, .workspace-shell .file-drop, .workspace-shell .search { border-color: var(--line-strong); }
+.workspace-shell .btn.primary:active:not(:disabled) { background: var(--primary-hover); }
+.workspace-shell .btn:disabled, .workspace-shell .btn-sm:disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--line); }
+.workspace-shell .icon-btn { min-width: 40px; min-height: 40px; }
+.workspace-shell .icon-btn.tiny { min-width: 32px; min-height: 32px; }
+.workspace-shell .topbar-right .desktop-updates-button { width: auto; min-height: 36px; padding: 6px var(--space-3); font-size: var(--text-sm); }
+.workspace-shell .count { border: none; background: transparent; padding-inline: 4px; }
+.workspace-shell .h-actions { opacity: 1; }
+.workspace-shell .hist-row { background: var(--panel-inset); border-radius: var(--radius-md); }
+.workspace-shell .hist-row:hover { background: var(--panel-2); }
+.workspace-shell .runpod-panel { gap: var(--space-5); }
+.workspace-shell .runpod-panel .card { padding: var(--space-6); }
+.workspace-shell .runpod-wizard-nav { gap: 0; padding: var(--space-1) 0; border-bottom: 1px solid var(--line); }
+.workspace-shell .runpod-wizard-nav button { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: var(--space-3); min-height: 48px; }
+.workspace-shell .runpod-wizard-nav button[aria-current="step"] { border-bottom-color: var(--accent); color: var(--text); }
+.workspace-shell .runpod-wizard-nav button span { width: 24px; height: 24px; border-color: var(--line-strong); border-radius: var(--radius-sm); }
+.workspace-shell .runpod-wizard-nav button[aria-current="step"] span { border-color: var(--accent); color: var(--accent); }
+.workspace-shell .runpod-wizard-nav button:disabled { opacity: 1; color: var(--tertiary); }
+.workspace-shell .runpod-model-row { padding: var(--space-4) 0; border: none; border-bottom: 1px solid var(--line); border-radius: 0; }
+.workspace-shell .runpod-model-row:last-child { border-bottom: none; }
+.workspace-shell .runpod-model-heading strong { font-weight: 500; }
+.workspace-shell .runpod-model-heading span, .workspace-shell .runpod-scroll td { font-variant-numeric: tabular-nums; }
+.workspace-shell .runpod-wizard-footer { padding-top: var(--space-5); border-top: 1px solid var(--line); }
+.workspace-shell .runpod-wizard-footer .btn, .workspace-shell .runpod-actions .btn { width: auto; min-width: 108px; }
+.workspace-shell .runpod-controls { max-width: 680px; }
+.workspace-shell .runpod-account .runpod-controls { max-width: 680px; }
+.workspace-shell .runpod-extra-settings > .card { padding: var(--space-5) 0; border: none; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.workspace-shell .runpod-scroll th { color: var(--muted); font-weight: 500; font-size: var(--text-sm); }
+.workspace-shell .agent-client { background: var(--panel-inset); }
+.workspace-shell .agent-example { border-left-width: 2px; }
+.workspace-shell .pron-card { max-width: none; }
+.workspace-shell .pron-form { max-width: 900px; }
+.workspace-shell .route-chip.solid { color: var(--text); background: transparent; border-color: var(--line-strong); border-radius: var(--radius-sm); }
+.workspace-shell .tag { border-radius: var(--radius-sm); }
+.workspace-shell .seg-badge { background: var(--panel-2); color: var(--muted); border-radius: var(--radius-sm); }
+.workspace-shell progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--line);
+  accent-color: var(--accent);
+}
+.workspace-shell progress::-webkit-progress-bar { background: var(--line); border-radius: var(--radius-full); }
+.workspace-shell progress::-webkit-progress-value { background: var(--accent); border-radius: var(--radius-full); }
+.workspace-shell progress::-moz-progress-bar { background: var(--accent); border-radius: var(--radius-full); }
+.workspace-shell :focus-visible { outline-color: var(--accent-ring); outline-offset: 3px; }
+@media (max-width: 980px) {
+  .studio-main, .studio-support { grid-column: 1; grid-row: auto; }
+  .studio-support { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+@media (max-width: 640px) {
+  .workspace-heading { align-items: flex-start; gap: var(--space-3); }
+  .workspace-heading-tools { flex-shrink: 1; }
+  .studio-support { display: flex; }
+  .workspace-shell .card, .workspace-shell .runpod-panel .card { padding: var(--space-4); }
+  .composer .textarea-wrapper textarea { min-height: 220px; }
+  .generation-action { align-items: flex-start; flex-direction: column; }
+  .workspace-shell .runpod-wizard-nav button { padding: var(--space-2); }
+  .workspace-shell .runpod-model-heading { align-items: flex-start; }
+  .workspace-shell .runpod-model-heading span { width: 100%; }
 }
 
 /* ── Transcript parts ───────────────────────────────────────────────────────

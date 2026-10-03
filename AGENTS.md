@@ -32,6 +32,8 @@ Pod. Read the documents below before changing behavior.
 ## Documents
 
 - [Architecture](docs/ARCHITECTURE.md): current design and invariants.
+- [Workspace design](docs/UI_DESIGN.md): layout, tokens, accessibility and visual checks.
+- [Liquid orb](docs/ORB.md): real status mapping, motion limits and static fallback.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
 - [Windows desktop build](docs/DESKTOP.md): packaging, installer and native test evidence.
 - [Desktop updates](docs/DESKTOP_UPDATES.md): signed update flow, local feed preparation and publication gates.

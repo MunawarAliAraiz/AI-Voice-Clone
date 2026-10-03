@@ -1,5 +1,30 @@
 # Handoff — current state
 
+## Premium workspace and generation error investigation - 2026-10-03
+
+The requested premium UI is implemented: neutral ink surfaces, a script-first
+editor, supporting voice tools, full-width Runpod wizard, compact navigation,
+accessible contrast and an original small liquid orb. The orb reflects actual
+submission/job/cloud state, including unconfirmed status and missing output;
+it never substitutes for measured model progress. Browser rendering and draft
+retention passed in an isolated preview. Narrow width/tooltip overflow found
+there was fixed. See [Design](UI_DESIGN.md) and [Orb](ORB.md) for evidence.
+
+Frontend production build and the existing setup/gate/update checks passed;
+15 new status checks and orb lifecycle checks passed. This redesign has not
+yet been packaged/published. 0.1.6 remains the latest public desktop release.
+
+User then supplied a screenshot of VoxCPM2 HTTP500 and unavailable Pod script
+conversion. Read-only profile inspection confirmed failures; the old GPU Pod
+was already removed, so its stacktrace is unavailable. Backend correction of
+an evidenced VoxCPM keyword/path defect, safe worker error propagation and a
+separate-volume cache path defect is in progress. Do not claim those changes
+prove the old failure's cause or real successful generation. Next: review/test
+those patches, publish only the already-authorized worker source scope, qualify
+immutable images, then package/test/sign the new desktop and obtain approval
+for its exact installer before public publication. Never push the whole app
+branch or operate the user's installed app/profile/cloud.
+
 ## Automatic model-download request fix - 2026-10-03
 
 The user reported "The request body failed validation" during model setup in
