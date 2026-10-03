@@ -11,6 +11,24 @@ See [Desktop build evidence](DESKTOP.md) for scope and untested native/GPU paths
 
 ## What the app does
 
+### MCP file replacement guard (0.1.8)
+
+Codex/Claude can keep the installed MCP executable running after the desktop
+API stops. NSIS now runs a standalone guard before copying application files,
+including when launched by older updaters. The guard stops only processes with
+the exact target executable path, verifies exclusive file readiness and blocks
+after bounded retries if the lock cannot be released. Agent hosts and other
+MCP binaries are not terminated. A postinstall SHA256 check blocks success and
+restart if the required MCP file was skipped or has different bytes.
+
+47 mocked guard tests and real frozen-MCP production-hook tests passed in a
+disposable silent NSIS probe. The tests preserved an unrelated same-name MCP
+process and local sentinel files, verified reconnecting the new MCP, and proved
+failure before extraction for a persistent lock plus postinstall failure for
+a skipped file. This is an actual file-lock regression, not a full app install
+or previous-version app restart cycle. The user's installer was left for them
+to click Retry after its six exact-path MCP processes were stopped.
+
 From 0.1.5, normal window close also asks the authenticated API to stop owned
 cloud work before the sidecar exits. Confirmed app-exit pauses resume on reopening;
 manual Pause remains paused. This does not override updater admission: applying

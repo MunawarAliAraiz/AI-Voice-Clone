@@ -37,6 +37,7 @@ Pod. Read the documents below before changing behavior.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
 - [Windows desktop build](docs/DESKTOP.md): packaging, installer and native test evidence.
 - [Desktop updates](docs/DESKTOP_UPDATES.md): signed update flow, local feed preparation and publication gates.
+- `scripts/test-installer-mcp-lock.py`: disposable production NSIS hook/frozen MCP lock regression; no app installation or registry/profile changes.
 - [FFmpeg redistribution](docs/FFMPEG_REDISTRIBUTION.md): exact runtime/source evidence and remaining source requirements.
 - [Model storage](docs/MODEL_STORAGE.md): complete pinned graphs, checksums and measured disk use.
 - [Cloud image release](docs/POD_IMAGE_RELEASE.md): hosted builds and immutable image qualification.
