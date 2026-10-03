@@ -1,6 +1,26 @@
 # Windows desktop build
 
-## Current 0.1.1 release — 2026-10-02
+## Windows 0.1.7 verification - 2026-10-03
+
+The premium workspace and original liquid orb passed an isolated browser review
+at 375, 768, 1024 and 1440 px. Keyboard section navigation, retained drafts,
+actual WebGL states and narrow tooltip/voice-panel layout were checked. The
+fixtures were explicitly simulated; no Runpod downloads or jobs were started.
+
+The rebuilt Windows x64 installer contains the exact reviewed frontend assets
+and the qualified worker manifest for source `5e2d5c0556622475b8e308c851b40d48fd0613a7`.
+Isolated frozen API/MCP checks passed, including setup validation, authenticated
+requests, generation admission, update preparation and app-exit acknowledgement.
+Artifact/global-comment Ed25519 signatures and signed version/filename passed.
+This does not establish Windows Authenticode signing, live GPU generation,
+listening acceptance or an installed app update/restart cycle.
+
+Local installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.7-setup.exe`;
+65,831,146 bytes; SHA256 `5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
+Exact publication approval is pending. The public latest remains 0.1.6.
+Evidence and release notes are beside the local installer.
+
+## Earlier 0.1.1 release — 2026-10-02
 
 The installer is available in the shared project `dist/desktop/` and the
 [approved public release](https://github.com/MunawarAliAraiz/AI-Voice-Clone/releases/tag/v0.1.1).
@@ -142,22 +162,3 @@ native smoke checks are recorded above. The public release still needs the
 redistribution source and notices required by the bundled FFmpeg build.
 Code signing is not configured.
 
-## Windows 0.1.7 verification - 2026-10-03
-
-The premium workspace and original liquid orb passed an isolated browser review
-at 375, 768, 1024 and 1440 px. Keyboard section navigation, retained drafts,
-actual WebGL states and narrow tooltip/voice-panel layout were checked. The
-fixtures were explicitly simulated; no Runpod downloads or jobs were started.
-
-The rebuilt Windows x64 installer contains the exact reviewed frontend assets
-and the qualified worker manifest for source `5e2d5c0556622475b8e308c851b40d48fd0613a7`.
-Isolated frozen API/MCP checks passed, including setup validation, authenticated
-requests, generation admission, update preparation and app-exit acknowledgement.
-Artifact/global-comment Ed25519 signatures and signed version/filename passed.
-This does not establish Windows Authenticode signing, live GPU generation,
-listening acceptance or an installed app update/restart cycle.
-
-Local installer: `D:/Projects/AI-Voice-Clone/dist/desktop/AI-Voice-Clone-Studio-0.1.7-setup.exe`;
-65,831,146 bytes; SHA256 `5ca5ed5dad8eeeae1b5e023a6a84dabfa4802a10f2e26f03d85eba53ecb31230`.
-Exact publication approval is pending. The public latest remains 0.1.6.
-Evidence and release notes are beside the local installer.
