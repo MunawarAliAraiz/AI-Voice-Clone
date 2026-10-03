@@ -247,3 +247,21 @@ standalone executable passed stdio/API bridge tests. The Pod image recipe and
 isolated hashed dependencies exist, but the image has not been built/published.
 The live Runpod account was checked read-only: no Pods, one existing 50 GB video
 volume (not used for this app). No paid resource was created.
+
+## Agent connections during installation
+
+Codex and Claude launch the installed MCP executable independently of the
+desktop API. Normal app restart intentionally lets MCP clients remain alive
+and reload the new encrypted API session. Installation must replace that
+executable, so its lifecycle differs from normal restart.
+
+The NSIS preinstall hook stages a standalone Windows guard in its temporary
+plugins directory before copying application files. It stops only processes
+whose canonical image is the exact target MCP executable, with query and
+termination performed through the same retained handle. An exclusive open
+checks that the file can be replaced; an uncertain result blocks installation.
+This is installer-side so it also protects upgrades launched by older app
+versions. It never stops agent hosts, accesses credentials, or changes saved
+studio data. A postinstall check compares the required MCP file with the exact
+build-generated SHA256; a skipped extraction cannot report success or restart
+the app. Hosts may need their Voice Clone connection reconnected afterward.

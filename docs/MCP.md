@@ -1,5 +1,14 @@
 # Local MCP server
 
+## App updates and agent connections
+
+Normal desktop restart keeps MCP clients alive and reloads the new encrypted
+API session. Installing an update replaces the MCP executable, so from 0.1.8
+the installer first stops connections using that exact installed file. Other
+agent tools and the Codex/Claude app stay running. If your agent shows this
+server as disconnected afterward, reconnect Voice Clone Studio in the agent.
+The installer blocks with Retry/Cancel if it cannot unlock the file.
+
 ## Connect from the desktop app
 
 Open **Agents**, select Codex, Claude Desktop or Claude Code, then click

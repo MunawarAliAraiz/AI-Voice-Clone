@@ -1,5 +1,26 @@
 # Handoff — current state
 
+## Installer MCP file-lock fix - 2026-10-03
+
+After the user applied 0.1.7, NSIS could not write the installed
+`voice-clone-mcp.exe`. Read-only process inspection confirmed three Codex-hosted
+onefile MCP connections (six processes) mapping that exact installed image.
+The updater stopped its owned API but not external agent-hosted MCP clients.
+Only those exact-path processes were stopped, with identity rechecked; no
+matching processes remained. The user was told to click Retry. Codex itself,
+the user profile and cloud/model storage were not changed.
+
+The permanent fix is being added to the NSIS preinstall hook, so an older app
+can launch the corrected installer. A standalone stdlib-only guard verifies
+exact process image paths through retained Windows handles, stops only that
+installed MCP image, checks exclusive file readiness and blocks on failure or
+persistent host respawn. It stages only in the temporary installer directory.
+The API, agent hosts, unrelated same-name binaries and user data are outside
+its termination scope. Runtime/package version is 0.1.8; no 0.1.8 installer
+has been built or published yet. Next: focused guard tests and an actual
+disposable NSIS/frozen-MCP lock reproduction, then package/sign and obtain
+exact publication approval. Public latest remains 0.1.7.
+
 ## Premium workspace and generation error investigation - 2026-10-03
 
 The requested premium UI is implemented: neutral ink surfaces, a script-first

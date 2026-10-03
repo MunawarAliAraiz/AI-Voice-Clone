@@ -101,10 +101,18 @@ try {
     & $Python -m PyInstaller @commonArgs --name voice-clone-mcp --console `
         --collect-submodules mcp.server --copy-metadata mcp (Join-Path $backend "mcp_entry.py")
     if ($LASTEXITCODE -ne 0) { throw "Python MCP executable build failed" }
-    foreach ($binary in @("voice-clone-api", "voice-clone-mcp")) {
+    # Staged only in NSIS's temporary plugins directory. The installer must
+    # unlock externally hosted MCP clients even when launched by an old app.
+    & $Python -m PyInstaller @commonArgs --name voice-clone-install-guard --console `
+        (Join-Path $backend "installer_entry.py")
+    if ($LASTEXITCODE -ne 0) { throw "Installer MCP guard build failed" }
+    foreach ($binary in @("voice-clone-api", "voice-clone-mcp", "voice-clone-install-guard")) {
         Copy-Item -LiteralPath (Join-Path $pythonDist "$binary.exe") `
             -Destination (Join-Path $sidecarDir "$binary-$target.exe") -Force
     }
+    $mcpInstallerSha = (Get-FileHash -LiteralPath (Join-Path $pythonDist 'voice-clone-mcp.exe') -Algorithm SHA256).Hash.ToLowerInvariant()
+    Set-Content -LiteralPath (Join-Path $sidecarDir 'installer-mcp-sha.nsh') `
+        -Value ('!define VCS_MCP_SHA256 "' + $mcpInstallerSha + '"') -Encoding ASCII
 } finally { Pop-Location }
 
 if (-not (Test-Path -LiteralPath (Join-Path $tauriRoot "Cargo.lock"))) {
