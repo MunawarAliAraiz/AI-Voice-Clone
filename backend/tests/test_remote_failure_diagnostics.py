@@ -44,8 +44,9 @@ def test_pinned_voxcpm_constructor_contract(monkeypatch) -> None:
         def from_pretrained(cls, *args, **kwargs):
             raise AssertionError("Must not resolve a moving repo default")
 
-    def snapshot_download(*, repo_id, revision):
+    def snapshot_download(*, repo_id, revision, local_files_only):
         assert (repo_id, revision) == ("org/model", "a" * 40)
+        assert isinstance(local_files_only, bool)
         return "/cached/pinned-snapshot"
 
     monkeypatch.setitem(

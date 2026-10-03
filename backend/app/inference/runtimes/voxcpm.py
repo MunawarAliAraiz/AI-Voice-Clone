@@ -47,6 +47,8 @@ import contextlib
 import time
 from typing import Any
 
+from app.inference.runtimes.hub_cache import hub_is_offline
+
 __all__ = ["VoxCPMBackend"]
 
 #: Bundled Apache-2.0 example clip shipped with the voxcpm repo, used only to
@@ -83,7 +85,9 @@ class VoxCPMBackend:
 
         # Honour the pinned revision (golden rule 7): resolve the exact snapshot
         # on disk and load from that path, rather than trusting `main`.
-        model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
+        model_path = snapshot_download(
+            repo_id=hf_repo, revision=hf_revision, local_files_only=hub_is_offline(),
+        )
         # The pinned voxcpm 2.0.3 constructor uses enable_denoiser. Loading
         # directly from the pinned snapshot also avoids a fallback to repo main
         # and never mistakes an internal TypeError for a signature mismatch.
@@ -121,6 +125,7 @@ class VoxCPMBackend:
             return snapshot_download(
                 repo_id=lora_hf_repo, revision=lora_hf_revision,
                 token=os.environ.get("HF_TOKEN"),
+                local_files_only=hub_is_offline(),
             )
 
         return None

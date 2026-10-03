@@ -39,6 +39,8 @@ import contextlib
 import time
 from typing import Any
 
+from app.inference.runtimes.hub_cache import hub_is_offline
+
 __all__ = ["ChatterboxBackend"]
 
 #: Only the files `from_local()` actually reads (verified from its source) —
@@ -76,7 +78,8 @@ class ChatterboxBackend:
         # disk ourselves and load from that path via the lower-level
         # from_local(), same as voxcpm.py's own snapshot_download + load.
         ckpt_dir = snapshot_download(
-            repo_id=hf_repo, revision=hf_revision, allow_patterns=list(_CKPT_ALLOW_PATTERNS)
+            repo_id=hf_repo, revision=hf_revision, allow_patterns=list(_CKPT_ALLOW_PATTERNS),
+            local_files_only=hub_is_offline(),
         )
         device = "cuda" if torch.cuda.is_available() else "cpu"
         self._model = ChatterboxMultilingualTTS.from_local(ckpt_dir, device)

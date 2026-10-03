@@ -268,7 +268,11 @@ class QwenAnalyzerBackend:
         # snapshot on disk and load from that path, rather than trusting
         # `main`. The probe ran unpinned deliberately (a one-off capability
         # check, not what ships) — this is the production path and pins.
-        model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
+        from app.inference.runtimes.hub_cache import hub_is_offline
+
+        model_path = snapshot_download(
+            repo_id=hf_repo, revision=hf_revision, local_files_only=hub_is_offline(),
+        )
         self._tokenizer = AutoTokenizer.from_pretrained(model_path)
         self._model = AutoModelForCausalLM.from_pretrained(
             model_path, dtype=torch.bfloat16, device_map="cuda"
