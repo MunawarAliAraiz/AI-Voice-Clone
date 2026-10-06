@@ -1,5 +1,425 @@
 # Handoff — current state
 
+## Hosted mock and repaired package checkpoint - 2026-10-05
+
+Explicitly approved mock Worker deployed on the existing Cloudflare account:
+voice-clone-guard-qualification-20261005. No Runpod key, GPU, paid plan change
+or production admission. After22s without client requests, independent native
+alarms4 retried fakeDELETE twice and confirmed fake endpoint/alarm absent.
+SQLite rollback and alarm-before-create passed; unauthenticated access401,
+paid admission503. [Hosted mock evidence](evidence/cloudflare-hosted-mock-2026-10-05.json).
+This is synthetic hosted alarm proof, not real provider shutdown, startup bounds,
+Cron recovery, billing cessation or permission to deploy the production guard.
+Protected mock access/deployment metadata stays in the ignored D-workspace build folder.
+
+Repaired0.1.9 package built, signature and signed version verified. Exact new
+installer: 74,395,819 bytes, SHA256
+473e24ef3947ca53753d1a9201e3c2e8ccc27ecea48ff0b4ee1ab6c8ec45362e.
+Packaged API/MCP passed with a disposable isolated profile: version0.1.9,
+explicit files_ready:false/generation_ready:false, authenticated new routes,
+optional connections,10 MCP tools and DPAPI discovery. S3 qualification JSON
+and exact source-digest module are bundled; torch is excluded.
+No desktop shell launch, app installation, shortcuts/registry change or normal
+profile edit. [Package evidence](../benchmarks/2026-10-05-repaired-desktop-package.json).
+Repeat API/MCP checks with scripts/test-desktop-sidecars.py; native UI/install
+needs a separate user/VM or explicit computer-use permission.
+
+The previous unsafe0.1.9 artifact remains disqualified by hash. This replacement
+keeps all paid starts held and is NOT published, generation-qualified or approved
+for publication. Its native admission/qualification foundations are unused source,
+not active packaged cloud transport. User's additional$0.50 remains conditional
+on real shutdown protection; none of it has been spent.
+
+Offline foundations: native cumulative ledger61 tests, trusted qualification
+loader65 tests (157 combined with existing Flex cases); its approved receipt
+registry is empty. Optional hosted account ledger22 tests (80 combined guard
+tests), not wired into the deployed mock or production admission. Next required
+work is production transport/rate/ownership/billing integration and actual provider
+qualification, followed by full model-file repair, live per-model output and
+exact installer publication approval. Do not bypass admission with an environment
+flag or treat the hosted mock as satisfying the real shutdown condition.
+
+## Generation/cache/readiness repair checkpoint - 2026-10-05
+
+User's live job8 failed MODEL_CACHE_MISSING; installed app nevertheless reported
+ready:true. It ran from19:51UTC until after19:59UTC. Read-only provider checks
+confirmed its owned Pod gone, then observed a later user-started Pod also gone.
+Last read20:32UTC: no Pods, balance$1.550783, rate$0.024/hour for retained storage.
+Those are snapshots, not current spend guarantees. No new root GPU rental occurred.
+
+Source now centrally revokes file readiness on MODEL_CACHE_MISSING, keeps storage,
+releases failed compute without idle grace, and does not resubmit inference.
+Header, Composer and orb require explicit file proof AND generation_ready:true;
+failed polls cannot preserve green readiness. New cache failures immediately
+invalidate the local UI proof. The setup wizard keeps GPU availability separate
+from S3 downloads and renders each model's transfer/check progress.
+
+Pod-free S3 setup is integrated into controller/routes: bound credentials,
+automatic missing-model download, capacity/staging checks, whole pinned graph
+metadata, persistent pause/resume. Real8KB PUT and6MiB multipart+readback SHA-256
+and owned cleanup passed on200GB US-NE-1. Both earlier interrupted probe uploads
+were removed by their exact recorded UUID keys/IDs; unrelated files were untouched.
+Live probe exposed/fixed decoded gzip double handling, bucket-root slash,
+single leading slash in provider keys and weak HTTP response ETag versus actual
+typed UploadPartResult. [Protocol evidence](evidence/runpod-s3-write-2026-10-05.json).
+No complete model graph or mounted GPU readiness has been proved by this probe.
+
+Qualification is generic across accounts but specific to tested region, graph
+and exact source digest. The build embeds storage_protocol.py plus its reviewed
+JSON receipt; stale source/graph blocks packaging rather than silently unlocking.
+280 combined backend checks passed; focused header/gate/orb and wizard checks
+and TypeScript passed. [Source checkpoint](../benchmarks/2026-10-05-generation-repair.json).
+
+User separately approved up to$0.50 additional Runpod compute AFTER shutdown
+protection is verified. This does not renew the earlier exhausted$2 allowance
+or authorize premature starts, Cloudflare deployment or publication. Record
+every later test reservation/actual charge against this separate allowance.
+Default Serverless cumulative native ledger/parsers now have61new tests; hosted
+transport, trusted qualification, image/provider startup/retry/worker stop proof
+remain pending. Cloudflare is still optional preparation, not deployed protection.
+
+Next: finish the source packaging checks and default guarded transport/provider
+qualification. Do not install/launch an app or modify the normal profile. The
+historical0.1.9 binary/feed remain unsafe/held; no new installer published.
+
+
+## CRITICAL: provider deadline failure; release held - 2026-10-04
+
+Read [RUNPOD_BUDGET_INCIDENT.md](RUNPOD_BUDGET_INCIDENT.md) first. All five
+test Pods are confirmed absent. Recorded identity-verified test charges are
+$5.582654 (GPU $5.562168 + temporary disk $0.020486), exceeding the authorized
+$2 ceiling. Read-only refresh at 07:08 UTC supersedes the older $5.037278 receipt;
+provider adjustments remain possible. No further paid tests.
+
+Runpod's official merged PR330 documents that terminateAfter is accepted but
+NOT enforced. The final Pod billed past its requested deadline during a long
+local interruption. Source now rejects new paid CPU/GPU and legacy start/restart before mutation.
+Do not trust any historical provider-deadline claim or zero/elapsed billing
+estimate below as current proof. No successful Chatterbox audio is established.
+
+Prepared 0.1.9 installer/feed are HELD and must not be published or installed.
+It contains the old unsafe guard even though its signature/frozen tests passed.
+No exact 0.1.9 publication approval exists. Source cleanup/status features,
+four earlier live model passes and UI/API/MCP checks are preserved.
+
+Next: review the tested fail-closed admission patch and the
+[CLOUD_SPENDING_PROTECTION.md](CLOUD_SPENDING_PROTECTION.md) proposal; implement
+an independent guard or qualified Serverless route offline; rebuild
+only after a concrete reviewed replacement. Any live test needs fresh explicit
+budget. Do not contact provider support or change the user's normal profile.
+
+## Installed version and S3 access checkpoint - 2026-10-04
+
+User reported App updates still said0.1.1. Read-only machine audit proved the
+normal LocalAppData app is0.1.8, while the running shell was0.1.1 in a temporary
+October2 test installation. Desktop and StartMenu shortcuts AND the shared
+HKCU uninstall registration pointed at that old test directory. This was not a
+version-label fallback or confirmed rollback of the normal installed binary.
+
+Root repaired exactly two existing shortcuts and four app-registration values
+to the hash-verified normal0.1.8 installation, with original backups and all
+values checked after write. No application was started/stopped or installed, and voice, history and
+credential data were unchanged. The old process stays0.1.1 until the user exits
+and reopens. Read [launcher repair evidence](../benchmarks/2026-10-04-launcher-repair.json).
+Source now shows App version, App details/path and a temporary-copy warning.
+Updater component checks, the native diagnostic/ACL compile test and production
+UI build passed; [source receipt](../benchmarks/2026-10-04-version-diagnostic.json).
+Future full production installer tests must use an isolated Windows user/VM:
+changing /D or app data directory alone still writes shared registration and
+shortcuts. Disposable hook probes are separate from full product installation.
+
+User supplied Runpod S3 access through named local env variables. Exact keys
+each exist once and live HEAD/bounded listing succeeded for selected200GB
+US-NE-1 storage. No transfer/write/rental occurred; no model integrity/readiness
+claim. See [sanitized S3 proof](evidence/runpod-s3-readonly-2026-10-04.json).
+These env credentials were not silently imported into the normal app profile.
+Storage controller integration and a qualified replacement installer remain
+pending. The old0.1.9 installer remains held; no new paid tests are authorized.
+
+## Account analytics completed in source - 2026-10-04
+
+Dedicated desktop Analytics is independent of model setup. Shows account
+balance/current rate, aggregate categories and historical billing (24h/7d/30d),
+including terminated resources and other apps. This is account spending, not
+API-token attribution. Storage monthly prices are deducted over time.
+
+114 combined backend cases passed, one native opt-in skipped; that case passed
+separately. Actual component SSR, scoped Ruff and UI build passed. New summary
+service also passed a read-only live Runpod check at 07:21 UTC: balance $2.12,
+seven-day recorded spend $7.64 and account rate $0.0240/hour. Read the
+[source-bound receipt](../benchmarks/2026-10-04-connections-analytics.json) and
+[analytics document](ACCOUNT_ANALYTICS.md).
+
+No installer rebuilt/published, no new rentals, no normal profile edits. Default
+native admission and optional guard/cloud transfer integration remain pending;
+the old 0.1.9 installer is held. Fresh sessions should first read recovery status
+and the latest account audit, then work on these offline integrations.
+
+## Customer connections checkpoint - 2026-10-04
+
+Settings now exposes optional Apify and Cloudflare connections. Each customer
+uses their own accounts; the installer contains no keys. Runpod is the required
+generation account; Cloudflare is optional backup protection, not a required
+credential. Existing generation admission stays held until the default native
+Serverless path is qualified. Connecting Cloudflare does not deploy a watchdog
+or remove the hold. See [connections](CONNECTIONS.md).
+
+74 distinct optional-connection cases passed across the scoped suite and the
+native Apify DPAPI opt-in. Cloudflare's Windows DPAPI test uses a disposable
+profile. UI rendering checks and production build pass; these do not prove a
+native installer, hosted watchdog or live captions. No normal profile was edited.
+
+Read-only account audit at 07:08 UTC: balance $2.12, no Pods/endpoints; 250 GB of
+retained storage continues billing at $17.50/month (~$0.58/day). Identity-matched
+test spending was revised upward to $5.582654. No new paid tests are permitted.
+
+## Spending block completed and checked - 2026-10-04
+
+111 focused backend tests passed; changed Python files pass Ruff. Frontend
+generation gate, header and orb-state checks passed (34/18/17), and the production
+UI build passed. See [source-bound receipt](../benchmarks/2026-10-04-spending-block-tests.json).
+Desktop generation/model tests reject before queue admission or sample creation.
+Paid setup/purchase/auto-enable and paired downloads reject. Read-only status,
+existing-machine cancellation/release and legacy stop remain available.
+Unknown machine starts remain fenced even after local timer expiry.
+The UI explains the app-fix requirement, disables new starts, and provides
+Stop cloud machine for saved generation sessions as well as installer cleanup.
+No cloud create, normal-profile edit, installer rebuild, installation or publication
+occurred for this source checkpoint. The old 0.1.9 binary remains held.
+
+## Replacement preparation checkpoint - 2026-10-04
+
+User approved Cloudflare watchdog preparation and a separate encrypted Runpod
+storage-access step. Read [CLOUD_RECOVERY_STATUS.md](CLOUD_RECOVERY_STATUS.md).
+The storage router/card are registered in the app, including saved-key recheck;
+UI build and setup rendering pass. 147 combined focused backend tests plus two
+registered-route auth/privacy tests passed. Guard preparation has 58 offline
+tests; local Cloudflare runtime and storage relay work continue independently.
+Pinned SDK1.12.0, Flex image target and hosted smoke workflow are prepared;
+no image build, deployment, provider writes or paid calls occurred.
+
+New development components do NOT unlock production admission. Current guard
+has one job per lease, not a cumulative warm queue session. Larger audio than
+6 MB requires qualified transport. Cloudflare credentials now pass a read-only check; account hosting tier and
+S3 credentials remain unverified/unavailable. Old0.1.9 installer is held; do not publish it.
+No normal app profile or native window was changed. A fresh session should first
+read current recovery status and source-bound receipts before any cloud action.
+
+## Credentials and transfer recovery checkpoint - 2026-10-04
+
+Cloudflare account-owned token is active and selected-account Workers reads pass;
+no deployment occurred. Read the sanitized access receipt linked from current
+recovery status. 153 backend integration/protocol/lifecycle cases and 35 isolated
+relay cases pass (188 total), with source hashes in
+[cloud recovery receipt](../benchmarks/2026-10-04-cloud-recovery-tests.json).
+Setup SSR and scoped Ruff checks pass. Multipart listings now reject incomplete
+truncation flags; uncertain completion reconciles final bytes without replay.
+Relay still returns `ready: false` and is unwired to production downloads.
+No real S3 writes, new rental, normal-profile edit or installer rebuild occurred.
+Cloudflare native-runtime evidence is recorded separately; hosted qualification,
+image qualification, cumulative warm queue ledger, app integration and a fresh
+live-test budget remain gates. The old 0.1.9 installer remains held.
+
+## Final confirmation with bounded status-read retries - 2026-10-03 16:26 UTC
+
+The fourth attempt stopped with ConnectError during a verification status GET;
+its Pod is confirmed absent. No generation result. Prior cumulative reserved
+compute is now$0.8137. A fresh final attempt RUNNING in ignored
+Dbuild/live-gpu-last-20261003 reserves at most$1.00 within the unchanged$2
+ceiling. Same qualifiedb8df image, accepted$1.09/hour; requested provider
+stop-by17:16:26 UTC. Exact owned reconciliation: Dbuild/stop-last-test.py.
+The helper retries transient status GETs only, never generation POSTs.
+
+The verified0.1.9 installer remains ready locally (74,297,463 bytes,
+SHA25640d3f7cf39f4f5b584900d357b4ffcddb7f07a02fb568b02ce33731b4412c323).
+No public installer/feed publication, native installation or user profile
+modification occurred. Final model output grading and exact publication approval
+are pending. Older running-attempt checkpoints below are historical.
+
+## Installer verified; final confirmation running - 2026-10-03 16:17 UTC
+
+Final0.1.9 installer built; frozen API/MCP checks passed. Local release
+preparation verified the cryptographic update signature, signed version,
+signed filename and Windows artifact receipt. Exact size74,297,463 bytes;
+SHA256 `40d3f7cf39f4f5b584900d357b4ffcddb7f07a02fb568b02ce33731b4412c323`.
+Prepared installer/feed/notes are under Ddist/desktop-release/0.1.9.
+Not published; exact 0.1.9 publication approval remains pending.
+
+Third live Pod is confirmed absent. Its Chatterbox response was interrupted
+with ReadError; no successful audio claim. VoxCPM reached real loading and
+generating stages, but the test helper used an outdated label-to-model lookup
+and raised KeyError before grading output. This was a harness error, not an
+app error or successful output proof. Reserve its elapsed cost $0.3279.
+Total prior reserve $0.7634; do not replay this ledger.
+
+Fresh confirmation is RUNNING under ignored Dbuild/live-gpu-confirm-20261003,
+using the same qualifiedb8df worker. Its helper label coverage is checked
+offline. It reserves $1.10 within the remaining cumulative $2 ceiling.
+Requested provider stop-by17:09:32 UTC; accepted rate$1.09/hour. Exact owned
+cleanup helper: Dbuild/stop-confirm-test.py. No app/default-profile changes.
+Observed startup43.906s; file checks still running at this checkpoint.
+
+Next: finish and grade actual Chatterbox/VoxCPM outputs, confirm Pod absence,
+store all attempts (including failed/interrupted checks), update the handoff
+and benchmark limits, then request exact installer publication approval.
+User installs and operates the app themselves.
+
+## Final worker qualification and guarded test running - 2026-10-03 15:54 UTC
+
+Worker source `b8df681de04ac4dc6d18205da9e199febe34a68f` passed hosted
+CI37133680503. Public registry/lock qualification passed and the app now embeds
+GPU image `sha256:5f4910335f1d5e8930a82e84208d02110a632d3945d32d4c0399ee78df7bdc84`.
+Compressed GPU layers are 4,745,769,174 bytes versus 7,736,394,485 for the
+previous image. This is measured image size, not a startup-speed guarantee.
+
+The fresh isolated Chatterbox/VoxCPM attempt is RUNNING under ignored
+Dbuild/live-gpu-blackwell-20261003. Its encrypted session ledger identifies
+the exact owned Pod. Accepted quoted rate $1.09/hour; requested provider
+stop-by16:56:40 UTC. This attempt reserves $1.25 plus prior $0.4355 within
+the cumulative $2 ceiling. Do not replay it. Reconcile using
+Dbuild/stop-blackwell-test.py if interrupted; do not stop unrelated Pods.
+
+The final0.1.9 installer is rebuilding concurrently with the qualified worker.
+Do not distribute the earlier0.1.9 candidate. After the live test, confirm Pod
+absence, save sanitized evidence, rerun the final frozen-sidecar checks and
+prepare exact signed installer size/hash before requesting release approval.
+
+Real local Windows demo synthesis now passed (9.068s non-silent reference,
+22,050Hz, created once and reused); see the stored demo benchmark. The candidate
+frozen API/MCP tests also cover unconnected optional Apify settings. No native
+installation or installed-app generation cycle has occurred.
+
+## Desktop 0.1.9 candidate and live progress proof - 2026-10-03
+
+The 0.1.9 candidate installer is built and its frozen API/MCP checks passed
+using an isolated profile. It is not the final release: the embedded worker
+must be replaced after the Chatterbox correction below qualifies. No native
+installation, user-window restart, or installed-app generation was tested.
+Do not publish this candidate. Exact final-installer approval is still required.
+
+The second live attempt used worker source
+`ca8f3b8dce5583547bd722ad319a31a9628429d0`. Actual correlated worker stages and
+cold/resident load timing passed: VoxCPM cold 34.203s (27.761s model loading),
+resident 5.094s (0s model loading); Gemma conversion 14.172s. Startup 231.609s,
+full stored-file verification 135.110s. These are individual observations,
+not statistically controlled performance comparisons.
+See [live progress evidence](../benchmarks/2026-10-03-live-progress.json).
+
+Chatterbox failed with `CUDA_ARCHITECTURE_UNSUPPORTED`: its old Torch2.6/CUDA 12.4
+runtime cannot execute on the tested Blackwell GPU. Model storage is intact.
+An explicit Torch/Torchaudio2.8/CUDA 12.8 compatibility override, hashed lock,
+and actual tiny CUDA startup probe are prepared; 28 focused Pod tests passed.
+Scoped authorized worker source `b8df681de04ac4dc6d18205da9e199febe34a68f`
+is published and hosted CI37133680503 is building. See
+[Chatterbox runtime qualification](CHATTERBOX_BLACKWELL.md).
+Do not call Chatterbox fixed until the new image produces real audio.
+
+Both live test Pods are confirmed absent. Conservative compute reserves are
+$0.2157 + $0.2198 = $0.4355 against the cumulative $2 ceiling; $1.5645 remains.
+The second reserve includes the stop-reconciliation interval. Provider billing
+may be delayed, so do not replace these reserves with zero billing records.
+Never replay existing ledgers under ignored Dbuild/live-gpu-20261003 or
+Dbuild/live-gpu-targeted-20261003. Use a separate guarded attempt.
+
+Implemented and checked: bounded Apify captions (55 focused checks, one real
+supplied-video result), all-kind queue/stages/recovery, 60s paid idle grace,
+safe failure diagnostics, individual model-test controls and labelled demo
+voice fallback (14 API/queue checks), original orb icon, production UI build.
+Reading model residency does not rent a GPU; completed tests do not imply a
+model remains loaded. Apify token was not written into the normal app profile.
+The supplied-video Apify run used $0.01005 of included Free credit.
+
+Next: qualify the new image, test Chatterbox and an already working TTS within
+the remaining cumulative ceiling, embed its immutable release, rebuild0.1.9,
+repeat frozen sidecar checks, prepare signed feed and exact artifact receipt,
+then request publication approval. User handles installation and desktop use.
+
+Historical checkpoints below describe earlier states.
+
+## Live model and caption proof - 2026-10-03 10:35 UTC
+
+Read [PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md) and
+[live GPU evidence](../benchmarks/2026-10-03-live-gpu.json) first.
+One isolated PRO6000 MIG48GB Pod ($1.09/hour, US-NE-1) used qualified worker
+source `12f57a71d5c5300d68f626dde385dee45e4496d3`. It was terminated and
+confirmed absent; no normal desktop profile was changed.
+
+VoxCPM2 passed (70.343s first request, 3.812s resident request), OmniVoice Urdu
+passed (29.031s), Qwen direction passed (8.109s), Gemma text conversion passed
+(14.078s). Chatterbox failed during loading (12.875s, MODEL_LOAD_FAILED).
+No claim that all models work. Startup took 234.047s and full file checking
+332.391s. TTS load headers discard actual LOAD timing and incorrectly report
+zero for cold requests; correction and allowlisted failure diagnostics are in
+progress. Chatterbox CUDA compatibility is a hypothesis pending a diagnostic
+live test, not a confirmed cause.
+
+Conservative elapsed-rate compute estimate: $0.2157 against the cumulative $2
+ceiling. Provider billing still returns zero records at 10:35 UTC; this is not
+evidence of zero cost. Reserve this estimate when admitting any further tests.
+Private encrypted ledgers/output remain under ignored Dbuild/live-gpu-20261003;
+never replay that existing attempt. Use a separate ledger and remaining budget.
+
+The supplied YouTube video was fetched successfully through pinned Apify Actor
+build 1.0.98 in 7.375s: actual Hindi-only captions, 206 segments. Cost was
+$0.01005 from the account's included $5 monthly Free credit. No paid subscription
+or overage was enabled. Sanitized proof is in
+[caption evidence](../benchmarks/2026-10-03-apify-captions.json). Optional token
+settings, bounded asynchronous imports and automatic track selection are being
+implemented. All-kind queue visibility/overdue estimates are a separate chunk.
+
+Next: qualify the diagnostic worker image, retry Chatterbox within the remaining
+compute ceiling, finish caption and queue checks, then implement actual remote
+stages/model tests and package. No new installer is built or approved.
+Historical planning checkpoints below describe earlier states.
+
+## Reliability and performance planning - 2026-10-03
+
+Live continuation: user now explicitly authorized GPU tests with the existing
+$2 total compute ceiling. A preflight at 09:41 UTC confirmed $8.24 balance,
+zero Pods, available selected 200 GB US-NE-1 storage and one saved voice.
+Only compatible quoted stock was PRO 6000 MIG 48 GB at $1.09/hour. The four
+offline loaders are fixed; 74 focused checks passed with actual Hub 1.33.
+Scoped worker source `12f57a71d5c5300d68f626dde385dee45e4496d3` is published and
+hosted image run 37114311724 is building. No GPU rental has started at this
+checkpoint. Dbuild/live-gpu-smoke.py is the isolated provider-deadline guarded
+test harness; private inputs are DPAPI-encrypted, no normal profile writes.
+Do not replay an attempt when Dbuild/live-gpu-20261003/session.dpapi exists;
+reconcile that exact owned Pod first. Qualify images before starting.
+User also chose Apify for captions; token location, test URL and separate $0.05
+allowance are pending. No Actor test has run. See PERFORMANCE_PLAN continuation.
+
+Read [PERFORMANCE_PLAN.md](PERFORMANCE_PLAN.md) first for the newest task.
+The user requested a plan before feature implementation: captions selected
+automatically, visible conversion/generation queue stages and useful ETA,
+functional tests for each model, current residency, icon and measured performance.
+Confirmed automatic file checks/loading on demand, selected saved voice (or
+synthetic demo fallback), and a cumulative $2 live compute ceiling. Pending
+warm-session/caption-priority choices and a failing YouTube URL were requested.
+
+Read-only installed health confirms 0.1.8. Saved setup says ready, selected 200 GB
+volume and no compute. Latest VoxCPM failure lasted 362 seconds with
+MODEL_CACHE_MISSING; following text conversion failed in 6 seconds. Sanitized
+observations are in `benchmarks/2026-10-03-observational-baseline.json`; failed jobs
+are not a successful speed baseline. No provider requests, paid rentals, user
+profile writes, native app control or feature edits occurred in this checkpoint.
+
+Exact Hub 1.33 offline fixture reproduces a loader regression: an exact pinned
+snapshot lookup without local_files_only asks for missing tree metadata, raises
+OfflineModeIsEnabled, then is incorrectly labeled missing model files. Explicit
+local-only lookup succeeds with the same fixture. VoxCPM, Chatterbox, Qwen and
+Gemma require an offline call-contract correction; OmniVoice already does this.
+Keep pinning/integrity checks and normal web-download behavior. Do not ask the
+user to redownload all models as the primary remedy. This is library proof,
+not confirmed live CUDA success or an exact recovered worker trace.
+
+Next: settle pending plan choices, implement cache correction with exact-package
+regression and safe diagnostic categories first, then durable actual stages,
+deadlines and all-kind active-job visibility. Measure cold/warm successful runs
+before tuning, inside $2 total; record spend including failed startup/idle.
+Current five-second release window may repeat startup/hash/load; a 60-second
+window is proposed but not yet approved. Do not warm/rent on app opening.
+No future installer is built or approved for publication by the 0.1.8 consent.
+
 ## Installer MCP file-lock fix - 2026-10-03
 
 After the user applied 0.1.7, NSIS could not write the installed

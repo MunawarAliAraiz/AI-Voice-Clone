@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from collections.abc import AsyncIterator
@@ -14,6 +15,7 @@ from ..exceptions import GenerationError, ModelNotFoundError
 from ..remote_worker.errors import WORKER_MESSAGES
 from ..remote_worker.model_pins import AUXILIARY_PINS
 from .catalog import ModelCatalog
+from .progress import current_request_id, emit_progress
 from .protocol import ModelStatus, SynthRequest, SynthResult
 from .spec import ModelState
 
@@ -53,10 +55,24 @@ class RemoteScheduler:
         )
 
     async def _response(self, method: str, path: str, **kwargs: object) -> httpx.Response:
+        request_id = current_request_id()
+        monitor = None
+        if method == "POST" and request_id and path in {
+            "/v1/synthesize", "/v1/analyze", "/v1/transliterate",
+        }:
+            headers = dict(kwargs.pop("headers", {}) or {})
+            headers["X-Request-Id"] = request_id
+            kwargs["headers"] = headers
+            monitor = asyncio.create_task(self._monitor_activity(request_id))
         try:
             response = await self._client.request(method, path, **kwargs)
         except httpx.HTTPError as exc:
             raise GenerationError("remote", "Cannot reach the Runpod worker") from exc
+        finally:
+            if monitor:
+                monitor.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await monitor
         if response.is_error:
             try:
                 problem = response.json()
@@ -72,6 +88,38 @@ class RemoteScheduler:
                 raise RemoteWorkerError(problem["code"], response.status_code)
             raise GenerationError("remote", f"Runpod worker returned HTTP {response.status_code}")
         return response
+
+    async def _monitor_activity(self, request_id: str) -> None:
+        """Read stages from this exact worker request, without duplicating work."""
+        stages = {"loading_model", "generating", "converting", "analyzing"}
+        while True:
+            await asyncio.sleep(2)
+            try:
+                response = await self._client.get("/v1/activity", timeout=5)
+                if response.status_code == 404:
+                    # Older qualified workers still complete through the same
+                    # request; their internals are unknown, never fabricated.
+                    await emit_progress("worker_busy")
+                    return
+                response.raise_for_status()
+                value = response.json()
+                if not isinstance(value, dict) or value.get("protocol_version") != 1:
+                    raise ValueError("Unexpected activity protocol")
+                operations = value.get("operations")
+                if not isinstance(operations, list):
+                    raise ValueError("Unexpected activity shape")
+                operation = next((item for item in operations if isinstance(item, dict)
+                                  and item.get("request_id") == request_id), None)
+                if operation and operation.get("stage") in stages:
+                    model_id = operation.get("model_id")
+                    if isinstance(model_id, str) and (
+                        self._catalog.get(model_id) is not None or model_id in AUXILIARY_PINS
+                    ):
+                        await emit_progress(operation["stage"], model_id)
+            except (httpx.HTTPError, ValueError, TypeError):
+                # Keep polling the original accepted request. Never resubmit
+                # because a status read failed or claim a completed stage.
+                await emit_progress("progress_unavailable")
 
     async def status(self) -> tuple[ModelStatus, ...]:
         response = await self._response("GET", "/v1/models")

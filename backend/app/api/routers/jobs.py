@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -18,9 +20,9 @@ from fastapi import APIRouter, Depends, Query, Response
 from ...config import Settings
 from ...db import Database
 from ...exceptions import JobNotFoundError, JobNotRetryableError
-from ...inference.protocol import SchedulerProtocol
+from ...inference.protocol import ModelStatus, SchedulerProtocol
 from ...jobs import JobKind, JobRunner, JobStatus, job_record_from_row
-from ...jobs.estimate import estimate_remaining_for_running, estimate_wait_seconds, queue_position
+from ...jobs.estimate import estimate_remaining_for_running, estimate_wait_seconds
 from ...jobs.types import JobRecord
 from ..deps import get_db, get_job_runner, get_scheduler, get_settings, require_cloud_ready
 from ..media_tokens import make_media_url
@@ -92,7 +94,11 @@ def _error_or_none(job: JobRecord) -> dict[str, Any] | None:
 def _input_text(job: JobRecord) -> str | None:
     # Set once at enqueue (see routers/tts.py); read straight off the
     # already-decoded params, no extra query.
-    text = job.params.get("input_text")
+    text = job.params.get("input_text") or job.params.get("text")
+    if not text and isinstance(job.params.get("texts"), list):
+        text = '\n'.join(str(t) for t in job.params['texts'])
+    if not text and isinstance(job.params.get('sentences'), list):
+        text = '\n'.join(str(t) for t in job.params['sentences'])
     return str(text) if text else None
 
 
@@ -104,27 +110,51 @@ def _title(job: JobRecord) -> str | None:
 
 
 async def _queue_position_and_eta(
-    job: JobRecord, db: Database, scheduler: SchedulerProtocol
+    job: JobRecord, db: Database, scheduler: SchedulerProtocol,
+    *, statuses: tuple[ModelStatus, ...] | None = None,
+    active: Sequence[JobRecord] | None = None, cloud: bool = False,
 ) -> tuple[int | None, float | None]:
     """`position` only while 'queued'; `eta_sec` while 'queued' or 'running'."""
     if job.status not in (JobStatus.QUEUED, JobStatus.RUNNING):
         return None, None
 
-    statuses = await scheduler.status()
+    if active is None:
+        active = [job_record_from_row(r) for r in await db.list_active_jobs(job.kind.value)]
+    queued = [j for j in active if j.status is JobStatus.QUEUED]
+    running_jobs = [j for j in active if j.status is JobStatus.RUNNING]
+    position = (next((i for i, j in enumerate(queued) if j.id == job.id), 0)
+                + len(running_jobs)) if job.status is JobStatus.QUEUED else None
+    # Legacy local estimates do not include Pod startup, cache checks or helper
+    # model loading. Cloud work has no trustworthy ETA until stage timings exist.
+    if cloud or job.kind is JobKind.ANALYZE_LLM or len(running_jobs) > 1:
+        return position, None
+    statuses = statuses if statuses is not None else await scheduler.status()
     now = time.time()
 
     if job.status is JobStatus.RUNNING:
         return None, estimate_remaining_for_running(job, statuses, now)
 
-    active = [job_record_from_row(r) for r in await db.list_active_jobs(job.kind.value)]
     running = next((j for j in active if j.status is JobStatus.RUNNING), None)
-    queued = [j for j in active if j.status is JobStatus.QUEUED]
-    position = queue_position(
-        queued_ahead=sum(1 for j in queued if j.id < job.id),
-        has_running=running is not None,
-    )
     eta_sec = estimate_wait_seconds(statuses, running, queued, now).get(job.id)
     return position, eta_sec
+
+
+def _timing(job: JobRecord, eta: float | None, *, cloud: bool) -> dict[str, Any]:
+    active = job.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+    elapsed = None
+    if job.started_at:
+        started = datetime.fromisoformat(job.started_at.replace('Z', '+00:00'))
+        ended = (datetime.fromisoformat(job.finished_at.replace('Z', '+00:00'))
+                 if job.finished_at else datetime.now(UTC))
+        elapsed = max(0.0, (ended - started).total_seconds())
+    state = 'not_applicable' if not active else 'estimated' if eta is not None else (
+        'overdue' if not cloud and job.kind is not JobKind.ANALYZE_LLM
+        and job.status is JobStatus.RUNNING else 'unknown')
+    return {'eta_state': state, 'elapsed_sec': elapsed,
+            'phase': job.phase if active else None,
+            'phase_updated_at': datetime.fromisoformat(job.phase_updated_at.replace('Z', '+00:00'))
+            if active and job.phase_updated_at else None,
+            'phase_model_id': job.phase_model_id if active else None}
 
 
 def _build_list_item(
@@ -153,6 +183,7 @@ def _build_list_item(
         queued_at=job.queued_at,
         started_at=job.started_at,
         finished_at=job.finished_at,
+        **_timing(job, None, cloud=True),
     )
 
 
@@ -169,7 +200,8 @@ async def build_job_status_response(
     poll of the same job are byte-for-byte the same shape.
     """
     route = _route_info(job)
-    position, eta_sec = await _queue_position_and_eta(job, db, scheduler)
+    cloud = bool(settings.desktop_static_dir or settings.remote_worker_url)
+    position, eta_sec = await _queue_position_and_eta(job, db, scheduler, cloud=cloud)
     is_fake = _is_fake(job)
     if is_fake:
         # Golden rule 1: fake audio is never silent about being fake. Set on
@@ -189,6 +221,7 @@ async def build_job_status_response(
         route=route,
         position=position,
         eta_sec=eta_sec,
+        **_timing(job, eta_sec, cloud=cloud),
         result=_result_or_none(job, route, settings),
         error=_error_or_none(job),
         is_fake=is_fake,
@@ -217,6 +250,35 @@ async def list_jobs(
         for j in jobs
     ]
     return JobList(items=items, total=await db.count_jobs(), page=page, page_size=page_size)
+
+
+@router.get('/activity', response_model=JobList)
+async def activity_jobs(
+    db: Annotated[Database, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    scheduler: Annotated[SchedulerProtocol, Depends(get_scheduler)],
+    tracked_id: Annotated[list[int] | None, Query(max_length=256)] = None,
+) -> JobList:
+    """Complete active feed with terminal transitions for older watched jobs."""
+    jobs = [job_record_from_row(r) for r in await db.list_activity_jobs(tracked_id or [])]
+    profiles = await db.get_profiles_by_ids([j.profile_id for j in jobs if j.profile_id])
+    cloud = bool(settings.desktop_static_dir or settings.remote_worker_url)
+    statuses = () if cloud or not any(j.status in (JobStatus.QUEUED, JobStatus.RUNNING)
+                                     for j in jobs) else await scheduler.status()
+    items = []
+    active_by_kind = {
+        kind: sorted((j for j in jobs if j.kind == kind and j.status in
+                      (JobStatus.QUEUED, JobStatus.RUNNING)), key=lambda j: (-j.priority, j.id))
+        for kind in JobKind
+    }
+    for job in jobs:
+        item = _build_list_item(job, settings,
+            profiles[job.profile_id]['name'] if job.profile_id in profiles else None)
+        position, eta = await _queue_position_and_eta(
+            job, db, scheduler, statuses=statuses, active=active_by_kind[job.kind], cloud=cloud)
+        items.append(item.model_copy(update={'position': position, 'eta_sec': eta,
+                                            **_timing(job, eta, cloud=cloud)}))
+    return JobList(items=items, total=len(items), page=1, page_size=len(items))
 
 
 @router.get("/{job_id}", response_model=JobStatusResponse)

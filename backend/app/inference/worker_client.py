@@ -20,7 +20,7 @@ import asyncio
 import contextlib
 import json
 import logging
-import signal
+import math
 from pathlib import Path
 from typing import Any
 
@@ -44,11 +44,15 @@ class WorkerProcess:
         *,
         env: dict[str, str] | None = None,
         cwd: Path | None = None,
+        ready_timeout_sec: float = 90.0,
     ) -> None:
         self._runtime = runtime
         self._python = python_executable
         self._env = env or {}
         self._cwd = cwd
+        if not math.isfinite(ready_timeout_sec) or ready_timeout_sec <= 0:
+            raise ValueError("Worker READY timeout must be a positive finite number")
+        self._ready_timeout_sec = ready_timeout_sec
         self._proc: asyncio.subprocess.Process | None = None
         self._loaded_model_id: str | None = None
         self._next_id = 0
@@ -97,13 +101,28 @@ class WorkerProcess:
         # First stdout line is the READY handshake. A dead process or a
         # ready:false payload is a fatal startup failure.
         try:
-            line = await self._readline()
+            line = await asyncio.wait_for(self._readline(), timeout=self._ready_timeout_sec)
+        except TimeoutError as exc:
+            await self.kill(grace_sec=0.0)
+            raise TimeoutError(
+                f"{self._runtime} worker READY timed out after {self._ready_timeout_sec:g}s"
+            ) from exc
+        except asyncio.CancelledError:
+            await self.kill(grace_sec=0.0)
+            raise
         except EOFError as exc:
             await self.kill()
             raise RuntimeError(
                 f"{self._runtime} worker exited before READY"
             ) from exc
-        handshake = json.loads(line)
+        try:
+            handshake = json.loads(line)
+        except (ValueError, TypeError):
+            await self.kill(grace_sec=0.0)
+            raise RuntimeError(f"{self._runtime} worker sent an invalid READY handshake") from None
+        if not isinstance(handshake, dict):
+            await self.kill(grace_sec=0.0)
+            raise RuntimeError(f"{self._runtime} worker sent an invalid READY handshake")
         if not handshake.get("ready"):
             await self.kill()
             raise RuntimeError(
@@ -160,6 +179,7 @@ class WorkerProcess:
             error_code=data.get("error_code"),
             error_message=data.get("error_message"),
             traceback=data.get("traceback"),
+            error_class=data.get("error_class"),
         )
         # Track residency so PING/status need not touch the worker.
         if response.ok:
@@ -187,7 +207,7 @@ class WorkerProcess:
                 await asyncio.wait_for(proc.wait(), timeout=grace_sec)
             except TimeoutError:
                 with contextlib.suppress(ProcessLookupError):
-                    proc.send_signal(signal.SIGKILL)
+                    proc.kill()  # SIGKILL on POSIX; TerminateProcess on Windows.
                 with contextlib.suppress(Exception):
                     await proc.wait()
         # Stop draining stderr once the process is gone.

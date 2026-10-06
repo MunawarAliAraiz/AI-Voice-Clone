@@ -1,0 +1,13 @@
+**
+!backend/
+!backend/app/
+!backend/app/**
+!pod/
+!pod/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/*.dpapi
+**/*.pem
+**/*.key
+pod/tests/

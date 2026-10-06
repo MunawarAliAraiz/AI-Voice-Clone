@@ -1,0 +1,6 @@
+# Chatterbox 0.1.7 metadata pins the CUDA 12.4 / PyTorch 2.6 pair, which
+# cannot execute kernels on the tested Blackwell GPU. This explicit override
+# is an app qualification exception, not an upstream compatibility claim.
+# See docs/CHATTERBOX_BLACKWELL.md. Keep both packages on the same CUDA build.
+torch==2.8.0+cu128
+torchaudio==2.8.0+cu128

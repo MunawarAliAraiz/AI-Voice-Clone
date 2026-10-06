@@ -47,7 +47,7 @@ RUN export UV_LINK_MODE=hardlink \
     && uv pip sync --python /opt/venvs/voxcpm/bin/python --require-hashes --only-binary :all: /opt/vcs/requirements/build.lock \
     && uv pip sync --python /opt/venvs/voxcpm/bin/python --torch-backend cu128 --require-hashes --no-build-isolation --only-binary :all: --no-binary antlr4-python3-runtime,argbind,crcmod,jieba,oss2 /opt/vcs/requirements/voxcpm.lock \
     && uv venv /opt/venvs/chatterbox --python /usr/local/bin/python \
-    && uv pip sync --python /opt/venvs/chatterbox/bin/python --torch-backend cu124 --require-hashes --only-binary :all: /opt/vcs/requirements/chatterbox.lock \
+    && uv pip sync --python /opt/venvs/chatterbox/bin/python --torch-backend cu128 --require-hashes --only-binary :all: /opt/vcs/requirements/chatterbox.lock \
     && uv venv /opt/venvs/omnivoice --python /usr/local/bin/python \
     && uv pip sync --python /opt/venvs/omnivoice/bin/python --torch-backend cu128 --require-hashes --only-binary :all: /opt/vcs/requirements/omnivoice.lock \
     && uv venv /opt/venvs/text --python /usr/local/bin/python \
@@ -71,3 +71,22 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD ["/opt/venvs/api/bin/python", "/opt/vcs/pod/healthcheck.py"]
 ENTRYPOINT ["/opt/venvs/api/bin/python", "/opt/vcs/pod/start.py"]
+
+
+# Prepared only: no release receipt/desktop admission points at this target.
+# SDK/API env stays torch-free; existing isolated GPU runtimes are inherited.
+FROM gpu AS flex
+RUN uv venv /opt/venvs/flex --python /usr/local/bin/python \
+    && uv pip sync --python /opt/venvs/flex/bin/python --require-hashes --only-binary :all: /opt/vcs/requirements/flex.lock \
+    && uv cache clean
+COPY pod/flex_start.py /opt/vcs/pod/
+ENV HF_HOME=/runpod-volume/hf-cache HF_HUB_CACHE=/runpod-volume/hf-cache/hub \
+    TORCH_HOME=/runpod-volume/torch-cache TORCHINDUCTOR_CACHE_DIR=/runpod-volume/torch-inductor \
+    VCS_MODEL_VOLUME_ROOT=/runpod-volume \
+    RUNPOD_LOG_LEVEL=NOTSET RUNPOD_DEBUG_LEVEL=NOTSET RUNPOD_REALTIME_PORT=0
+# Inherited EXPOSE is image metadata only. There is no listener or HTTP health
+# endpoint: provider owns job acquisition, heartbeat and termination.
+HEALTHCHECK NONE
+RUN /opt/venvs/flex/bin/python -c "import importlib.util, sys; from importlib.metadata import version; assert importlib.util.find_spec('torch') is None; assert version('runpod') == '1.12.0'; import runpod; sys.path.insert(0, '/opt/vcs/pod'); from flex_start import WorkerRuntime"
+ENTRYPOINT ["/opt/venvs/flex/bin/python", "/opt/vcs/pod/flex_start.py"]
+

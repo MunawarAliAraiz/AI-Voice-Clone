@@ -13,7 +13,17 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError
 from starlette.background import BackgroundTask
@@ -24,14 +34,24 @@ from ..exceptions import AppError
 from ..inference.analyzer_scheduler import QWEN_ANALYZER_MODEL_ID
 from ..inference.catalog import CATALOG
 from ..inference.protocol import SchedulerProtocol, SynthRequest
+from ..inference.spec import ModelState
 from ..inference.transliterator_scheduler import GEMMA_TRANSLITERATOR_MODEL_ID
 from ..main import _build_analyzer, _build_scheduler, _build_transliterator
+from .activity import ActivityStore, request_identity
 from .errors import safe_worker_problem
 from .model_install import REQUIRED_MODEL_IDS, ModelInstaller, release_manifest_id
 from .model_pins import AUXILIARY_PINS
 
 PROTOCOL_VERSION = 1
 MAX_REFERENCE_BYTES = 50 * 1024 * 1024
+
+
+def operation_identity(
+    http_request: Request, x_request_id: Annotated[str | None, Header()] = None,
+) -> str:
+    identity = request_identity(x_request_id)
+    http_request.state.activity_request_id = identity
+    return identity
 
 
 class RemoteSynthRequest(BaseModel):
@@ -98,6 +118,9 @@ def create_worker_app(
                 await app.state.transliterator.shutdown()
 
     app = FastAPI(title="Voice Clone Pod Worker", lifespan=lifespan)
+    app.state.activity = ActivityStore(
+        frozenset({spec.id for spec in CATALOG.specs} | set(AUXILIARY_PINS))
+    )
 
     @app.exception_handler(AppError)
     async def worker_error(_request, error: AppError) -> JSONResponse:
@@ -106,7 +129,11 @@ def create_worker_app(
         problem = safe_worker_problem(error)
         logging.getLogger(__name__).error("Cloud worker failure: %s", problem["code"])
         return JSONResponse(
-            problem, status_code=problem["status"], media_type="application/problem+json"
+            problem, status_code=problem["status"], media_type="application/problem+json",
+            headers=(
+                {"X-Request-Id": _request.state.activity_request_id}
+                if hasattr(_request.state, "activity_request_id") else None
+            ),
         )
 
     def authenticate(authorization: Annotated[str | None, Header()] = None) -> None:
@@ -117,6 +144,27 @@ def create_worker_app(
     @app.get("/v1/health", dependencies=[Depends(authenticate)])
     async def health() -> dict[str, int | str]:
         return {"status": "ok", "protocol_version": PROTOCOL_VERSION}
+
+    @app.get("/v1/activity", dependencies=[Depends(authenticate)])
+    async def activity() -> dict[str, object]:
+        # status() is in-memory bookkeeping and must not warm/provision a GPU.
+        statuses = await app.state.scheduler.status()
+        loaded = {
+            status.spec.id for status in statuses if status.state is ModelState.RESIDENT
+        }
+        for model_id, helper in (
+            (QWEN_ANALYZER_MODEL_ID, app.state.analyzer),
+            (GEMMA_TRANSLITERATOR_MODEL_ID, app.state.transliterator),
+        ):
+            worker = getattr(helper, "_worker", None)
+            if getattr(helper, "_loaded", False) and worker is not None and worker.is_alive:
+                loaded.add(model_id)
+        return {
+            "protocol_version": PROTOCOL_VERSION,
+            "worker_instance_id": app.state.activity.worker_instance_id,
+            "operations": app.state.activity.snapshot(),
+            "loaded_model_ids": sorted(loaded),
+        }
 
     @app.get("/v1/models", dependencies=[Depends(authenticate)])
     async def models() -> dict[str, object]:
@@ -169,15 +217,20 @@ def create_worker_app(
             raise HTTPException(409, "Download this helper model first")
 
     @app.post("/v1/analyze", dependencies=[Depends(authenticate)])
-    async def analyze(body: RemoteAnalyzeRequest) -> dict[str, Any]:
+    async def analyze(
+        body: RemoteAnalyzeRequest, response: Response,
+        request_id: Annotated[str, Depends(operation_identity)],
+    ) -> dict[str, Any]:
         require_helper(QWEN_ANALYZER_MODEL_ID)
         if sum(map(len, body.sentences)) > 5000 or any(not s.strip() for s in body.sentences):
             raise HTTPException(
                 422, "Analysis requires nonempty sentences totaling at most 5000 characters"
             )
-        result = await app.state.analyzer.classify(
-            language=body.language, sentences=tuple(body.sentences)
-        )
+        with app.state.activity.track(request_id, QWEN_ANALYZER_MODEL_ID):
+            result = await app.state.analyzer.classify(
+                language=body.language, sentences=tuple(body.sentences)
+            )
+        response.headers["X-Request-Id"] = request_id
         return {
             "protocol_version": PROTOCOL_VERSION,
             "model_id": QWEN_ANALYZER_MODEL_ID,
@@ -186,7 +239,10 @@ def create_worker_app(
         }
 
     @app.post("/v1/transliterate", dependencies=[Depends(authenticate)])
-    async def transliterate(body: RemoteTransliterateRequest) -> dict[str, Any]:
+    async def transliterate(
+        body: RemoteTransliterateRequest, response: Response,
+        request_id: Annotated[str, Depends(operation_identity)],
+    ) -> dict[str, Any]:
         require_helper(GEMMA_TRANSLITERATOR_MODEL_ID)
         if (
             body.source_language not in {"en", "hi"}
@@ -201,17 +257,19 @@ def create_worker_app(
             raise HTTPException(
                 409, app.state.transliterator_reason or "Script conversion unavailable"
             )
-        results = await app.state.transliterator.convert_many(
-            texts=body.texts,
-            instruction=body.instruction,
-            source_script=body.source_script,
-            target_script=body.target_script,
-            **(
-                {"source_language": body.source_language}
-                if body.source_language in {"en", "hi"}
-                else {}
-            ),
-        )
+        with app.state.activity.track(request_id, GEMMA_TRANSLITERATOR_MODEL_ID):
+            results = await app.state.transliterator.convert_many(
+                texts=body.texts,
+                instruction=body.instruction,
+                source_script=body.source_script,
+                target_script=body.target_script,
+                **(
+                    {"source_language": body.source_language}
+                    if body.source_language in {"en", "hi"}
+                    else {}
+                ),
+            )
+        response.headers["X-Request-Id"] = request_id
         return {
             "protocol_version": PROTOCOL_VERSION,
             "model_id": GEMMA_TRANSLITERATOR_MODEL_ID,
@@ -239,18 +297,24 @@ def create_worker_app(
             raise HTTPException(404, "Unknown model ID") from exc
 
     @app.post("/v1/models/{model_id}/warm", dependencies=[Depends(authenticate)])
-    async def warm_model(model_id: str) -> dict[str, str]:
+    async def warm_model(
+        model_id: str, response: Response,
+        request_id: Annotated[str, Depends(operation_identity)],
+    ) -> dict[str, str]:
         if CATALOG.get(model_id) is None:
             raise HTTPException(status_code=404, detail="Unknown model ID")
         if require_installed and app.state.installer.status(model_id)["state"] != "installed":
             raise HTTPException(status_code=409, detail="Download this model first")
-        await app.state.scheduler.warm(model_id)
+        with app.state.activity.track(request_id, model_id):
+            await app.state.scheduler.warm(model_id)
+        response.headers["X-Request-Id"] = request_id
         return {"status": "warm", "model_id": model_id}
 
     @app.post("/v1/synthesize", dependencies=[Depends(authenticate)])
     async def synthesize(
         request: Annotated[str, Form()],
         reference_audio: Annotated[UploadFile, File()],
+        request_id: Annotated[str, Depends(operation_identity)],
     ) -> FileResponse:
         try:
             payload = RemoteSynthRequest.model_validate(json.loads(request))
@@ -277,17 +341,18 @@ def create_worker_app(
                     if count > MAX_REFERENCE_BYTES:
                         raise HTTPException(status_code=413, detail="Reference audio exceeds 50 MB")
                     stream.write(chunk)
-            result = await app.state.scheduler.synthesize(
-                SynthRequest(
-                    model_id=payload.model_id,
-                    text=payload.text,
-                    reference_audio=reference,
-                    output_path=output,
-                    reference_text=payload.reference_text,
-                    params=payload.params,
-                    sample_rate=payload.sample_rate,
+            with app.state.activity.track(request_id, payload.model_id):
+                result = await app.state.scheduler.synthesize(
+                    SynthRequest(
+                        model_id=payload.model_id,
+                        text=payload.text,
+                        reference_audio=reference,
+                        output_path=output,
+                        reference_text=payload.reference_text,
+                        params=payload.params,
+                        sample_rate=payload.sample_rate,
+                    )
                 )
-            )
             if result.model_id != payload.model_id or not output.is_file():
                 raise RuntimeError("Worker returned no audio or changed the chosen model")
             return FileResponse(
@@ -299,6 +364,7 @@ def create_worker_app(
                     "X-Generation-Time-Sec": str(result.gen_time_sec),
                     "X-Audio-Duration-Sec": str(result.duration_sec),
                     "X-Load-Time-Sec": str(result.load_time_sec),
+                    "X-Request-Id": request_id,
                 },
                 background=BackgroundTask(_cleanup, work),
             )

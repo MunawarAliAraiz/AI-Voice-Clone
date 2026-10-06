@@ -236,6 +236,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     -- The failed job this row is a retry of, so the UI can tell an
     -- un-retried failure from one whose retry is already queued.
     retry_of_job_id        INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    phase                 TEXT,
+    phase_updated_at      TEXT,
+    phase_model_id        TEXT,
     cancel_requested       INTEGER NOT NULL DEFAULT 0,
     attempt                INTEGER NOT NULL DEFAULT 0,
 

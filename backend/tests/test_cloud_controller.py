@@ -345,7 +345,9 @@ async def test_session_finally_releases_admission_after_transport_shutdown_failu
         }
     )
     with pytest.raises(OSError):
-        async with cloud.session():
+        # Legacy session cleanup remains regression-tested; default generation
+        # now selects the native adapter and cannot reuse this saved Pod pair.
+        async with cloud._legacy_session():
             assert cloud.active == 1
     assert cloud.active == 0
     assert cloud.release_task is not None
@@ -354,34 +356,33 @@ async def test_session_finally_releases_admission_after_transport_shutdown_failu
 
 
 @pytest.mark.asyncio
-async def test_pod_deadline_is_atomic_with_creation_and_secret_not_in_url():
+async def test_gpu_creation_rejects_unenforced_deadline_before_any_network_request():
     seen = []
 
     def respond(request):
-        assert request.url.query == b""
-        body = json.loads(request.content)
-        seen.append(body["variables"]["input"])
-        return httpx.Response(
-            200, json={"data": {"podFindAndDeployOnDemand": {"id": "abcdef123", "costPerHr": 0.49}}}
-        )
+        seen.append(request)
+        pytest.fail("A paid Pod must not be created without independent spending protection")
 
     client = RunpodClient("secret", transport=httpx.MockTransport(respond))
     deadline = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     try:
-        await client.create_guarded_pod(
-            name="owned",
-            image="image@sha256:" + "a" * 64,
-            data_center="EU",
-            volume_id="volume",
-            worker_token="w" * 32,
-            terminate_at=deadline,
-            gpu_id="NVIDIA A40",
-        )
+        with pytest.raises(RunpodApiError, match="automatic spending protection") as rejected:
+            await client.create_guarded_pod(
+                name="owned",
+                image="image@sha256:" + "a" * 64,
+                data_center="EU",
+                volume_id="volume",
+                worker_token="w" * 32,
+                terminate_at=deadline,
+                gpu_id="NVIDIA A40",
+            )
     finally:
         await client.close()
-    assert seen[0]["terminateAfter"] == deadline
-    assert seen[0]["networkVolumeId"] == "volume"
-    assert seen[0]["computeType"] == "GPU"
+    assert seen == []
+    assert rejected.value.request_rejected is True
+    assert rejected.value.status_code is None
+    assert "secret" not in str(rejected.value)
+    assert "w" * 32 not in str(rejected.value)
 
 
 @pytest.mark.asyncio
@@ -846,41 +847,31 @@ def test_installer_candidates_quote_exact_instance_and_skip_ineligible_configura
 
 
 @pytest.mark.asyncio
-async def test_cpu_creation_uses_dedicated_mutation_exact_instance_and_atomic_deadline():
+async def test_cpu_creation_rejects_unenforced_deadline_before_any_network_request():
     requests = []
 
     def respond(request):
-        assert request.url.query == b""
-        body = json.loads(request.content)
-        requests.append(body)
-        return httpx.Response(
-            200, json={"data": {"deployCpuPod": {"id": "abcdef123", "costPerHr": 0.06}}}
-        )
+        requests.append(request)
+        pytest.fail("CPU installation also needs independent spending protection")
 
     client = RunpodClient("hidden-token", transport=httpx.MockTransport(respond))
     deadline = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
     try:
-        pod = await client.create_guarded_pod(
-            name="owned-installer",
-            image="image@sha256:" + "b" * 64,
-            data_center="EU",
-            volume_id="persistent-volume",
-            worker_token="w" * 32,
-            terminate_at=deadline,
-            cpu_instance_id="cpu3c-2-4",
-        )
+        with pytest.raises(RunpodApiError, match="automatic spending protection") as rejected:
+            await client.create_guarded_pod(
+                name="owned-installer",
+                image="image@sha256:" + "b" * 64,
+                data_center="EU",
+                volume_id="persistent-volume",
+                worker_token="w" * 32,
+                terminate_at=deadline,
+                cpu_instance_id="cpu3c-2-4",
+            )
     finally:
         await client.close()
-    assert pod["costPerHr"] == 0.06
-    assert "deployCpuPodInput!" in requests[0]["query"]
-    assert "deployCpuPod(input:" in requests[0]["query"]
-    body = requests[0]["variables"]["input"]
-    assert body["instanceId"] == "cpu3c-2-4"
-    assert body["terminateAfter"] == deadline
-    assert body["networkVolumeId"] == "persistent-volume"
-    assert body["imageName"] == "image@sha256:" + "b" * 64
-    excluded = {"gpuCount", "computeType", "gpuTypeId", "minVcpuCount", "minMemoryInGb"}
-    assert not excluded & body.keys()
+    assert requests == []
+    assert rejected.value.request_rejected is True
+    assert "hidden-token" not in str(rejected.value)
 
 
 @pytest.mark.asyncio
@@ -901,6 +892,112 @@ async def test_cpu_creation_requires_explicit_instance_before_sending_any_reques
             )
     finally:
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_legacy_pod_creation_cannot_bypass_spending_protection():
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        pytest.fail("Legacy creation must not send a paid request")
+
+    client = RunpodClient("hidden-token", transport=httpx.MockTransport(respond))
+    arguments = dict(name="owned", image="image@sha256:" + "b" * 64,
+                     gpu_id="NVIDIA A40", data_center="EU", volume_id="volume",
+                     worker_token="w" * 32)
+    try:
+        with pytest.raises(RunpodApiError, match="automatic spending protection") as rejected:
+            await client.create_pod(**arguments)
+        assert rejected.value.request_rejected is True
+        with pytest.raises(ValueError, match="Worker token"):
+            await client.create_pod(**{**arguments, "worker_token": ""})
+    finally:
+        await client.close()
+    assert requests == []
+
+
+@pytest.mark.parametrize("arguments,reason", [
+    ({"image": "image:latest"}, "immutable digest"),
+    ({"cache_home": "/other/cache"}, "model storage path"),
+    ({"gpu_id": None, "cpu_instance_id": "invalid!"}, "quoted instance"),
+])
+@pytest.mark.asyncio
+async def test_blocked_creation_preserves_input_validation_without_network(arguments, reason):
+    def respond(request):
+        pytest.fail("Validation must not send a provider request")
+
+    client = RunpodClient("hidden-token", transport=httpx.MockTransport(respond))
+    inputs = dict(name="owned", image="image@sha256:" + "b" * 64, data_center="EU",
+                  volume_id="volume", worker_token="w" * 32,
+                  terminate_at="2030-01-01T00:00:00Z", gpu_id="NVIDIA A40")
+    try:
+        with pytest.raises(ValueError, match=reason):
+            await client.create_guarded_pod(**{**inputs, **arguments})
+    finally:
+        await client.close()
+
+
+@pytest.mark.parametrize("installer", [False, True])
+@pytest.mark.asyncio
+async def test_real_client_spending_rejection_clears_provisioning_intent(cloud, installer):
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        pytest.fail("Controller must not start a paid Pod without protection")
+
+    class Provider(RunpodClient):
+        def __init__(self, key):
+            super().__init__(key, transport=httpx.MockTransport(respond))
+
+        async def list_gpu_types(self):
+            return [{"id": "NVIDIA test", "memory": 48, "price": {"secure": 1.0},
+                     "dataCenters": [{"id": "EU", "availability": "HIGH"}]}]
+
+        async def list_cpu_types(self):
+            return [{"id": "cpu3c", "ramGbPerVcpu": 2, "price": {"securePerVcpu": 0.03},
+                     "vcpu": {"min": 2, "max": 32},
+                     "dataCenters": [{"id": "EU", "availability": "HIGH"}]}]
+
+        async def balance(self):
+            return {"balance_usd": 9.0}
+
+    cloud.client_factory = Provider
+    cloud.write({"volume": {"id": "volume", "dataCenter": "EU"},
+                 "policy": {"max_session_usd": 1.0, "max_hourly_usd": 2.0}})
+    with pytest.raises(RunpodApiError, match="automatic spending protection") as rejected:
+        await cloud._provision(installer=installer)
+    assert rejected.value.request_rejected is True
+    assert cloud.read().get("compute") is None
+    assert not (cloud.settings.data_dir / "secrets" / "worker-pair.dpapi").exists()
+    assert requests == []
+
+
+@pytest.mark.asyncio
+async def test_creation_block_preserves_account_storage_reads_and_owned_termination():
+    requests = []
+
+    def respond(request):
+        requests.append((request.method, request.url.path))
+        assert request.url.query == b""
+        if request.url.path == "/graphql":
+            assert json.loads(request.content)["query"].startswith("query ")
+            return httpx.Response(200, json={"data": {"myself": {"clientBalance": 9.0}}})
+        if request.url.path == "/v2/network-volumes":
+            return httpx.Response(200, json={"networkVolumes": [{"id": "existing-volume"}]})
+        assert request.method == "DELETE" and request.url.path == "/v2/pods/owned123"
+        return httpx.Response(204)
+
+    client = RunpodClient("hidden-token", transport=httpx.MockTransport(respond))
+    try:
+        assert (await client.balance())["balance_usd"] == 9.0
+        assert await client.list_volumes() == [{"id": "existing-volume"}]
+        await client.terminate_pod("owned123")
+    finally:
+        await client.close()
+    assert requests == [("POST", "/graphql"), ("GET", "/v2/network-volumes"),
+                        ("DELETE", "/v2/pods/owned123")]
 
 
 @pytest.mark.asyncio

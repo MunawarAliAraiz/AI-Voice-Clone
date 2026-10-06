@@ -37,11 +37,14 @@ from .api.routers import (
     direction,
     health,
     history,
+    integrations,
     jobs,
     media,
+    model_tests,
     models,
     pronunciations,
     runpod,
+    storage_access,
     system,
     text,
     transcript,
@@ -307,9 +310,12 @@ def create_app(
 
     app.include_router(health.router, prefix="/api")
     app.include_router(models.router, prefix="/api")
+    app.include_router(model_tests.router, prefix="/api")
     app.include_router(models.languages_router, prefix="/api")
     app.include_router(system.router, prefix="/api")
     app.include_router(runpod.router, prefix="/api")
+    app.include_router(storage_access.router, prefix="/api")
+    app.include_router(integrations.router, prefix="/api")
     app.include_router(dialogue.router, prefix="/api")
     app.include_router(voice.router, prefix="/api")
     app.include_router(tts.router, prefix="/api")

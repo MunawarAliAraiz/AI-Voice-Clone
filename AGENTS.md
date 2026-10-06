@@ -1,8 +1,8 @@
 # Project guide
 
 AI Voice Clone Studio is a React UI backed by FastAPI. The Windows desktop
-edition keeps user data locally and sends GPU inference to a user-owned Runpod
-Pod. Read the documents below before changing behavior.
+edition keeps user data locally. Its default generation adapter targets guarded
+Runpod Serverless; production admission remains held pending real qualification. Read the documents below before changing behavior.
 
 ## Golden rules
 
@@ -31,12 +31,29 @@ Pod. Read the documents below before changing behavior.
 
 ## Documents
 
+- [Native transport checkpoint](docs/NATIVE_TRANSPORT.md): connected source adapter, once-only recovery and remaining live gates.
+
+- [Native Serverless admission](docs/NATIVE_SERVERLESS_ADMISSION.md): Runpod-only default, cumulative reservations and unresolved live shutdown/startup controls.
+- [Account analytics](docs/ACCOUNT_ANALYTICS.md): account-wide historical charges, storage billing and live read-only verification.
+- [Customer connections](docs/CONNECTIONS.md): required Runpod, optional Apify/Cloudflare, encrypted keys and honest feature gating.
+- [Cloud recovery status](docs/CLOUD_RECOVERY_STATUS.md): prepared replacement, current test evidence and remaining access/qualification.
+- [Cloudflare spending guard](docs/SPENDING_GUARD_CORE.md): durable alarms, owned cleanup, disabled admission and deployment requirements.
+- [Serverless protocol](docs/FLEX_PROTOCOL.md): bounded envelopes, once-only submission and result verification.
+- [Serverless worker](docs/FLEX_WORKER.md): pinned SDK entrypoint, image preparation and hosted build gates.
+- [Downloads without a setup rental](docs/VOLUME_SETUP_WITHOUT_POD.md): separate encrypted S3 connection, transfer requirements and limitations.
+- [Cloud spending protection proposal](docs/CLOUD_SPENDING_PROTECTION.md): offline design and qualification gates; no further paid tests.
+- [Runpod budget incident and release hold](docs/RUNPOD_BUDGET_INCIDENT.md): provider timers are not enforced; no new paid Pod starts or tests.
+- [Reliability and performance plan](docs/PERFORMANCE_PLAN.md): current cache regression, truthful job stages, model tests, measured baseline and $2 experiment ceiling.
 - [Architecture](docs/ARCHITECTURE.md): current design and invariants.
 - [Workspace design](docs/UI_DESIGN.md): layout, tokens, accessibility and visual checks.
 - [Liquid orb](docs/ORB.md): real status mapping, motion limits and static fallback.
+- [App icon](docs/ICON.md): original mark, reproducible favicon/ICO and size checks.
+- [Queue progress](docs/QUEUE_PROGRESS.md): active work, real stages, status recovery and measured feed cost.
+- [Model tests](docs/MODEL_TESTS.md): short queued samples, reference voice defaults and the distinction between file checks, residency and past results.
 - [Desktop architecture](docs/DESKTOP_ARCHITECTURE.md): local/Pod split and rationale.
 - [Windows desktop build](docs/DESKTOP.md): packaging, installer and native test evidence.
 - [Desktop updates](docs/DESKTOP_UPDATES.md): signed update flow, local feed preparation and publication gates.
+- `scripts/test-desktop-sidecars.py`: signed package and isolated frozen API/MCP checks; no desktop window, installer, normal profile or provider starts.
 - `scripts/test-installer-mcp-lock.py`: disposable production NSIS hook/frozen MCP lock regression; no app installation or registry/profile changes.
 - [FFmpeg redistribution](docs/FFMPEG_REDISTRIBUTION.md): exact runtime/source evidence and remaining source requirements.
 - [Model storage](docs/MODEL_STORAGE.md): complete pinned graphs, checksums and measured disk use.

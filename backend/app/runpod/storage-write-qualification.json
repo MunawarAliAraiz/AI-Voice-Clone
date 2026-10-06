@@ -1,0 +1,11 @@
+{
+  "region": "US-NE-1",
+  "checked_at": "2026-10-04T20:32:45.076371+00:00",
+  "transfer_code_sha256": "815e2eaca5c730f9e347420cf1315641708ed47773fa0a8aaf764488f9db6c7e",
+  "graph_manifest_id": "b7307be7b6a2308c2ee909e8f1b4ff01ffad9f7a8f387b9657cc1b0dd65e6182",
+  "put_readback_verified": true,
+  "multipart_readback_verified": true,
+  "owned_cleanup_verified": true,
+  "version": 1,
+  "protocol_version": "s3-pinned-relay-v1"
+}

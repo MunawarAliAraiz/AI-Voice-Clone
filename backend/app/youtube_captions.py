@@ -136,16 +136,27 @@ class BoundedCaptionSession(Session):
 
 
 @dataclass(frozen=True)
+class CaptionTrack:
+    language: str
+    language_code: str
+    is_generated: bool
+
+
+@dataclass(frozen=True)
 class ImportedCaptions:
     video_id: str
     text: str
     language: str
     language_code: str
     is_generated: bool
+    available_tracks: tuple[CaptionTrack, ...] = ()
+    provider: str = "local"
 
 
-def fetch_captions(video_id: str, language: str, *, max_chars: int = 200_000) -> ImportedCaptions:
-    if not _VIDEO_ID.fullmatch(video_id) or language not in {"en", "hi", "ur"}:
+def fetch_captions(
+    video_id: str, language: str | None = None, *, max_chars: int = 200_000
+) -> ImportedCaptions:
+    if not _VIDEO_ID.fullmatch(video_id) or language not in {None, "en", "hi", "ur"}:
         raise CaptionImportError(
             "invalid_caption_request",
             "Select English, Hindi or Urdu and enter a valid YouTube video.",
@@ -159,9 +170,19 @@ def fetch_captions(video_id: str, language: str, *, max_chars: int = 200_000) ->
         ) from exc
     try:
         with BoundedCaptionSession() as session:
-            tracks = YouTubeTranscriptApi(http_client=session).list(video_id)
+            tracks = list(YouTubeTranscriptApi(http_client=session).list(video_id))
+            supported = [
+                t for t in tracks if t.language_code.split("-", 1)[0] in {"en", "hi", "ur"}
+            ]
+            if tracks and not supported:
+                raise CaptionImportError(
+                    "captions_unsupported",
+                    "English, Hindi or Urdu captions are not available for this video.",
+                )
             matching = [
-                track for track in tracks if track.language_code.split("-", 1)[0] == language
+                track
+                for track in supported
+                if language is None or track.language_code.split("-", 1)[0] == language
             ]
             if not matching:
                 raise CaptionImportError(
@@ -189,7 +210,12 @@ def fetch_captions(video_id: str, language: str, *, max_chars: int = 200_000) ->
                     "The selected caption track is empty. Paste your script instead.",
                 )
             return ImportedCaptions(
-                video_id, "\n".join(lines), language, track.language_code, track.is_generated
+                video_id,
+                "\n".join(lines),
+                track.language_code.split("-", 1)[0],
+                track.language_code,
+                track.is_generated,
+                tuple(CaptionTrack(t.language, t.language_code, t.is_generated) for t in supported),
             )
     except CaptionImportError:
         raise
@@ -201,19 +227,26 @@ def fetch_captions(video_id: str, language: str, *, max_chars: int = 200_000) ->
                 "No public captions are available in the selected language. "
                 "Paste the transcript instead.",
             )
-        elif kind in {
-            "RequestBlocked",
-            "IpBlocked",
-            "AgeRestricted",
-            "VideoUnavailable",
-            "VideoUnplayable",
-            "PoTokenRequired",
-            "FailedToCreateConsentCookie",
-        }:
+        elif kind == "AgeRestricted":
+            code, detail = (
+                "caption_video_restricted",
+                "This video requires age verification. Paste its transcript instead.",
+            )
+        elif kind in {"VideoUnavailable", "VideoUnplayable"}:
+            code, detail = (
+                "caption_video_unavailable",
+                "This video is unavailable or private. Check the link or paste its transcript.",
+            )
+        elif kind in {"RequestBlocked", "IpBlocked", "PoTokenRequired"}:
             code, detail = (
                 "caption_access_blocked",
-                "YouTube blocked caption access or requires sign-in. "
-                "Open YouTube and paste the transcript instead.",
+                "YouTube blocked caption access from this PC. "
+                "Connect Apify in YouTube settings or paste the transcript.",
+            )
+        elif kind == "FailedToCreateConsentCookie":
+            code, detail = (
+                "caption_consent_required",
+                "YouTube requires consent. Open YouTube and paste the transcript instead.",
             )
         else:
             code, detail = (

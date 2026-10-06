@@ -396,7 +396,11 @@ class GemmaTransliteratorBackend:
 
         # Golden rule 7: resolve the PINNED snapshot on disk and load from
         # that path rather than trusting `main`.
-        model_path = snapshot_download(repo_id=hf_repo, revision=hf_revision)
+        from app.inference.runtimes.hub_cache import hub_is_offline
+
+        model_path = snapshot_download(
+            repo_id=hf_repo, revision=hf_revision, local_files_only=hub_is_offline(),
+        )
         self._tokenizer = AutoTokenizer.from_pretrained(model_path)
 
         cfg = AutoConfig.from_pretrained(model_path)

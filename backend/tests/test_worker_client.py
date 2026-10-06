@@ -86,6 +86,7 @@ async def test_backend_error_is_reported_not_raised(tmp_path: Path) -> None:
         bad = await w.call(WireOp.SYNTH, {"text": "x"}, timeout=5)  # missing keys
         assert not bad.ok
         assert bad.error_code  # e.g. KeyError
+        assert bad.error_class == "KeyError"
         assert w.is_alive  # a rendering error must not kill the worker
     finally:
         await w.kill()
@@ -129,3 +130,17 @@ async def test_kill_is_idempotent() -> None:
     assert not w.is_alive
     await w.kill()  # second kill must be a no-op, not an error
     assert not w.is_alive
+
+
+async def test_silent_ready_is_bounded_and_process_is_killed(monkeypatch) -> None:
+    worker = _worker()
+    worker._ready_timeout_sec = 0.05
+
+    async def silent_pipe():
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(worker, "_readline", silent_pipe)
+    with pytest.raises(TimeoutError, match="READY timed out"):
+        await worker.start()
+    assert not worker.is_alive
+    assert worker._stderr_task is None

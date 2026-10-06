@@ -122,26 +122,95 @@ def smoke(reference: str) -> None:
           "no weights downloaded.")
 
 
+def flex_smoke_code() -> str:
+    """Fixed GPUless qualification; never start the SDK or download a model."""
+    return "\n".join([
+        "import importlib.util, inspect, os, sys",
+        "from importlib.metadata import version",
+        "from pathlib import Path",
+        "assert importlib.util.find_spec('torch') is None",
+        "assert version('runpod') == '1.12.0'",
+        "sys.path.insert(0, '/opt/vcs/pod')",
+        "from flex_start import WorkerRuntime, load_sdk",
+        "from start import prepare_cache_environment",
+        "from preflight import verify_imports",
+        "sdk = load_sdk()",
+        "assert callable(sdk.serverless.start)",
+        "from runpod.http_client import AsyncClientSession",
+        "from runpod.serverless.modules.rp_progress import _async_progress_update",
+        "from runpod.serverless.modules.rp_logger import RunPodLogger",
+        "assert inspect.iscoroutinefunction(_async_progress_update)",
+        "assert AsyncClientSession is not None",
+        "assert RunPodLogger().level == 'NOTSET'",
+        "assert not os.environ.get('RUNPOD_WEBHOOK_GET_JOB')",
+        "assert not os.environ.get('RUNPOD_WEBHOOK_POST_OUTPUT')",
+        "assert os.environ.get('RUNPOD_REALTIME_PORT') == '0'",
+        "from app.remote_worker.flex_handler import FlexHandler",
+        "assert inspect.iscoroutinefunction(FlexHandler.handle)",
+        "assert inspect.iscoroutinefunction(WorkerRuntime.handle)",
+        "namespace = prepare_cache_environment(mount_root='/runpod-volume')",
+        "assert namespace == Path('/runpod-volume')",
+        "assert os.environ['HF_HOME'] == '/runpod-volume/hf-cache'",
+        "assert os.environ['HF_HUB_CACHE'] == '/runpod-volume/hf-cache/hub'",
+        "assert os.environ['HF_HUB_OFFLINE'] == '1'",
+        "assert os.environ['TRANSFORMERS_OFFLINE'] == '1'",
+        "assert os.environ['VCS_MODEL_VOLUME_ROOT'] == '/runpod-volume'",
+        "assert os.environ['VCS_DATA_DIR'].startswith('/tmp/vcs-runtime-')",
+        "assert os.environ['TMPDIR'].startswith('/tmp/vcs-runtime-')",
+        "assert not any(path.is_file() for path in Path('/runpod-volume').rglob('*'))",
+        "os.environ['HF_HOME'] = '/runpod-volume/voice-clone/hf-cache'",
+        "os.environ['HF_HUB_CACHE'] = '/runpod-volume/voice-clone/hf-cache/hub'",
+        "namespace = prepare_cache_environment(mount_root='/runpod-volume')",
+        "assert namespace == Path('/runpod-volume/voice-clone')",
+        "assert os.environ['TORCH_HOME'] == '/runpod-volume/voice-clone/torch-cache'",
+        "assert Path('/runpod-volume/hf-cache/hub').is_dir()",
+        "assert Path('/runpod-volume/voice-clone/hf-cache/hub').is_dir()",
+        "assert not any(path.is_file() for path in Path('/runpod-volume').rglob('*'))",
+        "verify_imports(require_cuda=False)",
+    ])
+
+
+def smoke_flex(reference: str) -> None:
+    image, separator, digest = reference.partition("@")
+    if not separator:
+        raise ValueError("Smoke testing requires a published immutable image")
+    immutable_image(image, digest)
+    docker("pull", reference)
+    with tempfile.TemporaryDirectory(prefix="vcs-flex-smoke-") as volume:
+        # No endpoint channels, credentials, network, GPU or default entrypoint.
+        # --rm guarantees even failed smoke containers leave no running process.
+        docker(
+            "run", "--rm", "--network", "none", "--mount",
+            f"type=bind,source={volume},target=/runpod-volume",
+            "--entrypoint", "/opt/venvs/flex/bin/python", reference,
+            "-c", flex_smoke_code(),
+        )
+    print("Flex: pinned SDK/hooks, torch-free API, runtime imports and mounted cache; "
+          "network disabled; CUDA, generation, provider lifecycle and billing not tested.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     disk = commands.add_parser("disk")
-    disk.add_argument("--target", choices=("gpu", "installer"), required=True)
+    disk.add_argument("--target", choices=("gpu", "installer", "flex"), required=True)
     name = commands.add_parser("name")
     name.add_argument("--repository", required=True)
-    name.add_argument("--target", choices=("gpu", "installer"), required=True)
+    name.add_argument("--target", choices=("gpu", "installer", "flex"), required=True)
     test = commands.add_parser("smoke")
     test.add_argument("--image", required=True)
+    flex_test = commands.add_parser("smoke-flex")
+    flex_test.add_argument("--image", required=True)
     evidence = commands.add_parser("evidence")
     evidence.add_argument("--image", required=True)
     evidence.add_argument("--digest", required=True)
-    evidence.add_argument("--target", choices=("gpu", "installer"), required=True)
+    evidence.add_argument("--target", choices=("gpu", "installer", "flex"), required=True)
     evidence.add_argument("--source-commit", required=True)
     evidence.add_argument("--run-url", required=True)
     evidence.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "disk":
-        required = (45 if args.target == "gpu" else 8) * 1024**3
+        required = (45 if args.target in {"gpu", "flex"} else 8) * 1024**3
         free = shutil.disk_usage(ROOT).free
         if free < required:
             raise ValueError(
@@ -155,6 +224,8 @@ def main() -> None:
         print(f"image=ghcr.io/{args.repository.lower()}-{args.target}")
     elif args.command == "smoke":
         smoke(args.image)
+    elif args.command == "smoke-flex":
+        smoke_flex(args.image)
     else:
         reference = immutable_image(args.image, args.digest)
         if not re.fullmatch(r"[a-f0-9]{40}", args.source_commit):
@@ -179,6 +250,15 @@ def main() -> None:
                 "real_generation": "not tested",
                 "listening": "not tested",
                 "billing": "not tested",
+                **({
+                    "sdk_version": "1.12.0",
+                    "sdk_hooks": "passed in network-disabled CPU container",
+                    "sdk_lifecycle": "not tested on provider",
+                    "cache_namespaces": "passed in network-disabled CPU container",
+                    "network_disabled_smoke": "passed",
+                    "provider_cleanup": "not tested",
+                    "spending_protection": "not qualified",
+                } if args.target == "flex" else {}),
             },
             **published_sizes(reference),
         }

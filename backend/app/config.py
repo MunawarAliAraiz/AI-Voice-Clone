@@ -16,7 +16,7 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .inference.spec import RuntimeKind
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
         env_prefix="VCS_", env_file=".env", extra="ignore"
     )
 
-    version: str = "0.1.8"
+    version: str = "0.1.9"
 
     #: When non-empty, every `/api/*` route except health requires this in the
     #: `X-API-Key` header. Empty = open (single-user local dev only).
@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     #: local-GPU path for the existing web/pod deployment.
     remote_worker_url: str = ""
     remote_worker_token: str = ""
+    #: Brief paid idle window to reuse checked files and loaded GPU models.
+    cloud_idle_grace_sec: int = Field(default=60, ge=0, le=300)
 
     #: HMAC secret for signed media URLs. Auto-generated per process if unset, so
     #: dev works out of the box; set it in production so tokens survive restarts.

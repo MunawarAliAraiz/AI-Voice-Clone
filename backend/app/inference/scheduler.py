@@ -51,6 +51,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
@@ -62,6 +63,8 @@ from ..exceptions import (
     WorkerCrashedError,
 )
 from .catalog import ModelCatalog
+from .error_diagnostics import with_worker_diagnostics
+from .progress import emit_progress
 from .protocol import ModelStatus, SynthRequest, SynthResult, WireOp, WorkerHandle
 from .spec import ModelSpec, ModelState, RuntimeKind
 
@@ -159,7 +162,7 @@ class InferenceScheduler:
 
             async with _bounded(self._admission):        # -> QueueFullError
                 async with self._slot:                   # <-- invariant lives here
-                    worker = await self._ensure_ready(spec)
+                    worker, load_sec = await self._ensure_ready(spec)
                     resp = await asyncio.shield(
                         worker.call("synth", ..., timeout=self._timeout_for(spec, text))
                     )
@@ -185,7 +188,7 @@ class InferenceScheduler:
 
         try:
             async with self._hold_slot():
-                worker = await self._ensure_ready(spec)
+                worker, load_sec = await self._ensure_ready(spec)
                 payload = {
                     "model_id": spec.id,
                     "text": request.text,
@@ -204,6 +207,7 @@ class InferenceScheduler:
                 # the exact race this class exists to prevent. The only early
                 # exit is the timeout below, which kills the process.
                 try:
+                    await emit_progress("generating", spec.id)
                     response = await asyncio.shield(
                         worker.call(WireOp.SYNTH, payload, timeout=timeout)
                     )
@@ -226,7 +230,7 @@ class InferenceScheduler:
                     gen_time_sec=float(result["gen_time_sec"]),
                     sample_rate=int(result.get("sample_rate", request.sample_rate)),
                     model_id=spec.id,
-                    load_time_sec=float(result.get("load_time_sec", 0.0)),
+                    load_time_sec=load_sec,
                 )
         finally:
             self._admission.release()
@@ -242,7 +246,7 @@ class InferenceScheduler:
         out: list[ModelStatus] = []
         for spec in self._catalog.specs:
             worker = self._workers.get(spec.runtime)
-            if worker is not None and worker.loaded_model_id == spec.id:
+            if worker is not None and worker.is_alive and worker.loaded_model_id == spec.id:
                 state, wait = ModelState.RESIDENT, 0.0
             elif worker is not None and worker.is_alive:
                 # Same runtime is live with a different checkpoint: a swap costs
@@ -311,9 +315,9 @@ class InferenceScheduler:
 
     # ── Internals ────────────────────────────────────────────────────────────
 
-    async def _ensure_ready(self, spec: ModelSpec) -> WorkerHandle:
+    async def _ensure_ready(self, spec: ModelSpec) -> tuple[WorkerHandle, float]:
         """
-        Return a worker with `spec` loaded, evicting others if needed.
+        Return the ready worker and load time paid here, evicting if needed.
 
         PRECONDITION: the caller holds `self._slot`. This is the ONLY function
         permitted to evict. B1 must assert the precondition rather than trust it
@@ -339,7 +343,9 @@ class InferenceScheduler:
 
         # RESIDENT — nothing to do.
         if worker is not None and worker.is_alive and worker.loaded_model_id == spec.id:
-            return worker
+            return worker, 0.0
+
+        await emit_progress("loading_model", spec.id)
 
         # A dead worker is bookkeeping we must drop before sizing the budget.
         if worker is not None and not worker.is_alive:
@@ -348,8 +354,8 @@ class InferenceScheduler:
 
         # WARM — right runtime, wrong checkpoint. Swap in-process.
         if worker is not None:
-            await self._load_into(worker, spec)
-            return worker
+            load_sec = await self._load_into(worker, spec)
+            return worker, load_sec
 
         # COLD — evict until this spec fits, then spawn.
         await self._make_room_for(spec)
@@ -358,15 +364,15 @@ class InferenceScheduler:
         self._tick += 1
         self._last_used[spec.runtime] = self._tick
         try:
-            await self._load_into(worker, spec)
+            load_sec = await self._load_into(worker, spec)
         except Exception:
             # Never leave a half-loaded worker holding VRAM the budget believes
             # is in use by a working model.
             await self._evict(spec.runtime)
             raise
-        return worker
+        return worker, load_sec
 
-    async def _load_into(self, worker: WorkerHandle, spec: ModelSpec) -> None:
+    async def _load_into(self, worker: WorkerHandle, spec: ModelSpec) -> float:
         """Load `spec` into an existing worker. Caller holds the slot."""
         payload = {"model_id": spec.id, "hf_repo": spec.hf_repo, "hf_revision": spec.hf_revision}
         # Only present for specs carrying a LoRA adapter (currently
@@ -382,6 +388,10 @@ class InferenceScheduler:
         )
         if not response.ok:
             raise self._error_from(spec, response, during_load=True)
+        load_sec = float(response.result.get("load_time_sec", 0.0))
+        if not math.isfinite(load_sec) or load_sec < 0:
+            raise ValueError("Worker returned invalid model load timing")
+        return load_sec
 
     async def _make_room_for(self, spec: ModelSpec) -> None:
         """
@@ -538,4 +548,6 @@ class InferenceScheduler:
             error = ModelLoadError(spec.id, detail)
         else:
             error = GenerationError(spec.id, detail)
-        return error.with_worker_error(code)
+        return with_worker_diagnostics(
+            error, response, stage="load" if during_load else "generate", model_id=spec.id,
+        )

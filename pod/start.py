@@ -18,23 +18,35 @@ def prepare() -> None:
         raise ValueError("POD_WORKER_TOKEN must be a 24-512 character URL-safe secret")
     if os.environ.get("VCS_REMOTE_WORKER_URL") or os.environ.get("VCS_DESKTOP_STATIC_DIR"):
         raise ValueError("Pod workers cannot use desktop or remote scheduler settings")
-    # The desktop may explicitly isolate this app's cache within a volume used
-    # by another app. Preserve that approved location across CPU and GPU Pods.
-    cache_home = os.environ.get("HF_HOME", "/workspace/hf-cache")
-    if cache_home not in {"/workspace/hf-cache", "/workspace/voice-clone/hf-cache"}:
+    prepare_cache_environment(mount_root="/workspace")
+    verify_imports(require_cuda=True)
+
+
+def prepare_cache_environment(*, mount_root: str) -> Path:
+    """Use the same two relative cache namespaces on Pod or Serverless mounts."""
+    if mount_root not in {"/workspace", "/runpod-volume"}:
+        raise ValueError("Unexpected persistent network volume mount")
+    if os.environ.get("VCS_REMOTE_WORKER_URL") or os.environ.get("VCS_DESKTOP_STATIC_DIR"):
+        raise ValueError("Pod workers cannot use desktop or remote scheduler settings")
+    # Preserve this app's approved relative namespace; never relocate weights.
+    cache_home = os.environ.get("HF_HOME", mount_root + "/hf-cache")
+    if cache_home not in {mount_root + "/hf-cache", mount_root + "/voice-clone/hf-cache"}:
         raise ValueError("Unexpected model cache location")
     hub_cache = cache_home + "/hub"
     if os.environ.get("HF_HUB_CACHE", hub_cache) != hub_cache:
         raise ValueError("Model cache locations do not match")
     cache_parent = (
-        "/workspace/voice-clone"
-        if cache_home.startswith("/workspace/voice-clone/") else "/workspace"
+        mount_root + "/voice-clone"
+        if cache_home.startswith(mount_root + "/voice-clone/") else mount_root
     )
     torch_home = cache_parent + "/torch-cache"
     torch_inductor = cache_parent + "/torch-inductor"
-    mount = Path("/workspace")
+    mount = Path(mount_root)
     if not mount.is_mount():
-        raise ValueError("Mount the persistent network volume at /workspace before starting")
+        raise ValueError("Mount the persistent network volume before starting")
+    for location in (cache_parent, cache_home, hub_cache):
+        if Path(location).is_symlink():
+            raise ValueError("The persistent model namespace cannot be a symlink")
     for location in (cache_home, hub_cache, torch_home, torch_inductor):
         path = Path(location)
         path.mkdir(parents=True, exist_ok=True)
@@ -60,7 +72,11 @@ def prepare() -> None:
     os.environ["HF_HUB_OFFLINE"] = "1"
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     os.environ["VCS_ALLOW_FAKE_RUNTIME"] = "false"
-    verify_imports(require_cuda=True)
+    os.environ["VCS_MODEL_VOLUME_ROOT"] = mount_root
+    # tempfile caches its default directory. Reset after replacing a legacy
+    # TMPDIR so even an already-imported worker cannot put user audio on storage.
+    tempfile.tempdir = None
+    return Path(cache_parent)
 
 
 def main() -> None:

@@ -139,11 +139,11 @@ def _job_cost_seconds(job: JobRecord, rtf_by_model: dict[str | None, float | Non
 
 def estimate_remaining_for_running(
     job: JobRecord, statuses: tuple[ModelStatus, ...], now: float
-) -> float:
+) -> float | None:
     """
     Estimated seconds left for a job that is ALREADY 'running' — its own
-    expected total synth time minus how long it has been running. Floored at
-    0 rather than letting a slower-than-expected job go negative.
+    expected total synth time minus how long it has been running. Once that
+    estimate is exceeded, return None rather than promise completion at zero.
 
     Shared by `estimate_wait_seconds` (for a job still queued behind this one)
     and the single-job status endpoint (for the running job's own ETA, which
@@ -155,7 +155,9 @@ def estimate_remaining_for_running(
     elapsed = (
         max(0.0, now - _parse_job_timestamp(job.started_at)) if job.started_at else 0.0
     )
-    return max(0.0, remaining_total - elapsed)
+    remaining = remaining_total - elapsed
+    # An overdue job is still running. Zero advertised completion indefinitely.
+    return remaining if remaining > 0.0 else None
 
 
 def estimate_wait_seconds(
@@ -163,7 +165,7 @@ def estimate_wait_seconds(
     running: JobRecord | None,
     queued: Sequence[JobRecord],
     now: float,
-) -> dict[int, float]:
+) -> dict[int, float | None]:
     """
     Per-job "seconds until this job is done", for jobs still `queued`.
 
@@ -179,15 +181,18 @@ def estimate_wait_seconds(
     load_cost_by_model = {s.spec.id: s.est_wait_sec for s in statuses}
     rtf_by_model: dict[str | None, float | None] = {s.spec.id: s.spec.est_rtf for s in statuses}
 
-    t = 0.0
+    t: float | None = 0.0
     resident: str | None = None
 
     if running is not None:
         t = estimate_remaining_for_running(running, statuses, now)
         resident = _job_model_id(running)
 
-    out: dict[int, float] = {}
+    out: dict[int, float | None] = {}
     for job in queued:
+        if t is None:
+            out[job.id] = None
+            continue
         model_id = _job_model_id(job)
         if model_id != resident:
             t += load_cost_by_model.get(model_id, 0.0) if model_id else 0.0

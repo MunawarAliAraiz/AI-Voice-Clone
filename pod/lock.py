@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,8 +15,12 @@ def main() -> None:
     version = subprocess.check_output([uv, "--version"], text=True)  # noqa: S603
     if not version.startswith("uv 0.11.32 "):
         raise SystemExit("Use uv 0.11.32 to regenerate these locks")
+    names = ("api", "build", "voxcpm", "chatterbox", "omnivoice", "text", "flex")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--environment", choices=names)
+    args = parser.parse_args()
     requirements = Path(__file__).resolve().parent / "requirements"
-    for name in ("api", "build", "voxcpm", "chatterbox", "omnivoice", "text"):
+    for name in ((args.environment,) if args.environment else names):
         command = [
             uv, "pip", "compile", str(requirements / f"{name}.in"),
             "--python-version", "3.12", "--python-platform", "x86_64-manylinux_2_28",
@@ -26,8 +31,10 @@ def main() -> None:
         if name == "voxcpm":
             # These pinned releases have no usable Python 3.12 Linux wheels.
             command += ["--no-binary", "antlr4-python3-runtime,argbind,crcmod,jieba,oss2"]
-        if name not in {"api", "build"}:
-            command += ["--torch-backend", "cu124" if name == "chatterbox" else "cu128"]
+        if name not in {"api", "build", "flex"}:
+            command += ["--torch-backend", "cu128"]
+        if name == "chatterbox":
+            command += ["--override", str(requirements / "chatterbox.overrides.in")]
         subprocess.run(command, check=True)  # noqa: S603 -- fixed resolver arguments, no shell
 
 

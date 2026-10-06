@@ -1,5 +1,63 @@
 # Architecture
 
+## Current cloud admission block
+
+Runpod Pod timers are not enforced. New CPU/GPU creation and legacy start/restart
+reject before a provider mutation. Desktop generation and model tests reject
+before queue admission; paid setup and new storage purchase also reject.
+Status separates verified model files from the spending block, which the UI
+shows before enabling generation. Owned-resource cleanup remains available.
+See [the incident](RUNPOD_BUDGET_INCIDENT.md) and
+[replacement proposal](CLOUD_SPENDING_PROTECTION.md).
+
+## Prepared replacement (not active)
+
+Runpod-only generation using a qualified native Serverless route is the intended
+default. Cloudflare is optional additional protection. The source below prepares
+that optional guard; no Cloudflare credential is a required customer account.
+Native provider admission, rate/settings qualification and integration remain
+unfinished, so production generation stays held. See [connections](CONNECTIONS.md).
+
+The independent guard reserves a durable lease and alarm before cloud creation.
+Cloudflare Durable Object transactions fence duplicate attempts; alarms and a
+secondary sweep retry deletion of the exact dedicated app endpoint. The first
+confirmed terminal job sets a non-extending 60-second idle stop target. Unknown
+creation or submission keeps the account fenced. This improves cleanup while
+the PC is off; provider outages still prevent an absolute dollar guarantee.
+
+The development Flex adapter keeps the existing model engines in isolated
+runtimes. A persistent SDK-owned async loop calls the authenticated ASGI app
+in-process. The desktop transport records and flushes intent before one guard
+submission and retries only status reads. The handler also creates a durable
+once-only marker before inference. No public worker listener is required.
+Results must match the selected model, request UUID and valid complete PCM WAV.
+Current transport limits are 6 MB decoded audio / 9 MB envelope; larger existing
+references and outputs need a separate qualified file transport.
+
+Direct storage access uses separate Runpod S3 credentials, encrypted with DPAPI
+and bound to the selected account-key fingerprint, volume and region. Registered
+local API routes retain desktop session authentication and update/exit admission
+locks. HEAD and bounded listing validate access without renting compute. This
+connection does not certify write permissions, model integrity or free space.
+Automatic transfers are not connected to the existing setup controller yet.
+
+Production remains blocked. See [current recovery status](CLOUD_RECOVERY_STATUS.md),
+[guard](SPENDING_GUARD_CORE.md), [worker](FLEX_WORKER.md),
+[protocol](FLEX_PROTOCOL.md), and [storage](VOLUME_SETUP_WITHOUT_POD.md).
+
+## Customer settings and account billing
+
+Required Runpod and optional Apify/Cloudflare settings are registered in the
+desktop UI/local API. Credentials use each customer's protected Windows profile,
+never installer defaults. Missing optional access disables only its feature;
+Cloudflare saved access is separate from active protection.
+
+Account Analytics mounts independently of model setup and reads aggregate
+historical billing for the account. It includes terminated resources and other
+apps, not API-token attribution. Unknown figures remain unknown; read failures
+do not present stale data as current. No analytics operation creates compute.
+See [connections](CONNECTIONS.md) and [analytics](ACCOUNT_ANALYTICS.md).
+
 ## Desktop workspace visuals
 
 The shared React workspace uses neutral surface tokens and system fonts. The
@@ -317,3 +375,19 @@ test_options_preflight_succeeds_with_api_key
 
 **The regression that must never return:** a request that returns HTTP 200 with
 audio no model produced.
+
+
+## Native transport integration — 2026-10-06
+
+The desktop controller now selects a native Serverless scheduler for speech and
+text helpers; it does not fall back to Pod provisioning. Account-scoped SQLite
+claims fence each paid request before transport, and matching saved provider IDs
+repair the dual-journal crash window without inference replay. Native admission
+and the optional independently hosted guard use separate submission interfaces.
+The legacy private session exists only for cleanup regression compatibility.
+
+Public admission stays held. Reviewed source deployment/qualification registries
+are empty; no allowance renewal or trusted receipt can come from user settings.
+Local sweeps cannot qualify PC-off shutdown. Results stay local; expired provider
+results never trigger regeneration. Read [the transport checkpoint](NATIVE_TRANSPORT.md)
+for interfaces, evidence distinctions and remaining production-bootstrap work.

@@ -8,6 +8,12 @@ on:
       - 'pod/**'
       - '.github/workflows/pod-image.yml'
   workflow_dispatch:
+    inputs:
+      target:
+        description: Image target to build and qualify
+        type: choice
+        default: flex
+        options: [flex, installer, gpu, all]
 
 permissions:
   contents: read
@@ -32,7 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [installer, gpu]
+        target: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.target != 'all' && format('["{0}"]', inputs.target) || '["installer","gpu","flex"]') }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -83,6 +89,11 @@ jobs:
         env:
           IMAGE: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
         run: python3 pod/ci.py smoke --image "$IMAGE"
+      - name: Qualify Flex SDK and mounted cache without network or GPU
+        if: matrix.target == 'flex'
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: python3 pod/ci.py smoke-flex --image "$IMAGE"
       - name: Record published digest, sizes and locks
         env:
           IMAGE: ${{ steps.name.outputs.image }}

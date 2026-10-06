@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import math
 import re
-from typing import Any
+from typing import Any, NoReturn
 
 import httpx
 
@@ -18,6 +20,17 @@ class RunpodApiError(RuntimeError):
         super().__init__(message)
         self.status_code = status_code
         self.request_rejected = request_rejected
+
+
+POD_START_BLOCKED_REASON = (
+    "Cloud generation and model downloads are paused because automatic spending "
+    "protection is unavailable. A Runpod machine could keep charging while this "
+    "PC is offline. This needs an app fix; retrying or adding funds will not help."
+)
+
+
+def _reject_unprotected_pod_creation() -> NoReturn:
+    raise RunpodApiError(POD_START_BLOCKED_REASON, request_rejected=True)
 
 
 class RunpodClient:
@@ -48,7 +61,7 @@ class RunpodClient:
             response = await self._client.request(method, path, params=params, json=body)
         except httpx.HTTPError as exc:
             raise RunpodApiError("Cannot reach Runpod") from exc
-        if response.is_error:
+        if response.is_error or response.is_redirect:
             # Apollo commonly sends parse/schema failures as HTTP 400. Inspect
             # only structured GraphQL errors through the same secret-safe code
             # classifier as HTTP 200; never infer rejection from HTTP alone.
@@ -134,7 +147,11 @@ class RunpodClient:
         ):
             value = account.get(field)
             result[key] = (
-                float(value) if isinstance(value, (int, float)) and math.isfinite(value) else None
+                float(value)
+                if isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                else None
             )
         return result
 
@@ -174,10 +191,12 @@ class RunpodClient:
         cpu_instance_id: str | None = None,
         cache_home: str = "/workspace/hf-cache",
     ) -> dict:
-        """GraphQL creation atomically includes the provider termination deadline.
+        """Reject creation until independent automatic spending protection exists.
 
-        REST v2's current creation schema has no expiry field. Never create an
-        unguarded Pod and depend on this PC being online to stop its billing.
+        Runpod accepts terminateAfter but does not enforce it or expose its
+        value for readback. An accepted timestamp cannot guard a rental when
+        this PC sleeps or goes offline. Keep this rejection before any HTTP
+        creation request, for both GPU generation and CPU model installation.
         """
         if not re.fullmatch(r"[a-zA-Z0-9./_-]+@sha256:[0-9a-f]{64}", image):
             raise ValueError("Worker image must have an immutable digest")
@@ -187,40 +206,7 @@ class RunpodClient:
             not cpu_instance_id or not re.fullmatch(r"[A-Za-z0-9_-]+", cpu_instance_id)
         ):
             raise ValueError("CPU installer requires a quoted instance configuration")
-        body = {
-            "name": name,
-            "imageName": image,
-            "cloudType": "SECURE",
-            "containerDiskInGb": 30 if gpu_id else 10,
-            "networkVolumeId": volume_id,
-            "volumeMountPath": "/workspace",
-            "dataCenterId": data_center,
-            "ports": "8000/http",
-            "terminateAfter": terminate_at,
-            "startSsh": False,
-            "startJupyter": False,
-            "env": [
-                {"key": "POD_WORKER_TOKEN", "value": worker_token},
-                {"key": "HF_HOME", "value": cache_home},
-                {"key": "HF_HUB_CACHE", "value": cache_home + "/hub"},
-                {"key": "VCS_VOLUME_ID", "value": volume_id},
-                {"key": "VCS_DATA_DIR", "value": "/tmp/vcs-worker"},  # noqa: S108 -- ephemeral container data
-            ],
-        }
-        if gpu_id:
-            body.update(gpuTypeId=gpu_id, minCudaVersion="12.8", computeType="GPU", gpuCount=1)
-            input_type, mutation = "PodFindAndDeployOnDemandInput", "podFindAndDeployOnDemand"
-        else:
-            body["instanceId"] = cpu_instance_id
-            input_type, mutation = "deployCpuPodInput", "deployCpuPod"
-        data = await self.graphql(
-            f"mutation($input: {input_type}!) {{ {mutation}(input: $input) {{ id costPerHr }} }}",
-            {"input": body},
-        )
-        pod = data.get(mutation)
-        if not isinstance(pod, dict) or not pod.get("id"):
-            raise RunpodApiError("Runpod did not return a Pod ID; reconcile before retrying")
-        return pod
+        _reject_unprotected_pod_creation()
 
     async def terminate_pod(self, pod_id: str) -> None:
         if not re.fullmatch(r"[a-zA-Z0-9_-]{6,40}", pod_id):
@@ -252,6 +238,35 @@ class RunpodClient:
 
     async def get_pod(self, pod_id: str) -> dict[str, Any]:
         return await self._call("GET", f"/pods/{pod_id}")
+
+    async def account_billing(self, period: str) -> dict[str, Any]:
+        """Read aggregate account billing, including terminated resources."""
+        options = {"24h": ("hour", 24), "7d": ("day", 7), "30d": ("day", 30)}
+        if period not in options:
+            raise ValueError("Choose 24 hours, 7 days or 30 days.")
+        bucket, count = options[period]
+        try:
+            async with asyncio.timeout(45):
+                async with self._client.stream(
+                    "GET", "/billing", params={"bucketSize": bucket, "lastN": count}
+                ) as response:
+                    if response.status_code != 200:
+                        raise RunpodApiError(
+                            f"Runpod returned HTTP {response.status_code}", response.status_code
+                        )
+                    raw = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(raw) + len(chunk) > 1024 * 1024:
+                            raise RunpodApiError("Runpod returned an invalid billing response")
+                        raw.extend(chunk)
+                    data = json.loads(raw)
+                    if not isinstance(data, dict):
+                        raise ValueError
+                    return data
+        except (httpx.HTTPError, TimeoutError):
+            raise RunpodApiError("Cannot reach Runpod billing") from None
+        except (ValueError, UnicodeError):
+            raise RunpodApiError("Runpod returned an invalid billing response") from None
 
     async def pod_billing(self, pod_id: str) -> dict[str, Any]:
         return await self._call(
@@ -303,27 +318,11 @@ class RunpodClient:
             raise ValueError("Pod image must be pinned by digest")
         if not worker_token:
             raise ValueError("Worker token is required")
-        return await self._call(
-            "POST",
-            "/pods",
-            body={
-                "name": name,
-                "image": image,
-                "gpu": {"id": gpu_id, "count": 1},
-                "cloud": "SECURE",
-                "dataCenterIds": [data_center],
-                "disk": 30,
-                "mounts": {"network": [{"volumeId": volume_id, "path": "/workspace"}]},
-                "ports": ["8000/http"],
-                "env": {
-                    "POD_WORKER_TOKEN": worker_token,
-                    "HF_HOME": "/workspace/hf-cache",
-                    "VCS_DATA_DIR": "/tmp/vcs-worker",  # noqa: S108 -- ephemeral container data
-                },
-            },
-        )
+        _reject_unprotected_pod_creation()
 
     async def pod_action(self, pod_id: str, action: str) -> dict[str, Any]:
         if action not in {"start", "stop", "restart"}:
             raise ValueError("Unsupported Pod action")
+        if action in {"start", "restart"}:
+            _reject_unprotected_pod_creation()
         return await self._call("POST", f"/pods/{pod_id}/action", body={"action": action})

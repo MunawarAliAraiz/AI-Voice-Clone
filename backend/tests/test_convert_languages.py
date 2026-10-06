@@ -109,6 +109,7 @@ def test_caption_language_is_explicit_and_manual_track_preferred(monkeypatch):
 
     def track(code, generated, text):
         return SimpleNamespace(
+            language=code,
             language_code=code,
             is_generated=generated,
             fetch=lambda: calls.append(code) or [SimpleNamespace(text=text)],

@@ -16,7 +16,7 @@ RESOURCE was readable; `status` inside it says what the job is doing.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -65,6 +65,11 @@ class JobStatusResponse(BaseModel):
     #: Seconds. A UI estimate, not a promise — see `app/jobs/estimate.py`.
     #: Populated while status is 'queued' or 'running'.
     eta_sec: float | None = None
+    eta_state: Literal['estimated', 'overdue', 'unknown', 'not_applicable'] = 'unknown'
+    elapsed_sec: float | None = None
+    phase: str | None = None
+    phase_updated_at: datetime | None = None
+    phase_model_id: str | None = None
 
     #: Populated once status == 'succeeded'. For 'synthesize' this is the SAME
     #: shape the old synchronous `/generate` returned, so `ResultCard`/

@@ -61,6 +61,8 @@ import time
 from pathlib import Path
 
 from ..exceptions import TransliteratorUnavailableError
+from .error_diagnostics import with_worker_diagnostics
+from .progress import emit_progress
 from .protocol import TransliterateResult, WireOp
 from .worker_client import WorkerProcess
 
@@ -223,6 +225,7 @@ class TransliteratorScheduler:
             try:
                 for text in texts:
                     assert self._worker is not None
+                    await emit_progress("converting", GEMMA_TRANSLITERATOR_MODEL_ID)
                     response = await self._worker.call(
                         WireOp.TRANSLITERATE,
                         {
@@ -235,9 +238,9 @@ class TransliteratorScheduler:
                         timeout=self._convert_timeout_sec,
                     )
                     if not response.ok:
-                        raise TransliteratorUnavailableError(
+                        raise with_worker_diagnostics(TransliteratorUnavailableError(
                             f"transliteration failed: {response.error_message or 'unknown'}"
-                        ).with_worker_error(response.error_code)
+                        ), response, stage="convert", model_id=GEMMA_TRANSLITERATOR_MODEL_ID)
                     out.append(
                         TransliterateResult(
                             text=str(response.result.get("text") or ""),
@@ -294,6 +297,7 @@ class TransliteratorScheduler:
         """Start and load the worker if needed. Caller holds `_worker_lock`."""
         if self._worker is not None and self._worker.is_alive and self._loaded:
             return 0.0
+        await emit_progress("loading_model", GEMMA_TRANSLITERATOR_MODEL_ID)
         if self._worker is None or not self._worker.is_alive:
             await self._start_worker()
         if not self._loaded:
@@ -338,9 +342,9 @@ class TransliteratorScheduler:
             )
         if not response.ok:
             await self._drop_worker()
-            raise TransliteratorUnavailableError(
+            raise with_worker_diagnostics(TransliteratorUnavailableError(
                 f"gemma transliterator failed to load: {response.error_message or 'unknown'}"
-            ).with_worker_error(response.error_code)
+            ), response, stage="load", model_id=GEMMA_TRANSLITERATOR_MODEL_ID)
         self._loaded = True
         self._pending_load_time_sec = float(response.result.get("load_time_sec", time.time() - t0))
         logger.info("gemma transliterator loaded in %.1fs", self._pending_load_time_sec)

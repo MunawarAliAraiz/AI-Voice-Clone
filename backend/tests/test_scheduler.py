@@ -162,6 +162,35 @@ async def test_no_double_load(tmp_path: Path) -> None:
     assert made[RuntimeKind.F5].load_calls == 1
 
 
+async def test_load_time_belongs_to_request_that_loaded_checkpoint(tmp_path: Path) -> None:
+    sched, made = _make_scheduler(load_delay_sec=0.02, synth_delay_sec=0.001)
+    try:
+        results = await asyncio.gather(*[
+            sched.synthesize(_req("a", tmp_path)) for _ in range(4)
+        ])
+        assert sorted(result.load_time_sec for result in results) == [0.0, 0.0, 0.0, 0.02]
+        assert made[RuntimeKind.F5].load_calls == 1
+        swapped = await sched.synthesize(_req("a2", tmp_path))
+        assert swapped.load_time_sec == 0.02
+        resident = await sched.synthesize(_req("a2", tmp_path))
+        assert resident.load_time_sec == 0
+    finally:
+        await sched.shutdown()
+
+
+async def test_pre_warmed_checkpoint_does_not_charge_next_synth_for_old_load(
+    tmp_path: Path,
+) -> None:
+    sched, made = _make_scheduler(load_delay_sec=0.02, synth_delay_sec=0.001)
+    try:
+        await sched.warm("a")
+        result = await sched.synthesize(_req("a", tmp_path))
+        assert result.load_time_sec == 0
+        assert made[RuntimeKind.F5].load_calls == 1
+    finally:
+        await sched.shutdown()
+
+
 async def test_queue_bounded(tmp_path: Path) -> None:
     """
     Excess concurrency is REJECTED, not queued unboundedly. A 503 beats an OOM.

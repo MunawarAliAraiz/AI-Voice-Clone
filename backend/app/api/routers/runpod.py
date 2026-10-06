@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -13,7 +13,8 @@ from ...exceptions import GenerationError
 from ...inference.catalog import CATALOG
 from ...inference.remote_scheduler import RemoteScheduler
 from ...remote_worker.model_pins import AUXILIARY_PINS
-from ...runpod.client import RunpodApiError, RunpodClient
+from ...runpod.account_analytics import account_analytics
+from ...runpod.client import POD_START_BLOCKED_REASON, RunpodApiError, RunpodClient
 from ...runpod.controller import CloudSetupError, controller
 from ...runpod.estimate import estimate_tts_costs
 from ...runpod.secrets import RunpodKeyStore
@@ -59,6 +60,10 @@ class AutoSetupInput(BaseModel):
 
 async def _cloud(settings: Settings, method: str, *args):
     _store(settings)
+    if method in {"purchase_storage", "start_setup"} or (
+        method == "set_auto_setup" and args and args[0]
+    ):
+        raise HTTPException(409, POD_START_BLOCKED_REASON)
     try:
         return await getattr(controller(settings), method)(*args)
     except (CloudSetupError, ValueError) as exc:
@@ -267,14 +272,8 @@ async def install_worker_model(
 ) -> dict[str, str]:
     if CATALOG.get(model_id) is None and model_id not in AUXILIARY_PINS:
         raise HTTPException(404, "Unknown model")
-    pair = _paired(settings)
-    remote = RemoteScheduler(pair.url, pair.token, CATALOG)
-    try:
-        return await remote.install(model_id)
-    except GenerationError as exc:
-        raise HTTPException(502, str(exc)) from exc
-    finally:
-        await remote.shutdown()
+    _store(settings)
+    raise HTTPException(409, POD_START_BLOCKED_REASON)
 
 
 @router.get("/estimate")
@@ -338,3 +337,19 @@ async def volume_usage(
         "records": result.get("records", []),
         "totals": result.get("metadata", {}).get("totals", {}),
     }
+
+
+@router.get("/analytics/account")
+async def account_spending(
+    settings: Annotated[Settings, Depends(get_settings)],
+    period: Annotated[Literal["24h", "7d", "30d"], Query()] = "24h",
+) -> dict:
+    client = RunpodClient(_key(settings))
+    try:
+        return await account_analytics(client, period)
+    except RunpodApiError:
+        raise HTTPException(
+            502, "Cannot read Runpod account billing. Check API access and try again."
+        ) from None
+    finally:
+        await client.close()

@@ -1,0 +1,3 @@
+-r api.in
+-c api.lock
+runpod==1.12.0

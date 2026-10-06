@@ -1,8 +1,9 @@
 """Desktop-owned persistent storage and bounded disposable compute sessions.
 
 Status reads never provision compute. Mutations require a reviewed setup quote
-or the user's saved per-session compute policy. Provider deadlines are sent in
-the creation request, including during an ambiguous desktop/network failure.
+or the user's saved per-session compute policy. New paid starts are currently
+blocked: provider timers are not enforced. Existing owned-resource cleanup
+and read-only status remain available.
 """
 
 from __future__ import annotations
@@ -22,13 +23,25 @@ from pathlib import Path
 from ..config import Settings
 from ..exceptions import GenerationError
 from ..inference.catalog import CATALOG
+from ..inference.native_scheduler import NativeScheduler
+from ..inference.progress import emit_progress
 from ..inference.protocol import ModelStatus
-from ..inference.remote_scheduler import RemoteScheduler
+from ..inference.remote_scheduler import RemoteScheduler, RemoteWorkerError
 from ..inference.spec import ModelState
 from ..remote_worker.model_install import REQUIRED_MODEL_IDS, model_graph, release_manifest_id
 from ..remote_worker.model_pins import AUXILIARY_PINS
-from .client import RunpodApiError, RunpodClient
+from .client import POD_START_BLOCKED_REASON, RunpodApiError, RunpodClient
+from .native_admission import NativeAdmissionError
+from .native_backend import production_backend
 from .secrets import RunpodKeyStore
+from .storage_access import StorageAccessError, StorageAccessStore, StorageBinding
+from .storage_setup import (
+    WRITE_HOLD,
+    StorageModelSetup,
+    confirmed_setup_proof,
+    storage_writes_qualified,
+)
+from .storage_transfer import StorageTransferError
 from .worker_pair import WorkerPair, WorkerPairStore
 
 MODEL_FILES_BYTES = 49_014_734_674
@@ -196,12 +209,22 @@ def verified_models(value: dict) -> bool:
 
 class CloudController:
     def __init__(
-        self, settings: Settings, *, client_factory=RunpodClient, remote_factory=RemoteScheduler
+        self,
+        settings: Settings,
+        *,
+        client_factory=RunpodClient,
+        remote_factory=RemoteScheduler,
+        storage_setup_factory=StorageModelSetup,
+        native_backend_factory=production_backend,
     ):
         self.settings = settings
         self.path = settings.data_dir / "cloud-state.json"
         self.client_factory = client_factory
         self.remote_factory = remote_factory
+        self.storage_setup_factory = storage_setup_factory
+        self.native_backend_factory = native_backend_factory
+        self.native_backend = None
+        self.storage_setup: StorageModelSetup | None = None
         self.lock = asyncio.Lock()
         self.active = 0
         self.setup_task: asyncio.Task | None = None
@@ -244,6 +267,151 @@ class CloudController:
             )
         return key
 
+    def storage_binding(self) -> StorageBinding:
+        volume = self.read().get("volume") or {}
+        return StorageBinding(
+            hashlib.sha256(self.key().encode()).hexdigest(),
+            volume.get("id", ""),
+            volume.get("dataCenter", ""),
+            prefix="voice-clone/hf-cache/hub/"
+            if volume.get("cache_namespace") == "isolated"
+            else "hf-cache/hub/",
+        )
+
+    def _storage_credentials(self):
+        try:
+            binding = self.storage_binding()
+            return StorageAccessStore(self.settings.data_dir).get(binding), binding
+        except (CloudSetupError, ValueError):
+            return None, None
+        except (StorageAccessError, OSError, RuntimeError):
+            raise CloudSetupError(
+                "Cannot unlock storage access. Connect storage access again."
+            ) from None
+
+    def mark_files_invalid(self, reason: str = "MODEL_CACHE_MISSING") -> None:
+        """Revoke historic readiness after a worker confirms missing model files."""
+        state = self.read()
+        state.update(
+            ready=False,
+            models_verified=False,
+            storage_proof_hash=None,
+            requires_model_repair=True,
+            setup_phase="failed",
+            setup_error="Required model files are missing. Repair model storage to continue.",
+        )
+        prior_models = state.get("models")
+        prior_models = prior_models if isinstance(prior_models, dict) else {}
+        state["models"] = {
+            model_id: {
+                **row,
+                "state": "not_started",
+                "bytes_completed": 0,
+                "files_verified": 0,
+                "progress_pct": 0,
+                "detail": "Model files need checking.",
+                "evidence": None,
+            }
+            for model_id, row in prior_models.items()
+            if isinstance(row, dict)
+        }
+        self.progress = {}
+        self.detail = state["setup_error"]
+        state["setup_detail"] = self.detail
+        self.write(state)
+
+    async def _start_storage_setup(self, credentials, binding: StorageBinding) -> None:
+        async with self.lock:
+            if self.cancel_task and not self.cancel_task.done():
+                raise CloudSetupError("Model setup is still stopping.")
+            if self.setup_task and not self.setup_task.done():
+                return
+            state = self.read()
+            if state.get("compute") or self.active:
+                raise CloudSetupError(
+                    "Finish the current cloud operation before setting up models."
+                )
+            if not storage_writes_qualified(binding):
+                raise CloudSetupError(WRITE_HOLD)
+            self.storage_setup = self.storage_setup_factory(
+                credentials,
+                binding,
+                self.settings.data_dir,
+                volume_size_gb=state["volume"]["size"],
+            )
+            state.update(
+                ready=False,
+                models_verified=False,
+                setup_transport="s3",
+                storage_proof_hash=None,
+                auto_setup_enabled=True,
+                auto_setup_requires_resume=False,
+                auto_setup_attempt_consumed=False,
+                pause_reason=None,
+                setup_error=None,
+            )
+            self.write(state)
+            self._cancel_requested = False
+            self.detail = "Checking model storage."
+            self.progress = self.storage_setup.status()
+            self._setup_status("checking_files")
+            self.setup_task = asyncio.create_task(self._setup_storage())
+
+    async def _setup_storage(self) -> None:
+        manager = self.storage_setup
+        try:
+            result = await manager.run_setup()
+            if manager.binding != self.storage_binding() or not verified_models(result):
+                raise StorageTransferError(
+                    "Model storage changed or its files did not pass all checks."
+                )
+            self.progress = {key: value for key, value in result.items() if key != "proof"}
+            state = self.read()
+            state.update(
+                ready=True,
+                models_verified=True,
+                evidence_version=EVIDENCE_VERSION,
+                manifest_id=release_manifest_id(),
+                models=result["models"],
+                capacity=result["capacity"],
+                requires_model_repair=False,
+                storage_proof_hash=hashlib.sha256(
+                    json.dumps(result["proof"], sort_keys=True).encode()
+                ).hexdigest(),
+                setup_transport="s3",
+                auto_setup_requires_resume=False,
+                auto_setup_waiting=False,
+            )
+            self.write(state)
+            self.detail = "Required model files are checked."
+            self._setup_status("ready")
+        except (InterruptedError, asyncio.CancelledError):
+            self.progress = manager.status()
+            self.detail = "Model downloads paused."
+            state = self.read()
+            state.update(ready=False, models_verified=False, models=self.progress["models"])
+            self.write(state)
+            self._setup_status("cancelled")
+            raise
+        except (StorageTransferError, CloudSetupError, OSError, ValueError) as exc:
+            self.progress = manager.status()
+            state = self.read()
+            state.update(
+                ready=False,
+                models_verified=False,
+                models=self.progress["models"],
+                auto_setup_requires_resume=True,
+            )
+            self.write(state)
+            self.detail = (
+                str(exc)
+                if isinstance(exc, (StorageTransferError, CloudSetupError))
+                else "Model setup could not finish. Try again."
+            )
+            self._setup_status("failed", error=self.detail)
+        finally:
+            await manager.close()
+
     def images(self) -> dict:
         path = Path(__file__).with_name("release.json")
         if not path.is_file():
@@ -271,6 +439,9 @@ class CloudController:
 
     async def snapshot(self) -> dict:
         state = self.read()
+        if self.storage_setup and self.setup_task and not self.setup_task.done():
+            self.progress = self.storage_setup.status()
+            self.detail = self.progress.get("detail", "")
         connected = RunpodKeyStore(self.settings.data_dir).has_key()
         stage = "connect_account" if not connected else "select_storage"
         if state.get("volume"):
@@ -278,7 +449,11 @@ class CloudController:
         if self.setup_task and not self.setup_task.done():
             stage = "download_models"
         running = bool(self.setup_task and not self.setup_task.done())
-        phase = state.get("setup_phase", "ready" if self.is_ready(state) else "idle")
+        phase = (
+            self.progress.get("setup_phase")
+            if running and self.storage_setup
+            else state.get("setup_phase", "ready" if self.is_ready(state) else "idle")
+        )
         error = state.get("setup_error")
         active_phases = {
             "starting_worker",
@@ -308,8 +483,22 @@ class CloudController:
         compute = state.get("compute")
         if compute:
             compute = {**compute, "creation_confirmed": bool(compute.get("pod_id"))}
+        credentials, binding = self._storage_credentials()
+        storage_connected = credentials is not None
+        storage_qualified = bool(binding and storage_writes_qualified(binding))
         return {
             "connected": connected,
+            "files_ready": self.is_ready(state),
+            "generation_ready": False,
+            "generation_transport": "native_serverless",
+            "setup_transport": state.get("setup_transport"),
+            "storage_access_connected": storage_connected,
+            "storage_download_supported": storage_connected and storage_qualified,
+            "storage_download_blocked_reason": WRITE_HOLD
+            if storage_connected and not storage_qualified
+            else None,
+            "requires_model_repair": bool(state.get("requires_model_repair")),
+            "compute_start_blocked_reason": POD_START_BLOCKED_REASON,
             "stage": stage,
             "volume": state.get("volume"),
             "capacity": state.get("capacity"),
@@ -358,6 +547,14 @@ class CloudController:
                 if not key or hashlib.sha256(key.encode()).hexdigest() != state["account"]:
                     return False
             except OSError:
+                return False
+        if state.get("setup_transport") == "s3":
+            try:
+                if not verified_models({**state, "ready": True}) or not confirmed_setup_proof(
+                    self.settings.data_dir, self.storage_binding(), state
+                ):
+                    return False
+            except (CloudSetupError, ValueError, OSError):
                 return False
         return bool(
             state.get("ready")
@@ -548,10 +745,12 @@ class CloudController:
                     "replace_current": bool(quote.get("replace_current")),
                 }
                 if operation and state.get("volume_operation_sent"):
-                    if (not isinstance(prior_binding, dict)
-                            or prior_binding.get("intent") != intent
-                            or prior_binding.get("operation_name") != operation
-                            or not prior_binding.get("quote_id")):
+                    if (
+                        not isinstance(prior_binding, dict)
+                        or prior_binding.get("intent") != intent
+                        or prior_binding.get("operation_name") != operation
+                        or not prior_binding.get("quote_id")
+                    ):
                         raise CloudSetupError(
                             "An earlier storage purchase is uncertain. "
                             "Check it before buying different storage."
@@ -704,7 +903,8 @@ class CloudController:
                 else "legacy",
             )
             self.write(state)
-            return state["volume"]
+        await self.resume_auto_setup()
+        return state["volume"]
 
     async def set_policy(self, max_session_usd: float, max_hourly_usd: float) -> None:
         if not (0.1 <= max_session_usd <= 20 and 0.1 <= max_hourly_usd <= 10):
@@ -715,6 +915,9 @@ class CloudController:
             self.write(state)
 
     async def start_setup(self) -> None:
+        credentials, binding = self._storage_credentials()
+        if credentials is not None:
+            return await self._start_storage_setup(credentials, binding)
         async with self.lock:
             if self.cancel_task and not self.cancel_task.done():
                 raise CloudSetupError("Model setup is still being cancelled; wait for cleanup")
@@ -762,8 +965,23 @@ class CloudController:
         return await self.snapshot()
 
     async def resume_auto_setup(self) -> None:
-        """Resume saved, explicit download intent without buying storage or new GPUs."""
+        """Resume saved download intent; S3 never starts a paid machine."""
         state = self.read()
+        credentials, binding = self._storage_credentials()
+        if credentials is not None:
+            if (
+                self.is_ready(state)
+                or state.get("auto_setup_enabled") is False
+                or state.get("auto_setup_requires_resume")
+            ):
+                return
+            if state.get("pause_reason") == "manual" or state.get("compute") or self.active:
+                return
+            if not storage_writes_qualified(binding):
+                self.detail = WRITE_HOLD
+                return
+            await self._start_storage_setup(credentials, binding)
+            return
         if not state.get("auto_setup_enabled") or not state.get("volume") or self.is_ready(state):
             return
         if state.get("pause_reason") == "app_exit":
@@ -930,13 +1148,17 @@ class CloudController:
 
     async def _cancel_setup(self) -> None:
         self.detail = (
-            "Stopping model setup and the temporary download machine. Stored files are kept."
+            "Pausing model downloads."
+            if self.storage_setup
+            else ("Stopping model setup and the temporary download machine. Stored files are kept.")
         )
         state = self.read()
         state["ready"] = False
         self.write(state)
         self._setup_status("cancelling", cleanup_pending=bool(state.get("compute")))
         task = self.setup_task
+        if self.storage_setup:
+            self.storage_setup.pause()
         if task and not task.done():
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -959,7 +1181,15 @@ class CloudController:
             models = self.progress.get("models", self.read().get("models", {}))
             models = {key: dict(value) for key, value in models.items()}
             for value in models.values():
-                if value.get("state") in {"discovering", "verifying", "downloading"}:
+                if value.get("state") in {
+                    "discovering",
+                    "verifying",
+                    "downloading",
+                    "uploading",
+                    "checking",
+                    "paused",
+                    "files_checked",
+                }:
                     value.update(
                         state="cancelled", detail="Stopped; stored bytes are kept for retry"
                     )
@@ -1086,14 +1316,18 @@ class CloudController:
                     "Actual Pod price differs from the approved rate; session is being released"
                 )
             self.detail = "Starting cloud worker; model loading is billed compute time"
-            for _ in range(120):
+            startup_limit = min(time.monotonic() + 600, time.monotonic() + seconds)
+            while time.monotonic() < startup_limit:
                 try:
-                    await self._worker_call(pair, "GET", "/v1/health")
+                    await asyncio.wait_for(
+                        self._worker_call(pair, "GET", "/v1/health"),
+                        timeout=min(15, max(0.01, startup_limit - time.monotonic())),
+                    )
                     state["compute"]["status"] = "running"
                     self.write(state)
                     return pair
-                except GenerationError:
-                    await asyncio.sleep(5)
+                except (GenerationError, TimeoutError):
+                    await asyncio.sleep(min(5, max(0, startup_limit - time.monotonic())))
             raise CloudSetupError("Cloud worker did not start within 10 minutes")
         finally:
             await client.close()
@@ -1254,12 +1488,12 @@ class CloudController:
                         "Multiple app-owned sessions need reconciliation in Runpod"
                     )
                 if not matches:
-                    # Absence immediately after an ambiguous POST is not proof of failure.
-                    deadline = datetime.fromisoformat(compute["deadline"])
-                    if datetime.now(UTC) < deadline:
-                        raise CloudSetupError(
-                            "Creation result is uncertain; wait for reconciliation or expiry"
-                        )
+                    # Provider timers are not enforced. Elapsed local time cannot
+                    # prove an ambiguous creation failed or stopped billing.
+                    raise CloudSetupError(
+                        "Machine start is still uncertain. Open Runpod to check it. "
+                        "An expired local stop target is not confirmation that it stopped."
+                    )
                 else:
                     pod_id = matches[0]["id"]
             if pod_id:
@@ -1312,7 +1546,41 @@ class CloudController:
             self.write(state)
 
     @contextlib.asynccontextmanager
-    async def session(self) -> AsyncIterator[RemoteScheduler]:
+    async def session(self) -> AsyncIterator[NativeScheduler]:
+        """Default native path for UI/MCP jobs and helpers; never falls back to Pods.
+
+        Public admission remains held until real provider qualification and the
+        audited allowance flow are complete. Injected factories are test seams,
+        not user settings or an environment bypass.
+        """
+        async with self.lock:
+            if not self.is_ready(self.read()):
+                raise GenerationError(
+                    "remote", "Finish model storage setup in the Runpod tab first"
+                )
+            try:
+                if self.native_backend is None:
+                    self.native_backend = await self.native_backend_factory(self)
+                self.active += 1
+            except NativeAdmissionError as exc:
+                raise GenerationError("remote", POD_START_BLOCKED_REASON) from exc
+        remote = NativeScheduler(self.native_backend)
+        try:
+            yield remote
+        except RemoteWorkerError as exc:
+            if exc.code == "MODEL_CACHE_MISSING":
+                self.mark_files_invalid()
+                with contextlib.suppress(NativeAdmissionError, OSError):
+                    await self.native_backend.stop()
+            raise
+        finally:
+            async with self.lock:
+                self.active -= 1
+
+    @contextlib.asynccontextmanager
+    async def _legacy_session(self) -> AsyncIterator[RemoteScheduler]:
+        if self.lock.locked():
+            await emit_progress("waiting_for_gpu")
         async with self.lock:
             state = self.read()
             if not self.is_ready(state):
@@ -1326,10 +1594,19 @@ class CloudController:
                     WorkerPairStore(self.settings.data_dir).get() if state.get("compute") else None
                 )
                 if pair is None:
+                    await emit_progress("starting_gpu")
                     pair = await self._provision(installer=False)
-                    await self._worker_call(pair, "POST", "/v1/setup")
-                    for _ in range(1800):
-                        value = await self._worker_call(pair, "GET", "/v1/setup")
+                    await emit_progress("checking_files")
+                    await asyncio.wait_for(self._worker_call(pair, "POST", "/v1/setup"), 15)
+                    compute_deadline = datetime.fromisoformat(self.read()["compute"]["deadline"])
+                    verify_limit = time.monotonic() + min(
+                        3600, max(0, (compute_deadline - datetime.now(UTC)).total_seconds())
+                    )
+                    while time.monotonic() < verify_limit:
+                        value = await asyncio.wait_for(
+                            self._worker_call(pair, "GET", "/v1/setup"),
+                            timeout=min(15, max(0.01, verify_limit - time.monotonic())),
+                        )
                         if verified_models(value):
                             break
                         if any(
@@ -1343,12 +1620,31 @@ class CloudController:
                         raise CloudSetupError("Model verification exceeded its startup limit")
                 remote = self.remote_factory(pair.url, pair.token, CATALOG)
                 self.active += 1
-            except (CloudSetupError, RunpodApiError, ValueError, OSError, GenerationError) as exc:
+            except (
+                CloudSetupError,
+                RunpodApiError,
+                ValueError,
+                OSError,
+                GenerationError,
+                TimeoutError,
+            ) as exc:
+                if isinstance(exc, RemoteWorkerError) and exc.code == "MODEL_CACHE_MISSING":
+                    self.mark_files_invalid()
                 with contextlib.suppress(CloudSetupError, RunpodApiError):
                     await self._release()
+                if isinstance(exc, TimeoutError):
+                    raise GenerationError(
+                        "remote", "Cloud setup took too long. This session is stopping; try again."
+                    ) from exc
+                if isinstance(exc, RemoteWorkerError):
+                    raise
                 raise GenerationError("remote", str(exc)) from exc
         try:
             yield remote
+        except RemoteWorkerError as exc:
+            if exc.code == "MODEL_CACHE_MISSING":
+                self.mark_files_invalid()
+            raise
         finally:
             try:
                 await remote.shutdown()
@@ -1356,12 +1652,34 @@ class CloudController:
                 async with self.lock:
                     self.active -= 1
                     if self.active == 0:
-                        self.release_task = asyncio.create_task(self._idle_release())
+                        if self.read().get("requires_model_repair"):
+                            try:
+                                await self._release()
+                            except (CloudSetupError, RunpodApiError, OSError, ValueError):
+                                state = self.read()
+                                state["cleanup_pending"] = bool(state.get("compute"))
+                                self.write(state)
+                        else:
+                            self.release_task = asyncio.create_task(self._idle_release())
 
     async def _idle_release(self) -> None:
         try:
             while True:
-                await asyncio.sleep(5)
+                # This is a local cleanup timer only. Provider stop timers
+                # are not enforced and cannot protect an offline PC.
+                compute = self.read().get("compute") or {}
+                remaining = self.settings.cloud_idle_grace_sec
+                if compute.get("deadline"):
+                    remaining = min(
+                        remaining,
+                        max(
+                            0,
+                            (
+                                datetime.fromisoformat(compute["deadline"]) - datetime.now(UTC)
+                            ).total_seconds(),
+                        ),
+                    )
+                await asyncio.sleep(remaining)
                 async with self.lock:
                     if self.active:
                         return
@@ -1372,12 +1690,25 @@ class CloudController:
                     return
         except (CloudSetupError, RunpodApiError):
             self.detail = (
-                "Compute release needs retry. The provider termination deadline remains active."
+                "Could not confirm the machine stopped. It may still be charging. "
+                "Open Runpod to check and stop it."
             )
 
     async def model_status(self) -> tuple[ModelStatus, ...]:
         state = self.read()
         ready = self.is_ready(state)
+        # Only inspect an existing generation worker. Never provision from a
+        # status read, and do not carry residency over after termination.
+        if ready and (state.get("compute") or {}).get("kind") == "generation":
+            pair = WorkerPairStore(self.settings.data_dir).get()
+            if pair:
+                remote = self.remote_factory(pair.url, pair.token, CATALOG)
+                try:
+                    return await asyncio.wait_for(remote.status(), timeout=5)
+                except (GenerationError, ValueError, OSError, TimeoutError):
+                    pass
+                finally:
+                    await remote.shutdown()
         return tuple(
             ModelStatus(
                 spec=s,
@@ -1390,12 +1721,23 @@ class CloudController:
         )
 
     async def shutdown(self) -> None:
+        if self.native_backend is not None:
+            try:
+                await self.native_backend.close()
+            except (NativeAdmissionError, OSError):
+                self.detail = (
+                    "Cloud shutdown is unconfirmed. The saved native session requires cleanup."
+                )
+            finally:
+                self.native_backend = None
         if self.auto_task and not self.auto_task.done():
             self.auto_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self.auto_task
         if self.cancel_task and not self.cancel_task.done():
             await asyncio.shield(self.cancel_task)
+        if self.storage_setup:
+            self.storage_setup.pause()
         if self.setup_task and not self.setup_task.done():
             self.setup_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

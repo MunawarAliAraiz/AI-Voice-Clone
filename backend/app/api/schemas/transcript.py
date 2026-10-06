@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 __all__ = [
     "PrepareTextRequest",
@@ -32,7 +32,19 @@ class PrepareTextRequest(BaseModel):
 
 class YoutubeTranscriptRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2048)
-    source_language: Literal["en", "hi", "ur"]
+    source_language: Literal["en", "hi", "ur"] | None = None
+    refresh: bool = False
+
+
+class ApifyConnectionInput(BaseModel):
+    # Validate manually so a validation response never echoes a rejected key.
+    api_key: SecretStr
+
+
+class CaptionTrackResponse(BaseModel):
+    language: str
+    language_code: str
+    is_generated: bool
 
 
 class TranscriptChunk(BaseModel):
@@ -64,3 +76,17 @@ class PreparedTextResponse(BaseModel):
     video_id: str | None = None
     caption_language_code: str | None = None
     captions_generated: bool | None = None
+    available_caption_tracks: list[CaptionTrackResponse] = Field(default_factory=list)
+    caption_provider: Literal["local", "apify"] | None = None
+
+
+class CaptionImportStatus(BaseModel):
+    id: str
+    phase: Literal["starting", "fetching", "checking", "cancelling", "ready", "failed", "cancelled"]
+    detail: str
+    error_code: str | None = None
+    created_at: float
+    provider: Literal["local", "apify"]
+    cached: bool = False
+    maximum_import_usd: float = 0
+    result: PreparedTextResponse | None = None

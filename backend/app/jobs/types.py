@@ -143,6 +143,9 @@ class JobRecord:
     #: not a retry of anything, so `None` is the honest default rather than a
     #: placeholder.
     retry_of_job_id: int | None = None
+    phase: str | None = None
+    phase_updated_at: str | None = None
+    phase_model_id: str | None = None
 
 
 def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
@@ -185,6 +188,9 @@ def job_record_from_row(row: Mapping[str, Any]) -> JobRecord:
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         updated_at=row["updated_at"],
+        phase=row['phase'] if 'phase' in row.keys() else None,
+        phase_updated_at=row['phase_updated_at'] if 'phase_updated_at' in row.keys() else None,
+        phase_model_id=row['phase_model_id'] if 'phase_model_id' in row.keys() else None,
     )
 
 

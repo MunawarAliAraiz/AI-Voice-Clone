@@ -1,22 +1,22 @@
 {
   "schema_version": 1,
-  "source_commit": "5e2d5c0556622475b8e308c851b40d48fd0613a7",
-  "installer": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:0f5156069a0b7c7b6cbffef5fd64ab533321c51ac1f04b0fde73eab702c23062",
-  "gpu": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:480e687c775d4a35f351ed44548bae8953ca794369e1ae4874a7481069ae9851",
-  "verified_at": "2026-10-03T04:27:41.197793+00:00",
+  "source_commit": "b8df681de04ac4dc6d18205da9e199febe34a68f",
+  "installer": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:fa656ac31621db3d2d7314b4aa9cad53cf5a07207c3e6d73c59f46ed70eb97e0",
+  "gpu": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:5f4910335f1d5e8930a82e84208d02110a632d3945d32d4c0399ee78df7bdc84",
+  "verified_at": "2026-10-03T15:53:45.600445+00:00",
   "evidence": {
     "installer": {
       "target": "installer",
-      "source_commit": "5e2d5c0556622475b8e308c851b40d48fd0613a7",
-      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:0f5156069a0b7c7b6cbffef5fd64ab533321c51ac1f04b0fde73eab702c23062",
+      "source_commit": "b8df681de04ac4dc6d18205da9e199febe34a68f",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-installer@sha256:fa656ac31621db3d2d7314b4aa9cad53cf5a07207c3e6d73c59f46ed70eb97e0",
       "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
       "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
       "debian_snapshot": "20260901T000000Z",
-      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37095214258",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37133680503",
       "dependency_locks": {
         "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
         "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
-        "chatterbox.lock": "83f6d89aff6932bb1dac2703261c350033ecc793a40f394ab6147a9d46c4af73",
+        "chatterbox.lock": "4f48a896e8ac92400134c73d693fb7cfccd1c305fe868dba07010e70e8b746e9",
         "omnivoice.lock": "82f73148b17bb4331d117d870fd2dea55bc4c56e79140bbc51707991206df75d",
         "text.lock": "796a2ff3b09ead7fa0956f6d51b95c268a448aaeb3be8937d95d3e4732050df2",
         "voxcpm.lock": "c1a66acd51ed983a65344ce7f06f42218604f7146f4c8548965fa2207d4f5f0a"
@@ -29,29 +29,29 @@
         "listening": "not tested",
         "billing": "not tested"
       },
-      "platform_manifest_digest": "sha256:91e70c1e035a1554de4991f696b2d1efc155c06f9461c6496df1dc17f715143e",
-      "compressed_layer_bytes": 280304955,
+      "platform_manifest_digest": "sha256:71503790262ade9eb671d54183558f903d45923242a987029b13cde7463f6d9e",
+      "compressed_layer_bytes": 280309510,
       "layer_count": 14,
       "registry": {
         "anonymous_pull": "passed",
         "content_digests": "verified",
         "platform": "linux/amd64",
-        "config_digest": "sha256:e24a4b609dc7dd0e280d447679c8cb0c67d1caec8461f5d3e2cbbd0c941585c4",
+        "config_digest": "sha256:b0d94cb45a521556153a22793d68a4dc68e967435e6c15daa80c1871f5cf4cba",
         "layers_downloaded": false
       }
     },
     "gpu": {
       "target": "gpu",
-      "source_commit": "5e2d5c0556622475b8e308c851b40d48fd0613a7",
-      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:480e687c775d4a35f351ed44548bae8953ca794369e1ae4874a7481069ae9851",
+      "source_commit": "b8df681de04ac4dc6d18205da9e199febe34a68f",
+      "image": "ghcr.io/munawaraliaraiz/ai-voice-clone-gpu@sha256:5f4910335f1d5e8930a82e84208d02110a632d3945d32d4c0399ee78df7bdc84",
       "python_base": "docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a",
       "uv_base": "ghcr.io/astral-sh/uv@sha256:0d127b3a7049b879a6e18a79c7f33fea59aa83c226464248f89cfb716a6b96f5",
       "debian_snapshot": "20260901T000000Z",
-      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37095214258",
+      "workflow_run": "https://github.com/MunawarAliAraiz/AI-Voice-Clone/actions/runs/37133680503",
       "dependency_locks": {
         "api.lock": "2bf53a6b7ea8dda6a2de76f192fb56be4a629f960e49fe84b13cbbcb8fdb3e78",
         "build.lock": "884a4e693937e944f17f0cb66cc43144ae36f1bd9ffbe086c80d2fcd17ed79c2",
-        "chatterbox.lock": "83f6d89aff6932bb1dac2703261c350033ecc793a40f394ab6147a9d46c4af73",
+        "chatterbox.lock": "4f48a896e8ac92400134c73d693fb7cfccd1c305fe868dba07010e70e8b746e9",
         "omnivoice.lock": "82f73148b17bb4331d117d870fd2dea55bc4c56e79140bbc51707991206df75d",
         "text.lock": "796a2ff3b09ead7fa0956f6d51b95c268a448aaeb3be8937d95d3e4732050df2",
         "voxcpm.lock": "c1a66acd51ed983a65344ce7f06f42218604f7146f4c8548965fa2207d4f5f0a"
@@ -64,14 +64,14 @@
         "listening": "not tested",
         "billing": "not tested"
       },
-      "platform_manifest_digest": "sha256:1c0e621d8b53289914c417a1ba22dad4a0475dbd2a92a320796e970e5e335bff",
-      "compressed_layer_bytes": 7736370443,
+      "platform_manifest_digest": "sha256:4d37b517d48357149cc189569834e23ce3fe2970f40acdab25b4474e3ed50a4a",
+      "compressed_layer_bytes": 4745769174,
       "layer_count": 17,
       "registry": {
         "anonymous_pull": "passed",
         "content_digests": "verified",
         "platform": "linux/amd64",
-        "config_digest": "sha256:495e12ad37ea14f7eb4c73ea62162feafda5ba67b0e8f5d31e9d12fc57b9f938",
+        "config_digest": "sha256:4bd1639063e9630c5a97b65f6d657a763cd38b9a1ffd948ea0106a63341c40c9",
         "layers_downloaded": false
       }
     }

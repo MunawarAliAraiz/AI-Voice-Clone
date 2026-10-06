@@ -24,8 +24,8 @@ def main() -> None:
     parser.add_argument("--uv-image", type=digest_ref, required=True,
                         help="Digest of ghcr.io/astral-sh/uv:0.11.32")
     parser.add_argument("--tag", required=True, help="Local image tag to build")
-    parser.add_argument("--target", choices=("installer", "gpu"), default="gpu",
-                        help="Cheap CPU model installer or complete GPU runtime")
+    parser.add_argument("--target", choices=("installer", "gpu", "flex"), default="gpu",
+                        help="CPU installer, GPU service or Serverless Flex worker")
     args = parser.parse_args()
     docker = shutil.which("docker")
     if docker is None:

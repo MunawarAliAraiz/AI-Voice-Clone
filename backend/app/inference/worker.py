@@ -30,6 +30,7 @@ import sys
 import traceback
 from typing import Any
 
+from .error_diagnostics import runtime_error_code
 from .protocol import WireOp
 from .runtimes import make_backend
 
@@ -139,7 +140,8 @@ def main(runtime: str) -> int:
                 {
                     "id": rid,
                     "ok": False,
-                    "error_code": type(exc).__name__,
+                    "error_code": runtime_error_code(exc),
+                    "error_class": type(exc).__name__,
                     "error_message": str(exc),
                     "traceback": traceback.format_exc(),
                 }

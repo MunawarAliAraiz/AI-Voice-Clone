@@ -37,6 +37,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -49,6 +50,7 @@ from ..exceptions import (
     JobNotFoundError,
     JobQueueFullError,
 )
+from ..inference.progress import progress_scope
 from .handlers import HANDLERS, JobContext
 from .types import JobHandler, JobKind, JobRecord, JobStatus, job_record_from_row
 
@@ -316,7 +318,11 @@ class JobRunner:
             transliterator=self._transliterator,
         )
         try:
-            outcome = await handler(ctx, job)
+            async def report_progress(stage: str, model_id: str | None) -> None:
+                await self._db.update_job_phase(job.id, stage, model_id)
+
+            with progress_scope(report_progress, request_id=uuid.uuid4().hex):
+                outcome = await handler(ctx, job)
         except AppError as exc:
             await self._db.fail_job(
                 job.id,

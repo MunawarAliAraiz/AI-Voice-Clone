@@ -47,6 +47,9 @@ _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # produced four identical queued jobs and no way to tell they were the
     # same attempt.
     ("jobs", "retry_of_job_id", "retry_of_job_id INTEGER"),
+    ("jobs", "phase", "phase TEXT"),
+    ("jobs", "phase_updated_at", "phase_updated_at TEXT"),
+    ("jobs", "phase_model_id", "phase_model_id TEXT"),
 )
 
 
@@ -364,6 +367,7 @@ class Database:
             await self._c.execute(
                 """UPDATE jobs
                       SET status = 'succeeded',
+                          phase = NULL, phase_model_id = NULL,
                           history_id = ?,
                           result_json = ?,
                           finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
@@ -382,6 +386,7 @@ class Database:
             await self._c.execute(
                 """UPDATE jobs
                       SET status = 'failed',
+                          phase = NULL, phase_model_id = NULL,
                           error_code = ?, error_title = ?, error_status = ?,
                           error_detail = ?, error_extensions_json = ?,
                           finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
@@ -432,6 +437,34 @@ class Database:
         row = await cur.fetchone()
         return int(row["n"]) if row else 0
 
+    async def update_job_phase(self, job_id: int, phase: str, model_id: str | None) -> None:
+        """Only real, allowlisted execution boundaries reach the durable UI."""
+        if phase not in {'starting_gpu', 'checking_files', 'loading_model', 'generating',
+                         'analyzing', 'converting', 'completing', 'waiting_gpu',
+                         'waiting_for_gpu', 'progress_unavailable', 'worker_busy'}:
+            return
+        async with self._write_lock:
+            await self._c.execute(
+                "UPDATE jobs SET phase = ?, phase_model_id = ?, "
+                "phase_updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
+                "updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') "
+                "WHERE id = ? AND status = 'running'",
+                (phase, model_id, job_id),
+            )
+            await self._c.commit()
+
+    async def list_activity_jobs(self, tracked_ids: list[int]) -> list[aiosqlite.Row]:
+        """All active work, recent rows and terminal rows a client was watching."""
+        tracked = list(dict.fromkeys(tracked_ids))
+        extra = f" OR id IN ({','.join('?' for _ in tracked)})" if tracked else ""
+        cur = await self._c.execute(
+            "SELECT * FROM jobs WHERE status IN ('queued','running')"  # noqa: S608 -- bound IDs
+            " OR id IN (SELECT id FROM jobs ORDER BY id DESC LIMIT 20)"
+            + extra + " ORDER BY id DESC",
+            tracked,
+        )
+        return list(await cur.fetchall())
+
     async def list_active_jobs(self, kind: str) -> list[aiosqlite.Row]:
         """
         Every not-yet-terminal job of `kind`, in enqueue order. Feeds
@@ -440,7 +473,8 @@ class Database:
         enqueue order — the caller splits by status, not position).
         """
         cur = await self._c.execute(
-            "SELECT * FROM jobs WHERE kind = ? AND status IN ('queued','running') ORDER BY id",
+            "SELECT * FROM jobs WHERE kind = ? AND status IN ('queued','running') "
+            "ORDER BY priority DESC, id",
             (kind,),
         )
         return list(await cur.fetchall())
@@ -468,6 +502,7 @@ class Database:
                 await self._c.execute(
                     """UPDATE jobs
                           SET status = 'failed',
+                              phase = NULL, phase_model_id = NULL,
                               error_code = ?, error_title = ?, error_status = ?,
                               error_detail = ?, error_extensions_json = '{}',
                               finished_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),

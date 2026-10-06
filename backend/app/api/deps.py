@@ -64,15 +64,11 @@ def require_cloud_ready(request: Request) -> None:
     settings = request.app.state.settings
     if settings.desktop_static_dir is None:
         return
-    from ..audio_tools import require_audio_tools
-    from ..runpod.controller import controller
+    from ..runpod.client import POD_START_BLOCKED_REASON
 
-    require_audio_tools(request)
-    cloud = controller(settings)
-    if not cloud.is_ready(cloud.read()):
-        raise HTTPException(409, "Finish model storage setup in the Runpod tab first")
-    if not cloud.read().get("policy"):
-        raise HTTPException(409, "Approve automatic compute limits in the Runpod tab first")
+    # Reject before audio preparation, sample-voice creation or enqueueing.
+    # The provider client independently blocks CPU/GPU starts as defense in depth.
+    raise HTTPException(409, POD_START_BLOCKED_REASON)
 
 
 #: Paths reachable without the API key. Media authenticates with its own signed

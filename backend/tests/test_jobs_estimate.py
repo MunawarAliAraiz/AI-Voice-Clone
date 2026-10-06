@@ -132,7 +132,7 @@ def test_wait_seconds_accounts_for_a_running_job_ahead() -> None:
     assert eta[1] > estimate_synth_seconds(len("hello"), 0.5)
 
 
-def test_remaining_for_running_decreases_as_time_passes_and_floors_at_zero() -> None:
+def test_remaining_for_running_becomes_unknown_when_overdue() -> None:
     statuses = (ModelStatus(spec=_SPEC_A, state=ModelState.RESIDENT, est_wait_sec=0.0),)
     running = _job(
         0, "voxcpm2", "x" * 150, status=JobStatus.RUNNING, started_at="2026-01-01T00:00:00Z"
@@ -143,8 +143,8 @@ def test_remaining_for_running_decreases_as_time_passes_and_floors_at_zero() -> 
     remaining_late = estimate_remaining_for_running(
         running, statuses, now=_epoch(2026, 1, 1, 0, 0, 1) + 10_000
     )
-    assert remaining_late < remaining_early
-    assert remaining_late == 0.0  # floored, never negative
+    assert remaining_early is not None and remaining_early > 0
+    assert remaining_late is None  # no false zero-second completion promise
 
 
 def test_remaining_for_running_with_no_started_at_is_full_estimate() -> None:
