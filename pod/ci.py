@@ -170,22 +170,47 @@ def flex_smoke_code() -> str:
     ])
 
 
+def smoke_host_user() -> tuple[int, int]:
+    """Hosted Linux Docker shares the runner's bind-mount ownership."""
+    getuid, getgid = getattr(os, "getuid", None), getattr(os, "getgid", None)
+    if not callable(getuid) or not callable(getgid):
+        raise ValueError("Run the Flex image smoke on a Linux Docker host")
+    uid, gid = getuid(), getgid()
+    if any(type(value) is not int or value < 0 for value in (uid, gid)):
+        raise ValueError("Invalid build runner identity")
+    return uid, gid
+
+
+def verify_smoke_ownership(volume: Path, uid: int, gid: int) -> None:
+    # Inspect only this invocation's disposable fixture, never customer storage.
+    for path in volume.rglob("*"):
+        entry = path.lstat()
+        if path.is_symlink() or (entry.st_uid, entry.st_gid) != (uid, gid):
+            raise ValueError("Smoke cache ownership differs from the build runner")
+
+
 def smoke_flex(reference: str) -> None:
     image, separator, digest = reference.partition("@")
     if not separator:
         raise ValueError("Smoke testing requires a published immutable image")
     immutable_image(image, digest)
+    uid, gid = smoke_host_user()
     docker("pull", reference)
     with tempfile.TemporaryDirectory(prefix="vcs-flex-smoke-") as volume:
         # No endpoint channels, credentials, network, GPU or default entrypoint.
         # --rm guarantees even failed smoke containers leave no running process.
         docker(
-            "run", "--rm", "--network", "none", "--mount",
+            "run", "--rm", "--network", "none",
+            "--user", f"{uid}:{gid}", "--env", "HOME=/tmp", "--mount",
             f"type=bind,source={volume},target=/runpod-volume",
             "--entrypoint", "/opt/venvs/flex/bin/python", reference,
             "-c", flex_smoke_code(),
         )
+        verify_smoke_ownership(Path(volume), uid, gid)
+    if Path(volume).exists():
+        raise ValueError("Smoke fixture cleanup did not finish")
     print("Flex: pinned SDK/hooks, torch-free API, runtime imports and mounted cache; "
+          "host ownership and fixture cleanup verified; "
           "network disabled; CUDA, generation, provider lifecycle and billing not tested.")
 
 

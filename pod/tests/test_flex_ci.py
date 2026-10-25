@@ -22,6 +22,7 @@ def load():
 
 def test_flex_smoke_uses_ephemeral_mount_no_network_no_gpu_or_provider(monkeypatch, capsys):
     ci = load()
+    monkeypatch.setattr(ci, "smoke_host_user", lambda: (1001, 1002))
     calls = []
     monkeypatch.setattr(ci, "docker", lambda *args: calls.append(args) or "")
     reference = "ghcr.io/owner/worker-flex@sha256:" + "a" * 64
@@ -31,7 +32,9 @@ def test_flex_smoke_uses_ephemeral_mount_no_network_no_gpu_or_provider(monkeypat
     assert run[:4] == ("run", "--rm", "--network", "none")
     assert run[run.index("--entrypoint") + 1] == "/opt/venvs/flex/bin/python"
     assert "target=/runpod-volume" in run[run.index("--mount") + 1]
-    assert "--gpus" not in run and "--env" not in run
+    assert "--gpus" not in run
+    assert run[run.index("--user") + 1] == "1001:1002"
+    assert [run[i + 1] for i, item in enumerate(run[:-1]) if item == "--env"] == ["HOME=/tmp"]
     assert reference in run and "-c" in run
     assert "verify_imports(require_cuda=False)" in run[-1]
     assert "sdk.serverless.start(" not in run[-1]
@@ -47,6 +50,7 @@ def test_flex_smoke_uses_ephemeral_mount_no_network_no_gpu_or_provider(monkeypat
 ])
 def test_mutable_or_invalid_flex_smoke_rejected_before_docker(monkeypatch, reference):
     ci = load()
+    monkeypatch.setattr(ci, "smoke_host_user", lambda: (1001, 1002))
     calls = []
     monkeypatch.setattr(ci, "docker", lambda *args: calls.append(args))
     with pytest.raises(ValueError):
@@ -56,6 +60,7 @@ def test_mutable_or_invalid_flex_smoke_rejected_before_docker(monkeypatch, refer
 
 def test_failed_flex_smoke_relies_on_auto_remove_without_deleting_host_paths(monkeypatch):
     ci = load()
+    monkeypatch.setattr(ci, "smoke_host_user", lambda: (1001, 1002))
     calls = []
     paths = []
 
@@ -65,6 +70,7 @@ def test_failed_flex_smoke_relies_on_auto_remove_without_deleting_host_paths(mon
             mount = args[args.index("--mount") + 1]
             paths.append(Path(mount.split("source=", 1)[1].split(",target=", 1)[0]))
             assert paths[0].is_dir()
+            (paths[0] / "voice-clone" / "torch-cache").mkdir(parents=True)
             raise ci.subprocess.CalledProcessError(1, "docker")
 
     monkeypatch.setattr(ci, "docker", docker)
@@ -149,7 +155,11 @@ def test_flex_evidence_includes_full_locks_and_never_claims_gpu_or_cost_proof(
 
 def test_workflow_adds_flex_gate_before_evidence_without_changing_existing_gates():
     workflow = (POD.parent / ".github" / "workflows" / "pod-image.yml").read_text()
-    assert "target: [installer, gpu, flex]" in workflow
+    assert '\'["installer","gpu","flex"]\'' in workflow
+    assert "github.event_name == 'workflow_dispatch'" in workflow
+    assert "inputs.target != 'all'" in workflow
+    assert "default: flex" in workflow
+    assert "options: [flex, installer, gpu, all]" in workflow
     assert "if: matrix.target == 'installer'" in workflow
     assert 'python3 pod/ci.py smoke --image "$IMAGE"' in workflow
     assert "if: matrix.target == 'flex'" in workflow
@@ -161,3 +171,69 @@ def test_workflow_adds_flex_gate_before_evidence_without_changing_existing_gates
     assert "persist-credentials: false" in workflow
     assert "RUNPOD_API" not in workflow and "POD_WORKER_TOKEN" not in workflow
 
+
+
+def test_smoke_host_identity_uses_numeric_runner_user(monkeypatch):
+    ci = load()
+    monkeypatch.setattr(ci.os, "getuid", lambda: 1001, raising=False)
+    monkeypatch.setattr(ci.os, "getgid", lambda: 1002, raising=False)
+    assert ci.smoke_host_user() == (1001, 1002)
+
+
+@pytest.mark.parametrize("uid,gid", [(True, 1), (-1, 1), (1, "1000"), (1, -1)])
+def test_invalid_runner_identity_refuses_before_container(monkeypatch, uid, gid):
+    ci = load()
+    monkeypatch.setattr(ci.os, "getuid", lambda: uid, raising=False)
+    monkeypatch.setattr(ci.os, "getgid", lambda: gid, raising=False)
+    calls = []
+    monkeypatch.setattr(ci, "docker", lambda *args: calls.append(args))
+    with pytest.raises(ValueError, match="runner identity"):
+        ci.smoke_flex("ghcr.io/owner/flex@sha256:" + "a" * 64)
+    assert calls == []
+
+
+def test_non_posix_identity_refuses_before_docker(monkeypatch):
+    ci = load()
+    monkeypatch.setattr(ci.os, "getuid", None, raising=False)
+    calls = []
+    monkeypatch.setattr(ci, "docker", lambda *args: calls.append(args))
+    with pytest.raises(ValueError, match="Linux Docker host"):
+        ci.smoke_flex("ghcr.io/owner/flex@sha256:" + "a" * 64)
+    assert calls == []
+
+
+def test_owned_cache_fixture_is_checked_and_removed_after_success(monkeypatch):
+    ci = load()
+    paths = []
+    identities = []
+    monkeypatch.setattr(ci, "smoke_host_user", lambda: (1001, 1002))
+
+    def run(*args):
+        if args[0] == "run":
+            mount = args[args.index("--mount") + 1]
+            volume = Path(mount.split("source=", 1)[1].split(",target=", 1)[0])
+            paths.append(volume)
+            (volume / "voice-clone" / "torch-cache").mkdir(parents=True)
+        return ""
+
+    def ownership(volume, uid, gid):
+        assert volume == paths[0]
+        assert (volume / "voice-clone" / "torch-cache").is_dir()
+        identities.append((uid, gid))
+
+    monkeypatch.setattr(ci, "docker", run)
+    monkeypatch.setattr(ci, "verify_smoke_ownership", ownership)
+    ci.smoke_flex("ghcr.io/owner/flex@sha256:" + "a" * 64)
+    assert identities == [(1001, 1002)] and not paths[0].exists()
+
+
+def test_actual_local_owned_fixture_passes_without_permission_changes(tmp_path):
+    ci = load()
+    nested = tmp_path / "voice-clone" / "torch-cache"
+    nested.mkdir(parents=True)
+    owner = nested.stat()
+    ci.verify_smoke_ownership(tmp_path, owner.st_uid, owner.st_gid)
+    with pytest.raises(ValueError, match="ownership"):
+        ci.verify_smoke_ownership(tmp_path, owner.st_uid + 1, owner.st_gid)
+    after = nested.stat()
+    assert (after.st_uid, after.st_gid, after.st_mode) == (owner.st_uid, owner.st_gid, owner.st_mode)
